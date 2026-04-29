@@ -15,8 +15,10 @@ const enableSetupPasswordReset = ["true", "1", "yes"].includes(String(process.en
 const ownerRecoveryEmail = normalizeEmail(process.env.ARIAD_OWNER_RECOVERY_EMAIL || "");
 const publicBaseUrl = String(process.env.ARIAD_PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || `http://localhost:${port}`).replace(/\/+$/, "");
 const mailFrom = process.env.ARIAD_MAIL_FROM || '"AriadGSM Soporte" <soporte@ariadgsm.com>';
-const sessionVersion = 3;
+const sessionVersion = 4;
 const sessionMaxAgeSeconds = 60 * 60 * 8;
+const deviceCookieName = "ariad_device";
+const deviceMaxAgeSeconds = 60 * 60 * 24 * 180;
 const presenceWindowMs = 45 * 1000;
 const presenceWriteIntervalMs = 10 * 1000;
 const resetTokenExpiresMs = 15 * 60 * 1000;
@@ -254,6 +256,7 @@ async function ensureDb() {
     await fs.writeFile(dbPath, JSON.stringify({
       users: [],
       sessions: [],
+      devices: [],
       clients: [],
       audit: [],
       tickets: [],
@@ -271,6 +274,7 @@ async function readDb() {
   const db = JSON.parse(raw);
   db.users ||= [];
   db.sessions ||= [];
+  db.devices ||= [];
   db.clients ||= [];
   db.audit ||= [];
   db.tickets ||= [];
@@ -320,6 +324,7 @@ function publicUser(user) {
     role: user.role,
     roleLabel: roleLabels[user.role] || "Pendiente",
     workChannel: user.workChannel || "",
+    operatorPinSet: Boolean(user.operatorPinHash),
     active: user.active,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
@@ -392,6 +397,44 @@ async function verifyPassword(password, stored) {
 
 function hashToken(token) {
   return crypto.createHash("sha256").update(String(token || "")).digest("hex");
+}
+
+function cookieHeader(name, value, maxAge) {
+  const secureCookie = process.env.NODE_ENV === "production" ? "; Secure" : "";
+  return `${name}=${encodeURIComponent(value)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}${secureCookie}`;
+}
+
+function ensureDevice(db, req) {
+  let token = getCookie(req, deviceCookieName);
+  if (!token) token = crypto.randomBytes(32).toString("base64url");
+  const tokenHash = hashToken(token);
+  let device = db.devices.find((candidate) => candidate.tokenHash === tokenHash);
+  if (!device) {
+    device = {
+      id: crypto.randomUUID(),
+      tokenHash,
+      adminUserIds: [],
+      userAgent: cleanText(req.headers["user-agent"] || "unknown", 180),
+      firstIpHash: hashToken(clientIp(req)),
+      createdAt: nowIso(),
+    };
+    db.devices.push(device);
+  }
+  device.adminUserIds ||= [];
+  device.lastSeenAt = nowIso();
+  device.lastSeenAtMs = Date.now();
+  return { token, device };
+}
+
+function deviceIsTrustedForAdmin(device, userId) {
+  return Boolean(device?.adminUserIds?.includes(userId));
+}
+
+function trustDeviceForAdmin(device, userId) {
+  device.adminUserIds ||= [];
+  if (!device.adminUserIds.includes(userId)) {
+    device.adminUserIds.push(userId);
+  }
 }
 
 function smtpConfig() {
@@ -624,6 +667,10 @@ function cleanName(name) {
 
 function validatePassword(password) {
   return typeof password === "string" && password.length >= 8;
+}
+
+function validateOperatorPin(pin) {
+  return /^[0-9]{4,8}$/.test(String(pin || ""));
 }
 
 function normalizeWorkChannel(value) {
@@ -929,6 +976,35 @@ async function handleApi(req, res, pathname) {
       return sendJson(res, 403, { error: "Cuenta pendiente de activacion por administrador." });
     }
 
+    const { token: deviceToken, device } = ensureDevice(db, req);
+    if (existing.role === "ADMIN" && !deviceIsTrustedForAdmin(device, existing.id)) {
+      const operatorPin = String(input.operatorPin || "");
+      const hasOperatorPin = Boolean(existing.operatorPinHash);
+      const pinIsValid = hasOperatorPin
+        ? await verifyPassword(operatorPin, existing.operatorPinHash)
+        : Boolean(setupToken && operatorPin === setupToken);
+      if (!pinIsValid) {
+        audit(db, existing.id, "ADMIN_DEVICE_PIN_REQUIRED", existing.id, {
+          deviceId: device.id,
+          usingSetupTokenFallback: !hasOperatorPin,
+        });
+        await writeDb(db);
+        res.setHeader("Set-Cookie", cookieHeader(deviceCookieName, deviceToken, deviceMaxAgeSeconds));
+        return sendJson(res, 409, {
+          error: hasOperatorPin
+            ? "PIN operativo requerido para autorizar este dispositivo."
+            : "Codigo de instalacion requerido para autorizar este dispositivo. Luego configura tu PIN operativo.",
+          code: "ADMIN_DEVICE_PIN_REQUIRED",
+          pinLabel: hasOperatorPin ? "PIN operativo" : "Codigo de instalacion",
+        });
+      }
+      trustDeviceForAdmin(device, existing.id);
+      audit(db, existing.id, "ADMIN_DEVICE_AUTHORIZED", existing.id, {
+        deviceId: device.id,
+        usingSetupTokenFallback: !hasOperatorPin,
+      });
+    }
+
     const token = crypto.randomBytes(32).toString("base64url");
     const maxAge = sessionMaxAgeSeconds;
     const expiresAt = Date.now() + maxAge * 1000;
@@ -946,8 +1022,10 @@ async function handleApi(req, res, pathname) {
     audit(db, existing.id, "LOGIN_SUCCESS", existing.id);
     await writeDb(db);
 
-    const secureCookie = process.env.NODE_ENV === "production" ? "; Secure" : "";
-    res.setHeader("Set-Cookie", `ariad_session=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}${secureCookie}`);
+    res.setHeader("Set-Cookie", [
+      cookieHeader("ariad_session", token, maxAge),
+      cookieHeader(deviceCookieName, deviceToken, deviceMaxAgeSeconds),
+    ]);
     return sendJson(res, 200, { user: publicUser(existing) });
   }
 
@@ -1107,6 +1185,33 @@ async function handleApi(req, res, pathname) {
     audit(db, user.id, "PASSWORD_CHANGED", target.id);
     await writeDb(db);
     return sendJson(res, 200, { message: "Contrasena actualizada." });
+  }
+
+  if (req.method === "POST" && pathname === "/api/me/operator-pin") {
+    if (!requireUser(user, res)) return;
+    const input = await parseJson(req);
+    const currentPassword = String(input.currentPassword || "");
+    const operatorPin = String(input.operatorPin || "");
+    if (!validateOperatorPin(operatorPin)) {
+      return sendJson(res, 400, { error: "El PIN operativo debe tener de 4 a 8 numeros." });
+    }
+    const db = await readDb();
+    const target = db.users.find((candidate) => candidate.id === user.id);
+    if (!target || !(await verifyPassword(currentPassword, target.passwordHash))) {
+      return sendJson(res, 401, { error: "Contrasena actual incorrecta." });
+    }
+    target.operatorPinHash = await hashPassword(operatorPin);
+    target.updatedAt = nowIso();
+    const currentTokenHash = hashToken(getCookie(req, "ariad_session"));
+    db.sessions = db.sessions.filter((session) => session.userId !== target.id || session.tokenHash === currentTokenHash);
+    const deviceToken = getCookie(req, deviceCookieName);
+    if (target.role === "ADMIN" && deviceToken) {
+      const device = db.devices.find((candidate) => candidate.tokenHash === hashToken(deviceToken));
+      if (device) trustDeviceForAdmin(device, target.id);
+    }
+    audit(db, user.id, "OPERATOR_PIN_CHANGED", target.id);
+    await writeDb(db);
+    return sendJson(res, 200, { message: "PIN operativo actualizado." });
   }
 
   if (req.method === "POST" && pathname === "/api/logout") {

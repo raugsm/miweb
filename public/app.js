@@ -9,6 +9,8 @@ const resetTokenInput = document.querySelector("#reset-token-input");
 const loginTab = document.querySelector("#login-tab");
 const registerTab = document.querySelector("#register-tab");
 const resetTab = document.querySelector("#reset-tab");
+const loginPinField = document.querySelector("#login-pin-field");
+const loginPinLabel = document.querySelector("#login-pin-label");
 const setupTokenField = document.querySelector("#setup-token-field");
 const setupTokenNote = document.querySelector("#setup-token-note");
 const welcomeTitle = document.querySelector("#welcome-title");
@@ -18,6 +20,8 @@ const activeUsersCount = document.querySelector("#active-users-count");
 const pendingUsersCount = document.querySelector("#pending-users-count");
 const changePasswordForm = document.querySelector("#change-password-form");
 const changePasswordMessage = document.querySelector("#change-password-message");
+const operatorPinForm = document.querySelector("#operator-pin-form");
+const operatorPinMessage = document.querySelector("#operator-pin-message");
 const usersTable = document.querySelector("#users-table");
 const auditList = document.querySelector("#audit-list");
 const pricingRatesTable = document.querySelector("#pricing-rates-table");
@@ -128,7 +132,11 @@ async function api(path, options = {}) {
   });
   if (response.status === 204) return null;
   const payload = await response.json();
-  if (!response.ok) throw new Error(payload.error || "Operacion fallida.");
+  if (!response.ok) {
+    const error = new Error(payload.error || "Operacion fallida.");
+    Object.assign(error, payload);
+    throw error;
+  }
   return payload;
 }
 
@@ -145,6 +153,13 @@ function syncRegistrationSetupField() {
   if (!showSetupToken) registerForm.elements.setupToken.value = "";
 }
 
+function toggleLoginPinField(show, label = "PIN operativo") {
+  loginPinField.classList.toggle("hidden", !show);
+  loginPinLabel.textContent = label;
+  loginForm.elements.operatorPin.required = show;
+  if (!show) loginForm.elements.operatorPin.value = "";
+}
+
 function switchTab(tab) {
   const isLogin = tab === "login";
   const isRegister = tab === "register";
@@ -157,6 +172,7 @@ function switchTab(tab) {
   resetPasswordForm.classList.toggle("active", isReset && resetMode === "request");
   completeResetForm.classList.toggle("active", isReset && resetMode === "complete");
   if (isRegister) syncRegistrationSetupField();
+  if (!isLogin) toggleLoginPinField(false);
   showMessage("");
 }
 
@@ -255,7 +271,7 @@ function renderCatalog() {
 
 function renderUsers() {
   if (session.user?.role !== "ADMIN") {
-    usersTable.innerHTML = `<tr><td colspan="6" class="muted-cell">Solo el administrador puede ver y modificar usuarios.</td></tr>`;
+    usersTable.innerHTML = `<tr><td colspan="7" class="muted-cell">Solo el administrador puede ver y modificar usuarios.</td></tr>`;
     return;
   }
 
@@ -283,6 +299,7 @@ function renderUsers() {
             </select>
             ${isSelfUser ? `<span class="table-subtext">Protegido</span>` : ""}
           </td>
+          <td><span class="table-subtext">${user.operatorPinSet ? "Configurado" : "Pendiente"}</span></td>
           <td>
             <label class="inline-check">
               <input type="checkbox" data-user-active="${user.id}" ${user.active ? "checked" : ""} ${isSelfUser ? "disabled" : ""} />
@@ -1041,8 +1058,14 @@ loginForm.addEventListener("submit", async (event) => {
       body: JSON.stringify(input),
     });
     clearRememberedLogin();
+    toggleLoginPinField(false);
+    loginForm.reset();
     await refreshSession();
   } catch (error) {
+    if (error.code === "ADMIN_DEVICE_PIN_REQUIRED") {
+      toggleLoginPinField(true, error.pinLabel || "PIN operativo");
+      loginForm.elements.operatorPin.focus();
+    }
     showMessage(error.message, "error");
   }
 });
@@ -1112,6 +1135,25 @@ changePasswordForm.addEventListener("submit", async (event) => {
   } catch (error) {
     changePasswordMessage.textContent = error.message;
     changePasswordMessage.dataset.type = "error";
+  }
+});
+
+operatorPinForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = new FormData(operatorPinForm);
+  operatorPinMessage.textContent = "";
+  try {
+    const payload = await api("/api/me/operator-pin", {
+      method: "POST",
+      body: JSON.stringify(Object.fromEntries(form)),
+    });
+    operatorPinMessage.textContent = payload.message;
+    operatorPinMessage.dataset.type = "success";
+    operatorPinForm.reset();
+    await refreshSession();
+  } catch (error) {
+    operatorPinMessage.textContent = error.message;
+    operatorPinMessage.dataset.type = "error";
   }
 });
 

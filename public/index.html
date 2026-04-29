@@ -31,6 +31,10 @@
               Contrasena
               <input name="password" type="password" autocomplete="off" minlength="8" required />
             </label>
+            <label id="login-pin-field" class="hidden">
+              <span id="login-pin-label">PIN operativo</span>
+              <input name="operatorPin" type="password" inputmode="numeric" autocomplete="one-time-code" />
+            </label>
             <button class="primary-btn" type="submit">Entrar</button>
           </form>
 
@@ -159,6 +163,18 @@
                 </label>
                 <button class="secondary-btn" type="submit">Cambiar contrasena</button>
                 <p id="change-password-message" class="message" aria-live="polite"></p>
+              </form>
+              <form id="operator-pin-form" class="security-form">
+                <label>
+                  Contrasena actual
+                  <input name="currentPassword" type="password" autocomplete="current-password" minlength="8" required />
+                </label>
+                <label>
+                  PIN operativo
+                  <input name="operatorPin" type="password" inputmode="numeric" autocomplete="one-time-code" minlength="4" maxlength="8" required />
+                </label>
+                <button class="secondary-btn" type="submit">Guardar PIN</button>
+                <p id="operator-pin-message" class="message" aria-live="polite"></p>
               </form>
             </div>
           </section>
@@ -292,6 +308,7 @@
                     <th>Correo</th>
                     <th>Canal</th>
                     <th>Rol</th>
+                    <th>PIN</th>
                     <th>Estado</th>
                     <th>Accion</th>
                   </tr>
