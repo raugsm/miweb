@@ -17,6 +17,8 @@ const publicBaseUrl = String(process.env.ARIAD_PUBLIC_URL || process.env.RENDER_
 const mailFrom = process.env.ARIAD_MAIL_FROM || '"AriadGSM Soporte" <soporte@ariadgsm.com>';
 const sessionVersion = 3;
 const sessionMaxAgeSeconds = 60 * 60 * 8;
+const presenceWindowMs = 45 * 1000;
+const presenceWriteIntervalMs = 10 * 1000;
 const resetTokenExpiresMs = 15 * 60 * 1000;
 const resetRequestWindowMs = 15 * 60 * 1000;
 const maxResetRequestsPerWindow = 5;
@@ -529,13 +531,52 @@ async function getCurrentUser(req) {
   const before = db.sessions.length;
   db.sessions = db.sessions.filter((session) => session.expiresAt > now && session.version === sessionVersion);
   const session = db.sessions.find((candidate) => candidate.tokenHash === hashToken(token));
-  if (db.sessions.length !== before) await writeDb(db);
+  let shouldWrite = db.sessions.length !== before;
   if (!session) {
+    if (shouldWrite) await writeDb(db);
     return null;
   }
   const user = db.users.find((candidate) => candidate.id === session.userId);
-  if (!user || !user.active) return null;
+  if (!user || !user.active) {
+    if (shouldWrite) await writeDb(db);
+    return null;
+  }
+  if (now - Number(session.lastSeenAtMs || 0) > presenceWriteIntervalMs) {
+    session.lastSeenAtMs = now;
+    session.lastSeenAt = new Date(now).toISOString();
+    shouldWrite = true;
+  }
+  if (shouldWrite) await writeDb(db);
   return user;
+}
+
+function publicPresence(db) {
+  const now = Date.now();
+  const latestByUser = new Map();
+  for (const session of db.sessions || []) {
+    if (session.version !== sessionVersion || session.expiresAt <= now) continue;
+    const lastSeenAtMs = Number(session.lastSeenAtMs || 0);
+    if (now - lastSeenAtMs > presenceWindowMs) continue;
+    const previous = latestByUser.get(session.userId);
+    if (!previous || lastSeenAtMs > previous.lastSeenAtMs) {
+      latestByUser.set(session.userId, { lastSeenAtMs, lastSeenAt: session.lastSeenAt });
+    }
+  }
+  const onlineUsers = db.users
+    .filter((user) => user.active && latestByUser.has(user.id))
+    .map((user) => ({
+      id: user.id,
+      name: user.name,
+      role: user.role,
+      roleLabel: roleLabels[user.role] || user.role,
+      workChannel: user.workChannel,
+      lastSeenAt: latestByUser.get(user.id).lastSeenAt,
+    }));
+  return {
+    onlineUsersCount: onlineUsers.length,
+    onlineUsers,
+    windowSeconds: Math.round(presenceWindowMs / 1000),
+  };
 }
 
 function requireUser(user, res) {
@@ -817,10 +858,17 @@ async function handleApi(req, res, pathname) {
       clients: db.clients.slice(0, 300).map((client) => publicClient(client, db)),
       audit: user.role === "ADMIN" ? db.audit.slice(0, 50) : [],
       tickets: db.tickets.slice(0, 120).map((ticket) => publicTicket(ticket, db)),
+      presence: publicPresence(db),
       pricingConfig: publicPricingConfig(db.pricingConfig, db),
       roles: Array.from(roles).map((role) => ({ value: role, label: roleLabels[role] })),
       catalog: { services, paymentMethods, workChannels, ticketStatuses, countries: countries.map(([, country]) => country) },
     });
+  }
+
+  if (req.method === "GET" && pathname === "/api/presence") {
+    if (!requireUser(user, res)) return;
+    const db = await readDb();
+    return sendJson(res, 200, { presence: publicPresence(db) });
   }
 
   if (req.method === "POST" && pathname === "/api/register") {
@@ -891,6 +939,8 @@ async function handleApi(req, res, pathname) {
       tokenHash: hashToken(token),
       version: sessionVersion,
       createdAt: nowIso(),
+      lastSeenAt: nowIso(),
+      lastSeenAtMs: Date.now(),
       expiresAt,
     });
     audit(db, existing.id, "LOGIN_SUCCESS", existing.id);

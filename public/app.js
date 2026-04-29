@@ -52,15 +52,31 @@ const finalLogFiles = document.querySelector("#final-log-files");
 const finalLogImages = document.querySelector("#final-log-images");
 const finalLogHelp = document.querySelector("#final-log-help");
 
-let session = { user: null, users: [], clients: [], audit: [], roles: [], tickets: [], pricingConfig: { exchangeRates: [], serviceRules: [] }, catalog: { services: [], paymentMethods: [] } };
+function emptySession() {
+  return {
+    user: null,
+    users: [],
+    clients: [],
+    audit: [],
+    roles: [],
+    tickets: [],
+    presence: { onlineUsersCount: 0, onlineUsers: [] },
+    pricingConfig: { exchangeRates: [], serviceRules: [] },
+    catalog: { services: [], paymentMethods: [] },
+  };
+}
+
+let session = emptySession();
 let pendingFinalLogResolve = null;
 let pendingFinalLogImages = [];
 let pendingPaymentProofTicketId = "";
 let draggingTicketId = "";
 let lastPaymentCountryKey = "";
 let resetMode = "request";
+let presenceTimer = null;
 const adminPanelIds = new Set(["users-panel", "audit-panel"]);
 const pricingManagerPanelIds = new Set(["pricing-panel"]);
+const presenceRefreshMs = 15 * 1000;
 const maxFinalLogImages = 4;
 const maxFinalLogImageBytes = 2 * 1024 * 1024;
 const finalizedBoardLimit = 5;
@@ -178,21 +194,39 @@ function syncNavigationForRole() {
   if (!canOpenPanel(activePanel)) activatePanel("overview-panel");
 }
 
+function renderPresence() {
+  activeUsersCount.textContent = String(session.presence?.onlineUsersCount || 0);
+}
+
+function stopPresenceRefresh() {
+  if (!presenceTimer) return;
+  clearInterval(presenceTimer);
+  presenceTimer = null;
+}
+
+function startPresenceRefresh() {
+  if (presenceTimer || !session.user) return;
+  presenceTimer = setInterval(refreshPresence, presenceRefreshMs);
+}
+
 function renderLayout() {
   const loggedIn = Boolean(session.user);
   syncRegistrationSetupField();
   authView.classList.toggle("hidden", loggedIn);
   dashboardView.classList.toggle("hidden", !loggedIn);
-  if (!loggedIn) return;
+  if (!loggedIn) {
+    stopPresenceRefresh();
+    return;
+  }
 
   welcomeTitle.textContent = `Hola, ${session.user.name}`;
   roleBadge.textContent = session.user.roleLabel;
   currentRoleLabel.textContent = session.user.roleLabel;
   syncNavigationForRole();
+  startPresenceRefresh();
 
-  const active = isAdmin() ? session.users.filter((user) => user.active).length : "-";
   const pending = isAdmin() ? session.users.filter((user) => !user.active).length : "-";
-  activeUsersCount.textContent = String(active);
+  renderPresence();
   pendingUsersCount.textContent = String(pending);
 
   renderUsers();
@@ -976,6 +1010,20 @@ async function refreshSession() {
   renderLayout();
 }
 
+async function refreshPresence() {
+  if (!session.user) return;
+  try {
+    const payload = await api("/api/presence");
+    session.presence = payload.presence;
+    renderPresence();
+  } catch (error) {
+    if (error.message === "Sesion requerida.") {
+      session = emptySession();
+      renderLayout();
+    }
+  }
+}
+
 loginTab.addEventListener("click", () => switchTab("login"));
 registerTab.addEventListener("click", () => switchTab("register"));
 resetTab.addEventListener("click", () => {
@@ -1070,7 +1118,7 @@ changePasswordForm.addEventListener("submit", async (event) => {
 document.querySelector("#logout-button").addEventListener("click", async () => {
   await api("/api/logout", { method: "POST" });
   clearRememberedLogin();
-  session = { user: null, users: [], clients: [], audit: [], roles: [], tickets: [], pricingConfig: { exchangeRates: [], serviceRules: [] }, catalog: { services: [], paymentMethods: [] } };
+  session = emptySession();
   renderLayout();
 });
 
