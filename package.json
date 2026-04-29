@@ -1,0 +1,13 @@
+{
+  "name": "ariadgsm-ops-mvp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MVP interno para login, registro y roles de AriadGSM.",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

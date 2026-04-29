@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AriadGSM Ops</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section id="auth-view" class="auth-grid">
+        <div class="brand-panel">
+          <img class="brand-logo" src="/ariadgsm-logo-cropped.png" alt="AriadGSM" />
+          <p class="eyebrow">Operacion interna</p><h1>Acceso seguro para el equipo AriadGSM.</h1><p class="brand-copy">Roles, trazabilidad y control antes de tickets y pagos. Una base limpia para escalar sin desorden.</p>
+          <div class="signal-row"><span>Login</span><span>Roles</span><span>Auditoria</span><span>Tickets v0.2</span></div>
+        </div>
+
+        <div class="auth-card">
+          <div class="tabs" role="tablist" aria-label="Acceso">
+            <button id="login-tab" class="tab active" type="button">Ingresar</button>
+            <button id="register-tab" class="tab" type="button">Registro</button>
+          </div>
+
+          <form id="login-form" class="form active">
+            <label>
+              Correo
+              <input name="email" type="email" autocomplete="email" required />
+            </label>
+            <label>
+              Contrasena
+              <input name="password" type="password" autocomplete="current-password" minlength="8" required />
+            </label>
+            <label class="inline-check remember-check">
+              <input id="remember-login" name="remember" type="checkbox" checked />
+              Recordarme en este equipo
+            </label>
+            <button class="primary-btn" type="submit">Entrar</button>
+          </form>
+
+          <form id="register-form" class="form">
+            <label>
+              Nombre
+              <input name="name" autocomplete="name" required />
+            </label>
+            <label>
+              Correo
+              <input name="email" type="email" autocomplete="email" required />
+            </label>
+            <label>
+              Contrasena
+              <input name="password" type="password" autocomplete="new-password" minlength="8" required />
+            </label>
+            <label>
+              Canal asignado
+              <select name="workChannel" required>
+                <option value="WhatsApp 1">WhatsApp 1</option>
+                <option value="WhatsApp 2">WhatsApp 2</option>
+                <option value="WhatsApp 3">WhatsApp 3</option>
+              </select>
+            </label>
+            <label>
+              Codigo de instalacion
+              <input name="setupToken" autocomplete="one-time-code" />
+            </label>
+            <button class="primary-btn" type="submit">Crear cuenta</button>
+            <p class="small-note">El codigo de instalacion solo protege la creacion del primer administrador en nube.</p>
+          </form>
+          <p id="auth-message" class="message" aria-live="polite"></p>
+        </div>
+      </section>
+
+      <section id="dashboard-view" class="dashboard hidden">
+        <aside class="sidebar">
+          <div class="brand-lockup">
+            <img class="side-logo" src="/ariadgsm-logo-cropped.png" alt="AriadGSM" />
+            <div>
+              <strong>AriadGSM</strong>
+              <span>Ops</span>
+            </div>
+          </div>
+          <nav>
+            <button class="nav-item active" type="button" data-panel="overview-panel">Inicio</button>
+            <button class="nav-item" type="button" data-panel="tickets-panel">Tickets</button>
+            <button class="nav-item" type="button" data-panel="clients-panel">Clientes</button>
+            <button class="nav-item" type="button" data-panel="pricing-panel" data-pricing-manager-only="true">Precios</button>
+            <button class="nav-item" type="button" data-panel="users-panel" data-admin-only="true">Usuarios</button>
+            <button class="nav-item" type="button" data-panel="audit-panel" data-admin-only="true">Auditoria</button>
+          </nav>
+          <button id="logout-button" class="ghost-btn" type="button">Salir</button>
+        </aside>
+
+        <div class="content">
+          <header class="topbar">
+            <div>
+              <p class="eyebrow">Sesion activa</p>
+              <h2 id="welcome-title">Panel interno</h2>
+            </div>
+            <div id="role-badge" class="role-badge"></div>
+          </header>
+
+          <section id="overview-panel" class="panel active">
+            <div class="metrics">
+              <article>
+                <span>Usuarios activos</span>
+                <strong id="active-users-count">0</strong>
+              </article>
+              <article>
+                <span>Pendientes</span>
+                <strong id="pending-users-count">0</strong>
+              </article>
+              <article>
+                <span>Rol actual</span>
+                <strong id="current-role-label">-</strong>
+              </article>
+            </div>
+
+            <div class="workflow">
+              <h3>Base operativa v0.1</h3>
+              <div class="step-list">
+                <span>Login</span>
+                <span>Registro</span>
+                <span>Asignacion de rol</span>
+                <span>Auditoria</span>
+                <span>Siguiente: tickets</span>
+              </div>
+            </div>
+          </section>
+
+          <section id="tickets-panel" class="panel">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Ventas</p>
+                <h3>Crear ticket</h3>
+              </div>
+              <button id="refresh-tickets" class="secondary-btn" type="button">Actualizar</button>
+            </div>
+
+            <form id="ticket-form" class="ticket-form">
+              <label>
+                Cliente
+                <input name="clientText" id="ticket-client" list="client-options" autocomplete="off" placeholder="Javier Lozano Colombia 🇨🇴" required />
+                <datalist id="client-options"></datalist>
+              </label>
+              <label>
+                Servicio
+                <select name="serviceCode" id="ticket-service" required></select>
+              </label>
+              <label id="model-field">
+                Modelo
+                <input name="model" autocomplete="off" />
+              </label>
+              <label>
+                Precio final
+                <input name="price" id="ticket-price" type="number" min="0" step="0.01" required />
+                <span id="price-hint" class="field-hint"></span>
+              </label>
+              <label>
+                Metodo de pago
+                <select name="paymentMethod" id="ticket-payment" required></select>
+              </label>
+              <div class="payment-summary">
+                <div id="payment-preview" class="payment-preview" aria-live="polite"></div>
+                <button id="copy-payment-preview" class="mini-btn payment-copy-btn" type="button">Copiar</button>
+              </div>
+              <button class="primary-btn ticket-submit-btn" type="submit">Generar ticket</button>
+              <p id="ticket-message" class="message" aria-live="polite"></p>
+              <div id="manual-copy-panel" class="manual-copy-panel" hidden>
+                <textarea id="manual-copy-text" readonly aria-label="Texto para copiar"></textarea>
+              </div>
+            </form>
+
+            <div class="section-heading tickets-heading">
+              <div>
+                <p class="eyebrow">Seguimiento</p>
+                <h3>Tickets recientes</h3>
+              </div>
+            </div>
+            <div id="ticket-board" class="ticket-board" aria-label="Tablero de tickets"></div>
+            <input id="payment-proof-files" class="hidden" type="file" accept="image/png,image/jpeg,image/webp" multiple />
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Ticket</th>
+                    <th>Cliente</th>
+                    <th>Servicio</th>
+                    <th>Precio</th>
+                    <th>Pago</th>
+                    <th>Estado</th>
+                    <th>Canal</th>
+                    <th>Creado por</th>
+                    <th>Accion</th>
+                  </tr>
+                </thead>
+                <tbody id="tickets-table"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section id="clients-panel" class="panel">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Base comercial</p>
+                <h3>Clientes</h3>
+              </div>
+              <button id="refresh-clients" class="secondary-btn" type="button">Actualizar</button>
+            </div>
+
+            <form id="client-form" class="client-form">
+              <label>
+                Nombre y apellido
+                <input name="name" autocomplete="off" required />
+              </label>
+              <label>
+                Numero de telefono
+                <input name="whatsapp" autocomplete="off" />
+              </label>
+              <label>
+                Pais
+                <input name="country" autocomplete="off" required />
+              </label>
+              <button class="primary-btn" type="submit">Agregar cliente</button>
+              <p id="client-message" class="message" aria-live="polite"></p>
+            </form>
+
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Cliente</th>
+                    <th>Telefono</th>
+                    <th>Pais</th>
+                    <th>Canal</th>
+                    <th>Creado</th>
+                  </tr>
+                </thead>
+                <tbody id="clients-table"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section id="users-panel" class="panel">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Administracion</p>
+                <h3>Usuarios y roles</h3>
+              </div>
+              <button id="refresh-users" class="secondary-btn" type="button">Actualizar</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Nombre</th>
+                    <th>Correo</th>
+                    <th>Canal</th>
+                    <th>Rol</th>
+                    <th>Estado</th>
+                    <th>Accion</th>
+                  </tr>
+                </thead>
+                <tbody id="users-table"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section id="pricing-panel" class="panel">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Precios</p>
+                <h3>Tasas y reglas</h3>
+              </div>
+              <button id="refresh-pricing" class="secondary-btn" type="button">Actualizar</button>
+            </div>
+
+            <div class="pricing-note">
+              <strong>Base para calculo futuro</strong>
+              <span>Las tasas se actualizan una vez al dia por soporte. El administrador puede corregir una tasa el mismo dia si hubo error.</span>
+            </div>
+
+            <div class="section-heading compact-heading">
+              <div>
+                <p class="eyebrow">Cambio</p>
+                <h3>Tasa por 1 USDT</h3>
+              </div>
+            </div>
+            <div class="table-wrap pricing-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Pais</th>
+                    <th>Moneda</th>
+                    <th>1 USDT equivale a</th>
+                    <th>Actualizado</th>
+                    <th>Accion</th>
+                  </tr>
+                </thead>
+                <tbody id="pricing-rates-table"></tbody>
+              </table>
+            </div>
+
+            <div class="section-heading compact-heading">
+              <div>
+                <p class="eyebrow">Servicios</p>
+                <h3>Reglas de costo</h3>
+              </div>
+            </div>
+            <div class="table-wrap pricing-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Servicio</th>
+                    <th>Modo</th>
+                    <th>Base USDT</th>
+                    <th>Ganancia USDT</th>
+                    <th>Auth</th>
+                    <th>Critical</th>
+                    <th>Herramienta</th>
+                    <th>Servidor</th>
+                    <th>Ajuste</th>
+                    <th>Actualizado</th>
+                    <th>Accion</th>
+                  </tr>
+                </thead>
+                <tbody id="pricing-rules-table"></tbody>
+              </table>
+            </div>
+            <p id="pricing-message" class="message" aria-live="polite"></p>
+          </section>
+
+          <section id="audit-panel" class="panel">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Historial</p>
+                <h3>Ultimos eventos</h3>
+              </div>
+            </div>
+            <div id="audit-list" class="audit-list"></div>
+          </section>
+        </div>
+      </section>
+      <div id="final-log-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="final-log-title">
+        <form id="final-log-form" class="modal-card">
+          <h3 id="final-log-title">Log final</h3>
+          <label>
+            Resultado del servicio
+            <textarea id="final-log-input" rows="5" placeholder="Pega aqui el log final del proceso"></textarea>
+          </label>
+          <div id="final-log-dropzone" class="image-dropzone" tabindex="0">
+            <strong>Pegar o arrastrar imagenes</strong>
+            <span>Capturas PNG, JPG o WEBP. Maximo 4 imagenes.</span>
+            <input id="final-log-files" type="file" accept="image/png,image/jpeg,image/webp" multiple />
+          </div>
+          <div id="final-log-images" class="image-preview-list"></div>
+          <p id="final-log-help" class="message" aria-live="polite"></p>
+          <div class="modal-actions">
+            <button id="final-log-cancel" class="secondary-btn" type="button">Cancelar</button>
+            <button class="primary-btn" type="submit">Finalizar</button>
+          </div>
+        </form>
+      </div>
+    </main>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
