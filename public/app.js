@@ -1421,6 +1421,16 @@ ticketBoard.addEventListener("drop", async (event) => {
   }
 });
 
-restoreRememberedLogin();
-activatePasswordResetFromUrl();
-refreshSession().catch(() => renderLayout());
+async function bootApplication() {
+  restoreRememberedLogin();
+  activatePasswordResetFromUrl();
+  try {
+    await refreshSession();
+  } catch {
+    renderLayout();
+  } finally {
+    document.body.classList.remove("app-booting");
+  }
+}
+
+bootApplication();

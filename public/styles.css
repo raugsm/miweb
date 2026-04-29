@@ -34,6 +34,10 @@ button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
 .shell { min-height: 100vh; padding: 24px; }
 .hidden { display: none !important; }
+.app-booting #auth-view,
+.app-booting #dashboard-view {
+  visibility: hidden;
+}
 
 .auth-grid {
   display: grid;
