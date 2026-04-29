@@ -1667,11 +1667,11 @@ async function serveStatic(req, res, pathname) {
       ".png": "image/png",
       ".jpg": "image/jpeg",
     }[ext] || "application/octet-stream";
-    res.writeHead(200, { "Content-Type": type });
+    res.writeHead(200, { "Content-Type": type, "Cache-Control": "no-store" });
     res.end(file);
   } catch {
     const index = await fs.readFile(path.join(publicDir, "index.html"));
-    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
     res.end(index);
   }
 }

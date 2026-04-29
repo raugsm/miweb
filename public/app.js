@@ -131,6 +131,17 @@ async function api(path, options = {}) {
     ...options,
   });
   if (response.status === 204) return null;
+  const contentType = response.headers.get("content-type") || "";
+  if (!contentType.includes("application/json")) {
+    const text = await response.text();
+    const error = new Error(
+      text.trim().startsWith("<!DOCTYPE") || text.trim().startsWith("<html")
+        ? "El servidor devolvio una pagina HTML en lugar de datos. Recarga la pagina y espera a que termine el deploy."
+        : "El servidor devolvio una respuesta inesperada."
+    );
+    error.rawResponse = text.slice(0, 240);
+    throw error;
+  }
   const payload = await response.json();
   if (!response.ok) {
     const error = new Error(payload.error || "Operacion fallida.");
