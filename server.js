@@ -15,7 +15,9 @@ const enableSetupPasswordReset = ["true", "1", "yes"].includes(String(process.en
 const ownerRecoveryEmail = normalizeEmail(process.env.ARIAD_OWNER_RECOVERY_EMAIL || "");
 const publicBaseUrl = String(process.env.ARIAD_PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || `http://localhost:${port}`).replace(/\/+$/, "");
 const mailFrom = process.env.ARIAD_MAIL_FROM || '"AriadGSM Soporte" <soporte@ariadgsm.com>';
-const sessionVersion = 5;
+const appVersion = "device-trust-v2";
+const sessionVersion = 6;
+const trustedDeviceVersion = 2;
 const sessionMaxAgeSeconds = 60 * 60 * 8;
 const deviceCookieName = "ariad_device";
 const deviceMaxAgeSeconds = 60 * 60 * 24 * 180;
@@ -427,11 +429,13 @@ function ensureDevice(db, req) {
 }
 
 function deviceIsTrustedForAdmin(device, userId) {
-  return Boolean(device?.adminUserIds?.includes(userId));
+  return Boolean(device?.trustVersion === trustedDeviceVersion && device?.adminUserIds?.includes(userId));
 }
 
 function trustDeviceForAdmin(device, userId) {
   device.adminUserIds ||= [];
+  device.trustVersion = trustedDeviceVersion;
+  device.trustedAt = nowIso();
   if (!device.adminUserIds.includes(userId)) {
     device.adminUserIds.push(userId);
   }
@@ -917,7 +921,7 @@ async function handleApi(req, res, pathname) {
   const user = await getCurrentUser(req);
 
   if (req.method === "GET" && pathname === "/api/health") {
-    return sendJson(res, 200, { ok: true });
+    return sendJson(res, 200, { ok: true, appVersion, sessionVersion, trustedDeviceVersion });
   }
 
   if (req.method === "GET" && pathname === "/api/session") {
