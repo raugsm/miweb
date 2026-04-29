@@ -19,6 +19,7 @@
           <div class="tabs" role="tablist" aria-label="Acceso">
             <button id="login-tab" class="tab active" type="button">Ingresar</button>
             <button id="register-tab" class="tab" type="button">Registro</button>
+            <button id="reset-tab" class="tab" type="button">Recuperar</button>
           </div>
 
           <form id="login-form" class="form active">
@@ -64,6 +65,23 @@
             </label>
             <button class="primary-btn" type="submit">Crear cuenta</button>
             <p class="small-note">El codigo de instalacion solo protege la creacion del primer administrador en nube.</p>
+          </form>
+
+          <form id="reset-password-form" class="form">
+            <label>
+              Correo administrador
+              <input name="email" type="email" autocomplete="email" required />
+            </label>
+            <label>
+              Nueva contrasena
+              <input name="password" type="password" autocomplete="new-password" minlength="8" required />
+            </label>
+            <label>
+              Codigo de instalacion
+              <input name="setupToken" autocomplete="one-time-code" required />
+            </label>
+            <button class="primary-btn" type="submit">Restablecer</button>
+            <p class="small-note">Solo recupera un administrador activo usando el codigo privado configurado en Render.</p>
           </form>
           <p id="auth-message" class="message" aria-live="polite"></p>
         </div>
@@ -123,6 +141,22 @@
                 <span>Auditoria</span>
                 <span>Siguiente: tickets</span>
               </div>
+            </div>
+
+            <div class="workflow security-box">
+              <h3>Seguridad</h3>
+              <form id="change-password-form" class="security-form">
+                <label>
+                  Contrasena actual
+                  <input name="currentPassword" type="password" autocomplete="current-password" minlength="8" required />
+                </label>
+                <label>
+                  Nueva contrasena
+                  <input name="password" type="password" autocomplete="new-password" minlength="8" required />
+                </label>
+                <button class="secondary-btn" type="submit">Cambiar contrasena</button>
+                <p id="change-password-message" class="message" aria-live="polite"></p>
+              </form>
             </div>
           </section>
 

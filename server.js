@@ -788,6 +788,54 @@ async function handleApi(req, res, pathname) {
     return sendJson(res, 200, { user: publicUser(existing) });
   }
 
+  if (req.method === "POST" && pathname === "/api/password-reset") {
+    const input = await parseJson(req);
+    const email = normalizeEmail(input.email);
+    const password = String(input.password || "");
+    if (!setupToken) {
+      return sendJson(res, 403, { error: "Reset con codigo no configurado." });
+    }
+    if (String(input.setupToken || "") !== setupToken) {
+      return sendJson(res, 403, { error: "Codigo de instalacion invalido." });
+    }
+    if (!email.includes("@") || !validatePassword(password)) {
+      return sendJson(res, 400, { error: "Correo valido y nueva contrasena de 8 caracteres son obligatorios." });
+    }
+    const db = await readDb();
+    const target = db.users.find((candidate) => candidate.email === email && candidate.role === "ADMIN" && candidate.active);
+    if (!target) {
+      return sendJson(res, 404, { error: "Solo se puede recuperar un administrador activo con este codigo." });
+    }
+    target.passwordHash = await hashPassword(password);
+    target.updatedAt = nowIso();
+    db.sessions = db.sessions.filter((session) => session.userId !== target.id);
+    audit(db, null, "ADMIN_PASSWORD_RESET_WITH_SETUP_TOKEN", target.id, { email });
+    await writeDb(db);
+    return sendJson(res, 200, { message: "Contrasena de administrador actualizada. Inicia sesion con la nueva contrasena." });
+  }
+
+  if (req.method === "POST" && pathname === "/api/me/password") {
+    if (!requireUser(user, res)) return;
+    const input = await parseJson(req);
+    const currentPassword = String(input.currentPassword || "");
+    const password = String(input.password || "");
+    if (!validatePassword(password)) {
+      return sendJson(res, 400, { error: "La nueva contrasena debe tener al menos 8 caracteres." });
+    }
+    const db = await readDb();
+    const target = db.users.find((candidate) => candidate.id === user.id);
+    if (!target || !(await verifyPassword(currentPassword, target.passwordHash))) {
+      return sendJson(res, 401, { error: "Contrasena actual incorrecta." });
+    }
+    target.passwordHash = await hashPassword(password);
+    target.updatedAt = nowIso();
+    const currentTokenHash = hashToken(getCookie(req, "ariad_session"));
+    db.sessions = db.sessions.filter((session) => session.userId !== target.id || session.tokenHash === currentTokenHash);
+    audit(db, user.id, "PASSWORD_CHANGED", target.id);
+    await writeDb(db);
+    return sendJson(res, 200, { message: "Contrasena actualizada." });
+  }
+
   if (req.method === "POST" && pathname === "/api/logout") {
     const token = getCookie(req, "ariad_session");
     if (token) {

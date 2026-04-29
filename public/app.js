@@ -3,14 +3,18 @@ const dashboardView = document.querySelector("#dashboard-view");
 const authMessage = document.querySelector("#auth-message");
 const loginForm = document.querySelector("#login-form");
 const registerForm = document.querySelector("#register-form");
+const resetPasswordForm = document.querySelector("#reset-password-form");
 const rememberLogin = document.querySelector("#remember-login");
 const loginTab = document.querySelector("#login-tab");
 const registerTab = document.querySelector("#register-tab");
+const resetTab = document.querySelector("#reset-tab");
 const welcomeTitle = document.querySelector("#welcome-title");
 const roleBadge = document.querySelector("#role-badge");
 const currentRoleLabel = document.querySelector("#current-role-label");
 const activeUsersCount = document.querySelector("#active-users-count");
 const pendingUsersCount = document.querySelector("#pending-users-count");
+const changePasswordForm = document.querySelector("#change-password-form");
+const changePasswordMessage = document.querySelector("#change-password-message");
 const usersTable = document.querySelector("#users-table");
 const auditList = document.querySelector("#audit-list");
 const pricingRatesTable = document.querySelector("#pricing-rates-table");
@@ -115,10 +119,14 @@ function showMessage(text, type = "neutral") {
 
 function switchTab(tab) {
   const isLogin = tab === "login";
+  const isRegister = tab === "register";
+  const isReset = tab === "reset";
   loginTab.classList.toggle("active", isLogin);
-  registerTab.classList.toggle("active", !isLogin);
+  registerTab.classList.toggle("active", isRegister);
+  resetTab.classList.toggle("active", isReset);
   loginForm.classList.toggle("active", isLogin);
-  registerForm.classList.toggle("active", !isLogin);
+  registerForm.classList.toggle("active", isRegister);
+  resetPasswordForm.classList.toggle("active", isReset);
   showMessage("");
 }
 
@@ -950,6 +958,7 @@ async function refreshSession() {
 
 loginTab.addEventListener("click", () => switchTab("login"));
 registerTab.addEventListener("click", () => switchTab("register"));
+resetTab.addEventListener("click", () => switchTab("reset"));
 
 loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -984,6 +993,40 @@ registerForm.addEventListener("submit", async (event) => {
     switchTab("login");
   } catch (error) {
     showMessage(error.message, "error");
+  }
+});
+
+resetPasswordForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = new FormData(resetPasswordForm);
+  try {
+    const payload = await api("/api/password-reset", {
+      method: "POST",
+      body: JSON.stringify(Object.fromEntries(form)),
+    });
+    showMessage(payload.message, "success");
+    resetPasswordForm.reset();
+    switchTab("login");
+  } catch (error) {
+    showMessage(error.message, "error");
+  }
+});
+
+changePasswordForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = new FormData(changePasswordForm);
+  changePasswordMessage.textContent = "";
+  try {
+    const payload = await api("/api/me/password", {
+      method: "POST",
+      body: JSON.stringify(Object.fromEntries(form)),
+    });
+    changePasswordMessage.textContent = payload.message;
+    changePasswordMessage.dataset.type = "success";
+    changePasswordForm.reset();
+  } catch (error) {
+    changePasswordMessage.textContent = error.message;
+    changePasswordMessage.dataset.type = "error";
   }
 });
 
