@@ -472,6 +472,15 @@ function sendJson(res, status, payload) {
   res.end(body);
 }
 
+function sendHtml(res, status, html) {
+  res.writeHead(status, {
+    "Content-Type": "text/html; charset=utf-8",
+    "Content-Length": Buffer.byteLength(html),
+    "Cache-Control": "no-store",
+  });
+  res.end(html);
+}
+
 function sendNoContent(res) {
   res.writeHead(204, { "Cache-Control": "no-store" });
   res.end();
@@ -1388,7 +1397,77 @@ async function handleApi(req, res, pathname) {
   return sendJson(res, 404, { error: "Ruta no encontrada." });
 }
 
+function ownerRecoveryPage() {
+  return `<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>Recuperacion propietario - AriadGSM Ops</title>
+    <style>
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #f5f7fb; color: #101827; font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      main { width: min(480px, calc(100vw - 32px)); padding: 28px; border: 1px solid #d9e0ec; border-radius: 18px; background: #fff; box-shadow: 0 24px 70px rgba(16, 24, 39, 0.13); }
+      h1 { margin: 0 0 10px; font-size: 28px; }
+      p { color: #667085; line-height: 1.5; }
+      form { display: grid; gap: 14px; margin-top: 18px; }
+      label { display: grid; gap: 7px; color: #27364b; font-size: 13px; font-weight: 800; }
+      input { min-height: 46px; border: 1px solid #d9e0ec; border-radius: 8px; padding: 0 12px; font: inherit; }
+      button { min-height: 48px; border: 0; border-radius: 8px; background: #2177f2; color: #fff; font: inherit; font-weight: 900; cursor: pointer; }
+      .message[data-type="error"] { color: #dc3f49; }
+      .message[data-type="success"] { color: #0f9f6e; }
+      .note { font-size: 13px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Recuperacion propietario</h1>
+      <p>Usa esta pagina solo mientras <strong>ARIAD_ENABLE_SETUP_RESET=true</strong> este activo en Render. Desactivala despues de recuperar tu acceso.</p>
+      <form id="form">
+        <label>Correo administrador <input name="email" type="email" autocomplete="email" required /></label>
+        <label>Nueva contrasena <input name="password" type="password" autocomplete="new-password" minlength="8" required /></label>
+        <label>Codigo de instalacion <input name="setupToken" autocomplete="one-time-code" required /></label>
+        <button type="submit">Restablecer administrador</button>
+        <p id="message" class="message note" aria-live="polite"></p>
+      </form>
+    </main>
+    <script>
+      const form = document.querySelector("#form");
+      const message = document.querySelector("#message");
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        message.textContent = "";
+        const body = Object.fromEntries(new FormData(form));
+        try {
+          const response = await fetch("/api/password-reset", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          const payload = await response.json();
+          if (!response.ok) throw new Error(payload.error || "No se pudo restablecer.");
+          message.textContent = payload.message;
+          message.dataset.type = "success";
+          form.reset();
+        } catch (error) {
+          message.textContent = error.message;
+          message.dataset.type = "error";
+        }
+      });
+    </script>
+  </body>
+</html>`;
+}
+
 async function serveStatic(req, res, pathname) {
+  if (pathname === "/owner-recovery") {
+    if (!enableSetupPasswordReset) {
+      res.writeHead(404, { "Cache-Control": "no-store" });
+      return res.end("Not found");
+    }
+    return sendHtml(res, 200, ownerRecoveryPage());
+  }
+
   const safePath = pathname === "/" ? "/index.html" : pathname;
   const resolved = path.normalize(path.join(publicDir, safePath));
   if (!resolved.startsWith(publicDir)) {
