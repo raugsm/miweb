@@ -304,6 +304,32 @@ nav { display: grid; gap: 7px; }
   grid-column: 1 / -1;
   margin: 0;
 }
+.device-approvals {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+}
+.device-approval-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: #f8fbff;
+}
+.device-approval-row span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.device-approval-row small {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .step-list {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));

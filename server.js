@@ -15,9 +15,10 @@ const enableSetupPasswordReset = ["true", "1", "yes"].includes(String(process.en
 const ownerRecoveryEmail = normalizeEmail(process.env.ARIAD_OWNER_RECOVERY_EMAIL || "");
 const publicBaseUrl = String(process.env.ARIAD_PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || `http://localhost:${port}`).replace(/\/+$/, "");
 const mailFrom = process.env.ARIAD_MAIL_FROM || '"AriadGSM Soporte" <soporte@ariadgsm.com>';
-const appVersion = "device-trust-v2";
-const sessionVersion = 6;
-const trustedDeviceVersion = 2;
+const appVersion = "device-approval-v1";
+const sessionVersion = 7;
+const trustedDeviceVersion = 3;
+const deviceApprovalExpiresMs = 15 * 60 * 1000;
 const sessionMaxAgeSeconds = 60 * 60 * 8;
 const deviceCookieName = "ariad_device";
 const deviceMaxAgeSeconds = 60 * 60 * 24 * 180;
@@ -259,6 +260,7 @@ async function ensureDb() {
       users: [],
       sessions: [],
       devices: [],
+      deviceApprovals: [],
       clients: [],
       audit: [],
       tickets: [],
@@ -277,6 +279,7 @@ async function readDb() {
   db.users ||= [];
   db.sessions ||= [];
   db.devices ||= [];
+  db.deviceApprovals ||= [];
   db.clients ||= [];
   db.audit ||= [];
   db.tickets ||= [];
@@ -290,7 +293,9 @@ async function readDb() {
   const resetRequestCount = db.passwordResetRequests.length;
   db.passwordResetTokens = db.passwordResetTokens.filter((token) => !token.usedAt && token.expiresAt > now);
   db.passwordResetRequests = db.passwordResetRequests.filter((request) => request.createdAtMs > now - resetRequestWindowMs);
-  if (db.passwordResetTokens.length !== resetTokenCount || db.passwordResetRequests.length !== resetRequestCount) {
+  const deviceApprovalCount = db.deviceApprovals.length;
+  db.deviceApprovals = db.deviceApprovals.filter((approval) => !approval.approvedAt && approval.expiresAt > now);
+  if (db.passwordResetTokens.length !== resetTokenCount || db.passwordResetRequests.length !== resetRequestCount || db.deviceApprovals.length !== deviceApprovalCount) {
     changed = true;
   }
   if (JSON.stringify(db.pricingConfig || {}) !== JSON.stringify(normalizedPricingConfig)) {
@@ -451,6 +456,45 @@ function revokeAdminDevicesExcept(db, userId, keepDeviceId = "") {
     revoked += 1;
   }
   return revoked;
+}
+
+function hasTrustedAdminDevice(db, userId) {
+  return (db.devices || []).some((device) => deviceIsTrustedForAdmin(device, userId));
+}
+
+function upsertAdminDeviceApproval(db, user, device, req) {
+  const now = Date.now();
+  db.deviceApprovals = (db.deviceApprovals || []).filter((approval) => {
+    return !approval.approvedAt && approval.expiresAt > now && !(approval.adminUserId === user.id && approval.deviceId === device.id);
+  });
+  const approval = {
+    id: crypto.randomUUID(),
+    adminUserId: user.id,
+    deviceId: device.id,
+    userAgent: cleanText(req.headers["user-agent"] || device.userAgent || "unknown", 180),
+    ipHash: hashToken(clientIp(req)),
+    createdAt: nowIso(),
+    createdAtMs: now,
+    expiresAt: now + deviceApprovalExpiresMs,
+    approvedAt: "",
+  };
+  db.deviceApprovals.push(approval);
+  return approval;
+}
+
+function publicDeviceSecurity(db, user) {
+  if (user.role !== "ADMIN") return { pendingApprovals: [] };
+  const now = Date.now();
+  return {
+    pendingApprovals: (db.deviceApprovals || [])
+      .filter((approval) => approval.adminUserId === user.id && !approval.approvedAt && approval.expiresAt > now)
+      .map((approval) => ({
+        id: approval.id,
+        deviceId: approval.deviceId,
+        userAgent: approval.userAgent,
+        createdAt: approval.createdAt,
+      })),
+  };
 }
 
 function smtpConfig() {
@@ -936,6 +980,7 @@ async function handleApi(req, res, pathname) {
       audit: user.role === "ADMIN" ? db.audit.slice(0, 50) : [],
       tickets: db.tickets.slice(0, 120).map((ticket) => publicTicket(ticket, db)),
       presence: publicPresence(db),
+      deviceSecurity: publicDeviceSecurity(db, user),
       pricingConfig: publicPricingConfig(db.pricingConfig, db),
       roles: Array.from(roles).map((role) => ({ value: role, label: roleLabels[role] })),
       catalog: { services, paymentMethods, workChannels, ticketStatuses, countries: countries.map(([, country]) => country) },
@@ -1010,29 +1055,44 @@ async function handleApi(req, res, pathname) {
     if (existing.role === "ADMIN" && !deviceIsTrustedForAdmin(device, existing.id)) {
       const operatorPin = String(input.operatorPin || "");
       const hasOperatorPin = Boolean(existing.operatorPinHash);
-      const pinIsValid = hasOperatorPin
-        ? await verifyPassword(operatorPin, existing.operatorPinHash)
-        : Boolean(setupToken && operatorPin === setupToken);
-      if (!pinIsValid) {
-        audit(db, existing.id, "ADMIN_DEVICE_PIN_REQUIRED", existing.id, {
-          deviceId: device.id,
-          usingSetupTokenFallback: !hasOperatorPin,
-        });
+      const setupTokenIsValid = Boolean(setupToken && operatorPin === setupToken);
+      const pinIsValid = hasOperatorPin && await verifyPassword(operatorPin, existing.operatorPinHash);
+      const trustedDeviceExists = hasTrustedAdminDevice(db, existing.id);
+      if (!trustedDeviceExists) {
+        if (!setupTokenIsValid) {
+          audit(db, existing.id, "ADMIN_DEVICE_SETUP_REQUIRED", existing.id, { deviceId: device.id });
+          await writeDb(db);
+          res.setHeader("Set-Cookie", cookieHeader(deviceCookieName, deviceToken, deviceMaxAgeSeconds));
+          return sendJson(res, 409, {
+            error: "Codigo de instalacion requerido para autorizar el primer dispositivo admin.",
+            code: "ADMIN_DEVICE_PIN_REQUIRED",
+            pinLabel: "Codigo de instalacion",
+          });
+        }
+        trustDeviceForAdmin(device, existing.id);
+        audit(db, existing.id, "ADMIN_DEVICE_AUTHORIZED", existing.id, { deviceId: device.id, firstTrustedDevice: true });
+      } else {
+        if (!pinIsValid) {
+          audit(db, existing.id, "ADMIN_DEVICE_PIN_REQUIRED", existing.id, {
+            deviceId: device.id,
+          });
+          await writeDb(db);
+          res.setHeader("Set-Cookie", cookieHeader(deviceCookieName, deviceToken, deviceMaxAgeSeconds));
+          return sendJson(res, 409, {
+            error: "PIN operativo requerido para solicitar aprobacion de este dispositivo.",
+            code: "ADMIN_DEVICE_PIN_REQUIRED",
+            pinLabel: "PIN operativo",
+          });
+        }
+        upsertAdminDeviceApproval(db, existing, device, req);
+        audit(db, existing.id, "ADMIN_DEVICE_APPROVAL_REQUESTED", existing.id, { deviceId: device.id });
         await writeDb(db);
         res.setHeader("Set-Cookie", cookieHeader(deviceCookieName, deviceToken, deviceMaxAgeSeconds));
         return sendJson(res, 409, {
-          error: hasOperatorPin
-            ? "PIN operativo requerido para autorizar este dispositivo."
-            : "Codigo de instalacion requerido para autorizar este dispositivo. Luego configura tu PIN operativo.",
-          code: "ADMIN_DEVICE_PIN_REQUIRED",
-          pinLabel: hasOperatorPin ? "PIN operativo" : "Codigo de instalacion",
+          error: "Solicitud enviada. Aprueba este dispositivo desde una PC admin ya autorizada.",
+          code: "ADMIN_DEVICE_APPROVAL_REQUIRED",
         });
       }
-      trustDeviceForAdmin(device, existing.id);
-      audit(db, existing.id, "ADMIN_DEVICE_AUTHORIZED", existing.id, {
-        deviceId: device.id,
-        usingSetupTokenFallback: !hasOperatorPin,
-      });
     }
 
     const token = crypto.randomBytes(32).toString("base64url");
@@ -1267,6 +1327,25 @@ async function handleApi(req, res, pathname) {
     await writeDb(db);
     res.setHeader("Set-Cookie", cookieHeader(deviceCookieName, currentDevice.token, deviceMaxAgeSeconds));
     return sendJson(res, 200, { message: "Otros dispositivos y sesiones fueron revocados." });
+  }
+
+  const approveDeviceMatch = pathname.match(/^\/api\/me\/device-approvals\/([^/]+)\/approve$/);
+  if (req.method === "POST" && approveDeviceMatch) {
+    if (!requireUser(user, res)) return;
+    if (user.role !== "ADMIN") return sendJson(res, 403, { error: "Solo administrador puede aprobar dispositivos." });
+    const db = await readDb();
+    const approval = db.deviceApprovals.find((candidate) => {
+      return candidate.id === approveDeviceMatch[1] && candidate.adminUserId === user.id && !candidate.approvedAt && candidate.expiresAt > Date.now();
+    });
+    if (!approval) return sendJson(res, 404, { error: "Solicitud de dispositivo no encontrada o vencida." });
+    const device = db.devices.find((candidate) => candidate.id === approval.deviceId);
+    if (!device) return sendJson(res, 404, { error: "Dispositivo no encontrado." });
+    trustDeviceForAdmin(device, user.id);
+    approval.approvedAt = nowIso();
+    db.deviceApprovals = db.deviceApprovals.filter((candidate) => candidate.id !== approval.id);
+    audit(db, user.id, "ADMIN_DEVICE_APPROVED", user.id, { deviceId: device.id });
+    await writeDb(db);
+    return sendJson(res, 200, { message: "Dispositivo aprobado. Ya puede iniciar sesion con tu cuenta admin." });
   }
 
   if (req.method === "POST" && pathname === "/api/logout") {

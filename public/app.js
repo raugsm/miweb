@@ -23,6 +23,7 @@ const changePasswordMessage = document.querySelector("#change-password-message")
 const operatorPinForm = document.querySelector("#operator-pin-form");
 const operatorPinMessage = document.querySelector("#operator-pin-message");
 const revokeDevicesButton = document.querySelector("#revoke-devices-button");
+const deviceApprovalsPanel = document.querySelector("#device-approvals-panel");
 const usersTable = document.querySelector("#users-table");
 const auditList = document.querySelector("#audit-list");
 const pricingRatesTable = document.querySelector("#pricing-rates-table");
@@ -66,6 +67,7 @@ function emptySession() {
     roles: [],
     tickets: [],
     presence: { onlineUsersCount: 0, onlineUsers: [] },
+    deviceSecurity: { pendingApprovals: [] },
     pricingConfig: { exchangeRates: [], serviceRules: [] },
     catalog: { services: [], paymentMethods: [] },
   };
@@ -226,6 +228,23 @@ function renderPresence() {
   activeUsersCount.textContent = String(session.presence?.onlineUsersCount || 0);
 }
 
+function renderDeviceApprovals() {
+  const approvals = session.deviceSecurity?.pendingApprovals || [];
+  if (!isAdmin() || !approvals.length) {
+    deviceApprovalsPanel.innerHTML = "";
+    return;
+  }
+  deviceApprovalsPanel.innerHTML = `
+    <strong>Dispositivos pendientes</strong>
+    ${approvals.map((approval) => `
+      <div class="device-approval-row">
+        <span>${escapeHtml(formatDate(approval.createdAt))}<small>${escapeHtml(approval.userAgent || "Navegador desconocido")}</small></span>
+        <button class="mini-btn" type="button" data-approve-device="${escapeHtml(approval.id)}">Aprobar</button>
+      </div>
+    `).join("")}
+  `;
+}
+
 function stopPresenceRefresh() {
   if (!presenceTimer) return;
   clearInterval(presenceTimer);
@@ -255,6 +274,7 @@ function renderLayout() {
 
   const pending = isAdmin() ? session.users.filter((user) => !user.active).length : "-";
   renderPresence();
+  renderDeviceApprovals();
   pendingUsersCount.textContent = String(pending);
 
   renderUsers();
@@ -1173,6 +1193,21 @@ revokeDevicesButton.addEventListener("click", async () => {
   operatorPinMessage.textContent = "";
   try {
     const payload = await api("/api/me/revoke-devices", { method: "POST" });
+    operatorPinMessage.textContent = payload.message;
+    operatorPinMessage.dataset.type = "success";
+    await refreshSession();
+  } catch (error) {
+    operatorPinMessage.textContent = error.message;
+    operatorPinMessage.dataset.type = "error";
+  }
+});
+
+deviceApprovalsPanel.addEventListener("click", async (event) => {
+  const approvalId = event.target.dataset.approveDevice;
+  if (!approvalId) return;
+  operatorPinMessage.textContent = "";
+  try {
+    const payload = await api(`/api/me/device-approvals/${approvalId}/approve`, { method: "POST" });
     operatorPinMessage.textContent = payload.message;
     operatorPinMessage.dataset.type = "success";
     await refreshSession();
