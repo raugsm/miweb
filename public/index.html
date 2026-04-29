@@ -55,12 +55,12 @@
                 <option value="WhatsApp 3">WhatsApp 3</option>
               </select>
             </label>
-            <label>
+            <label id="setup-token-field">
               Codigo de instalacion
               <input name="setupToken" autocomplete="one-time-code" />
             </label>
             <button class="primary-btn" type="submit">Crear cuenta</button>
-            <p class="small-note">El codigo de instalacion solo protege la creacion del primer administrador en nube.</p>
+            <p id="setup-token-note" class="small-note">Solo se solicita cuando la nube esta vacia y se crea el primer administrador.</p>
           </form>
 
           <form id="reset-password-form" class="form">

@@ -807,10 +807,12 @@ async function handleApi(req, res, pathname) {
   }
 
   if (req.method === "GET" && pathname === "/api/session") {
-    if (!user) return sendJson(res, 200, { user: null });
     const db = await readDb();
+    const setupRequired = db.users.length === 0 && Boolean(setupToken);
+    if (!user) return sendJson(res, 200, { user: null, setupRequired });
     return sendJson(res, 200, {
       user: publicUser(user),
+      setupRequired,
       users: user.role === "ADMIN" ? db.users.map(publicUser) : [],
       clients: db.clients.slice(0, 300).map((client) => publicClient(client, db)),
       audit: user.role === "ADMIN" ? db.audit.slice(0, 50) : [],

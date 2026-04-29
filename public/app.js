@@ -9,6 +9,8 @@ const resetTokenInput = document.querySelector("#reset-token-input");
 const loginTab = document.querySelector("#login-tab");
 const registerTab = document.querySelector("#register-tab");
 const resetTab = document.querySelector("#reset-tab");
+const setupTokenField = document.querySelector("#setup-token-field");
+const setupTokenNote = document.querySelector("#setup-token-note");
 const welcomeTitle = document.querySelector("#welcome-title");
 const roleBadge = document.querySelector("#role-badge");
 const currentRoleLabel = document.querySelector("#current-role-label");
@@ -119,6 +121,14 @@ function showMessage(text, type = "neutral") {
   authMessage.dataset.type = type;
 }
 
+function syncRegistrationSetupField() {
+  const showSetupToken = Boolean(session.setupRequired);
+  setupTokenField.classList.toggle("hidden", !showSetupToken);
+  setupTokenNote.classList.toggle("hidden", !showSetupToken);
+  registerForm.elements.setupToken.required = showSetupToken;
+  if (!showSetupToken) registerForm.elements.setupToken.value = "";
+}
+
 function switchTab(tab) {
   const isLogin = tab === "login";
   const isRegister = tab === "register";
@@ -130,6 +140,7 @@ function switchTab(tab) {
   registerForm.classList.toggle("active", isRegister);
   resetPasswordForm.classList.toggle("active", isReset && resetMode === "request");
   completeResetForm.classList.toggle("active", isReset && resetMode === "complete");
+  if (isRegister) syncRegistrationSetupField();
   showMessage("");
 }
 
@@ -169,6 +180,7 @@ function syncNavigationForRole() {
 
 function renderLayout() {
   const loggedIn = Boolean(session.user);
+  syncRegistrationSetupField();
   authView.classList.toggle("hidden", loggedIn);
   dashboardView.classList.toggle("hidden", !loggedIn);
   if (!loggedIn) return;
