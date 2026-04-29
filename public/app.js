@@ -41,6 +41,7 @@ const copyPaymentPreview = document.querySelector("#copy-payment-preview");
 const ticketMessage = document.querySelector("#ticket-message");
 const manualCopyPanel = document.querySelector("#manual-copy-panel");
 const manualCopyText = document.querySelector("#manual-copy-text");
+const ticketChannelFilter = document.querySelector("#ticket-channel-filter");
 const ticketBoard = document.querySelector("#ticket-board");
 const ticketsTable = document.querySelector("#tickets-table");
 const paymentProofFiles = document.querySelector("#payment-proof-files");
@@ -78,6 +79,7 @@ let pendingFinalLogResolve = null;
 let pendingFinalLogImages = [];
 let pendingPaymentProofTicketId = "";
 let draggingTicketId = "";
+let selectedChannelFilter = "mine";
 let lastPaymentCountryKey = "";
 let resetMode = "request";
 let presenceTimer = null;
@@ -195,7 +197,52 @@ function isAdmin() {
 }
 
 function canManagePricing() {
-  return ["ADMIN", "COORDINADOR"].includes(session.user?.role);
+  return isAdmin();
+}
+
+function availableWorkChannels() {
+  return session.catalog?.workChannels?.length
+    ? session.catalog.workChannels
+    : ["WhatsApp 1", "WhatsApp 2", "WhatsApp 3"];
+}
+
+function currentUserChannel() {
+  return session.user?.workChannel || "";
+}
+
+function ticketCurrentChannel(ticket) {
+  return ticket.currentChannel || ticket.workerChannel || ticket.originChannel || "";
+}
+
+function ticketOriginChannel(ticket) {
+  return ticket.originChannel || ticket.workerChannel || ticket.currentChannel || "";
+}
+
+function channelFilterTarget() {
+  if (selectedChannelFilter === "all") return "";
+  if (selectedChannelFilter === "mine") return currentUserChannel();
+  return selectedChannelFilter;
+}
+
+function matchesSelectedChannel(channel) {
+  const target = channelFilterTarget();
+  if (!target) return true;
+  return channel === target;
+}
+
+function filteredTickets() {
+  return (session.tickets || []).filter((ticket) => matchesSelectedChannel(ticketCurrentChannel(ticket)));
+}
+
+function filteredClients() {
+  return (session.clients || []).filter((client) => matchesSelectedChannel(client.workChannel || ""));
+}
+
+function normalizeChannelFilter() {
+  if (selectedChannelFilter === "all" || selectedChannelFilter === "mine") return;
+  if (!availableWorkChannels().includes(selectedChannelFilter)) {
+    selectedChannelFilter = "mine";
+  }
 }
 
 function canOpenPanel(panelId) {
@@ -226,6 +273,24 @@ function syncNavigationForRole() {
 
 function renderPresence() {
   activeUsersCount.textContent = String(session.presence?.onlineUsersCount || 0);
+}
+
+function renderChannelFilter() {
+  if (!ticketChannelFilter) return;
+  normalizeChannelFilter();
+  const myChannel = currentUserChannel();
+  const filters = [
+    { value: "mine", label: myChannel ? `Mi canal - ${myChannel}` : "Mi canal" },
+    { value: "all", label: "Todos" },
+    ...availableWorkChannels().map((channel) => ({ value: channel, label: channel })),
+  ];
+  ticketChannelFilter.innerHTML = filters
+    .map((filter) => `
+      <button class="channel-chip${selectedChannelFilter === filter.value ? " active" : ""}" type="button" data-channel-filter="${escapeHtml(filter.value)}">
+        ${escapeHtml(filter.label)}
+      </button>
+    `)
+    .join("");
 }
 
 function renderDeviceApprovals() {
@@ -277,6 +342,7 @@ function renderLayout() {
   renderDeviceApprovals();
   pendingUsersCount.textContent = String(pending);
 
+  renderChannelFilter();
   renderUsers();
   renderAudit();
   renderCatalog();
@@ -288,7 +354,7 @@ function renderLayout() {
 
 function renderCatalog() {
   const services = session.catalog?.services || [];
-  const clients = session.clients || [];
+  const clients = filteredClients();
   clientOptions.innerHTML = clients
     .map((client) => `<option value="${escapeHtml([client.name, client.country].filter(Boolean).join(" "))}"></option>`)
     .join("");
@@ -353,7 +419,13 @@ function renderClients() {
     return;
   }
 
-  clientsTable.innerHTML = session.clients
+  const clients = filteredClients();
+  if (!clients.length) {
+    clientsTable.innerHTML = `<tr><td colspan="5" class="muted-cell">No hay clientes para este canal.</td></tr>`;
+    return;
+  }
+
+  clientsTable.innerHTML = clients
     .map((client) => `
       <tr>
         <td><strong>${escapeHtml(client.name)}</strong></td>
@@ -381,8 +453,8 @@ function renderPricingModeOptions(selectedMode) {
 function renderPricing() {
   if (!pricingRatesTable || !pricingRulesTable) return;
   if (!canManagePricing()) {
-    pricingRatesTable.innerHTML = `<tr><td colspan="5" class="muted-cell">Solo administrador o coordinador puede modificar tasas.</td></tr>`;
-    pricingRulesTable.innerHTML = `<tr><td colspan="11" class="muted-cell">Solo administrador o coordinador puede modificar reglas de costo.</td></tr>`;
+    pricingRatesTable.innerHTML = `<tr><td colspan="5" class="muted-cell">Solo administrador puede modificar tasas.</td></tr>`;
+    pricingRulesTable.innerHTML = `<tr><td colspan="11" class="muted-cell">Solo administrador puede modificar reglas de costo.</td></tr>`;
     return;
   }
 
@@ -465,13 +537,43 @@ function renderAudit() {
     .join("");
 }
 
+function channelOptionsMarkup(selectedChannel) {
+  return availableWorkChannels()
+    .map((channel) => `<option value="${escapeHtml(channel)}" ${selectedChannel === channel ? "selected" : ""}>${escapeHtml(channel)}</option>`)
+    .join("");
+}
+
+function renderTicketChannelCell(ticket) {
+  const currentChannel = ticketCurrentChannel(ticket) || "-";
+  const originChannel = ticketOriginChannel(ticket) || "-";
+  if (isAdmin()) {
+    return `
+      <select class="table-input channel-select" data-ticket-channel="${escapeHtml(ticket.id)}">
+        ${channelOptionsMarkup(currentChannel)}
+      </select>
+      <button class="mini-btn compact-action" type="button" data-save-ticket-channel="${escapeHtml(ticket.id)}">Guardar canal</button>
+      <span class="table-subtext">Origen: ${escapeHtml(originChannel)}</span>
+    `;
+  }
+  return `
+    <strong>${escapeHtml(currentChannel)}</strong>
+    <span class="table-subtext">Origen: ${escapeHtml(originChannel)}</span>
+  `;
+}
+
 function renderTickets() {
   if (!session.tickets?.length) {
     ticketsTable.innerHTML = `<tr><td colspan="9" class="muted-cell">Todavia no hay tickets creados.</td></tr>`;
     return;
   }
 
-  ticketsTable.innerHTML = session.tickets
+  const tickets = filteredTickets();
+  if (!tickets.length) {
+    ticketsTable.innerHTML = `<tr><td colspan="9" class="muted-cell">No hay tickets para este canal.</td></tr>`;
+    return;
+  }
+
+  ticketsTable.innerHTML = tickets
     .map((ticket) => {
       const paymentLines = renderPaymentLines(ticket.paymentDetails);
       const showPaymentReview = canReviewPayments() && ticket.paymentStatus === "PAGO_EN_VALIDACION" && ticket.paymentProofs?.length;
@@ -488,7 +590,7 @@ function renderTickets() {
             <span class="table-subtext">${escapeHtml(ticket.operationalStatus)}</span>
             ${ticket.finalImages?.length ? `<span class="table-subtext">${ticket.finalImages.length} imagen(es) de cierre</span>` : ""}
           </td>
-          <td>${escapeHtml(ticket.workerChannel || "-")}</td>
+          <td>${renderTicketChannelCell(ticket)}</td>
           <td>${escapeHtml(ticket.createdByName)}</td>
           <td class="action-stack">
             <button class="mini-btn" type="button" data-copy-ticket="${ticket.id}">Copiar</button>
@@ -511,7 +613,7 @@ function renderTicketBoard() {
     { code: "EN_PROCESO", label: "En proceso" },
     { code: "FINALIZADO", label: "Finalizado" },
   ];
-  const tickets = session.tickets || [];
+  const tickets = filteredTickets();
   ticketBoard.innerHTML = statuses
     .map((status) => {
       const statusTickets = tickets.filter((ticket) => ticket.operationalStatus === status.code);
@@ -543,12 +645,14 @@ function renderTicketBoard() {
 
 function renderTicketCard(ticket) {
   const isFinalized = ticket.operationalStatus === "FINALIZADO";
+  const channel = ticketCurrentChannel(ticket);
   return `
     <article class="ticket-card${isFinalized ? " is-locked" : ""}" draggable="${isFinalized ? "false" : "true"}" data-ticket-id="${ticket.id}">
       <strong>${escapeHtml(ticket.code)}</strong>
       <span>${escapeHtml(ticket.clientName)}</span>
       <small>${escapeHtml(ticket.serviceName)}${ticket.model ? ` - ${escapeHtml(ticket.model)}` : ""}</small>
       <small>${escapeHtml(formatTicketPrice(ticket))} - ${escapeHtml(ticket.paymentLabel)}</small>
+      ${channel ? `<small>Canal: ${escapeHtml(channel)}</small>` : ""}
       ${ticket.paymentProofs?.length ? `<small>${ticket.paymentProofs.length} comprobante(s)</small>` : `<small class="drop-hint">Suelta comprobante aqui</small>`}
       ${ticket.finalImages?.length ? `<small>${ticket.finalImages.length} imagen(es) de cierre</small>` : ""}
       <em>${escapeHtml(paymentStatusLabel(ticket.paymentStatus))}</em>
@@ -1267,6 +1371,17 @@ document.querySelectorAll(".nav-item").forEach((button) => {
   });
 });
 
+ticketChannelFilter.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-channel-filter]");
+  if (!button) return;
+  selectedChannelFilter = button.dataset.channelFilter;
+  renderChannelFilter();
+  renderCatalog();
+  renderClients();
+  renderTicketBoard();
+  renderTickets();
+});
+
 usersTable.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-save-user]");
   if (!button) return;
@@ -1341,6 +1456,30 @@ pricingRulesTable.addEventListener("click", async (event) => {
     pricingMessage.dataset.type = "error";
   } finally {
     button.disabled = false;
+  }
+});
+
+ticketsTable.addEventListener("click", async (event) => {
+  const channelButton = event.target.closest("[data-save-ticket-channel]");
+  if (!channelButton) return;
+  const ticketId = channelButton.dataset.saveTicketChannel;
+  const selector = ticketsTable.querySelector(`[data-ticket-channel="${ticketId}"]`);
+  if (!selector) return;
+  channelButton.disabled = true;
+  ticketMessage.textContent = "";
+  try {
+    await api(`/api/tickets/${ticketId}/channel`, {
+      method: "PATCH",
+      body: JSON.stringify({ currentChannel: selector.value }),
+    });
+    ticketMessage.textContent = "Canal responsable actualizado.";
+    ticketMessage.dataset.type = "success";
+    await refreshSession();
+  } catch (error) {
+    ticketMessage.textContent = error.message;
+    ticketMessage.dataset.type = "error";
+  } finally {
+    channelButton.disabled = false;
   }
 });
 

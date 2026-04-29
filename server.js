@@ -15,7 +15,7 @@ const enableSetupPasswordReset = ["true", "1", "yes"].includes(String(process.en
 const ownerRecoveryEmail = normalizeEmail(process.env.ARIAD_OWNER_RECOVERY_EMAIL || "");
 const publicBaseUrl = String(process.env.ARIAD_PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || `http://localhost:${port}`).replace(/\/+$/, "");
 const mailFrom = process.env.ARIAD_MAIL_FROM || '"AriadGSM Soporte" <soporte@ariadgsm.com>';
-const appVersion = "device-approval-v1";
+const appVersion = "channel-ops-v1";
 const sessionVersion = 7;
 const trustedDeviceVersion = 3;
 const deviceApprovalExpiresMs = 15 * 60 * 1000;
@@ -303,6 +303,9 @@ async function readDb() {
     changed = true;
   }
   for (const ticket of db.tickets) {
+    if (ensureTicketChannels(ticket, db)) {
+      changed = true;
+    }
     const hasProofs = Array.isArray(ticket.paymentProofs) && ticket.paymentProofs.length > 0;
     const wasAutoAccepted = hasProofs && ticket.paymentStatus === "COMPROBANTE_RECIBIDO" && !ticket.paymentReviewedAt;
     if (wasAutoAccepted) {
@@ -349,6 +352,33 @@ function publicClient(client, db = { users: [] }) {
     createdAt: client.createdAt,
     updatedAt: client.updatedAt,
   };
+}
+
+function fallbackTicketChannel(ticket, db = { users: [] }) {
+  const creator = db.users.find((candidate) => candidate.id === ticket.createdBy);
+  return normalizeWorkChannel(ticket.currentChannel)
+    || normalizeWorkChannel(ticket.workerChannel)
+    || normalizeWorkChannel(ticket.originChannel)
+    || normalizeWorkChannel(creator?.workChannel)
+    || "";
+}
+
+function ensureTicketChannels(ticket, db = { users: [] }) {
+  let changed = false;
+  const fallback = fallbackTicketChannel(ticket, db);
+  if (!normalizeWorkChannel(ticket.originChannel) && fallback) {
+    ticket.originChannel = fallback;
+    changed = true;
+  }
+  if (!normalizeWorkChannel(ticket.currentChannel)) {
+    ticket.currentChannel = fallback || normalizeWorkChannel(ticket.originChannel);
+    changed = true;
+  }
+  if (!normalizeWorkChannel(ticket.workerChannel) && ticket.currentChannel) {
+    ticket.workerChannel = ticket.currentChannel;
+    changed = true;
+  }
+  return changed;
 }
 
 function publicPricingConfig(config, db = { users: [] }) {
@@ -724,8 +754,8 @@ function requirePaymentReviewer(user, res) {
 
 function requirePricingManager(user, res) {
   if (!requireUser(user, res)) return false;
-  if (!["ADMIN", "COORDINADOR"].includes(user.role)) {
-    sendJson(res, 403, { error: "Solo administrador o coordinador puede modificar precios y tasas." });
+  if (user.role !== "ADMIN") {
+    sendJson(res, 403, { error: "Solo administrador puede modificar precios y tasas." });
     return false;
   }
   return true;
@@ -949,11 +979,22 @@ function completeClientFromContext(db, user, client, whatsapp = "") {
 
 function publicTicket(ticket, db) {
   const creator = db.users.find((candidate) => candidate.id === ticket.createdBy);
+  const lastHandler = db.users.find((candidate) => candidate.id === ticket.lastHandledBy);
   const payment = paymentMethods.find((candidate) => candidate.code === ticket.paymentMethod);
+  const originChannel = normalizeWorkChannel(ticket.originChannel)
+    || normalizeWorkChannel(ticket.workerChannel)
+    || normalizeWorkChannel(creator?.workChannel)
+    || "";
+  const currentChannel = normalizeWorkChannel(ticket.currentChannel)
+    || normalizeWorkChannel(ticket.workerChannel)
+    || originChannel;
   return {
     ...ticket,
     createdByName: creator?.name || "Sistema",
-    workerChannel: ticket.workerChannel || creator?.workChannel || "",
+    lastHandledByName: lastHandler?.name || "",
+    originChannel,
+    currentChannel,
+    workerChannel: currentChannel || creator?.workChannel || "",
     priceFormatted: ticket.priceFormatted || formatPaymentAmount(ticket.price, payment),
     paymentDetails: Array.isArray(ticket.paymentDetails) ? ticket.paymentDetails : payment?.details || [],
     paymentProofs: Array.isArray(ticket.paymentProofs) ? ticket.paymentProofs : [],
@@ -1487,6 +1528,7 @@ async function handleApi(req, res, pathname) {
       return sendJson(res, 400, { error: "Este servicio requiere modelo del equipo." });
     }
 
+    const ticketChannel = normalizeWorkChannel(user.workChannel);
     const ticket = {
       id: crypto.randomUUID(),
       code: nextTicketCode(db),
@@ -1503,7 +1545,9 @@ async function handleApi(req, res, pathname) {
       paymentLabel: payment.label,
       paymentDetails: payment.details,
       paymentProofs: [],
-      workerChannel: user.workChannel || "",
+      originChannel: ticketChannel,
+      currentChannel: ticketChannel,
+      workerChannel: ticketChannel,
       paymentStatus: "ESPERANDO_COMPROBANTE",
       operationalStatus: "TICKET_CREADO",
       createdBy: user.id,
@@ -1513,7 +1557,12 @@ async function handleApi(req, res, pathname) {
       finalImages: [],
     };
     db.tickets.unshift(ticket);
-    audit(db, user.id, "TICKET_CREATED", ticket.id, { code: ticket.code, service: ticket.serviceCode });
+    audit(db, user.id, "TICKET_CREATED", ticket.id, {
+      code: ticket.code,
+      service: ticket.serviceCode,
+      originChannel: ticket.originChannel,
+      currentChannel: ticket.currentChannel,
+    });
     await writeDb(db);
     return sendJson(res, 201, { ticket: publicTicket(ticket, db) });
   }
@@ -1562,11 +1611,14 @@ async function handleApi(req, res, pathname) {
       ticket.paymentStatus = "PAGO_EN_VALIDACION";
     }
     ticket.updatedAt = nowIso();
+    ticket.lastHandledBy = user.id;
+    ticket.lastHandledAt = ticket.updatedAt;
     audit(db, user.id, "PAYMENT_PROOF_UPLOADED", ticket.id, {
       code: ticket.code,
       proofCount: proofs.length,
       paymentStatus: ticket.paymentStatus,
       operationalStatus: ticket.operationalStatus,
+      currentChannel: fallbackTicketChannel(ticket, db),
     });
     await writeDb(db);
     return sendJson(res, 200, { ticket: publicTicket(ticket, db) });
@@ -1620,12 +1672,15 @@ async function handleApi(req, res, pathname) {
     }
 
     ticket.updatedAt = nowIso();
+    ticket.lastHandledBy = user.id;
+    ticket.lastHandledAt = ticket.updatedAt;
     audit(db, user.id, action === "approve" ? "PAYMENT_PROOF_APPROVED" : "PAYMENT_PROOF_REJECTED", ticket.id, {
       code: ticket.code,
       fromPaymentStatus: previousPaymentStatus,
       toPaymentStatus: ticket.paymentStatus,
       fromOperationalStatus: previousOperationalStatus,
       toOperationalStatus: ticket.operationalStatus,
+      currentChannel: fallbackTicketChannel(ticket, db),
     });
     await writeDb(db);
     return sendJson(res, 200, { ticket: publicTicket(ticket, db) });
@@ -1662,10 +1717,52 @@ async function handleApi(req, res, pathname) {
       if (finalImages.length) ticket.finalImages = finalImages;
     }
     ticket.updatedAt = nowIso();
+    ticket.lastHandledBy = user.id;
+    ticket.lastHandledAt = ticket.updatedAt;
     audit(db, user.id, "TICKET_STATUS_UPDATED", ticket.id, {
       code: ticket.code,
       from: previous,
       to: status.code,
+      currentChannel: fallbackTicketChannel(ticket, db),
+    });
+    await writeDb(db);
+    return sendJson(res, 200, { ticket: publicTicket(ticket, db) });
+  }
+
+  const ticketChannelMatch = pathname.match(/^\/api\/tickets\/([^/]+)\/channel$/);
+  if (req.method === "PATCH" && ticketChannelMatch) {
+    if (!requireUser(user, res)) return;
+    const input = await parseJson(req);
+    const db = await readDb();
+    if (user.role !== "ADMIN") {
+      audit(db, user.id, "TICKET_CHANNEL_UPDATE_DENIED", ticketChannelMatch[1], {
+        requestedChannel: cleanText(input.currentChannel, 40),
+        role: user.role,
+      });
+      await writeDb(db);
+      return sendJson(res, 403, { error: "Solo administrador puede reasignar el canal responsable de un ticket." });
+    }
+    const ticket = db.tickets.find((candidate) => candidate.id === ticketChannelMatch[1]);
+    if (!ticket) return sendJson(res, 404, { error: "Ticket no encontrado." });
+    const nextChannel = normalizeWorkChannel(input.currentChannel);
+    if (!nextChannel) return sendJson(res, 400, { error: "Canal responsable invalido." });
+
+    ensureTicketChannels(ticket, db);
+    const previousChannel = fallbackTicketChannel(ticket, db);
+    if (previousChannel === nextChannel) {
+      return sendJson(res, 200, { ticket: publicTicket(ticket, db) });
+    }
+
+    ticket.currentChannel = nextChannel;
+    ticket.workerChannel = nextChannel;
+    ticket.updatedAt = nowIso();
+    ticket.lastHandledBy = user.id;
+    ticket.lastHandledAt = ticket.updatedAt;
+    audit(db, user.id, "TICKET_CHANNEL_UPDATED", ticket.id, {
+      code: ticket.code,
+      from: previousChannel,
+      to: nextChannel,
+      originChannel: normalizeWorkChannel(ticket.originChannel),
     });
     await writeDb(db);
     return sendJson(res, 200, { ticket: publicTicket(ticket, db) });
