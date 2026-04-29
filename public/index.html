@@ -22,18 +22,14 @@
             <button id="reset-tab" class="tab" type="button">Recuperar</button>
           </div>
 
-          <form id="login-form" class="form active">
+          <form id="login-form" class="form active" autocomplete="off">
             <label>
               Correo
-              <input name="email" type="email" autocomplete="email" required />
+              <input name="email" type="email" autocomplete="off" required />
             </label>
             <label>
               Contrasena
-              <input name="password" type="password" autocomplete="current-password" minlength="8" required />
-            </label>
-            <label class="inline-check remember-check">
-              <input id="remember-login" name="remember" type="checkbox" checked />
-              Recordarme en este equipo
+              <input name="password" type="password" autocomplete="off" minlength="8" required />
             </label>
             <button class="primary-btn" type="submit">Entrar</button>
           </form>

@@ -15,6 +15,8 @@ const enableSetupPasswordReset = ["true", "1", "yes"].includes(String(process.en
 const ownerRecoveryEmail = normalizeEmail(process.env.ARIAD_OWNER_RECOVERY_EMAIL || "");
 const publicBaseUrl = String(process.env.ARIAD_PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || `http://localhost:${port}`).replace(/\/+$/, "");
 const mailFrom = process.env.ARIAD_MAIL_FROM || '"AriadGSM Soporte" <soporte@ariadgsm.com>';
+const sessionVersion = 3;
+const sessionMaxAgeSeconds = 60 * 60 * 8;
 const resetTokenExpiresMs = 15 * 60 * 1000;
 const resetRequestWindowMs = 15 * 60 * 1000;
 const maxResetRequestsPerWindow = 5;
@@ -525,7 +527,7 @@ async function getCurrentUser(req) {
   const db = await readDb();
   const now = Date.now();
   const before = db.sessions.length;
-  db.sessions = db.sessions.filter((session) => session.expiresAt > now);
+  db.sessions = db.sessions.filter((session) => session.expiresAt > now && session.version === sessionVersion);
   const session = db.sessions.find((candidate) => candidate.tokenHash === hashToken(token));
   if (db.sessions.length !== before) await writeDb(db);
   if (!session) {
@@ -878,17 +880,16 @@ async function handleApi(req, res, pathname) {
     }
 
     const token = crypto.randomBytes(32).toString("base64url");
-    const remember = input.remember === true || input.remember === "on";
-    const maxAge = remember ? 60 * 60 * 24 * 30 : 60 * 60 * 12;
+    const maxAge = sessionMaxAgeSeconds;
     const expiresAt = Date.now() + maxAge * 1000;
-    db.sessions = db.sessions.filter((session) => session.expiresAt > Date.now());
+    db.sessions = db.sessions.filter((session) => session.expiresAt > Date.now() && session.version === sessionVersion);
     db.sessions.push({
       id: crypto.randomUUID(),
       userId: existing.id,
       tokenHash: hashToken(token),
+      version: sessionVersion,
       createdAt: nowIso(),
       expiresAt,
-      remember,
     });
     audit(db, existing.id, "LOGIN_SUCCESS", existing.id);
     await writeDb(db);

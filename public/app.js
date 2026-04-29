@@ -6,7 +6,6 @@ const registerForm = document.querySelector("#register-form");
 const resetPasswordForm = document.querySelector("#reset-password-form");
 const completeResetForm = document.querySelector("#complete-reset-form");
 const resetTokenInput = document.querySelector("#reset-token-input");
-const rememberLogin = document.querySelector("#remember-login");
 const loginTab = document.querySelector("#login-tab");
 const registerTab = document.querySelector("#register-tab");
 const resetTab = document.querySelector("#reset-tab");
@@ -947,12 +946,8 @@ function syncSelectedService() {
   }
 }
 
-function restoreRememberedLogin() {
-  const email = localStorage.getItem("ariad_last_email");
-  if (email) {
-    loginForm.elements.email.value = email;
-    rememberLogin.checked = true;
-  }
+function clearRememberedLogin() {
+  localStorage.removeItem("ariad_last_email");
 }
 
 function activatePasswordResetFromUrl() {
@@ -985,11 +980,7 @@ loginForm.addEventListener("submit", async (event) => {
       method: "POST",
       body: JSON.stringify(input),
     });
-    if (input.remember) {
-      localStorage.setItem("ariad_last_email", input.email || "");
-    } else {
-      localStorage.removeItem("ariad_last_email");
-    }
+    clearRememberedLogin();
     await refreshSession();
   } catch (error) {
     showMessage(error.message, "error");
@@ -1066,6 +1057,7 @@ changePasswordForm.addEventListener("submit", async (event) => {
 
 document.querySelector("#logout-button").addEventListener("click", async () => {
   await api("/api/logout", { method: "POST" });
+  clearRememberedLogin();
   session = { user: null, users: [], clients: [], audit: [], roles: [], tickets: [], pricingConfig: { exchangeRates: [], serviceRules: [] }, catalog: { services: [], paymentMethods: [] } };
   renderLayout();
 });
@@ -1422,7 +1414,7 @@ ticketBoard.addEventListener("drop", async (event) => {
 });
 
 async function bootApplication() {
-  restoreRememberedLogin();
+  clearRememberedLogin();
   activatePasswordResetFromUrl();
   try {
     await refreshSession();
