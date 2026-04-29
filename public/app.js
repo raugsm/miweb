@@ -5,7 +5,6 @@ const loginForm = document.querySelector("#login-form");
 const registerForm = document.querySelector("#register-form");
 const resetPasswordForm = document.querySelector("#reset-password-form");
 const completeResetForm = document.querySelector("#complete-reset-form");
-const emergencyResetForm = document.querySelector("#emergency-reset-form");
 const resetTokenInput = document.querySelector("#reset-token-input");
 const rememberLogin = document.querySelector("#remember-login");
 const loginTab = document.querySelector("#login-tab");
@@ -132,7 +131,6 @@ function switchTab(tab) {
   registerForm.classList.toggle("active", isRegister);
   resetPasswordForm.classList.toggle("active", isReset && resetMode === "request");
   completeResetForm.classList.toggle("active", isReset && resetMode === "complete");
-  emergencyResetForm.classList.toggle("active", isReset && resetMode === "request");
   showMessage("");
 }
 
@@ -1042,22 +1040,6 @@ completeResetForm.addEventListener("submit", async (event) => {
     resetTokenInput.value = "";
     resetMode = "request";
     window.history.replaceState({}, document.title, window.location.pathname);
-    switchTab("login");
-  } catch (error) {
-    showMessage(error.message, "error");
-  }
-});
-
-emergencyResetForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const form = new FormData(emergencyResetForm);
-  try {
-    const payload = await api("/api/password-reset", {
-      method: "POST",
-      body: JSON.stringify(Object.fromEntries(form)),
-    });
-    showMessage(payload.message, "success");
-    emergencyResetForm.reset();
     switchTab("login");
   } catch (error) {
     showMessage(error.message, "error");

@@ -11,6 +11,7 @@ const dataDir = process.env.ARIAD_DATA_DIR || path.join(__dirname, "data");
 const dbPath = path.join(dataDir, "users.json");
 const port = Number(process.env.PORT || 4173);
 const setupToken = process.env.ARIAD_SETUP_TOKEN || "";
+const enableSetupPasswordReset = ["true", "1", "yes"].includes(String(process.env.ARIAD_ENABLE_SETUP_RESET || "").toLowerCase());
 const publicBaseUrl = String(process.env.ARIAD_PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || `http://localhost:${port}`).replace(/\/+$/, "");
 const mailFrom = process.env.ARIAD_MAIL_FROM || '"AriadGSM Soporte" <soporte@ariadgsm.com>';
 const resetTokenExpiresMs = 15 * 60 * 1000;
@@ -973,6 +974,9 @@ async function handleApi(req, res, pathname) {
   }
 
   if (req.method === "POST" && pathname === "/api/password-reset") {
+    if (!enableSetupPasswordReset) {
+      return sendJson(res, 404, { error: "Ruta no disponible." });
+    }
     const input = await parseJson(req);
     const email = normalizeEmail(input.email);
     const password = String(input.password || "");
