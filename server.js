@@ -40,10 +40,20 @@ const roleLabels = {
 };
 const workChannels = ["WhatsApp 1", "WhatsApp 2", "WhatsApp 3"];
 const services = [
-  { code: "XIA-FRP-GOOGLE", name: "Xiaomi Cuenta Google", defaultPrice: 25, requiresModel: false },
-  { code: "XIA-F4", name: "Xiaomi F4", defaultPrice: 0, requiresModel: true },
-  { code: "IREMOVAL-REGISTROS", name: "iRemoval Registros", defaultPrice: 0, requiresModel: false },
-  { code: "SERVICIO-MANUAL", name: "Servicio manual", defaultPrice: 0, requiresModel: false },
+  { code: "SOPORTE-TECNICO", name: "Soporte tecnico", defaultPrice: 0, requiresModel: false, workChannel: "WhatsApp 1" },
+  { code: "SERVICIO-MANUAL", name: "Servicio manual", defaultPrice: 0, requiresModel: false, workChannel: "WhatsApp 1" },
+  { code: "MOTOROLA", name: "Motorola", defaultPrice: 0, requiresModel: true, workChannel: "WhatsApp 2" },
+  { code: "HERRAMIENTA-VENTA", name: "Venta de herramienta", defaultPrice: 0, requiresModel: false, workChannel: "WhatsApp 2" },
+  { code: "ZTE-HERRAMIENTA-ALQUILER", name: "Alquiler herramienta ZTE", defaultPrice: 0, requiresModel: false, workChannel: "WhatsApp 2" },
+  { code: "BYPASS-MDM", name: "Bypass MDM general", defaultPrice: 0, requiresModel: true, workChannel: "WhatsApp 2" },
+  { code: "RECARGA-CREDITOS", name: "Recarga de creditos", defaultPrice: 0, requiresModel: false, workChannel: "WhatsApp 2" },
+  { code: "XIA-FRP-GOOGLE", name: "Xiaomi Cuenta Google", defaultPrice: 25, requiresModel: false, workChannel: "WhatsApp 3" },
+  { code: "XIA-MDM", name: "Xiaomi MDM", defaultPrice: 0, requiresModel: true, workChannel: "WhatsApp 3" },
+  { code: "XIA-F4", name: "Xiaomi F4", defaultPrice: 0, requiresModel: true, workChannel: "WhatsApp 3" },
+  { code: "XIA-CUENTA-MI", name: "Xiaomi Cuenta Mi", defaultPrice: 0, requiresModel: true, workChannel: "WhatsApp 3" },
+  { code: "XIA-BOOTLOOP", name: "Xiaomi Bootloop", defaultPrice: 0, requiresModel: true, workChannel: "WhatsApp 3" },
+  { code: "IREMOVAL-REGISTROS", name: "iRemoval Registros", defaultPrice: 0, requiresModel: false, workChannel: "WhatsApp 3" },
+  { code: "IPHONE-LIBERACION-RED", name: "Liberacion de red iPhone", defaultPrice: 0, requiresModel: true, workChannel: "WhatsApp 3" },
 ];
 const paymentMethods = [
   {
@@ -930,6 +940,15 @@ function allowedTicketPaymentMethods() {
   return paymentMethods.filter((payment) => payment.ticketOption);
 }
 
+function allowedServicesForUser(user) {
+  const channel = normalizeWorkChannel(user?.workChannel);
+  return services.filter((service) => service.workChannel === channel);
+}
+
+function serviceAllowedForUser(service, user) {
+  return Boolean(service && allowedServicesForUser(user).some((candidate) => candidate.code === service.code));
+}
+
 function findClientByIdentity(db, name, country, whatsapp = "") {
   const nameKey = normalizeForMatch(name);
   const countryKey = normalizeForMatch(country);
@@ -1024,7 +1043,7 @@ async function handleApi(req, res, pathname) {
       deviceSecurity: publicDeviceSecurity(db, user),
       pricingConfig: publicPricingConfig(db.pricingConfig, db),
       roles: Array.from(roles).map((role) => ({ value: role, label: roleLabels[role] })),
-      catalog: { services, paymentMethods, workChannels, ticketStatuses, countries: countries.map(([, country]) => country) },
+      catalog: { services: allowedServicesForUser(user), paymentMethods, workChannels, ticketStatuses, countries: countries.map(([, country]) => country) },
     });
   }
 
@@ -1518,6 +1537,16 @@ async function handleApi(req, res, pathname) {
 
     if (!client || !service || !payment || !Number.isFinite(price) || price < 0) {
       return sendJson(res, 400, { error: "Cliente, servicio, precio y metodo de pago son obligatorios." });
+    }
+    if (!serviceAllowedForUser(service, user)) {
+      audit(db, user.id, "TICKET_SERVICE_DENIED", null, {
+        requestedService: service.code,
+        requestedServiceName: service.name,
+        serviceChannel: service.workChannel || "",
+        userChannel: user.workChannel || "",
+      });
+      await writeDb(db);
+      return sendJson(res, 403, { error: "Este servicio no pertenece a tu WhatsApp asignado." });
     }
     const allowedPayments = allowedTicketPaymentMethods();
     if (!allowedPayments.some((candidate) => candidate.code === payment.code)) {

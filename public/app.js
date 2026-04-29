@@ -358,9 +358,12 @@ function renderCatalog() {
   clientOptions.innerHTML = clients
     .map((client) => `<option value="${escapeHtml([client.name, client.country].filter(Boolean).join(" "))}"></option>`)
     .join("");
-  ticketService.innerHTML = services
-    .map((service) => `<option value="${service.code}">${escapeHtml(service.name)}</option>`)
-    .join("");
+  ticketService.innerHTML = services.length
+    ? services
+      .map((service) => `<option value="${service.code}">${escapeHtml(service.name)}</option>`)
+      .join("")
+    : `<option value="">Sin servicios para este WhatsApp</option>`;
+  ticketService.disabled = !services.length;
   normalizeTicketClientDisplay();
   syncPaymentOptions();
   syncSelectedService();
@@ -1137,7 +1140,11 @@ function selectedService() {
 
 function syncSelectedService() {
   const service = selectedService();
-  if (!service) return;
+  if (!service) {
+    modelField.classList.add("hidden");
+    modelField.querySelector("input").required = false;
+    return;
+  }
   modelField.classList.toggle("hidden", !service.requiresModel);
   modelField.querySelector("input").required = Boolean(service.requiresModel);
   if (!ticketPrice.value || Number(ticketPrice.value) === 0) {
@@ -1591,6 +1598,11 @@ clientForm.addEventListener("submit", async (event) => {
 
 ticketForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (!selectedService()) {
+    ticketMessage.textContent = "Tu WhatsApp no tiene servicios configurados.";
+    ticketMessage.dataset.type = "error";
+    return;
+  }
   normalizeTicketClientDisplay();
   const form = new FormData(ticketForm);
   const button = ticketForm.querySelector("button[type='submit']");
