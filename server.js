@@ -15,7 +15,7 @@ const enableSetupPasswordReset = ["true", "1", "yes"].includes(String(process.en
 const ownerRecoveryEmail = normalizeEmail(process.env.ARIAD_OWNER_RECOVERY_EMAIL || "");
 const publicBaseUrl = String(process.env.ARIAD_PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || `http://localhost:${port}`).replace(/\/+$/, "");
 const mailFrom = process.env.ARIAD_MAIL_FROM || '"AriadGSM Soporte" <soporte@ariadgsm.com>';
-const appVersion = "service-channel-v1";
+const appVersion = "role-permissions-v1";
 const sessionVersion = 7;
 const trustedDeviceVersion = 3;
 const deviceApprovalExpiresMs = 15 * 60 * 1000;
@@ -407,6 +407,11 @@ function publicPricingConfig(config, db = { users: [] }) {
   };
 }
 
+function publicPricingConfigForUser(config, db, user) {
+  if (user?.role === "ADMIN") return publicPricingConfig(config, db);
+  return { exchangeRates: [], serviceRules: [] };
+}
+
 function audit(db, actorId, action, targetId, detail = {}) {
   db.audit.unshift({
     id: crypto.randomUUID(),
@@ -771,6 +776,24 @@ function requirePricingManager(user, res) {
   return true;
 }
 
+async function denySensitiveRoute(res, db, user, action, targetId, detail = {}, message = "Solo administrador puede realizar esta accion.") {
+  if (user?.id) {
+    audit(db, user.id, action, targetId, {
+      role: user.role,
+      ...detail,
+    });
+    await writeDb(db);
+  }
+  return sendJson(res, 403, { error: message });
+}
+
+async function requireAdminWithAudit(user, res, db, action, targetId, detail = {}, message = "Solo administrador puede realizar esta accion.") {
+  if (!requireUser(user, res)) return false;
+  if (user.role === "ADMIN") return true;
+  await denySensitiveRoute(res, db, user, action, targetId, detail, message);
+  return false;
+}
+
 function normalizeEmail(email) {
   return String(email || "").trim().toLowerCase();
 }
@@ -1041,8 +1064,8 @@ async function handleApi(req, res, pathname) {
       tickets: db.tickets.slice(0, 120).map((ticket) => publicTicket(ticket, db)),
       presence: publicPresence(db),
       deviceSecurity: publicDeviceSecurity(db, user),
-      pricingConfig: publicPricingConfig(db.pricingConfig, db),
-      roles: Array.from(roles).map((role) => ({ value: role, label: roleLabels[role] })),
+      pricingConfig: publicPricingConfigForUser(db.pricingConfig, db, user),
+      roles: user.role === "ADMIN" ? Array.from(roles).map((role) => ({ value: role, label: roleLabels[role] })) : [],
       catalog: { services: allowedServicesForUser(user), paymentMethods, workChannels, ticketStatuses, countries: countries.map(([, country]) => country) },
     });
   }
@@ -1340,13 +1363,14 @@ async function handleApi(req, res, pathname) {
 
   if (req.method === "POST" && pathname === "/api/me/operator-pin") {
     if (!requireUser(user, res)) return;
+    const db = await readDb();
+    if (!(await requireAdminWithAudit(user, res, db, "OPERATOR_PIN_UPDATE_DENIED", user.id, { route: pathname }, "Solo administrador puede configurar PIN operativo."))) return;
     const input = await parseJson(req);
     const currentPassword = String(input.currentPassword || "");
     const operatorPin = String(input.operatorPin || "");
     if (!validateOperatorPin(operatorPin)) {
       return sendJson(res, 400, { error: "El PIN operativo debe tener de 4 a 8 numeros." });
     }
-    const db = await readDb();
     const target = db.users.find((candidate) => candidate.id === user.id);
     if (!target || !(await verifyPassword(currentPassword, target.passwordHash))) {
       return sendJson(res, 401, { error: "Contrasena actual incorrecta." });
@@ -1374,6 +1398,7 @@ async function handleApi(req, res, pathname) {
   if (req.method === "POST" && pathname === "/api/me/revoke-devices") {
     if (!requireUser(user, res)) return;
     const db = await readDb();
+    if (!(await requireAdminWithAudit(user, res, db, "TRUSTED_DEVICES_REVOKE_DENIED", user.id, { route: pathname }, "Solo administrador puede revocar dispositivos."))) return;
     const target = db.users.find((candidate) => candidate.id === user.id);
     if (!target) return sendJson(res, 404, { error: "Usuario no encontrado." });
     const currentTokenHash = hashToken(getCookie(req, "ariad_session"));
@@ -1392,8 +1417,8 @@ async function handleApi(req, res, pathname) {
   const approveDeviceMatch = pathname.match(/^\/api\/me\/device-approvals\/([^/]+)\/approve$/);
   if (req.method === "POST" && approveDeviceMatch) {
     if (!requireUser(user, res)) return;
-    if (user.role !== "ADMIN") return sendJson(res, 403, { error: "Solo administrador puede aprobar dispositivos." });
     const db = await readDb();
+    if (!(await requireAdminWithAudit(user, res, db, "ADMIN_DEVICE_APPROVE_DENIED", approveDeviceMatch[1], { route: pathname }, "Solo administrador puede aprobar dispositivos."))) return;
     const approval = db.deviceApprovals.find((candidate) => {
       return candidate.id === approveDeviceMatch[1] && candidate.adminUserId === user.id && !candidate.approvedAt && candidate.expiresAt > Date.now();
     });
@@ -1420,8 +1445,8 @@ async function handleApi(req, res, pathname) {
   }
 
   if (req.method === "GET" && pathname === "/api/users") {
-    if (!requireAdmin(user, res)) return;
     const db = await readDb();
+    if (!(await requireAdminWithAudit(user, res, db, "USERS_READ_DENIED", "users", { route: pathname }))) return;
     return sendJson(res, 200, { users: db.users.map(publicUser) });
   }
 
@@ -1440,14 +1465,16 @@ async function handleApi(req, res, pathname) {
   if (req.method === "GET" && pathname === "/api/pricing") {
     if (!requireUser(user, res)) return;
     const db = await readDb();
+    if (!(await requireAdminWithAudit(user, res, db, "PRICING_READ_DENIED", "pricing", { route: pathname }, "Solo administrador puede ver precios y tasas."))) return;
     return sendJson(res, 200, { pricingConfig: publicPricingConfig(db.pricingConfig, db) });
   }
 
   const pricingRateMatch = pathname.match(/^\/api\/pricing\/exchange-rates\/([^/]+)$/);
   if (req.method === "PATCH" && pricingRateMatch) {
-    if (!requirePricingManager(user, res)) return;
-    const input = await parseJson(req);
+    if (!requireUser(user, res)) return;
     const db = await readDb();
+    if (!(await requireAdminWithAudit(user, res, db, "PRICING_RATE_UPDATE_DENIED", pricingRateMatch[1], { route: pathname }, "Solo administrador puede modificar precios y tasas."))) return;
+    const input = await parseJson(req);
     db.pricingConfig = normalizePricingConfig(db.pricingConfig);
     const rate = db.pricingConfig.exchangeRates.find((candidate) => candidate.key === pricingRateMatch[1]);
     if (!rate) return sendJson(res, 404, { error: "Tasa no encontrada." });
@@ -1471,9 +1498,10 @@ async function handleApi(req, res, pathname) {
 
   const pricingRuleMatch = pathname.match(/^\/api\/pricing\/service-rules\/([^/]+)$/);
   if (req.method === "PATCH" && pricingRuleMatch) {
-    if (!requirePricingManager(user, res)) return;
-    const input = await parseJson(req);
+    if (!requireUser(user, res)) return;
     const db = await readDb();
+    if (!(await requireAdminWithAudit(user, res, db, "PRICING_RULE_UPDATE_DENIED", pricingRuleMatch[1], { route: pathname }, "Solo administrador puede modificar precios y tasas."))) return;
+    const input = await parseJson(req);
     db.pricingConfig = normalizePricingConfig(db.pricingConfig);
     const rule = db.pricingConfig.serviceRules.find((candidate) => candidate.serviceCode === pricingRuleMatch[1]);
     if (!rule) return sendJson(res, 404, { error: "Regla de servicio no encontrada." });
@@ -1799,9 +1827,10 @@ async function handleApi(req, res, pathname) {
 
   const userMatch = pathname.match(/^\/api\/users\/([^/]+)$/);
   if (req.method === "PATCH" && userMatch) {
-    if (!requireAdmin(user, res)) return;
-    const input = await parseJson(req);
+    if (!requireUser(user, res)) return;
     const db = await readDb();
+    if (!(await requireAdminWithAudit(user, res, db, "USER_UPDATE_DENIED", userMatch[1], { route: pathname }))) return;
+    const input = await parseJson(req);
     const target = db.users.find((candidate) => candidate.id === userMatch[1]);
     if (!target) return sendJson(res, 404, { error: "Usuario no encontrado." });
 

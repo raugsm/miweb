@@ -17,7 +17,10 @@ const welcomeTitle = document.querySelector("#welcome-title");
 const roleBadge = document.querySelector("#role-badge");
 const currentRoleLabel = document.querySelector("#current-role-label");
 const activeUsersCount = document.querySelector("#active-users-count");
+const pendingUsersLabel = document.querySelector("#pending-users-label");
 const pendingUsersCount = document.querySelector("#pending-users-count");
+const workflowTitle = document.querySelector("#workflow-title");
+const workflowStepList = document.querySelector("#workflow-step-list");
 const changePasswordForm = document.querySelector("#change-password-form");
 const changePasswordMessage = document.querySelector("#change-password-message");
 const operatorPinForm = document.querySelector("#operator-pin-form");
@@ -200,6 +203,10 @@ function canManagePricing() {
   return isAdmin();
 }
 
+function enabledServiceNames() {
+  return (session.catalog?.services || []).map((service) => service.name || service.code).filter(Boolean);
+}
+
 function availableWorkChannels() {
   return session.catalog?.workChannels?.length
     ? session.catalog.workChannels
@@ -310,6 +317,41 @@ function renderDeviceApprovals() {
   `;
 }
 
+function renderSecurityForRole() {
+  const showAdminSecurity = isAdmin();
+  operatorPinForm.classList.toggle("hidden", !showAdminSecurity);
+  deviceApprovalsPanel.classList.toggle("hidden", !showAdminSecurity);
+  revokeDevicesButton.classList.toggle("hidden", !showAdminSecurity);
+  if (!showAdminSecurity) {
+    operatorPinMessage.textContent = "";
+    deviceApprovalsPanel.innerHTML = "";
+  }
+}
+
+function renderOverviewForRole() {
+  if (isAdmin()) {
+    pendingUsersLabel.textContent = "Pendientes";
+    pendingUsersCount.textContent = String(session.users.filter((user) => !user.active).length);
+    workflowTitle.textContent = "Base operativa v0.1";
+    workflowStepList.innerHTML = `
+      <span>Login</span>
+      <span>Registro</span>
+      <span>Asignacion de rol</span>
+      <span>Auditoria</span>
+      <span>Siguiente: tickets</span>
+    `;
+    return;
+  }
+
+  pendingUsersLabel.textContent = "Mi canal";
+  pendingUsersCount.textContent = currentUserChannel() || "-";
+  workflowTitle.textContent = "Operacion del canal";
+  const services = enabledServiceNames();
+  workflowStepList.innerHTML = services.length
+    ? services.map((service) => `<span>${escapeHtml(service)}</span>`).join("")
+    : `<span>Sin servicios habilitados</span>`;
+}
+
 function stopPresenceRefresh() {
   if (!presenceTimer) return;
   clearInterval(presenceTimer);
@@ -337,10 +379,10 @@ function renderLayout() {
   syncNavigationForRole();
   startPresenceRefresh();
 
-  const pending = isAdmin() ? session.users.filter((user) => !user.active).length : "-";
   renderPresence();
   renderDeviceApprovals();
-  pendingUsersCount.textContent = String(pending);
+  renderSecurityForRole();
+  renderOverviewForRole();
 
   renderChannelFilter();
   renderUsers();
