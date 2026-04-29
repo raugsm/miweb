@@ -15,7 +15,7 @@ const enableSetupPasswordReset = ["true", "1", "yes"].includes(String(process.en
 const ownerRecoveryEmail = normalizeEmail(process.env.ARIAD_OWNER_RECOVERY_EMAIL || "");
 const publicBaseUrl = String(process.env.ARIAD_PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || `http://localhost:${port}`).replace(/\/+$/, "");
 const mailFrom = process.env.ARIAD_MAIL_FROM || '"AriadGSM Soporte" <soporte@ariadgsm.com>';
-const sessionVersion = 4;
+const sessionVersion = 5;
 const sessionMaxAgeSeconds = 60 * 60 * 8;
 const deviceCookieName = "ariad_device";
 const deviceMaxAgeSeconds = 60 * 60 * 24 * 180;
@@ -596,6 +596,20 @@ async function getCurrentUser(req) {
     if (shouldWrite) await writeDb(db);
     return null;
   }
+  if (user.role === "ADMIN") {
+    const deviceToken = getCookie(req, deviceCookieName);
+    const device = deviceToken ? db.devices.find((candidate) => candidate.tokenHash === hashToken(deviceToken)) : null;
+    const trustedAdminDevice = device && session.deviceId === device.id && deviceIsTrustedForAdmin(device, user.id);
+    if (!trustedAdminDevice) {
+      db.sessions = db.sessions.filter((candidate) => candidate.id !== session.id);
+      audit(db, user.id, "ADMIN_SESSION_DEVICE_REJECTED", user.id, {
+        sessionDeviceId: session.deviceId || "",
+        currentDeviceId: device?.id || "",
+      });
+      await writeDb(db);
+      return null;
+    }
+  }
   if (now - Number(session.lastSeenAtMs || 0) > presenceWriteIntervalMs) {
     session.lastSeenAtMs = now;
     session.lastSeenAt = new Date(now).toISOString();
@@ -1025,6 +1039,7 @@ async function handleApi(req, res, pathname) {
       id: crypto.randomUUID(),
       userId: existing.id,
       tokenHash: hashToken(token),
+      deviceId: device.id,
       version: sessionVersion,
       createdAt: nowIso(),
       lastSeenAt: nowIso(),
