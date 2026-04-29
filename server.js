@@ -3,6 +3,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import crypto from "node:crypto";
+import nodemailer from "nodemailer";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, "public");
@@ -10,6 +11,11 @@ const dataDir = process.env.ARIAD_DATA_DIR || path.join(__dirname, "data");
 const dbPath = path.join(dataDir, "users.json");
 const port = Number(process.env.PORT || 4173);
 const setupToken = process.env.ARIAD_SETUP_TOKEN || "";
+const publicBaseUrl = String(process.env.ARIAD_PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || `http://localhost:${port}`).replace(/\/+$/, "");
+const mailFrom = process.env.ARIAD_MAIL_FROM || '"AriadGSM Soporte" <soporte@ariadgsm.com>';
+const resetTokenExpiresMs = 15 * 60 * 1000;
+const resetRequestWindowMs = 15 * 60 * 1000;
+const maxResetRequestsPerWindow = 5;
 const maxJsonBodyBytes = 12 * 1024 * 1024;
 const maxFinalLogImages = 4;
 const maxPaymentProofImages = 4;
@@ -239,7 +245,17 @@ async function ensureDb() {
   try {
     await fs.access(dbPath);
   } catch {
-    await fs.writeFile(dbPath, JSON.stringify({ users: [], sessions: [], clients: [], audit: [], tickets: [], ticketCounters: {}, pricingConfig: defaultPricingConfig() }, null, 2));
+    await fs.writeFile(dbPath, JSON.stringify({
+      users: [],
+      sessions: [],
+      clients: [],
+      audit: [],
+      tickets: [],
+      ticketCounters: {},
+      passwordResetTokens: [],
+      passwordResetRequests: [],
+      pricingConfig: defaultPricingConfig(),
+    }, null, 2));
   }
 }
 
@@ -253,8 +269,18 @@ async function readDb() {
   db.audit ||= [];
   db.tickets ||= [];
   db.ticketCounters ||= {};
+  db.passwordResetTokens ||= [];
+  db.passwordResetRequests ||= [];
   const normalizedPricingConfig = normalizePricingConfig(db.pricingConfig);
   let changed = false;
+  const now = Date.now();
+  const resetTokenCount = db.passwordResetTokens.length;
+  const resetRequestCount = db.passwordResetRequests.length;
+  db.passwordResetTokens = db.passwordResetTokens.filter((token) => !token.usedAt && token.expiresAt > now);
+  db.passwordResetRequests = db.passwordResetRequests.filter((request) => request.createdAtMs > now - resetRequestWindowMs);
+  if (db.passwordResetTokens.length !== resetTokenCount || db.passwordResetRequests.length !== resetRequestCount) {
+    changed = true;
+  }
   if (JSON.stringify(db.pricingConfig || {}) !== JSON.stringify(normalizedPricingConfig)) {
     db.pricingConfig = normalizedPricingConfig;
     changed = true;
@@ -360,6 +386,79 @@ async function verifyPassword(password, stored) {
 
 function hashToken(token) {
   return crypto.createHash("sha256").update(String(token || "")).digest("hex");
+}
+
+function smtpConfig() {
+  const host = process.env.ARIAD_SMTP_HOST || process.env.SMTP_HOST || "";
+  const user = process.env.ARIAD_SMTP_USER || process.env.SMTP_USER || "";
+  const pass = process.env.ARIAD_SMTP_PASS || process.env.SMTP_PASS || "";
+  const explicitSecure = String(process.env.ARIAD_SMTP_SECURE || process.env.SMTP_SECURE || "").toLowerCase();
+  const secure = explicitSecure ? ["true", "1", "yes"].includes(explicitSecure) : false;
+  const portValue = process.env.ARIAD_SMTP_PORT || process.env.SMTP_PORT || (secure ? "465" : "587");
+  return {
+    host,
+    port: Number(portValue),
+    secure,
+    auth: host && user && pass ? { user, pass } : null,
+  };
+}
+
+function mailIsConfigured() {
+  const config = smtpConfig();
+  return Boolean(config.host && Number.isFinite(config.port) && config.auth?.user && config.auth?.pass);
+}
+
+function htmlEscape(value) {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function clientIp(req) {
+  return cleanText(String(req.headers["x-forwarded-for"] || "").split(",")[0] || req.socket?.remoteAddress || "unknown", 80);
+}
+
+async function sendPasswordResetEmail(user, token) {
+  const config = smtpConfig();
+  if (!mailIsConfigured()) {
+    const error = new Error("Correo de recuperacion no configurado en Render.");
+    error.status = 503;
+    throw error;
+  }
+  const resetUrl = `${publicBaseUrl}/?resetToken=${encodeURIComponent(token)}`;
+  const transporter = nodemailer.createTransport({
+    host: config.host,
+    port: config.port,
+    secure: config.secure,
+    auth: config.auth,
+  });
+  const safeName = htmlEscape(user.name || "AriadGSM");
+  await transporter.sendMail({
+    from: mailFrom,
+    to: user.email,
+    subject: "Restablecer contrasena - AriadGSM Ops",
+    text: [
+      `Hola ${user.name || ""},`,
+      "",
+      "Recibimos una solicitud para restablecer tu contrasena en AriadGSM Ops.",
+      `Abre este enlace antes de 15 minutos: ${resetUrl}`,
+      "",
+      "Si no solicitaste este cambio, ignora este correo.",
+    ].join("\n"),
+    html: `
+      <div style="font-family:Arial,sans-serif;color:#101827;line-height:1.5">
+        <h2 style="margin:0 0 12px">AriadGSM Ops</h2>
+        <p>Hola ${safeName},</p>
+        <p>Recibimos una solicitud para restablecer tu contrasena.</p>
+        <p><a href="${htmlEscape(resetUrl)}" style="display:inline-block;padding:12px 16px;background:#2177f2;color:#fff;text-decoration:none;border-radius:8px;font-weight:700">Cambiar contrasena</a></p>
+        <p>Este enlace vence en 15 minutos y solo se puede usar una vez.</p>
+        <p style="color:#667085;font-size:13px">Si no solicitaste este cambio, ignora este correo.</p>
+      </div>
+    `,
+  });
 }
 
 function sendJson(res, status, payload) {
@@ -786,6 +885,91 @@ async function handleApi(req, res, pathname) {
     const secureCookie = process.env.NODE_ENV === "production" ? "; Secure" : "";
     res.setHeader("Set-Cookie", `ariad_session=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}${secureCookie}`);
     return sendJson(res, 200, { user: publicUser(existing) });
+  }
+
+  if (req.method === "POST" && pathname === "/api/password-reset/request") {
+    const genericMessage = "Si el correo existe y esta activo, enviaremos un enlace de recuperacion.";
+    if (!mailIsConfigured()) {
+      return sendJson(res, 503, { error: "Correo de recuperacion no configurado en Render." });
+    }
+
+    const input = await parseJson(req);
+    const email = normalizeEmail(input.email);
+    const db = await readDb();
+    const now = Date.now();
+    const requestEmailHash = hashToken(email);
+    const requestIpHash = hashToken(clientIp(req));
+    const recentRequests = db.passwordResetRequests.filter((request) => request.createdAtMs > now - resetRequestWindowMs);
+    const requestCount = recentRequests.filter((request) => request.emailHash === requestEmailHash || request.ipHash === requestIpHash).length;
+    db.passwordResetRequests = recentRequests.concat({
+      id: crypto.randomUUID(),
+      emailHash: requestEmailHash,
+      ipHash: requestIpHash,
+      createdAt: nowIso(),
+      createdAtMs: now,
+    });
+
+    if (!email.includes("@") || requestCount >= maxResetRequestsPerWindow) {
+      audit(db, null, requestCount >= maxResetRequestsPerWindow ? "PASSWORD_RESET_RATE_LIMITED" : "PASSWORD_RESET_REQUEST_IGNORED", null, { emailHash: requestEmailHash });
+      await writeDb(db);
+      return sendJson(res, 200, { message: genericMessage });
+    }
+
+    const target = db.users.find((candidate) => candidate.email === email && candidate.active);
+    if (target) {
+      const resetToken = crypto.randomBytes(32).toString("base64url");
+      db.passwordResetTokens = db.passwordResetTokens.filter((tokenRecord) => tokenRecord.userId !== target.id);
+      db.passwordResetTokens.push({
+        id: crypto.randomUUID(),
+        userId: target.id,
+        tokenHash: hashToken(resetToken),
+        createdAt: nowIso(),
+        expiresAt: now + resetTokenExpiresMs,
+        usedAt: "",
+      });
+      audit(db, null, "PASSWORD_RESET_EMAIL_REQUESTED", target.id, { email });
+      await writeDb(db);
+      try {
+        await sendPasswordResetEmail(target, resetToken);
+      } catch (error) {
+        const failureDb = await readDb();
+        audit(failureDb, null, "PASSWORD_RESET_EMAIL_FAILED", target.id, { email, error: cleanText(error.message, 160) });
+        await writeDb(failureDb);
+        return sendJson(res, error.status || 500, { error: "No se pudo enviar el correo de recuperacion. Revisa la configuracion SMTP." });
+      }
+    } else {
+      audit(db, null, "PASSWORD_RESET_EMAIL_REQUESTED_UNKNOWN", null, { emailHash: requestEmailHash });
+      await writeDb(db);
+    }
+
+    return sendJson(res, 200, { message: genericMessage });
+  }
+
+  if (req.method === "POST" && pathname === "/api/password-reset/confirm") {
+    const input = await parseJson(req);
+    const token = String(input.token || "");
+    const password = String(input.password || "");
+    const confirmPassword = String(input.confirmPassword || "");
+    if (!token || !validatePassword(password) || password !== confirmPassword) {
+      return sendJson(res, 400, { error: "Token valido y confirmacion de contrasena son obligatorios." });
+    }
+    const db = await readDb();
+    const tokenHash = hashToken(token);
+    const resetRecord = db.passwordResetTokens.find((record) => record.tokenHash === tokenHash && !record.usedAt && record.expiresAt > Date.now());
+    if (!resetRecord) {
+      return sendJson(res, 400, { error: "El enlace de recuperacion vencio o ya fue usado." });
+    }
+    const target = db.users.find((candidate) => candidate.id === resetRecord.userId && candidate.active);
+    if (!target) {
+      return sendJson(res, 400, { error: "No se puede recuperar una cuenta inactiva." });
+    }
+    target.passwordHash = await hashPassword(password);
+    target.updatedAt = nowIso();
+    resetRecord.usedAt = nowIso();
+    db.sessions = db.sessions.filter((session) => session.userId !== target.id);
+    audit(db, null, "PASSWORD_RESET_CONFIRMED", target.id, { email: target.email });
+    await writeDb(db);
+    return sendJson(res, 200, { message: "Contrasena actualizada. Ya puedes ingresar." });
   }
 
   if (req.method === "POST" && pathname === "/api/password-reset") {

@@ -9,6 +9,7 @@ MVP interno para login, registro, roles, tickets y auditoria.
 - Tickets con codigo `V-YYYYMMDD-001`.
 - Tablero de seguimiento por arrastre: Nuevo, En cola, En proceso y Finalizado.
 - Finalizar un ticket exige guardar el log final.
+- Recuperacion de contrasena por enlace temporal enviado desde `soporte@ariadgsm.com`.
 
 ## Local
 
@@ -26,8 +27,17 @@ Variables recomendadas:
 NODE_ENV=production
 ARIAD_DATA_DIR=/opt/render/project/src/storage
 ARIAD_SETUP_TOKEN=<codigo privado para crear el primer admin>
+ARIAD_PUBLIC_URL=https://ops.ariadgsm.com
+ARIAD_MAIL_FROM="AriadGSM Soporte" <soporte@ariadgsm.com>
+ARIAD_SMTP_HOST=<servidor smtp>
+ARIAD_SMTP_PORT=587
+ARIAD_SMTP_SECURE=false
+ARIAD_SMTP_USER=<usuario smtp>
+ARIAD_SMTP_PASS=<password o api key smtp>
 ```
 
 En Render, adjuntar un disco persistente en `/opt/render/project/src/storage`.
+
+El reset por correo no funciona hasta configurar las variables `ARIAD_SMTP_*`.
 
 No subir `data/users.json` a nube. Ese archivo contiene la base local de trabajo.

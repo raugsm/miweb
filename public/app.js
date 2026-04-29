@@ -4,6 +4,9 @@ const authMessage = document.querySelector("#auth-message");
 const loginForm = document.querySelector("#login-form");
 const registerForm = document.querySelector("#register-form");
 const resetPasswordForm = document.querySelector("#reset-password-form");
+const completeResetForm = document.querySelector("#complete-reset-form");
+const emergencyResetForm = document.querySelector("#emergency-reset-form");
+const resetTokenInput = document.querySelector("#reset-token-input");
 const rememberLogin = document.querySelector("#remember-login");
 const loginTab = document.querySelector("#login-tab");
 const registerTab = document.querySelector("#register-tab");
@@ -55,6 +58,7 @@ let pendingFinalLogImages = [];
 let pendingPaymentProofTicketId = "";
 let draggingTicketId = "";
 let lastPaymentCountryKey = "";
+let resetMode = "request";
 const adminPanelIds = new Set(["users-panel", "audit-panel"]);
 const pricingManagerPanelIds = new Set(["pricing-panel"]);
 const maxFinalLogImages = 4;
@@ -126,7 +130,9 @@ function switchTab(tab) {
   resetTab.classList.toggle("active", isReset);
   loginForm.classList.toggle("active", isLogin);
   registerForm.classList.toggle("active", isRegister);
-  resetPasswordForm.classList.toggle("active", isReset);
+  resetPasswordForm.classList.toggle("active", isReset && resetMode === "request");
+  completeResetForm.classList.toggle("active", isReset && resetMode === "complete");
+  emergencyResetForm.classList.toggle("active", isReset && resetMode === "request");
   showMessage("");
 }
 
@@ -951,6 +957,15 @@ function restoreRememberedLogin() {
   }
 }
 
+function activatePasswordResetFromUrl() {
+  const token = new URLSearchParams(window.location.search).get("resetToken");
+  if (!token) return;
+  resetTokenInput.value = token;
+  resetMode = "complete";
+  switchTab("reset");
+  showMessage("Ingresa tu nueva contrasena para terminar la recuperacion.", "neutral");
+}
+
 async function refreshSession() {
   session = await api("/api/session");
   renderLayout();
@@ -958,7 +973,10 @@ async function refreshSession() {
 
 loginTab.addEventListener("click", () => switchTab("login"));
 registerTab.addEventListener("click", () => switchTab("register"));
-resetTab.addEventListener("click", () => switchTab("reset"));
+resetTab.addEventListener("click", () => {
+  if (!resetTokenInput.value) resetMode = "request";
+  switchTab("reset");
+});
 
 loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -1000,12 +1018,46 @@ resetPasswordForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = new FormData(resetPasswordForm);
   try {
-    const payload = await api("/api/password-reset", {
+    const payload = await api("/api/password-reset/request", {
       method: "POST",
       body: JSON.stringify(Object.fromEntries(form)),
     });
     showMessage(payload.message, "success");
     resetPasswordForm.reset();
+  } catch (error) {
+    showMessage(error.message, "error");
+  }
+});
+
+completeResetForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = new FormData(completeResetForm);
+  try {
+    const payload = await api("/api/password-reset/confirm", {
+      method: "POST",
+      body: JSON.stringify(Object.fromEntries(form)),
+    });
+    showMessage(payload.message, "success");
+    completeResetForm.reset();
+    resetTokenInput.value = "";
+    resetMode = "request";
+    window.history.replaceState({}, document.title, window.location.pathname);
+    switchTab("login");
+  } catch (error) {
+    showMessage(error.message, "error");
+  }
+});
+
+emergencyResetForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = new FormData(emergencyResetForm);
+  try {
+    const payload = await api("/api/password-reset", {
+      method: "POST",
+      body: JSON.stringify(Object.fromEntries(form)),
+    });
+    showMessage(payload.message, "success");
+    emergencyResetForm.reset();
     switchTab("login");
   } catch (error) {
     showMessage(error.message, "error");
@@ -1388,4 +1440,5 @@ ticketBoard.addEventListener("drop", async (event) => {
 });
 
 restoreRememberedLogin();
+activatePasswordResetFromUrl();
 refreshSession().catch(() => renderLayout());

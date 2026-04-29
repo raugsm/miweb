@@ -11,6 +11,10 @@ services:
         value: production
       - key: ARIAD_DATA_DIR
         value: /opt/render/project/src/storage
+      - key: ARIAD_PUBLIC_URL
+        value: https://ops.ariadgsm.com
+      - key: ARIAD_MAIL_FROM
+        value: '"AriadGSM Soporte" <soporte@ariadgsm.com>'
       - key: ARIAD_SETUP_TOKEN
         generateValue: true
     disk:

@@ -69,19 +69,42 @@
 
           <form id="reset-password-form" class="form">
             <label>
-              Correo administrador
+              Correo
               <input name="email" type="email" autocomplete="email" required />
             </label>
+            <button class="primary-btn" type="submit">Enviar enlace</button>
+            <p class="small-note">Enviaremos un enlace temporal desde soporte@ariadgsm.com si la cuenta existe y esta activa.</p>
+          </form>
+
+          <form id="complete-reset-form" class="form">
+            <input id="reset-token-input" name="token" type="hidden" />
             <label>
               Nueva contrasena
               <input name="password" type="password" autocomplete="new-password" minlength="8" required />
             </label>
             <label>
-              Codigo de instalacion
-              <input name="setupToken" autocomplete="one-time-code" required />
+              Confirmar contrasena
+              <input name="confirmPassword" type="password" autocomplete="new-password" minlength="8" required />
             </label>
-            <button class="primary-btn" type="submit">Restablecer</button>
-            <p class="small-note">Solo recupera un administrador activo usando el codigo privado configurado en Render.</p>
+            <button class="primary-btn" type="submit">Guardar nueva contrasena</button>
+            <p class="small-note">El enlace vence en 15 minutos y solo se puede usar una vez.</p>
+          </form>
+
+          <form id="emergency-reset-form" class="form emergency-reset-form">
+            <p class="small-note">Emergencia administrador: usa esto solo si no puedes recibir correo.</p>
+            <label>
+              Correo administrador
+              <input name="email" type="email" autocomplete="email" />
+            </label>
+            <label>
+              Nueva contrasena
+              <input name="password" type="password" autocomplete="new-password" minlength="8" />
+            </label>
+            <label>
+              Codigo de instalacion
+              <input name="setupToken" autocomplete="one-time-code" />
+            </label>
+            <button class="secondary-btn" type="submit">Reset admin con codigo</button>
           </form>
           <p id="auth-message" class="message" aria-live="polite"></p>
         </div>
