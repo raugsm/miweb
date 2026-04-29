@@ -12,6 +12,7 @@ const dbPath = path.join(dataDir, "users.json");
 const port = Number(process.env.PORT || 4173);
 const setupToken = process.env.ARIAD_SETUP_TOKEN || "";
 const enableSetupPasswordReset = ["true", "1", "yes"].includes(String(process.env.ARIAD_ENABLE_SETUP_RESET || "").toLowerCase());
+const ownerRecoveryEmail = normalizeEmail(process.env.ARIAD_OWNER_RECOVERY_EMAIL || "");
 const publicBaseUrl = String(process.env.ARIAD_PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || `http://localhost:${port}`).replace(/\/+$/, "");
 const mailFrom = process.env.ARIAD_MAIL_FROM || '"AriadGSM Soporte" <soporte@ariadgsm.com>';
 const resetTokenExpiresMs = 15 * 60 * 1000;
@@ -999,14 +1000,36 @@ async function handleApi(req, res, pathname) {
       return sendJson(res, 400, { error: "Correo valido y nueva contrasena de 8 caracteres son obligatorios." });
     }
     const db = await readDb();
-    const target = db.users.find((candidate) => candidate.email === email && candidate.role === "ADMIN" && candidate.active);
+    let target = db.users.find((candidate) => candidate.email === email && candidate.role === "ADMIN" && candidate.active);
+    const ownerRecoveryAllowed = ownerRecoveryEmail && email === ownerRecoveryEmail;
     if (!target) {
-      return sendJson(res, 404, { error: "Solo se puede recuperar un administrador activo con este codigo." });
+      if (!ownerRecoveryAllowed) {
+        return sendJson(res, 404, { error: "Solo se puede recuperar un administrador activo o el correo propietario configurado en Render." });
+      }
+      target = db.users.find((candidate) => candidate.email === email);
+      if (target) {
+        target.role = "ADMIN";
+        target.active = true;
+        target.workChannel ||= "WhatsApp 1";
+      } else {
+        target = {
+          id: crypto.randomUUID(),
+          name: "Propietario AriadGSM",
+          email,
+          passwordHash: "",
+          role: "ADMIN",
+          workChannel: "WhatsApp 1",
+          active: true,
+          createdAt: nowIso(),
+          updatedAt: nowIso(),
+        };
+        db.users.push(target);
+      }
     }
     target.passwordHash = await hashPassword(password);
     target.updatedAt = nowIso();
     db.sessions = db.sessions.filter((session) => session.userId !== target.id);
-    audit(db, null, "ADMIN_PASSWORD_RESET_WITH_SETUP_TOKEN", target.id, { email });
+    audit(db, null, ownerRecoveryAllowed ? "OWNER_ADMIN_RECOVERED_WITH_SETUP_TOKEN" : "ADMIN_PASSWORD_RESET_WITH_SETUP_TOKEN", target.id, { email });
     await writeDb(db);
     return sendJson(res, 200, { message: "Contrasena de administrador actualizada. Inicia sesion con la nueva contrasena." });
   }
@@ -1422,7 +1445,7 @@ function ownerRecoveryPage() {
   <body>
     <main>
       <h1>Recuperacion propietario</h1>
-      <p>Usa esta pagina solo mientras <strong>ARIAD_ENABLE_SETUP_RESET=true</strong> este activo en Render. Desactivala despues de recuperar tu acceso.</p>
+      <p>Usa esta pagina solo mientras <strong>ARIAD_ENABLE_SETUP_RESET=true</strong> este activo en Render. Si tu correo no era administrador activo, tambien configura <strong>ARIAD_OWNER_RECOVERY_EMAIL</strong>.</p>
       <form id="form">
         <label>Correo administrador <input name="email" type="email" autocomplete="email" required /></label>
         <label>Nueva contrasena <input name="password" type="password" autocomplete="new-password" minlength="8" required /></label>
