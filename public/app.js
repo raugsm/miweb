@@ -22,6 +22,7 @@ const changePasswordForm = document.querySelector("#change-password-form");
 const changePasswordMessage = document.querySelector("#change-password-message");
 const operatorPinForm = document.querySelector("#operator-pin-form");
 const operatorPinMessage = document.querySelector("#operator-pin-message");
+const revokeDevicesButton = document.querySelector("#revoke-devices-button");
 const usersTable = document.querySelector("#users-table");
 const auditList = document.querySelector("#audit-list");
 const pricingRatesTable = document.querySelector("#pricing-rates-table");
@@ -1161,6 +1162,19 @@ operatorPinForm.addEventListener("submit", async (event) => {
     operatorPinMessage.textContent = payload.message;
     operatorPinMessage.dataset.type = "success";
     operatorPinForm.reset();
+    await refreshSession();
+  } catch (error) {
+    operatorPinMessage.textContent = error.message;
+    operatorPinMessage.dataset.type = "error";
+  }
+});
+
+revokeDevicesButton.addEventListener("click", async () => {
+  operatorPinMessage.textContent = "";
+  try {
+    const payload = await api("/api/me/revoke-devices", { method: "POST" });
+    operatorPinMessage.textContent = payload.message;
+    operatorPinMessage.dataset.type = "success";
     await refreshSession();
   } catch (error) {
     operatorPinMessage.textContent = error.message;

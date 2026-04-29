@@ -437,6 +437,18 @@ function trustDeviceForAdmin(device, userId) {
   }
 }
 
+function revokeAdminDevicesExcept(db, userId, keepDeviceId = "") {
+  let revoked = 0;
+  for (const device of db.devices || []) {
+    device.adminUserIds ||= [];
+    if (!device.adminUserIds.includes(userId)) continue;
+    if (keepDeviceId && device.id === keepDeviceId) continue;
+    device.adminUserIds = device.adminUserIds.filter((id) => id !== userId);
+    revoked += 1;
+  }
+  return revoked;
+}
+
 function smtpConfig() {
   const host = process.env.ARIAD_SMTP_HOST || process.env.SMTP_HOST || "";
   const user = process.env.ARIAD_SMTP_USER || process.env.SMTP_USER || "";
@@ -1204,14 +1216,38 @@ async function handleApi(req, res, pathname) {
     target.updatedAt = nowIso();
     const currentTokenHash = hashToken(getCookie(req, "ariad_session"));
     db.sessions = db.sessions.filter((session) => session.userId !== target.id || session.tokenHash === currentTokenHash);
-    const deviceToken = getCookie(req, deviceCookieName);
-    if (target.role === "ADMIN" && deviceToken) {
-      const device = db.devices.find((candidate) => candidate.tokenHash === hashToken(deviceToken));
-      if (device) trustDeviceForAdmin(device, target.id);
+    let deviceToken = "";
+    let revokedDevices = 0;
+    if (target.role === "ADMIN") {
+      const currentDevice = ensureDevice(db, req);
+      deviceToken = currentDevice.token;
+      revokedDevices = revokeAdminDevicesExcept(db, target.id, currentDevice.device.id);
+      trustDeviceForAdmin(currentDevice.device, target.id);
     }
-    audit(db, user.id, "OPERATOR_PIN_CHANGED", target.id);
+    audit(db, user.id, "OPERATOR_PIN_CHANGED", target.id, { revokedDevices });
     await writeDb(db);
-    return sendJson(res, 200, { message: "PIN operativo actualizado." });
+    if (deviceToken) {
+      res.setHeader("Set-Cookie", cookieHeader(deviceCookieName, deviceToken, deviceMaxAgeSeconds));
+    }
+    return sendJson(res, 200, { message: "PIN operativo actualizado. Otros dispositivos admin fueron revocados." });
+  }
+
+  if (req.method === "POST" && pathname === "/api/me/revoke-devices") {
+    if (!requireUser(user, res)) return;
+    const db = await readDb();
+    const target = db.users.find((candidate) => candidate.id === user.id);
+    if (!target) return sendJson(res, 404, { error: "Usuario no encontrado." });
+    const currentTokenHash = hashToken(getCookie(req, "ariad_session"));
+    db.sessions = db.sessions.filter((session) => session.userId !== target.id || session.tokenHash === currentTokenHash);
+    const currentDevice = ensureDevice(db, req);
+    const revokedDevices = target.role === "ADMIN"
+      ? revokeAdminDevicesExcept(db, target.id, currentDevice.device.id)
+      : 0;
+    if (target.role === "ADMIN") trustDeviceForAdmin(currentDevice.device, target.id);
+    audit(db, user.id, "TRUSTED_DEVICES_REVOKED", target.id, { revokedDevices });
+    await writeDb(db);
+    res.setHeader("Set-Cookie", cookieHeader(deviceCookieName, currentDevice.token, deviceMaxAgeSeconds));
+    return sendJson(res, 200, { message: "Otros dispositivos y sesiones fueron revocados." });
   }
 
   if (req.method === "POST" && pathname === "/api/logout") {
