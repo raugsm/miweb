@@ -208,8 +208,8 @@
                 <input name="quantity" id="frp-quantity" type="number" min="1" max="50" value="1" required />
               </label>
               <label>
-                Precio unitario
-                <input name="unitPrice" id="frp-unit-price" type="number" min="0" step="0.01" required />
+                Precio calculado
+                <input name="unitPrice" id="frp-unit-price" type="number" min="0" step="0.01" readonly required />
               </label>
               <label>
                 Metodo de pago
@@ -219,6 +219,7 @@
               <button class="primary-btn ticket-submit-btn" type="submit">Crear orden FRP</button>
               <p id="frp-message" class="message" aria-live="polite"></p>
             </form>
+            <div id="frp-pricing-box" class="frp-pricing-box"></div>
 
             <div id="frp-metrics" class="metrics frp-metrics"></div>
             <div id="frp-workbench" class="frp-workbench"></div>
@@ -380,6 +381,7 @@
                     <th>Correo</th>
                     <th>Canal</th>
                     <th>Rol</th>
+                    <th>FRP costos</th>
                     <th>PIN</th>
                     <th>Estado</th>
                     <th>Accion</th>

@@ -16,7 +16,7 @@ const enableSetupPasswordReset = ["true", "1", "yes"].includes(String(process.en
 const ownerRecoveryEmail = normalizeEmail(process.env.ARIAD_OWNER_RECOVERY_EMAIL || "");
 const publicBaseUrl = String(process.env.ARIAD_PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || `http://localhost:${port}`).replace(/\/+$/, "");
 const mailFrom = process.env.ARIAD_MAIL_FROM || '"AriadGSM Soporte" <soporte@ariadgsm.com>';
-const appVersion = "daily-close-v1";
+const appVersion = "frp-dynamic-pricing-v1";
 const sessionVersion = 7;
 const customerSessionVersion = 1;
 const trustedDeviceVersion = 3;
@@ -184,6 +184,9 @@ const frpMonthlyTiers = [
   { minJobs: 60, unitPrice: 23, label: "Meta 60+" },
   { minJobs: 30, unitPrice: 24, label: "Meta 30+" },
 ];
+const frpProviderStatuses = new Set(["ACTIVE", "BACKUP", "OFF"]);
+const frpProviderCostModes = new Set(["FIXED_USDT", "CREDITS"]);
+const frpPermissionKeys = new Set(["frpCostManager"]);
 const portalPublicServices = [
   {
     code: "PORTAL-XIAOMI-FRP",
@@ -292,6 +295,103 @@ function moneyNumber(value) {
   return Math.round(number * 10000) / 10000;
 }
 
+function percentNumber(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < 0) return 0;
+  return Math.round(number * 100) / 100;
+}
+
+function defaultFrpPricingConfig() {
+  return {
+    policy: {
+      minMarginUsdt: 1,
+      targetMarginUsdt: 1.5,
+      minSellPriceUsdt: 25,
+      maxWorkerCostChangePct: 30,
+      updatedAt: "",
+      updatedBy: "",
+    },
+    providers: [
+      {
+        id: "krypto",
+        name: "Krypto",
+        status: "ACTIVE",
+        costMode: "FIXED_USDT",
+        fixedCostUsdt: 3,
+        creditsPerProcess: 0,
+        creditUnitCostUsdt: 0,
+        priority: 1,
+        reason: "Base inicial",
+        updatedAt: "",
+        updatedBy: "",
+      },
+      {
+        id: "xfp",
+        name: "XFP",
+        status: "BACKUP",
+        costMode: "CREDITS",
+        fixedCostUsdt: 0,
+        creditsPerProcess: 5,
+        creditUnitCostUsdt: 0.85,
+        priority: 2,
+        reason: "Base inicial",
+        updatedAt: "",
+        updatedBy: "",
+      },
+      {
+        id: "manual",
+        name: "Manual / Otro",
+        status: "OFF",
+        costMode: "FIXED_USDT",
+        fixedCostUsdt: 0,
+        creditsPerProcess: 0,
+        creditUnitCostUsdt: 0,
+        priority: 3,
+        reason: "Reserva",
+        updatedAt: "",
+        updatedBy: "",
+      },
+    ],
+  };
+}
+
+function normalizeFrpPricingConfig(config = {}) {
+  const defaults = defaultFrpPricingConfig();
+  const inputPolicy = config && typeof config.policy === "object" ? config.policy : {};
+  const policy = {
+    minMarginUsdt: moneyNumber(inputPolicy.minMarginUsdt ?? defaults.policy.minMarginUsdt),
+    targetMarginUsdt: moneyNumber(inputPolicy.targetMarginUsdt ?? defaults.policy.targetMarginUsdt),
+    minSellPriceUsdt: moneyNumber(inputPolicy.minSellPriceUsdt ?? defaults.policy.minSellPriceUsdt),
+    maxWorkerCostChangePct: percentNumber(inputPolicy.maxWorkerCostChangePct ?? defaults.policy.maxWorkerCostChangePct),
+    updatedAt: String(inputPolicy.updatedAt || ""),
+    updatedBy: String(inputPolicy.updatedBy || ""),
+  };
+  const existingProviders = Array.isArray(config.providers) ? config.providers : [];
+  const providers = defaults.providers.map((defaultProvider) => {
+    const existing = existingProviders.find((provider) => provider.id === defaultProvider.id || provider.name === defaultProvider.name);
+    const status = frpProviderStatuses.has(String(existing?.status || "").toUpperCase())
+      ? String(existing.status).toUpperCase()
+      : defaultProvider.status;
+    const costMode = frpProviderCostModes.has(String(existing?.costMode || "").toUpperCase())
+      ? String(existing.costMode).toUpperCase()
+      : defaultProvider.costMode;
+    return {
+      ...defaultProvider,
+      name: cleanText(existing?.name || defaultProvider.name, 40),
+      status,
+      costMode,
+      fixedCostUsdt: moneyNumber(existing?.fixedCostUsdt ?? defaultProvider.fixedCostUsdt),
+      creditsPerProcess: moneyNumber(existing?.creditsPerProcess ?? defaultProvider.creditsPerProcess),
+      creditUnitCostUsdt: moneyNumber(existing?.creditUnitCostUsdt ?? defaultProvider.creditUnitCostUsdt),
+      priority: Math.max(1, Number.parseInt(existing?.priority ?? defaultProvider.priority, 10) || defaultProvider.priority),
+      reason: cleanText(existing?.reason || defaultProvider.reason || "", 160),
+      updatedAt: String(existing?.updatedAt || ""),
+      updatedBy: String(existing?.updatedBy || ""),
+    };
+  });
+  return { policy, providers };
+}
+
 function defaultServicePricingRule(service) {
   const baseRule = {
     serviceCode: service.code,
@@ -324,6 +424,7 @@ function defaultPricingConfig() {
       updatedBy: "",
     })),
     serviceRules: services.map(defaultServicePricingRule),
+    frpPricing: defaultFrpPricingConfig(),
   };
 }
 
@@ -360,6 +461,7 @@ function normalizePricingConfig(config = {}) {
         updatedBy: String(existing?.updatedBy || ""),
       };
     }),
+    frpPricing: normalizeFrpPricingConfig(config.frpPricing || defaults.frpPricing),
   };
 }
 
@@ -478,6 +580,13 @@ async function readDb() {
   if (normalizeDailyAccountingRecords(db)) {
     changed = true;
   }
+  for (const user of db.users) {
+    const normalizedPermissions = normalizeUserPermissions(user.permissions);
+    if (JSON.stringify(user.permissions || {}) !== JSON.stringify(normalizedPermissions)) {
+      user.permissions = normalizedPermissions;
+      changed = true;
+    }
+  }
   for (const ticket of db.tickets) {
     if (ensureTicketChannels(ticket, db)) {
       changed = true;
@@ -502,6 +611,11 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+function normalizeUserPermissions(permissions = {}) {
+  const source = permissions && typeof permissions === "object" ? permissions : {};
+  return Object.fromEntries(Array.from(frpPermissionKeys).map((key) => [key, Boolean(source[key])]));
+}
+
 function publicUser(user) {
   return {
     id: user.id,
@@ -510,6 +624,7 @@ function publicUser(user) {
     role: user.role,
     roleLabel: roleLabels[user.role] || "Pendiente",
     workChannel: user.workChannel || "",
+    permissions: normalizeUserPermissions(user.permissions),
     operatorPinSet: Boolean(user.operatorPinHash),
     active: user.active,
     createdAt: user.createdAt,
@@ -646,30 +761,49 @@ function customerCanUseBenefits(context, benefit) {
 
 function portalFrpPriceSuggestion(db, clientId, quantity, canUseBenefits, benefit, masterClientId = "") {
   const safeQuantity = Math.max(1, Math.min(50, Number.parseInt(quantity, 10) || 1));
-  const baseUnitPrice = 25;
-  if (!canUseBenefits) {
+  const pricing = frpCurrentPricing(db);
+  if (!pricing.available) {
     return {
+      available: false,
+      error: pricing.reason || "Precio FRP no disponible.",
+      quantity: safeQuantity,
+      unitPrice: 0,
+      label: "No disponible",
+      total: 0,
+      monthlyUsage: customerMonthlyUsage(db, clientId, new Date(), masterClientId || benefit?.masterClientId || ""),
+      discountLocked: true,
+      nextMonthlyTier: null,
+      pricingSnapshot: frpPricingSnapshot(pricing, { quantity: safeQuantity, unitPrice: 0, total: 0, label: "No disponible" }),
+    };
+  }
+  const baseUnitPrice = pricing.unitPrice;
+  if (!canUseBenefits) {
+    const suggestion = {
+      available: true,
       quantity: safeQuantity,
       unitPrice: baseUnitPrice,
       label: "Precio base",
       total: moneyNumber(baseUnitPrice * safeQuantity),
       monthlyUsage: customerMonthlyUsage(db, clientId, new Date(), masterClientId || benefit?.masterClientId || ""),
       discountLocked: true,
-      nextMonthlyTier: frpMonthlyTiers.at(-1),
+      nextMonthlyTier: nextFrpMonthlyTier(0, pricing),
     };
+    suggestion.pricingSnapshot = frpPricingSnapshot(pricing, suggestion);
+    return suggestion;
   }
   const monthlyUsage = customerMonthlyUsage(db, clientId, new Date(), masterClientId || benefit?.masterClientId || "");
-  const quantityTier = benefit.quantityDiscountEnabled ? frpTierForQuantity(safeQuantity) : { unitPrice: baseUnitPrice, label: "Precio base", minQty: 1 };
-  const monthlyTier = benefit.monthlyDiscountEnabled ? frpTierForMonthlyUsage(monthlyUsage) : null;
+  const quantityTier = benefit.quantityDiscountEnabled ? frpTierForQuantity(safeQuantity, pricing) : { unitPrice: baseUnitPrice, label: "Precio base", minQty: 1 };
+  const monthlyTier = benefit.monthlyDiscountEnabled ? frpTierForMonthlyUsage(monthlyUsage, pricing) : null;
   const goalTier = benefit.goalDiscountEnabled && benefit.monthlyGoal > 0 && monthlyUsage >= benefit.monthlyGoal
-    ? { unitPrice: Math.max(1, baseUnitPrice - 1), label: `Meta ${benefit.monthlyGoal}+` }
+    ? { unitPrice: Math.max(pricing.minAllowedUnitPrice, baseUnitPrice - 1), label: `Meta ${benefit.monthlyGoal}+` }
     : null;
-  const vipTier = clientId && benefit.vipUnitPrice > 0 ? { unitPrice: benefit.vipUnitPrice, label: "VIP aprobado" } : null;
+  const vipTier = clientId && benefit.vipUnitPrice > 0 ? { unitPrice: Math.max(pricing.minAllowedUnitPrice, benefit.vipUnitPrice), label: "VIP aprobado" } : null;
   const selected = [quantityTier, monthlyTier, goalTier, vipTier]
     .filter(Boolean)
     .sort((a, b) => a.unitPrice - b.unitPrice)[0] || { unitPrice: baseUnitPrice, label: "Precio base" };
-  const nextMonthlyTier = [...frpMonthlyTiers].reverse().find((tier) => monthlyUsage < tier.minJobs) || null;
-  return {
+  const nextMonthlyTier = nextFrpMonthlyTier(monthlyUsage, pricing);
+  const suggestion = {
+    available: true,
     quantity: safeQuantity,
     unitPrice: selected.unitPrice,
     label: selected.label,
@@ -680,6 +814,8 @@ function portalFrpPriceSuggestion(db, clientId, quantity, canUseBenefits, benefi
     nextMonthlyTier: nextMonthlyTier ? { minJobs: nextMonthlyTier.minJobs, unitPrice: nextMonthlyTier.unitPrice, label: nextMonthlyTier.label, remaining: nextMonthlyTier.minJobs - monthlyUsage } : null,
     discountLocked: false,
   };
+  suggestion.pricingSnapshot = frpPricingSnapshot(pricing, suggestion);
+  return suggestion;
 }
 
 function publicCustomerClient(client) {
@@ -797,7 +933,7 @@ function publicCustomerState(db, context) {
   const benefit = client ? customerBenefitFor(db, client.id, client.masterClientId) : null;
   const canUseBenefits = customerCanUseBenefits(context, benefit);
   const monthlyUsage = client ? customerMonthlyUsage(db, client.id, new Date(), client.masterClientId || benefit?.masterClientId || "") : 0;
-  const nextMonthlyTier = client ? [...frpMonthlyTiers].reverse().find((tier) => monthlyUsage < tier.minJobs) || null : null;
+  const nextMonthlyTier = client ? nextFrpMonthlyTier(monthlyUsage, frpCurrentPricing(db)) : null;
   const orders = client ? publicCustomerOrdersForClient(db, client.id) : [];
   return {
     user: publicCustomerUser(user),
@@ -838,14 +974,20 @@ function resolvePortalPaymentForClient(paymentCode, client) {
   return compatible.find((payment) => payment.code === code) || defaultPortalPaymentForCountry(client?.country);
 }
 
-function publicPortalCatalog() {
+function publicPortalCatalog(db = null) {
+  const pricing = db ? frpCurrentPricing(db) : null;
+  const servicesForPortal = portalPublicServices
+    .filter((service) => service.enabled)
+    .map((service) => service.internalServiceCode === frpServiceCode && pricing?.available
+      ? { ...service, baseUnitPrice: pricing.unitPrice }
+      : service);
   return {
-    services: portalPublicServices.filter((service) => service.enabled),
+    services: servicesForPortal,
     paymentMethods: allowedPortalPaymentMethods(),
     countries: countries.map(([, country]) => country),
     statuses: publicOrderStatuses,
-    quantityTiers: frpQuantityTiers,
-    monthlyTiers: frpMonthlyTiers,
+    quantityTiers: pricing?.available ? frpDynamicQuantityTiers(pricing) : frpQuantityTiers,
+    monthlyTiers: pricing?.available ? frpDynamicMonthlyTiers(pricing) : frpMonthlyTiers,
     phoneCountries: portalPhoneCountryHints,
     turnstileEnabled: Boolean(turnstileSecret && turnstileSiteKey),
     turnstileSiteKey,
@@ -898,6 +1040,38 @@ function publicPricingConfig(config, db = { users: [] }) {
 function publicPricingConfigForUser(config, db, user) {
   if (user?.role === "ADMIN") return publicPricingConfig(config, db);
   return { exchangeRates: [], serviceRules: [] };
+}
+
+function publicFrpPricingState(db, user) {
+  const pricing = frpCurrentPricing(db);
+  const config = pricing.config;
+  const canManageCosts = canManageFrpCosts(user);
+  const canManagePolicy = canManageFrpPolicy(user);
+  return {
+    canManageCosts,
+    canManagePolicy,
+    summary: {
+      available: pricing.available,
+      reason: pricing.reason,
+      providerId: pricing.provider?.id || "",
+      providerName: pricing.provider?.name || "",
+      costMode: pricing.provider?.costMode || "",
+      internalCostUsdt: canManageCosts ? pricing.internalCostUsdt : undefined,
+      minAllowedUnitPrice: canManageCosts ? pricing.minAllowedUnitPrice : undefined,
+      unitPrice: pricing.unitPrice,
+    },
+    policy: canManagePolicy ? {
+      ...config.policy,
+      updatedByName: userNameById(db, config.policy.updatedBy),
+    } : null,
+    providers: canManageCosts ? config.providers.map((provider) => ({
+      ...provider,
+      internalCostUsdt: frpProviderCostUsdt(provider),
+      updatedByName: userNameById(db, provider.updatedBy),
+    })) : [],
+    quantityTiers: frpDynamicQuantityTiers(pricing),
+    monthlyTiers: frpDynamicMonthlyTiers(pricing),
+  };
 }
 
 function defaultFrpOrderChecklist() {
@@ -978,8 +1152,107 @@ function canUseFrp(user) {
   return Boolean(user && (user.role === "ADMIN" || normalizeWorkChannel(user.workChannel) === frpWorkChannel));
 }
 
+function canManageFrpCosts(user) {
+  if (!user || user.active === false) return false;
+  if (user.role === "ADMIN") return true;
+  return normalizeWorkChannel(user.workChannel) === frpWorkChannel
+    && Boolean(normalizeUserPermissions(user.permissions).frpCostManager);
+}
+
+function canManageFrpPolicy(user) {
+  return Boolean(user && user.role === "ADMIN" && user.active !== false);
+}
+
 function canReviewFrpPayments(user) {
   return Boolean(user && ["ADMIN", "COORDINADOR"].includes(user.role));
+}
+
+function frpProviderCostUsdt(provider) {
+  if (!provider) return 0;
+  if (provider.costMode === "CREDITS") {
+    return moneyNumber(moneyNumber(provider.creditsPerProcess) * moneyNumber(provider.creditUnitCostUsdt));
+  }
+  return moneyNumber(provider.fixedCostUsdt);
+}
+
+function activeFrpProvider(config) {
+  return [...(config.providers || [])]
+    .filter((provider) => provider.status === "ACTIVE")
+    .sort((a, b) => Number(a.priority || 99) - Number(b.priority || 99))[0] || null;
+}
+
+function frpCurrentPricing(db) {
+  const config = normalizeFrpPricingConfig(db.pricingConfig?.frpPricing);
+  const provider = activeFrpProvider(config);
+  if (!provider) {
+    return {
+      available: false,
+      reason: "Sin proveedor FRP activo",
+      config,
+      provider: null,
+      internalCostUsdt: 0,
+      minAllowedUnitPrice: 0,
+      unitPrice: 0,
+    };
+  }
+  const internalCostUsdt = frpProviderCostUsdt(provider);
+  const minAllowedUnitPrice = moneyNumber(internalCostUsdt + config.policy.minMarginUsdt);
+  const unitPrice = moneyNumber(Math.max(
+    minAllowedUnitPrice,
+    internalCostUsdt + config.policy.targetMarginUsdt,
+    config.policy.minSellPriceUsdt,
+  ));
+  return {
+    available: unitPrice > 0,
+    reason: unitPrice > 0 ? "" : "Precio FRP no configurado",
+    config,
+    provider,
+    internalCostUsdt,
+    minAllowedUnitPrice,
+    unitPrice,
+  };
+}
+
+function frpDynamicTier(defaultTier, pricing) {
+  if (!pricing?.available) return { ...defaultTier };
+  const discount = moneyNumber(25 - Number(defaultTier.unitPrice || 25));
+  return {
+    ...defaultTier,
+    unitPrice: moneyNumber(Math.max(pricing.minAllowedUnitPrice, pricing.unitPrice - discount)),
+  };
+}
+
+function frpDynamicQuantityTiers(pricing) {
+  return frpQuantityTiers.map((tier) => frpDynamicTier(tier, pricing));
+}
+
+function frpDynamicMonthlyTiers(pricing) {
+  return frpMonthlyTiers.map((tier) => frpDynamicTier(tier, pricing));
+}
+
+function frpPricingSnapshot(pricing, suggestion = {}) {
+  const provider = pricing.provider;
+  return {
+    version: "frp-dynamic-v1",
+    providerId: provider?.id || "",
+    providerName: provider?.name || "",
+    providerStatus: provider?.status || "",
+    costMode: provider?.costMode || "",
+    fixedCostUsdt: moneyNumber(provider?.fixedCostUsdt || 0),
+    creditsPerProcess: moneyNumber(provider?.creditsPerProcess || 0),
+    creditUnitCostUsdt: moneyNumber(provider?.creditUnitCostUsdt || 0),
+    internalCostUsdt: moneyNumber(pricing.internalCostUsdt || 0),
+    minMarginUsdt: moneyNumber(pricing.config?.policy?.minMarginUsdt || 0),
+    targetMarginUsdt: moneyNumber(pricing.config?.policy?.targetMarginUsdt || 0),
+    minSellPriceUsdt: moneyNumber(pricing.config?.policy?.minSellPriceUsdt || 0),
+    minAllowedUnitPrice: moneyNumber(pricing.minAllowedUnitPrice || 0),
+    baseUnitPrice: moneyNumber(pricing.unitPrice || 0),
+    unitPrice: moneyNumber(suggestion.unitPrice ?? pricing.unitPrice),
+    quantity: Number(suggestion.quantity || 1),
+    total: moneyNumber(suggestion.total || 0),
+    discountLabel: cleanText(suggestion.label || "", 80),
+    calculatedAt: nowIso(),
+  };
 }
 
 function frpOrderIsReady(order) {
@@ -1007,27 +1280,45 @@ function frpMonthlyUsage(db, clientId, value = new Date()) {
   }).length;
 }
 
-function frpTierForQuantity(quantity) {
-  return frpQuantityTiers.find((tier) => quantity >= tier.minQty) || frpQuantityTiers.at(-1);
+function frpTierForQuantity(quantity, pricing = null) {
+  const tiers = pricing?.available ? frpDynamicQuantityTiers(pricing) : frpQuantityTiers;
+  return tiers.find((tier) => quantity >= tier.minQty) || tiers.at(-1);
 }
 
-function frpTierForMonthlyUsage(usage) {
-  return frpMonthlyTiers.find((tier) => usage >= tier.minJobs) || null;
+function frpTierForMonthlyUsage(usage, pricing = null) {
+  const tiers = pricing?.available ? frpDynamicMonthlyTiers(pricing) : frpMonthlyTiers;
+  return tiers.find((tier) => usage >= tier.minJobs) || null;
 }
 
-function nextFrpMonthlyTier(usage) {
-  return [...frpMonthlyTiers].reverse().find((tier) => usage < tier.minJobs) || null;
+function nextFrpMonthlyTier(usage, pricing = null) {
+  const tiers = pricing?.available ? frpDynamicMonthlyTiers(pricing) : frpMonthlyTiers;
+  return [...tiers].reverse().find((tier) => usage < tier.minJobs) || null;
 }
 
 function frpPriceSuggestion(db, clientId, quantity) {
   const safeQuantity = Math.max(1, Math.min(50, Number.parseInt(quantity, 10) || 1));
+  const pricing = frpCurrentPricing(db);
+  if (!pricing.available) {
+    return {
+      available: false,
+      error: pricing.reason || "Precio FRP no disponible.",
+      quantity: safeQuantity,
+      monthlyUsage: frpMonthlyUsage(db, clientId),
+      unitPrice: 0,
+      label: "No disponible",
+      total: 0,
+      pricingSnapshot: frpPricingSnapshot(pricing, { quantity: safeQuantity, unitPrice: 0, total: 0, label: "No disponible" }),
+    };
+  }
   const monthlyUsage = frpMonthlyUsage(db, clientId);
-  const quantityTier = frpTierForQuantity(safeQuantity);
-  const monthlyTier = frpTierForMonthlyUsage(monthlyUsage);
+  const quantityTier = frpTierForQuantity(safeQuantity, pricing);
+  const monthlyTier = frpTierForMonthlyUsage(monthlyUsage, pricing);
   const candidates = [quantityTier, monthlyTier].filter(Boolean);
   const selected = candidates.reduce((best, tier) => (tier.unitPrice < best.unitPrice ? tier : best), quantityTier);
-  const nextTier = nextFrpMonthlyTier(monthlyUsage);
-  return {
+  const nextTier = nextFrpMonthlyTier(monthlyUsage, pricing);
+  const total = moneyNumber(selected.unitPrice * safeQuantity);
+  const suggestion = {
+    available: true,
     quantity: safeQuantity,
     monthlyUsage,
     nextMonthlyTier: nextTier ? { minJobs: nextTier.minJobs, unitPrice: nextTier.unitPrice, label: nextTier.label, remaining: nextTier.minJobs - monthlyUsage } : null,
@@ -1035,8 +1326,10 @@ function frpPriceSuggestion(db, clientId, quantity) {
     monthlyTier: monthlyTier ? { minJobs: monthlyTier.minJobs, unitPrice: monthlyTier.unitPrice, label: monthlyTier.label } : null,
     unitPrice: selected.unitPrice,
     label: selected.label,
-    total: moneyNumber(selected.unitPrice * safeQuantity),
+    total,
   };
+  suggestion.pricingSnapshot = frpPricingSnapshot(pricing, suggestion);
+  return suggestion;
 }
 
 function syncFrpOrderStatus(db, order) {
@@ -1098,7 +1391,7 @@ function publicFrpJob(job, db, includeOrder = true) {
 
 function publicFrpState(db, user) {
   if (!canUseFrp(user)) {
-    return { enabled: false, orders: [], jobs: [], metrics: {}, statuses: { orders: frpOrderStatuses, jobs: frpJobStatuses } };
+    return { enabled: false, orders: [], jobs: [], metrics: {}, statuses: { orders: frpOrderStatuses, jobs: frpJobStatuses }, pricing: publicFrpPricingState(db, user) };
   }
   const orders = db.frpOrders.filter((order) => user.role === "ADMIN" || order.workChannel === frpWorkChannel);
   const jobs = db.frpJobs.filter((job) => user.role === "ADMIN" || job.workChannel === frpWorkChannel);
@@ -1117,6 +1410,7 @@ function publicFrpState(db, user) {
       myActive: jobs.filter((job) => job.technicianId === user.id && job.status === "EN_PROCESO").length,
     },
     statuses: { orders: frpOrderStatuses, jobs: frpJobStatuses },
+    pricing: publicFrpPricingState(db, user),
   };
 }
 
@@ -1291,6 +1585,7 @@ function syncFrpLedgerEntry(db, order) {
     exchangeRateToUsdt: exchange.ratePerUsdt,
     exchangeRateDate: exchange.exchangeRateDate,
     amountUsdtEstimate: ledgerAmountUsdtFromRate(amount, payment.currency, exchange.ratePerUsdt),
+    pricingSnapshot: order.pricingSnapshot || null,
     status: "VALIDATED",
     validatedBy: order.paymentReviewedBy || order.createdBy || "",
     validatedAt: order.paymentReviewedAt || order.updatedAt || order.createdAt || nowIso(),
@@ -2875,6 +3170,15 @@ async function requireFrpAccess(user, res, db, action = "FRP_ACCESS_DENIED", tar
   return false;
 }
 
+async function requireFrpCostManagerWithAudit(user, res, db, action = "FRP_PRICING_UPDATE_DENIED", targetId = "frp-pricing", detail = {}) {
+  if (!requireUser(user, res)) return false;
+  if (canManageFrpCosts(user)) return true;
+  audit(db, user.id, action, targetId, { role: user.role, workChannel: user.workChannel || "", ...detail });
+  await writeDb(db);
+  sendJson(res, 403, { error: "Solo administrador o WhatsApp 3 autorizado puede modificar costos FRP." });
+  return false;
+}
+
 async function requireFrpPaymentReviewer(user, res, db, targetId) {
   if (!requireUser(user, res)) return false;
   if (canReviewFrpPayments(user)) return true;
@@ -2983,7 +3287,7 @@ function createFrpOrderFromPortal(db, customerClient, customerOrder, customerIte
     serviceName: services.find((service) => service.code === frpServiceCode)?.name || "Xiaomi Cuenta Google",
     workChannel: frpWorkChannel,
     quantity: customerOrder.quantity,
-    baseUnitPrice: 25,
+    baseUnitPrice: customerOrder.baseUnitPrice,
     suggestedUnitPrice: customerOrder.suggestedUnitPrice,
     unitPrice: customerOrder.unitPrice,
     discountLabel: customerOrder.discountLabel,
@@ -3000,6 +3304,7 @@ function createFrpOrderFromPortal(db, customerClient, customerOrder, customerIte
     checklist: { ...defaultFrpOrderChecklist(), priceSent: true },
     createdBy: "portal",
     portalOrderId: customerOrder.id,
+    pricingSnapshot: customerOrder.pricingSnapshot || null,
     source: "PORTAL_CLIENTE",
     createdAt: nowIso(),
     updatedAt: nowIso(),
@@ -3429,7 +3734,8 @@ async function handleApi(req, res, pathname) {
   }
 
   if (req.method === "GET" && pathname === "/api/portal/catalog") {
-    return sendJson(res, 200, { catalog: publicPortalCatalog() });
+    const db = await readDb();
+    return sendJson(res, 200, { catalog: publicPortalCatalog(db) });
   }
 
   if (req.method === "GET" && pathname === "/api/portal/session") {
@@ -3437,7 +3743,7 @@ async function handleApi(req, res, pathname) {
     res.setHeader("Set-Cookie", cookieHeader(customerDeviceCookieName, context.deviceToken, customerDeviceMaxAgeSeconds));
     return sendJson(res, 200, {
       customer: publicCustomerState(context.db, context),
-      catalog: publicPortalCatalog(),
+      catalog: publicPortalCatalog(context.db),
     });
   }
 
@@ -3584,7 +3890,7 @@ async function handleApi(req, res, pathname) {
     ]);
     return sendJson(res, 201, {
       customer: publicCustomerState(db, { user: customerUser, client, device }),
-      catalog: publicPortalCatalog(),
+      catalog: publicPortalCatalog(db),
       message: verificationSent ? "Cuenta creada. Revisa tu correo para verificarla." : "Cuenta creada. No pudimos enviar el correo de verificacion; intenta reenviarlo.",
       emailVerification: { required: true, sent: verificationSent },
     });
@@ -3673,7 +3979,7 @@ async function handleApi(req, res, pathname) {
     ]);
     return sendJson(res, 200, {
       customer: publicCustomerState(db, { user: customerUser, client, device }),
-      catalog: publicPortalCatalog(),
+      catalog: publicPortalCatalog(db),
     });
   }
 
@@ -3793,6 +4099,14 @@ async function handleApi(req, res, pathname) {
     const benefit = customerBenefitFor(db, context.client.id, context.client.masterClientId || "");
     const canUseBenefits = customerCanUseBenefits(context, benefit);
     const suggestion = portalFrpPriceSuggestion(db, context.client.id, quantity, canUseBenefits, benefit, context.client.masterClientId || benefit.masterClientId || "");
+    if (!suggestion.available) {
+      audit(db, context.user.id, "PORTAL_FRP_ORDER_BLOCKED_PRICING_UNAVAILABLE", context.client.id, {
+        quantity,
+        reason: suggestion.error || "pricing_unavailable",
+      });
+      await writeDb(db);
+      return sendJson(res, 503, { error: suggestion.error || "Xiaomi FRP no tiene precio activo en este momento." });
+    }
     const request = {
       id: crypto.randomUUID(),
       clientId: context.client.id,
@@ -3818,10 +4132,11 @@ async function handleApi(req, res, pathname) {
       serviceName: service.name,
       workChannel: frpWorkChannel,
       quantity,
-      baseUnitPrice: service.baseUnitPrice,
+      baseUnitPrice: suggestion.pricingSnapshot?.baseUnitPrice || suggestion.unitPrice,
       suggestedUnitPrice: suggestion.unitPrice,
       unitPrice: suggestion.unitPrice,
       totalPrice: suggestion.total,
+      pricingSnapshot: suggestion.pricingSnapshot,
       priceFormatted: formatPaymentAmount(suggestion.total, payment),
       discountLabel: suggestion.label,
       discountLocked: suggestion.discountLocked,
@@ -4609,6 +4924,101 @@ async function handleApi(req, res, pathname) {
     return sendJson(res, 200, { pricingConfig: publicPricingConfig(db.pricingConfig, db) });
   }
 
+  if (req.method === "GET" && pathname === "/api/frp/pricing") {
+    if (!requireUser(user, res)) return;
+    const db = await readDb();
+    if (!(await requireFrpAccess(user, res, db, "FRP_PRICING_READ_DENIED"))) return;
+    return sendJson(res, 200, { pricing: publicFrpPricingState(db, user), frp: publicFrpState(db, user) });
+  }
+
+  if (req.method === "PATCH" && pathname === "/api/frp/pricing/policy") {
+    if (!requireUser(user, res)) return;
+    const db = await readDb();
+    if (!(await requireAdminWithAudit(user, res, db, "FRP_POLICY_UPDATE_DENIED", "frp-policy", { route: pathname }, "Solo administrador puede configurar margenes FRP."))) return;
+    const input = await parseJson(req);
+    db.pricingConfig = normalizePricingConfig(db.pricingConfig);
+    const previous = structuredClone(db.pricingConfig.frpPricing.policy);
+    db.pricingConfig.frpPricing.policy = {
+      ...db.pricingConfig.frpPricing.policy,
+      minMarginUsdt: moneyNumber(input.minMarginUsdt),
+      targetMarginUsdt: moneyNumber(input.targetMarginUsdt),
+      minSellPriceUsdt: moneyNumber(input.minSellPriceUsdt),
+      maxWorkerCostChangePct: percentNumber(input.maxWorkerCostChangePct),
+      updatedAt: nowIso(),
+      updatedBy: user.id,
+    };
+    audit(db, user.id, "FRP_POLICY_UPDATED", "frp-policy", {
+      from: previous,
+      to: db.pricingConfig.frpPricing.policy,
+    });
+    await writeDb(db);
+    return sendJson(res, 200, { pricing: publicFrpPricingState(db, user), frp: publicFrpState(db, user) });
+  }
+
+  const frpProviderMatch = pathname.match(/^\/api\/frp\/pricing\/providers\/([^/]+)$/);
+  if (req.method === "PATCH" && frpProviderMatch) {
+    if (!requireUser(user, res)) return;
+    const db = await readDb();
+    if (!(await requireFrpCostManagerWithAudit(user, res, db, "FRP_PROVIDER_UPDATE_DENIED", frpProviderMatch[1], { route: pathname }))) return;
+    const input = await parseJson(req);
+    db.pricingConfig = normalizePricingConfig(db.pricingConfig);
+    const provider = db.pricingConfig.frpPricing.providers.find((candidate) => candidate.id === frpProviderMatch[1]);
+    if (!provider) return sendJson(res, 404, { error: "Proveedor FRP no encontrado." });
+    const reason = cleanText(input.reason, 160);
+    if (!reason) return sendJson(res, 400, { error: "Motivo obligatorio para cambiar costo/proveedor FRP." });
+    const previous = structuredClone(provider);
+    const nextStatus = frpProviderStatuses.has(String(input.status || "").toUpperCase()) ? String(input.status).toUpperCase() : provider.status;
+    const nextCostMode = frpProviderCostModes.has(String(input.costMode || "").toUpperCase()) ? String(input.costMode).toUpperCase() : provider.costMode;
+    const nextProvider = {
+      ...provider,
+      status: nextStatus,
+      costMode: nextCostMode,
+      fixedCostUsdt: moneyNumber(input.fixedCostUsdt ?? provider.fixedCostUsdt),
+      creditsPerProcess: moneyNumber(input.creditsPerProcess ?? provider.creditsPerProcess),
+      creditUnitCostUsdt: moneyNumber(input.creditUnitCostUsdt ?? provider.creditUnitCostUsdt),
+      priority: Math.max(1, Number.parseInt(input.priority ?? provider.priority, 10) || provider.priority),
+      reason,
+      updatedAt: nowIso(),
+      updatedBy: user.id,
+    };
+    const nextCost = frpProviderCostUsdt(nextProvider);
+    if (nextProvider.status !== "OFF" && nextCost <= 0) {
+      audit(db, user.id, "FRP_PROVIDER_UPDATE_BLOCKED", provider.id, { reason: "invalid_cost", input: { status: nextProvider.status, costMode: nextProvider.costMode } });
+      await writeDb(db);
+      return sendJson(res, 400, { error: "Costo FRP obligatorio para proveedor activo o respaldo." });
+    }
+    if (user.role !== "ADMIN") {
+      const previousCost = frpProviderCostUsdt(provider);
+      const limit = db.pricingConfig.frpPricing.policy.maxWorkerCostChangePct;
+      const deltaPct = previousCost > 0 ? Math.abs(nextCost - previousCost) / previousCost * 100 : 100;
+      if (deltaPct > limit) {
+        audit(db, user.id, "FRP_PROVIDER_UPDATE_BLOCKED", provider.id, {
+          reason: "worker_change_limit",
+          previousCost,
+          nextCost,
+          deltaPct: percentNumber(deltaPct),
+          limit,
+        });
+        await writeDb(db);
+        return sendJson(res, 403, { error: `Cambio mayor a ${limit}%. Pide aprobacion de administrador.` });
+      }
+    }
+    Object.assign(provider, nextProvider);
+    if (provider.status === "ACTIVE") {
+      for (const other of db.pricingConfig.frpPricing.providers) {
+        if (other.id !== provider.id && other.status === "ACTIVE") other.status = "BACKUP";
+      }
+    }
+    audit(db, user.id, "FRP_PROVIDER_UPDATED", provider.id, {
+      from: previous,
+      to: provider,
+      approved: true,
+      approvedByPolicy: user.role !== "ADMIN",
+    });
+    await writeDb(db);
+    return sendJson(res, 200, { pricing: publicFrpPricingState(db, user), frp: publicFrpState(db, user) });
+  }
+
   if (req.method === "POST" && pathname === "/api/frp/orders") {
     if (!requireUser(user, res)) return;
     const input = await parseJson(req);
@@ -4630,17 +5040,33 @@ async function handleApi(req, res, pathname) {
       return sendJson(res, 400, { error: "Metodo de pago no disponible para orden FRP." });
     }
     const suggestion = frpPriceSuggestion(db, client.id, quantity);
+    if (!suggestion.available) {
+      audit(db, user.id, "FRP_ORDER_BLOCKED_PRICING_UNAVAILABLE", client.id, {
+        quantity,
+        reason: suggestion.error || "pricing_unavailable",
+      });
+      await writeDb(db);
+      return sendJson(res, 503, { error: suggestion.error || "Xiaomi FRP no tiene precio activo en este momento." });
+    }
     const requestedUnitPrice = Object.hasOwn(input, "unitPrice") ? moneyNumber(input.unitPrice) : suggestion.unitPrice;
     if (requestedUnitPrice <= 0) return sendJson(res, 400, { error: "Precio unitario obligatorio." });
-    if (requestedUnitPrice < suggestion.unitPrice && user.role !== "ADMIN") {
-      audit(db, user.id, "FRP_DISCOUNT_APPROVAL_REQUIRED", client.id, {
+    if (requestedUnitPrice !== suggestion.unitPrice && user.role !== "ADMIN") {
+      audit(db, user.id, "FRP_PRICE_OVERRIDE_BLOCKED", client.id, {
         requestedUnitPrice,
         suggestedUnitPrice: suggestion.unitPrice,
         quantity,
       });
       await writeDb(db);
-      return sendJson(res, 403, { error: "Ese descuento requiere aprobacion de administrador." });
+      return sendJson(res, 403, { error: "El precio FRP se calcula desde el proveedor activo. Actualiza el proveedor si el costo cambio." });
     }
+    const finalUnitPrice = user.role === "ADMIN" ? requestedUnitPrice : suggestion.unitPrice;
+    const orderPricingSnapshot = {
+      ...suggestion.pricingSnapshot,
+      unitPrice: finalUnitPrice,
+      total: moneyNumber(finalUnitPrice * quantity),
+      manualOverride: finalUnitPrice !== suggestion.unitPrice,
+      overriddenBy: finalUnitPrice !== suggestion.unitPrice ? user.id : "",
+    };
     const order = {
       id: crypto.randomUUID(),
       code: nextFrpOrderCode(db),
@@ -4653,14 +5079,15 @@ async function handleApi(req, res, pathname) {
       serviceName: services.find((service) => service.code === frpServiceCode)?.name || "Xiaomi Cuenta Google",
       workChannel: frpWorkChannel,
       quantity,
-      baseUnitPrice: 25,
+      baseUnitPrice: suggestion.pricingSnapshot?.baseUnitPrice || suggestion.unitPrice,
       suggestedUnitPrice: suggestion.unitPrice,
-      unitPrice: requestedUnitPrice,
-      discountLabel: requestedUnitPrice < 25 ? suggestion.label : "Normal",
+      unitPrice: finalUnitPrice,
+      discountLabel: finalUnitPrice < (suggestion.pricingSnapshot?.baseUnitPrice || suggestion.unitPrice) ? suggestion.label : "Normal",
       monthlyUsageAtCreation: suggestion.monthlyUsage,
       nextMonthlyTier: suggestion.nextMonthlyTier,
-      totalPrice: moneyNumber(requestedUnitPrice * quantity),
-      priceFormatted: formatPaymentAmount(requestedUnitPrice * quantity, payment),
+      totalPrice: moneyNumber(finalUnitPrice * quantity),
+      priceFormatted: formatPaymentAmount(finalUnitPrice * quantity, payment),
+      pricingSnapshot: orderPricingSnapshot,
       paymentMethod: payment.code,
       paymentLabel: payment.label,
       paymentDetails: payment.details,
@@ -5256,6 +5683,13 @@ async function handleApi(req, res, pathname) {
     }
     if (Object.hasOwn(input, "workChannel")) {
       target.workChannel = normalizeWorkChannel(input.workChannel);
+    }
+    if (Object.hasOwn(input, "permissions")) {
+      const nextPermissions = normalizeUserPermissions(input.permissions);
+      if (target.role !== "ADMIN" && normalizeWorkChannel(target.workChannel) !== frpWorkChannel && nextPermissions.frpCostManager) {
+        return sendJson(res, 400, { error: "El permiso de costos FRP solo aplica a usuarios de WhatsApp 3." });
+      }
+      target.permissions = nextPermissions;
     }
     target.updatedAt = nowIso();
     audit(db, user.id, "USER_UPDATED", target.id, { before: previous, after: publicUser(target) });

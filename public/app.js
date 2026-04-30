@@ -73,6 +73,7 @@ const frpQuantity = document.querySelector("#frp-quantity");
 const frpUnitPrice = document.querySelector("#frp-unit-price");
 const frpPayment = document.querySelector("#frp-payment");
 const frpSuggestion = document.querySelector("#frp-suggestion");
+const frpPricingBox = document.querySelector("#frp-pricing-box");
 const frpMessage = document.querySelector("#frp-message");
 const frpMetrics = document.querySelector("#frp-metrics");
 const frpWorkbench = document.querySelector("#frp-workbench");
@@ -243,6 +244,14 @@ function isAdmin() {
 
 function canManagePricing() {
   return isAdmin();
+}
+
+function canManageFrpCosts() {
+  return Boolean(session.frp?.pricing?.canManageCosts);
+}
+
+function canManageFrpPolicy() {
+  return Boolean(session.frp?.pricing?.canManagePolicy);
 }
 
 function enabledServiceNames() {
@@ -489,7 +498,7 @@ function renderCatalog() {
 
 function renderUsers() {
   if (session.user?.role !== "ADMIN") {
-    usersTable.innerHTML = `<tr><td colspan="7" class="muted-cell">Solo el administrador puede ver y modificar usuarios.</td></tr>`;
+    usersTable.innerHTML = `<tr><td colspan="8" class="muted-cell">Solo el administrador puede ver y modificar usuarios.</td></tr>`;
     return;
   }
 
@@ -516,6 +525,12 @@ function renderUsers() {
               ${roleOptions}
             </select>
             ${isSelfUser ? `<span class="table-subtext">Protegido</span>` : ""}
+          </td>
+          <td>
+            <label class="inline-check compact-check">
+              <input type="checkbox" data-user-frp-cost-manager="${user.id}" ${user.permissions?.frpCostManager ? "checked" : ""} ${user.role !== "ADMIN" && user.workChannel !== "WhatsApp 3" ? "disabled" : ""} />
+              Delegado
+            </label>
           </td>
           <td><span class="table-subtext">${user.operatorPinSet ? "Configurado" : "Pendiente"}</span></td>
           <td>
@@ -943,10 +958,15 @@ function frpJobs() {
 
 function frpQuantityTier(quantity) {
   const qty = Number(quantity || 1);
-  if (qty >= 10) return { label: "Volumen 10+", unitPrice: 22 };
-  if (qty >= 5) return { label: "Volumen 5-9", unitPrice: 23 };
-  if (qty >= 2) return { label: "Volumen 2-4", unitPrice: 24 };
-  return { label: "Normal", unitPrice: 25 };
+  const tiers = session.frp?.pricing?.quantityTiers?.length
+    ? session.frp.pricing.quantityTiers
+    : [
+      { minQty: 10, label: "Volumen 10+", unitPrice: 22 },
+      { minQty: 5, label: "Volumen 5-9", unitPrice: 23 },
+      { minQty: 2, label: "Volumen 2-4", unitPrice: 24 },
+      { minQty: 1, label: "Normal", unitPrice: 25 },
+    ];
+  return tiers.find((tier) => qty >= Number(tier.minQty || 1)) || tiers.at(-1);
 }
 
 function frpPaymentByCode(code) {
@@ -982,18 +1002,133 @@ function syncFrpPaymentOptions() {
 function syncFrpSuggestion() {
   if (!frpSuggestion) return;
   const quantity = Math.max(1, Number(frpQuantity.value || 1));
-  const tier = frpQuantityTier(quantity);
-  if (!frpUnitPrice.value || Number(frpUnitPrice.value) <= 0) {
-    frpUnitPrice.value = tier.unitPrice;
+  const pricing = session.frp?.pricing;
+  if (pricing?.summary && !pricing.summary.available) {
+    frpUnitPrice.value = "";
+    frpSuggestion.innerHTML = `
+      <div class="payment-main">
+        <strong>FRP sin precio activo</strong>
+        <span>${escapeHtml(pricing.summary.reason || "Configura un proveedor FRP activo.")}</span>
+      </div>
+    `;
+    return;
   }
+  const tier = frpQuantityTier(quantity);
+  frpUnitPrice.value = Number(tier.unitPrice || pricing?.summary?.unitPrice || 0).toFixed(2);
   const payment = frpPaymentByCode(frpPayment.value) || binancePayment();
-  const total = Number(frpUnitPrice.value || tier.unitPrice) * quantity;
+  const total = Number(tier.unitPrice || frpUnitPrice.value || 0) * quantity;
+  const activeProvider = pricing?.summary?.providerName ? `Proveedor activo: ${pricing.summary.providerName}. ` : "";
   frpSuggestion.innerHTML = `
     <div class="payment-main">
       <strong>Total sugerido: ${escapeHtml(formatAmountForPayment(total, payment))}</strong>
-      <span>${escapeHtml(tier.label)} - ${Number(frpUnitPrice.value || tier.unitPrice).toFixed(2)} por equipo</span>
-      <em>El servidor valida descuentos por consumo frecuente y metas.</em>
+      <span>${escapeHtml(tier.label)} - ${Number(tier.unitPrice || frpUnitPrice.value).toFixed(2)} por equipo</span>
+      <em>${escapeHtml(activeProvider)}El servidor valida descuentos por consumo frecuente y metas.</em>
     </div>
+  `;
+}
+
+function frpCostModeLabel(mode) {
+  return mode === "CREDITS" ? "Creditos" : "USDT fijo";
+}
+
+function frpProviderStatusLabel(status) {
+  const labels = { ACTIVE: "Activo", BACKUP: "Respaldo", OFF: "Off" };
+  return labels[status] || status || "-";
+}
+
+function renderFrpPricingBox() {
+  if (!frpPricingBox) return;
+  const pricing = session.frp?.pricing;
+  if (!frpEnabled() || !pricing) {
+    frpPricingBox.innerHTML = "";
+    return;
+  }
+  const summary = pricing.summary || {};
+  const summaryHtml = `
+    <div class="frp-pricing-summary">
+      <article>
+        <span>Proveedor activo</span>
+        <strong>${escapeHtml(summary.providerName || "Sin proveedor")}</strong>
+      </article>
+      <article>
+        <span>Precio normal</span>
+        <strong>${summary.available ? `${Number(summary.unitPrice || 0).toFixed(2)} USDT` : "No disponible"}</strong>
+      </article>
+      ${canManageFrpCosts() ? `
+        <article>
+          <span>Costo interno</span>
+          <strong>${Number(summary.internalCostUsdt || 0).toFixed(4)} USDT</strong>
+        </article>
+      ` : ""}
+    </div>
+  `;
+
+  const policyHtml = canManageFrpPolicy() && pricing.policy ? `
+    <form class="frp-policy-form" data-frp-policy-form>
+      <label>Margen minimo<input type="number" min="0" step="0.01" value="${escapeHtml(pricing.policy.minMarginUsdt)}" data-frp-policy="minMarginUsdt" /></label>
+      <label>Ganancia objetivo<input type="number" min="0" step="0.01" value="${escapeHtml(pricing.policy.targetMarginUsdt)}" data-frp-policy="targetMarginUsdt" /></label>
+      <label>Precio minimo<input type="number" min="0" step="0.01" value="${escapeHtml(pricing.policy.minSellPriceUsdt)}" data-frp-policy="minSellPriceUsdt" /></label>
+      <label>Limite delegado %<input type="number" min="0" step="1" value="${escapeHtml(pricing.policy.maxWorkerCostChangePct)}" data-frp-policy="maxWorkerCostChangePct" /></label>
+      <button class="mini-btn" type="submit">Guardar politica</button>
+    </form>
+  ` : "";
+
+  const providersHtml = canManageFrpCosts() ? `
+    <div class="table-wrap frp-provider-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Proveedor</th>
+            <th>Estado</th>
+            <th>Modo</th>
+            <th>USDT fijo</th>
+            <th>Creditos</th>
+            <th>USDT/credito</th>
+            <th>Motivo</th>
+            <th>Accion</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${(pricing.providers || []).map((provider) => `
+            <tr>
+              <td>
+                <strong>${escapeHtml(provider.name)}</strong>
+                <span class="table-subtext">${escapeHtml(provider.updatedByName || provider.reason || "")}</span>
+              </td>
+              <td>
+                <select class="table-input" data-frp-provider-status="${escapeHtml(provider.id)}">
+                  ${["ACTIVE", "BACKUP", "OFF"].map((status) => `<option value="${status}" ${provider.status === status ? "selected" : ""}>${escapeHtml(frpProviderStatusLabel(status))}</option>`).join("")}
+                </select>
+              </td>
+              <td>
+                <select class="table-input" data-frp-provider-mode="${escapeHtml(provider.id)}">
+                  ${["FIXED_USDT", "CREDITS"].map((mode) => `<option value="${mode}" ${provider.costMode === mode ? "selected" : ""}>${escapeHtml(frpCostModeLabel(mode))}</option>`).join("")}
+                </select>
+              </td>
+              <td><input class="table-input numeric-input" type="number" min="0" step="0.0001" value="${escapeHtml(provider.fixedCostUsdt)}" data-frp-provider-fixed="${escapeHtml(provider.id)}" /></td>
+              <td><input class="table-input numeric-input" type="number" min="0" step="0.0001" value="${escapeHtml(provider.creditsPerProcess)}" data-frp-provider-credits="${escapeHtml(provider.id)}" /></td>
+              <td><input class="table-input numeric-input" type="number" min="0" step="0.0001" value="${escapeHtml(provider.creditUnitCostUsdt)}" data-frp-provider-credit-cost="${escapeHtml(provider.id)}" /></td>
+              <td><input class="table-input" type="text" maxlength="160" value="" placeholder="${escapeHtml(provider.reason || "Motivo obligatorio")}" data-frp-provider-reason="${escapeHtml(provider.id)}" /></td>
+              <td><button class="mini-btn" type="button" data-save-frp-provider="${escapeHtml(provider.id)}">Guardar</button></td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  ` : `<p class="pricing-note"><strong>Precio FRP automatico</strong><span>Solo el administrador o WhatsApp 3 autorizado puede cambiar proveedor y costos.</span></p>`;
+
+  frpPricingBox.innerHTML = `
+    <section class="frp-pricing-panel">
+      <header>
+        <div>
+          <p class="eyebrow">Costos FRP</p>
+          <h4>Proveedor y precio calculado</h4>
+        </div>
+      </header>
+      ${summaryHtml}
+      ${policyHtml}
+      ${providersHtml}
+    </section>
   `;
 }
 
@@ -1113,10 +1248,15 @@ function renderFrp() {
   if (!frpWorkbench || !frpMetrics) return;
   frpForm?.classList.toggle("hidden", !frpEnabled());
   if (!frpEnabled()) {
+    renderFrpPricingBox();
     frpMetrics.innerHTML = "";
     frpWorkbench.innerHTML = `<div class="pricing-note"><strong>FRP Express pertenece a WhatsApp 3</strong><span>Tu usuario no tiene este modulo habilitado.</span></div>`;
     return;
   }
+  renderFrpPricingBox();
+  syncFrpSuggestion();
+  const frpSubmit = frpForm?.querySelector("button[type='submit']");
+  if (frpSubmit) frpSubmit.disabled = session.frp?.pricing?.summary?.available === false;
   renderFrpMetrics();
   const orders = frpOrders();
   const jobs = frpJobs();
@@ -2116,6 +2256,66 @@ frpClient?.addEventListener("blur", () => {
 frpQuantity?.addEventListener("input", syncFrpSuggestion);
 frpUnitPrice?.addEventListener("input", syncFrpSuggestion);
 frpPayment?.addEventListener("change", syncFrpSuggestion);
+frpPricingBox?.addEventListener("submit", async (event) => {
+  const form = event.target.closest("[data-frp-policy-form]");
+  if (!form) return;
+  event.preventDefault();
+  const valueOf = (key) => form.querySelector(`[data-frp-policy="${key}"]`)?.value || 0;
+  const button = form.querySelector("button[type='submit']");
+  button.disabled = true;
+  frpMessage.textContent = "";
+  try {
+    const payload = await api("/api/frp/pricing/policy", {
+      method: "PATCH",
+      body: JSON.stringify({
+        minMarginUsdt: valueOf("minMarginUsdt"),
+        targetMarginUsdt: valueOf("targetMarginUsdt"),
+        minSellPriceUsdt: valueOf("minSellPriceUsdt"),
+        maxWorkerCostChangePct: valueOf("maxWorkerCostChangePct"),
+      }),
+    });
+    session.frp = payload.frp;
+    renderFrp();
+    frpMessage.textContent = "Politica FRP actualizada.";
+    frpMessage.dataset.type = "success";
+  } catch (error) {
+    frpMessage.textContent = error.message;
+    frpMessage.dataset.type = "error";
+  } finally {
+    button.disabled = false;
+  }
+});
+
+frpPricingBox?.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-save-frp-provider]");
+  if (!button) return;
+  const providerId = button.dataset.saveFrpProvider;
+  const valueOf = (selector) => frpPricingBox.querySelector(`[${selector}="${providerId}"]`)?.value || "";
+  button.disabled = true;
+  frpMessage.textContent = "";
+  try {
+    const payload = await api(`/api/frp/pricing/providers/${encodeURIComponent(providerId)}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        status: valueOf("data-frp-provider-status"),
+        costMode: valueOf("data-frp-provider-mode"),
+        fixedCostUsdt: valueOf("data-frp-provider-fixed"),
+        creditsPerProcess: valueOf("data-frp-provider-credits"),
+        creditUnitCostUsdt: valueOf("data-frp-provider-credit-cost"),
+        reason: valueOf("data-frp-provider-reason"),
+      }),
+    });
+    session.frp = payload.frp;
+    renderFrp();
+    frpMessage.textContent = "Proveedor FRP actualizado.";
+    frpMessage.dataset.type = "success";
+  } catch (error) {
+    frpMessage.textContent = error.message;
+    frpMessage.dataset.type = "error";
+  } finally {
+    button.disabled = false;
+  }
+});
 ticketService.addEventListener("change", () => {
   ticketPrice.value = selectedService()?.defaultPrice || 0;
   syncSelectedService();
@@ -2186,11 +2386,12 @@ usersTable.addEventListener("click", async (event) => {
   const role = usersTable.querySelector(`[data-user-role="${userId}"]`).value;
   const active = usersTable.querySelector(`[data-user-active="${userId}"]`).checked;
   const workChannel = usersTable.querySelector(`[data-user-channel="${userId}"]`).value;
+  const frpCostManager = Boolean(usersTable.querySelector(`[data-user-frp-cost-manager="${userId}"]`)?.checked);
   button.disabled = true;
   try {
     await api(`/api/users/${userId}`, {
       method: "PATCH",
-      body: JSON.stringify({ role, active, workChannel }),
+      body: JSON.stringify({ role, active, workChannel, permissions: { frpCostManager } }),
     });
     await refreshSession();
   } finally {

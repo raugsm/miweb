@@ -906,6 +906,73 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
 .frp-order-form {
   align-items: end;
 }
+
+.frp-pricing-box {
+  margin: 14px 0;
+}
+
+.frp-pricing-panel {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.72);
+  display: grid;
+  gap: 14px;
+}
+
+.frp-pricing-panel > header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.frp-pricing-panel h4 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.frp-pricing-summary,
+.frp-policy-form {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.frp-pricing-summary article,
+.frp-policy-form label {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--panel-soft);
+}
+
+.frp-pricing-summary span,
+.frp-policy-form label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.frp-pricing-summary strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 18px;
+  color: var(--text);
+}
+
+.frp-policy-form input {
+  margin-top: 8px;
+}
+
+.frp-policy-form button {
+  align-self: stretch;
+}
+
+.frp-provider-table {
+  margin-top: 0;
+}
+
 .frp-suggestion {
   min-height: 126px;
 }
@@ -1123,6 +1190,11 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
     grid-template-columns: 1fr;
   }
 
+  .frp-pricing-summary,
+  .frp-policy-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .frp-lane.wide {
     grid-row: auto;
   }
@@ -1139,7 +1211,7 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
 
 @media (max-width: 900px) {
   .shell { padding: 14px; }
-  .auth-grid, .dashboard, .metrics, .step-list, .security-form, .ticket-form, .client-form, .ticket-board, .frp-workbench, .frp-job-row, .daily-close-grid, .daily-close-actions, .daily-adjustment-form { grid-template-columns: 1fr; }
+  .auth-grid, .dashboard, .metrics, .step-list, .security-form, .ticket-form, .client-form, .ticket-board, .frp-workbench, .frp-job-row, .frp-pricing-summary, .frp-policy-form, .daily-close-grid, .daily-close-actions, .daily-adjustment-form { grid-template-columns: 1fr; }
   .payment-summary { grid-column: 1; }
   .ticket-submit-btn { min-height: 52px; }
   .image-preview-list { grid-template-columns: 1fr; }
