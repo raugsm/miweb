@@ -493,7 +493,23 @@ function stopOrdersLive() {
   setOrdersLiveStatus("Desconectado", "");
 }
 
+function wirePasswordToggles() {
+  $$("[data-password-toggle]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const field = button.closest(".password-field")?.querySelector("input");
+      if (!field) return;
+      const shouldShow = field.type === "password";
+      field.type = shouldShow ? "text" : "password";
+      button.dataset.visible = String(shouldShow);
+      button.setAttribute("aria-pressed", String(shouldShow));
+      button.setAttribute("aria-label", shouldShow ? "Ocultar contraseña" : "Mostrar contraseña");
+      field.focus();
+    });
+  });
+}
+
 function wireEvents() {
+  wirePasswordToggles();
   $$(".tab").forEach((button) => button.addEventListener("click", () => setTab(button.dataset.tab)));
   $("#loginForm").addEventListener("submit", async (event) => {
     event.preventDefault();
