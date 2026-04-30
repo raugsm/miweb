@@ -16,7 +16,7 @@ const enableSetupPasswordReset = ["true", "1", "yes"].includes(String(process.en
 const ownerRecoveryEmail = normalizeEmail(process.env.ARIAD_OWNER_RECOVERY_EMAIL || "");
 const publicBaseUrl = String(process.env.ARIAD_PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || `http://localhost:${port}`).replace(/\/+$/, "");
 const mailFrom = process.env.ARIAD_MAIL_FROM || '"AriadGSM Soporte" <soporte@ariadgsm.com>';
-const appVersion = "portal-password-reveal-v1";
+const appVersion = "portal-email-domain-guard-v1";
 const sessionVersion = 7;
 const customerSessionVersion = 1;
 const trustedDeviceVersion = 3;
@@ -43,7 +43,8 @@ const maxPortalOrderRequestsPerWindow = 12;
 const maxPortalProofRequestsPerWindow = 20;
 const maxPortalVerificationEmailRequestsPerWindow = 3;
 const customerEmailVerificationExpiresMs = 24 * 60 * 60 * 1000;
-const customerPortalBaseUrl = String(process.env.ARIAD_CUSTOMER_PUBLIC_URL || process.env.ARIAD_PORTAL_PUBLIC_URL || publicBaseUrl).replace(/\/+$/, "");
+const productionCustomerPortalBaseUrl = "https://ariadgsm.com";
+const customerPortalBaseUrl = resolveCustomerPortalBaseUrl();
 const portalOrdersSseHeartbeatMs = 25 * 1000;
 const turnstileSiteKey = process.env.ARIAD_TURNSTILE_SITE_KEY || "";
 const turnstileSecret = process.env.ARIAD_TURNSTILE_SECRET || "";
@@ -1885,6 +1886,26 @@ function nextFrpArdCode(db) {
   const first = String.fromCharCode(65 + Math.floor((next - 1) / 26) % 26);
   const second = String.fromCharCode(65 + ((next - 1) % 26));
   return `ARD${String(next).padStart(3, "0")}-${first}${second}`;
+}
+
+function runtimeLooksProduction() {
+  return Boolean(process.env.RENDER || process.env.RENDER_EXTERNAL_URL || process.env.NODE_ENV === "production");
+}
+
+function resolveCustomerPortalBaseUrl() {
+  const configured = process.env.ARIAD_CUSTOMER_PUBLIC_URL || process.env.ARIAD_PORTAL_PUBLIC_URL || "";
+  const fallback = runtimeLooksProduction() ? productionCustomerPortalBaseUrl : publicBaseUrl;
+  const candidate = String(configured || fallback).replace(/\/+$/, "");
+  try {
+    const url = new URL(candidate);
+    const host = url.hostname.toLowerCase();
+    if (runtimeLooksProduction() && (host === "ops.ariadgsm.com" || host.endsWith(".onrender.com"))) {
+      return productionCustomerPortalBaseUrl;
+    }
+    return `${url.protocol}//${url.host}${url.pathname === "/" ? "" : url.pathname.replace(/\/+$/, "")}`;
+  } catch {
+    return fallback;
+  }
 }
 
 function cleanText(value, max = 120) {
@@ -3856,6 +3877,27 @@ function requestHost(req) {
   return String(req.headers.host || "").split(":")[0].toLowerCase();
 }
 
+function requestShouldRedirectToCustomerPortal(req, pathname) {
+  return requestHost(req) === "ops.ariadgsm.com"
+    && (pathname === "/cliente" || pathname.startsWith("/cliente/") || pathname === "/portal");
+}
+
+function redirectToCustomerPortal(req, res) {
+  let target;
+  try {
+    const currentUrl = new URL(req.url || "/cliente", `https://${req.headers.host || "ops.ariadgsm.com"}`);
+    target = new URL(`${currentUrl.pathname}${currentUrl.search}`, customerPortalBaseUrl);
+  } catch {
+    target = new URL("/cliente", customerPortalBaseUrl);
+  }
+  res.writeHead(302, {
+    Location: target.toString(),
+    "Cache-Control": "no-store",
+    "Referrer-Policy": "no-referrer",
+  });
+  res.end();
+}
+
 function requestUsesCustomerPortal(req, pathname) {
   const host = requestHost(req);
   return host === "ariadgsm.com"
@@ -3874,7 +3916,12 @@ async function serveStatic(req, res, pathname) {
     return sendHtml(res, 200, ownerRecoveryPage());
   }
 
+  if (requestShouldRedirectToCustomerPortal(req, pathname)) {
+    return redirectToCustomerPortal(req, res);
+  }
+
   const portalRequest = requestUsesCustomerPortal(req, pathname);
+  if (portalRequest) res.setHeader("Referrer-Policy", "no-referrer");
   let safePath = pathname;
   if (portalRequest && (pathname === "/" || pathname === "/cliente" || pathname.startsWith("/cliente/") || pathname === "/portal")) {
     safePath = "/portal.html";
