@@ -106,6 +106,7 @@
           <nav>
             <button class="nav-item active" type="button" data-panel="overview-panel">Inicio</button>
             <button class="nav-item" type="button" data-panel="tickets-panel">Tickets</button>
+            <button class="nav-item" type="button" data-panel="frp-panel">FRP Express</button>
             <button class="nav-item" type="button" data-panel="clients-panel">Clientes</button>
             <button class="nav-item" type="button" data-panel="pricing-panel" data-pricing-manager-only="true">Precios</button>
             <button class="nav-item" type="button" data-panel="users-panel" data-admin-only="true">Usuarios</button>
@@ -179,6 +180,42 @@
               <div id="device-approvals-panel" class="device-approvals"></div>
               <button id="revoke-devices-button" class="secondary-btn" type="button">Revocar otros dispositivos</button>
             </div>
+          </section>
+
+          <section id="frp-panel" class="panel">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">WhatsApp 3</p>
+                <h3>FRP Express</h3>
+              </div>
+              <button id="refresh-frp" class="secondary-btn" type="button">Actualizar</button>
+            </div>
+
+            <form id="frp-form" class="ticket-form frp-order-form">
+              <label>
+                Cliente
+                <input name="clientText" id="frp-client" list="client-options" autocomplete="off" placeholder="Carlos Perez Colombia" required />
+              </label>
+              <label>
+                Equipos
+                <input name="quantity" id="frp-quantity" type="number" min="1" max="50" value="1" required />
+              </label>
+              <label>
+                Precio unitario
+                <input name="unitPrice" id="frp-unit-price" type="number" min="0" step="0.01" required />
+              </label>
+              <label>
+                Metodo de pago
+                <select name="paymentMethod" id="frp-payment" required></select>
+              </label>
+              <div id="frp-suggestion" class="payment-summary frp-suggestion" aria-live="polite"></div>
+              <button class="primary-btn ticket-submit-btn" type="submit">Crear orden FRP</button>
+              <p id="frp-message" class="message" aria-live="polite"></p>
+            </form>
+
+            <div id="frp-metrics" class="metrics frp-metrics"></div>
+            <div id="frp-workbench" class="frp-workbench"></div>
+            <input id="frp-proof-files" class="hidden" type="file" accept="image/png,image/jpeg,image/webp" multiple />
           </section>
 
           <section id="tickets-panel" class="panel">

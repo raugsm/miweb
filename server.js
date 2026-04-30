@@ -15,7 +15,7 @@ const enableSetupPasswordReset = ["true", "1", "yes"].includes(String(process.en
 const ownerRecoveryEmail = normalizeEmail(process.env.ARIAD_OWNER_RECOVERY_EMAIL || "");
 const publicBaseUrl = String(process.env.ARIAD_PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || `http://localhost:${port}`).replace(/\/+$/, "");
 const mailFrom = process.env.ARIAD_MAIL_FROM || '"AriadGSM Soporte" <soporte@ariadgsm.com>';
-const appVersion = "role-permissions-v1";
+const appVersion = "frp-express-v1";
 const sessionVersion = 7;
 const trustedDeviceVersion = 3;
 const deviceApprovalExpiresMs = 15 * 60 * 1000;
@@ -131,6 +131,40 @@ const ticketStatuses = [
   { code: "EN_COLA", label: "En cola" },
   { code: "EN_PROCESO", label: "En proceso" },
   { code: "FINALIZADO", label: "Finalizado" },
+];
+const frpServiceCode = "XIA-FRP-GOOGLE";
+const frpWorkChannel = "WhatsApp 3";
+const frpOrderStatuses = [
+  { code: "COTIZADA", label: "Cotizada" },
+  { code: "ESPERANDO_PAGO", label: "Esperando pago" },
+  { code: "PAGO_VALIDADO", label: "Pago validado" },
+  { code: "EN_PREPARACION", label: "En preparacion" },
+  { code: "PARCIAL_LISTA", label: "Parcial lista" },
+  { code: "LISTA_PARA_TECNICO", label: "Lista para tecnico" },
+  { code: "CERRADA", label: "Cerrada" },
+  { code: "CANCELADA", label: "Cancelada" },
+];
+const frpJobStatuses = [
+  { code: "ESPERANDO_PREPARACION", label: "Preparacion" },
+  { code: "LISTO_PARA_TECNICO", label: "Listo" },
+  { code: "EN_PROCESO", label: "En proceso" },
+  { code: "FINALIZADO", label: "Finalizado" },
+  { code: "REQUIERE_REVISION", label: "Revision" },
+  { code: "ESPERANDO_CLIENTE", label: "Esperando cliente" },
+  { code: "CANCELADO", label: "Cancelado" },
+];
+const frpOrderChecklistKeys = ["priceSent", "paymentValidated", "connectionDataSent", "authorizationConfirmed"];
+const frpJobChecklistKeys = ["clientConnected", "requiredStateConfirmed", "modelSupported"];
+const frpQuantityTiers = [
+  { minQty: 10, unitPrice: 22, label: "Volumen 10+" },
+  { minQty: 5, unitPrice: 23, label: "Volumen 5-9" },
+  { minQty: 2, unitPrice: 24, label: "Volumen 2-4" },
+  { minQty: 1, unitPrice: 25, label: "Normal" },
+];
+const frpMonthlyTiers = [
+  { minJobs: 100, unitPrice: 22, label: "Meta 100+" },
+  { minJobs: 60, unitPrice: 23, label: "Meta 60+" },
+  { minJobs: 30, unitPrice: 24, label: "Meta 30+" },
 ];
 const exchangeRateCountries = [
   { key: "mexico", country: "Mexico", currency: "MXN" },
@@ -275,6 +309,9 @@ async function ensureDb() {
       audit: [],
       tickets: [],
       ticketCounters: {},
+      frpOrders: [],
+      frpJobs: [],
+      frpCounters: {},
       passwordResetTokens: [],
       passwordResetRequests: [],
       pricingConfig: defaultPricingConfig(),
@@ -294,6 +331,9 @@ async function readDb() {
   db.audit ||= [];
   db.tickets ||= [];
   db.ticketCounters ||= {};
+  db.frpOrders ||= [];
+  db.frpJobs ||= [];
+  db.frpCounters ||= {};
   db.passwordResetTokens ||= [];
   db.passwordResetRequests ||= [];
   const normalizedPricingConfig = normalizePricingConfig(db.pricingConfig);
@@ -310,6 +350,9 @@ async function readDb() {
   }
   if (JSON.stringify(db.pricingConfig || {}) !== JSON.stringify(normalizedPricingConfig)) {
     db.pricingConfig = normalizedPricingConfig;
+    changed = true;
+  }
+  if (normalizeFrpRecords(db)) {
     changed = true;
   }
   for (const ticket of db.tickets) {
@@ -410,6 +453,221 @@ function publicPricingConfig(config, db = { users: [] }) {
 function publicPricingConfigForUser(config, db, user) {
   if (user?.role === "ADMIN") return publicPricingConfig(config, db);
   return { exchangeRates: [], serviceRules: [] };
+}
+
+function defaultFrpOrderChecklist() {
+  return {
+    priceSent: false,
+    paymentValidated: false,
+    connectionDataSent: false,
+    authorizationConfirmed: false,
+  };
+}
+
+function defaultFrpJobChecklist() {
+  return {
+    clientConnected: false,
+    requiredStateConfirmed: false,
+    modelSupported: false,
+  };
+}
+
+function normalizeChecklist(value, keys, defaults) {
+  const source = value && typeof value === "object" ? value : {};
+  return Object.fromEntries(keys.map((key) => [key, Boolean(Object.hasOwn(source, key) ? source[key] : defaults[key])]));
+}
+
+function normalizeFrpRecords(db) {
+  let changed = false;
+  for (const order of db.frpOrders) {
+    const checklist = normalizeChecklist(order.checklist, frpOrderChecklistKeys, defaultFrpOrderChecklist());
+    if (JSON.stringify(order.checklist || {}) !== JSON.stringify(checklist)) {
+      order.checklist = checklist;
+      changed = true;
+    }
+    if (!order.workChannel) {
+      order.workChannel = frpWorkChannel;
+      changed = true;
+    }
+    if (!order.serviceCode) {
+      order.serviceCode = frpServiceCode;
+      changed = true;
+    }
+    if (!order.serviceName) {
+      order.serviceName = services.find((service) => service.code === frpServiceCode)?.name || "Xiaomi Cuenta Google";
+      changed = true;
+    }
+    if (!order.orderStatus) {
+      order.orderStatus = "COTIZADA";
+      changed = true;
+    }
+    if (!Array.isArray(order.paymentProofs)) {
+      order.paymentProofs = [];
+      changed = true;
+    }
+  }
+  for (const job of db.frpJobs) {
+    const checklist = normalizeChecklist(job.checklist, frpJobChecklistKeys, defaultFrpJobChecklist());
+    if (JSON.stringify(job.checklist || {}) !== JSON.stringify(checklist)) {
+      job.checklist = checklist;
+      changed = true;
+    }
+    if (!job.workChannel) {
+      job.workChannel = frpWorkChannel;
+      changed = true;
+    }
+    if (!job.status) {
+      job.status = "ESPERANDO_PREPARACION";
+      changed = true;
+    }
+  }
+  for (const order of db.frpOrders) {
+    const previousStatus = order.orderStatus;
+    syncFrpOrderStatus(db, order);
+    if (order.orderStatus !== previousStatus) changed = true;
+  }
+  return changed;
+}
+
+function canUseFrp(user) {
+  return Boolean(user && (user.role === "ADMIN" || normalizeWorkChannel(user.workChannel) === frpWorkChannel));
+}
+
+function canReviewFrpPayments(user) {
+  return Boolean(user && ["ADMIN", "COORDINADOR"].includes(user.role));
+}
+
+function frpOrderIsReady(order) {
+  return Boolean(order?.checklist?.paymentValidated && order?.checklist?.connectionDataSent && order?.checklist?.authorizationConfirmed);
+}
+
+function frpJobChecklistComplete(job) {
+  return Boolean(job?.checklist?.clientConnected && job?.checklist?.requiredStateConfirmed && job?.checklist?.modelSupported);
+}
+
+function frpActiveJobForUser(db, user) {
+  return db.frpJobs.find((job) => job.technicianId === user.id && job.status === "EN_PROCESO");
+}
+
+function frpMonthlyUsage(db, clientId, value = new Date()) {
+  const period = limaMonthStamp(value);
+  return db.frpJobs.filter((job) => {
+    const order = db.frpOrders.find((candidate) => candidate.id === job.orderId);
+    return order?.clientId === clientId && job.status === "FINALIZADO" && limaMonthStamp(job.doneAt || job.updatedAt || job.createdAt) === period;
+  }).length;
+}
+
+function frpTierForQuantity(quantity) {
+  return frpQuantityTiers.find((tier) => quantity >= tier.minQty) || frpQuantityTiers.at(-1);
+}
+
+function frpTierForMonthlyUsage(usage) {
+  return frpMonthlyTiers.find((tier) => usage >= tier.minJobs) || null;
+}
+
+function nextFrpMonthlyTier(usage) {
+  return [...frpMonthlyTiers].reverse().find((tier) => usage < tier.minJobs) || null;
+}
+
+function frpPriceSuggestion(db, clientId, quantity) {
+  const safeQuantity = Math.max(1, Math.min(50, Number.parseInt(quantity, 10) || 1));
+  const monthlyUsage = frpMonthlyUsage(db, clientId);
+  const quantityTier = frpTierForQuantity(safeQuantity);
+  const monthlyTier = frpTierForMonthlyUsage(monthlyUsage);
+  const candidates = [quantityTier, monthlyTier].filter(Boolean);
+  const selected = candidates.reduce((best, tier) => (tier.unitPrice < best.unitPrice ? tier : best), quantityTier);
+  const nextTier = nextFrpMonthlyTier(monthlyUsage);
+  return {
+    quantity: safeQuantity,
+    monthlyUsage,
+    nextMonthlyTier: nextTier ? { minJobs: nextTier.minJobs, unitPrice: nextTier.unitPrice, label: nextTier.label, remaining: nextTier.minJobs - monthlyUsage } : null,
+    quantityTier: { minQty: quantityTier.minQty, unitPrice: quantityTier.unitPrice, label: quantityTier.label },
+    monthlyTier: monthlyTier ? { minJobs: monthlyTier.minJobs, unitPrice: monthlyTier.unitPrice, label: monthlyTier.label } : null,
+    unitPrice: selected.unitPrice,
+    label: selected.label,
+    total: moneyNumber(selected.unitPrice * safeQuantity),
+  };
+}
+
+function syncFrpOrderStatus(db, order) {
+  if (!order || ["CERRADA", "CANCELADA"].includes(order.orderStatus)) return;
+  const jobs = db.frpJobs.filter((job) => job.orderId === order.id);
+  const closedJobs = jobs.filter((job) => ["FINALIZADO", "CANCELADO"].includes(job.status)).length;
+  if (jobs.length && closedJobs === jobs.length) {
+    order.orderStatus = "CERRADA";
+    order.closedAt ||= nowIso();
+    return;
+  }
+  if (!order.checklist?.paymentValidated) {
+    order.orderStatus = order.checklist?.priceSent ? "ESPERANDO_PAGO" : "COTIZADA";
+    return;
+  }
+  if (!order.checklist.connectionDataSent || !order.checklist.authorizationConfirmed) {
+    order.orderStatus = "PAGO_VALIDADO";
+    return;
+  }
+  const readyOrActive = jobs.filter((job) => ["LISTO_PARA_TECNICO", "EN_PROCESO", "FINALIZADO", "REQUIERE_REVISION"].includes(job.status)).length;
+  if (readyOrActive === 0) {
+    order.orderStatus = "EN_PREPARACION";
+    return;
+  }
+  order.orderStatus = readyOrActive === jobs.length ? "LISTA_PARA_TECNICO" : "PARCIAL_LISTA";
+}
+
+function publicFrpOrder(order, db) {
+  const creator = db.users.find((user) => user.id === order.createdBy);
+  const jobs = db.frpJobs.filter((job) => job.orderId === order.id);
+  return {
+    ...order,
+    createdByName: creator?.name || "Sistema",
+    jobs: jobs.map((job) => publicFrpJob(job, db, false)),
+    jobCounts: frpJobStatuses.reduce((acc, status) => {
+      acc[status.code] = jobs.filter((job) => job.status === status.code).length;
+      return acc;
+    }, {}),
+  };
+}
+
+function publicFrpJob(job, db, includeOrder = true) {
+  const technician = db.users.find((user) => user.id === job.technicianId);
+  const order = includeOrder ? db.frpOrders.find((candidate) => candidate.id === job.orderId) : null;
+  return {
+    ...job,
+    technicianName: technician?.name || "",
+    order: order ? {
+      id: order.id,
+      code: order.code,
+      clientName: order.clientName,
+      country: order.country,
+      unitPrice: order.unitPrice,
+      totalPrice: order.totalPrice,
+      paymentLabel: order.paymentLabel,
+    } : undefined,
+  };
+}
+
+function publicFrpState(db, user) {
+  if (!canUseFrp(user)) {
+    return { enabled: false, orders: [], jobs: [], metrics: {}, statuses: { orders: frpOrderStatuses, jobs: frpJobStatuses } };
+  }
+  const orders = db.frpOrders.filter((order) => user.role === "ADMIN" || order.workChannel === frpWorkChannel);
+  const jobs = db.frpJobs.filter((job) => user.role === "ADMIN" || job.workChannel === frpWorkChannel);
+  const today = limaDateStamp();
+  const todaysJobs = jobs.filter((job) => limaDateStamp(job.createdAt) === today || limaDateStamp(job.doneAt) === today);
+  return {
+    enabled: true,
+    orders: orders.slice(0, 80).map((order) => publicFrpOrder(order, db)),
+    jobs: jobs.slice(0, 200).map((job) => publicFrpJob(job, db)),
+    metrics: {
+      ordersToday: orders.filter((order) => limaDateStamp(order.createdAt) === today).length,
+      finishedToday: todaysJobs.filter((job) => job.status === "FINALIZADO").length,
+      ready: jobs.filter((job) => job.status === "LISTO_PARA_TECNICO").length,
+      inProcess: jobs.filter((job) => job.status === "EN_PROCESO").length,
+      review: jobs.filter((job) => job.status === "REQUIERE_REVISION").length,
+      myActive: jobs.filter((job) => job.technicianId === user.id && job.status === "EN_PROCESO").length,
+    },
+    statuses: { orders: frpOrderStatuses, jobs: frpJobStatuses },
+  };
 }
 
 function audit(db, actorId, action, targetId, detail = {}) {
@@ -794,6 +1052,24 @@ async function requireAdminWithAudit(user, res, db, action, targetId, detail = {
   return false;
 }
 
+async function requireFrpAccess(user, res, db, action = "FRP_ACCESS_DENIED", targetId = "frp") {
+  if (!requireUser(user, res)) return false;
+  if (canUseFrp(user)) return true;
+  audit(db, user.id, action, targetId, { role: user.role, workChannel: user.workChannel || "" });
+  await writeDb(db);
+  sendJson(res, 403, { error: "FRP Express pertenece a WhatsApp 3." });
+  return false;
+}
+
+async function requireFrpPaymentReviewer(user, res, db, targetId) {
+  if (!requireUser(user, res)) return false;
+  if (canReviewFrpPayments(user)) return true;
+  audit(db, user.id, "FRP_PAYMENT_REVIEW_DENIED", targetId, { role: user.role, workChannel: user.workChannel || "" });
+  await writeDb(db);
+  sendJson(res, 403, { error: "Solo administrador o coordinador puede validar pagos FRP." });
+  return false;
+}
+
 function normalizeEmail(email) {
   return String(email || "").trim().toLowerCase();
 }
@@ -828,11 +1104,33 @@ function limaDateStamp(value = new Date()) {
   return `${get("year")}${get("month")}${get("day")}`;
 }
 
+function limaMonthStamp(value = new Date()) {
+  return limaDateStamp(value).slice(0, 6);
+}
+
 function nextTicketCode(db) {
   const stamp = limaDateStamp();
   const next = (db.ticketCounters[stamp] || 0) + 1;
   db.ticketCounters[stamp] = next;
   return `V-${stamp}-${String(next).padStart(3, "0")}`;
+}
+
+function nextFrpOrderCode(db) {
+  const stamp = limaDateStamp();
+  db.frpCounters.orders ||= {};
+  const next = (db.frpCounters.orders[stamp] || 0) + 1;
+  db.frpCounters.orders[stamp] = next;
+  return `ORD-${stamp}-${String(next).padStart(3, "0")}`;
+}
+
+function nextFrpArdCode(db) {
+  const stamp = limaDateStamp();
+  db.frpCounters.ard ||= {};
+  const next = (db.frpCounters.ard[stamp] || 0) + 1;
+  db.frpCounters.ard[stamp] = next;
+  const first = String.fromCharCode(65 + Math.floor((next - 1) / 26) % 26);
+  const second = String.fromCharCode(65 + ((next - 1) % 26));
+  return `ARD${String(next).padStart(3, "0")}-${first}${second}`;
 }
 
 function cleanText(value, max = 120) {
@@ -1067,6 +1365,7 @@ async function handleApi(req, res, pathname) {
       pricingConfig: publicPricingConfigForUser(db.pricingConfig, db, user),
       roles: user.role === "ADMIN" ? Array.from(roles).map((role) => ({ value: role, label: roleLabels[role] })) : [],
       catalog: { services: allowedServicesForUser(user), paymentMethods, workChannels, ticketStatuses, countries: countries.map(([, country]) => country) },
+      frp: publicFrpState(db, user),
     });
   }
 
@@ -1523,6 +1822,305 @@ async function handleApi(req, res, pathname) {
     });
     await writeDb(db);
     return sendJson(res, 200, { pricingConfig: publicPricingConfig(db.pricingConfig, db) });
+  }
+
+  if (req.method === "POST" && pathname === "/api/frp/orders") {
+    if (!requireUser(user, res)) return;
+    const input = await parseJson(req);
+    const db = await readDb();
+    if (!(await requireFrpAccess(user, res, db, "FRP_ORDER_CREATE_DENIED"))) return;
+    let client = db.clients.find((candidate) => candidate.id === input.clientId);
+    if (!client) {
+      const parsedClient = parseClientText(input.clientText);
+      if (!parsedClient) return sendJson(res, 400, { error: "Escribe cliente y pais. Ejemplo: Javier Lozano Colombia." });
+      client = findClientByIdentity(db, parsedClient.name, parsedClient.country, parsedClient.whatsapp)
+        || createClient(db, user, parsedClient.name, parsedClient.country, parsedClient.whatsapp);
+      completeClientFromContext(db, user, client, parsedClient.whatsapp);
+    }
+    completeClientFromContext(db, user, client);
+    const quantity = Math.max(1, Math.min(50, Number.parseInt(input.quantity, 10) || 1));
+    const payment = paymentMethods.find((candidate) => candidate.code === input.paymentMethod);
+    const allowedPayments = allowedTicketPaymentMethods();
+    if (!payment || !allowedPayments.some((candidate) => candidate.code === payment.code)) {
+      return sendJson(res, 400, { error: "Metodo de pago no disponible para orden FRP." });
+    }
+    const suggestion = frpPriceSuggestion(db, client.id, quantity);
+    const requestedUnitPrice = Object.hasOwn(input, "unitPrice") ? moneyNumber(input.unitPrice) : suggestion.unitPrice;
+    if (requestedUnitPrice <= 0) return sendJson(res, 400, { error: "Precio unitario obligatorio." });
+    if (requestedUnitPrice < suggestion.unitPrice && user.role !== "ADMIN") {
+      audit(db, user.id, "FRP_DISCOUNT_APPROVAL_REQUIRED", client.id, {
+        requestedUnitPrice,
+        suggestedUnitPrice: suggestion.unitPrice,
+        quantity,
+      });
+      await writeDb(db);
+      return sendJson(res, 403, { error: "Ese descuento requiere aprobacion de administrador." });
+    }
+    const order = {
+      id: crypto.randomUUID(),
+      code: nextFrpOrderCode(db),
+      clientId: client.id,
+      clientName: client.name,
+      clientWhatsapp: client.whatsapp,
+      country: client.country,
+      serviceCode: frpServiceCode,
+      serviceName: services.find((service) => service.code === frpServiceCode)?.name || "Xiaomi Cuenta Google",
+      workChannel: frpWorkChannel,
+      quantity,
+      baseUnitPrice: 25,
+      suggestedUnitPrice: suggestion.unitPrice,
+      unitPrice: requestedUnitPrice,
+      discountLabel: requestedUnitPrice < 25 ? suggestion.label : "Normal",
+      monthlyUsageAtCreation: suggestion.monthlyUsage,
+      nextMonthlyTier: suggestion.nextMonthlyTier,
+      totalPrice: moneyNumber(requestedUnitPrice * quantity),
+      priceFormatted: formatPaymentAmount(requestedUnitPrice * quantity, payment),
+      paymentMethod: payment.code,
+      paymentLabel: payment.label,
+      paymentDetails: payment.details,
+      paymentProofs: [],
+      paymentStatus: "ESPERANDO_COMPROBANTE",
+      orderStatus: "COTIZADA",
+      checklist: defaultFrpOrderChecklist(),
+      createdBy: user.id,
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+    };
+    const jobs = Array.from({ length: quantity }, (_, index) => ({
+      id: crypto.randomUUID(),
+      code: `${order.code}-${index + 1}`,
+      orderId: order.id,
+      sequence: index + 1,
+      totalJobs: quantity,
+      workChannel: frpWorkChannel,
+      serviceCode: frpServiceCode,
+      serviceName: order.serviceName,
+      clientName: order.clientName,
+      country: order.country,
+      status: "ESPERANDO_PREPARACION",
+      checklist: defaultFrpJobChecklist(),
+      technicianId: "",
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+      finalLog: "",
+      finalImages: [],
+      ardCode: "",
+    }));
+    db.frpOrders.unshift(order);
+    db.frpJobs.unshift(...jobs);
+    audit(db, user.id, "FRP_ORDER_CREATED", order.id, {
+      code: order.code,
+      client: order.clientName,
+      quantity,
+      unitPrice: order.unitPrice,
+      totalPrice: order.totalPrice,
+      discountLabel: order.discountLabel,
+    });
+    audit(db, user.id, "FRP_JOBS_CREATED", order.id, { jobCount: jobs.length });
+    await writeDb(db);
+    return sendJson(res, 201, { order: publicFrpOrder(order, db), frp: publicFrpState(db, user) });
+  }
+
+  const frpOrderChecklistMatch = pathname.match(/^\/api\/frp\/orders\/([^/]+)\/checklist$/);
+  if (req.method === "PATCH" && frpOrderChecklistMatch) {
+    if (!requireUser(user, res)) return;
+    const input = await parseJson(req);
+    const db = await readDb();
+    if (!(await requireFrpAccess(user, res, db, "FRP_ORDER_CHECKLIST_DENIED", frpOrderChecklistMatch[1]))) return;
+    const order = db.frpOrders.find((candidate) => candidate.id === frpOrderChecklistMatch[1]);
+    if (!order) return sendJson(res, 404, { error: "Orden FRP no encontrada." });
+    const key = cleanText(input.key, 40);
+    if (!frpOrderChecklistKeys.includes(key) || key === "paymentValidated") {
+      return sendJson(res, 400, { error: "Checklist de orden invalido." });
+    }
+    order.checklist[key] = Boolean(input.value);
+    order.updatedAt = nowIso();
+    const actionByKey = {
+      priceSent: "FRP_PRICE_SENT",
+      connectionDataSent: "FRP_CONNECTION_SENT",
+      authorizationConfirmed: "FRP_AUTH_CONFIRMED",
+    };
+    syncFrpOrderStatus(db, order);
+    audit(db, user.id, actionByKey[key] || "FRP_ORDER_CHECKLIST_UPDATED", order.id, { key, value: order.checklist[key], orderStatus: order.orderStatus });
+    await writeDb(db);
+    return sendJson(res, 200, { order: publicFrpOrder(order, db), frp: publicFrpState(db, user) });
+  }
+
+  const frpOrderPaymentProofMatch = pathname.match(/^\/api\/frp\/orders\/([^/]+)\/payment-proof$/);
+  if (req.method === "PATCH" && frpOrderPaymentProofMatch) {
+    if (!requireUser(user, res)) return;
+    const input = await parseJson(req);
+    const db = await readDb();
+    if (!(await requireFrpAccess(user, res, db, "FRP_PAYMENT_PROOF_DENIED", frpOrderPaymentProofMatch[1]))) return;
+    const order = db.frpOrders.find((candidate) => candidate.id === frpOrderPaymentProofMatch[1]);
+    if (!order) return sendJson(res, 404, { error: "Orden FRP no encontrada." });
+    const proofs = sanitizePaymentProofImages(input.paymentProofs);
+    if (!proofs.length) return sendJson(res, 400, { error: "Carga al menos una imagen de comprobante." });
+    const existingProofs = Array.isArray(order.paymentProofs) ? order.paymentProofs : [];
+    if (existingProofs.length + proofs.length > maxPaymentProofImages) {
+      return sendJson(res, 400, { error: `Maximo ${maxPaymentProofImages} comprobantes por orden.` });
+    }
+    const proofHashes = proofs.map((proof) => proof.hash).filter(Boolean);
+    if (new Set(proofHashes).size !== proofHashes.length) return sendJson(res, 409, { error: "Subiste la misma imagen mas de una vez." });
+    const existingHashes = new Set(existingProofs.map((proof) => proof.hash).filter(Boolean));
+    if (proofs.some((proof) => existingHashes.has(proof.hash))) return sendJson(res, 409, { error: "Ese comprobante ya esta cargado en esta orden." });
+    for (const otherOrder of db.frpOrders) {
+      if (otherOrder.id === order.id) continue;
+      const reusedProof = (otherOrder.paymentProofs || []).find((proof) => proofHashes.includes(proof.hash));
+      if (reusedProof) return sendJson(res, 409, { error: `Ese comprobante ya fue usado en la orden ${otherOrder.code}.` });
+    }
+    for (const ticket of db.tickets) {
+      const reusedProof = (ticket.paymentProofs || []).find((proof) => proofHashes.includes(proof.hash));
+      if (reusedProof) return sendJson(res, 409, { error: `Ese comprobante ya fue usado en el ticket ${ticket.code}.` });
+    }
+    order.paymentProofs = existingProofs.concat(proofs.map((proof) => ({ ...proof, uploadedBy: user.id, uploadedAt: nowIso(), reviewStatus: "PENDIENTE" })));
+    if (order.paymentStatus !== "COMPROBANTE_RECIBIDO") order.paymentStatus = "PAGO_EN_VALIDACION";
+    order.updatedAt = nowIso();
+    audit(db, user.id, "FRP_PAYMENT_PROOF_UPLOADED", order.id, { code: order.code, proofCount: proofs.length });
+    await writeDb(db);
+    return sendJson(res, 200, { order: publicFrpOrder(order, db), frp: publicFrpState(db, user) });
+  }
+
+  const frpOrderPaymentReviewMatch = pathname.match(/^\/api\/frp\/orders\/([^/]+)\/payment-review$/);
+  if (req.method === "PATCH" && frpOrderPaymentReviewMatch) {
+    if (!requireUser(user, res)) return;
+    const input = await parseJson(req);
+    const db = await readDb();
+    if (!(await requireFrpPaymentReviewer(user, res, db, frpOrderPaymentReviewMatch[1]))) return;
+    const order = db.frpOrders.find((candidate) => candidate.id === frpOrderPaymentReviewMatch[1]);
+    if (!order) return sendJson(res, 404, { error: "Orden FRP no encontrada." });
+    const action = cleanText(input.action, 20);
+    const proofs = Array.isArray(order.paymentProofs) ? order.paymentProofs : [];
+    if (!proofs.length) return sendJson(res, 400, { error: "No hay comprobante cargado para validar." });
+    if (action === "approve") {
+      order.paymentStatus = "COMPROBANTE_RECIBIDO";
+      order.checklist.paymentValidated = true;
+      order.paymentReviewedBy = user.id;
+      order.paymentReviewedAt = nowIso();
+      order.paymentProofs = proofs.map((proof) => ({ ...proof, reviewStatus: "VALIDADO", reviewedBy: user.id, reviewedAt: order.paymentReviewedAt }));
+    } else if (action === "reject") {
+      order.paymentStatus = "COMPROBANTE_RECHAZADO";
+      order.checklist.paymentValidated = false;
+      order.paymentReviewedBy = user.id;
+      order.paymentReviewedAt = nowIso();
+      order.paymentRejectedReason = cleanText(input.reason, 160) || "Comprobante rechazado";
+      order.paymentProofs = proofs.map((proof) => ({ ...proof, reviewStatus: "RECHAZADO", reviewedBy: user.id, reviewedAt: order.paymentReviewedAt }));
+    } else {
+      return sendJson(res, 400, { error: "Accion de validacion invalida." });
+    }
+    order.updatedAt = nowIso();
+    syncFrpOrderStatus(db, order);
+    audit(db, user.id, action === "approve" ? "FRP_PAYMENT_VALIDATED" : "FRP_PAYMENT_REJECTED", order.id, { code: order.code, orderStatus: order.orderStatus });
+    await writeDb(db);
+    return sendJson(res, 200, { order: publicFrpOrder(order, db), frp: publicFrpState(db, user) });
+  }
+
+  const frpJobChecklistMatch = pathname.match(/^\/api\/frp\/jobs\/([^/]+)\/checklist$/);
+  if (req.method === "PATCH" && frpJobChecklistMatch) {
+    if (!requireUser(user, res)) return;
+    const input = await parseJson(req);
+    const db = await readDb();
+    if (!(await requireFrpAccess(user, res, db, "FRP_JOB_CHECKLIST_DENIED", frpJobChecklistMatch[1]))) return;
+    const job = db.frpJobs.find((candidate) => candidate.id === frpJobChecklistMatch[1]);
+    if (!job) return sendJson(res, 404, { error: "Trabajo FRP no encontrado." });
+    const key = cleanText(input.key, 40);
+    if (!frpJobChecklistKeys.includes(key)) return sendJson(res, 400, { error: "Checklist de equipo invalido." });
+    job.checklist[key] = Boolean(input.value);
+    job.updatedAt = nowIso();
+    audit(db, user.id, "FRP_JOB_CHECKLIST_UPDATED", job.id, { code: job.code, key, value: job.checklist[key] });
+    await writeDb(db);
+    return sendJson(res, 200, { job: publicFrpJob(job, db), frp: publicFrpState(db, user) });
+  }
+
+  const frpJobReadyMatch = pathname.match(/^\/api\/frp\/jobs\/([^/]+)\/ready$/);
+  if (req.method === "PATCH" && frpJobReadyMatch) {
+    if (!requireUser(user, res)) return;
+    const db = await readDb();
+    if (!(await requireFrpAccess(user, res, db, "FRP_JOB_READY_DENIED", frpJobReadyMatch[1]))) return;
+    const job = db.frpJobs.find((candidate) => candidate.id === frpJobReadyMatch[1]);
+    const order = db.frpOrders.find((candidate) => candidate.id === job?.orderId);
+    if (!job || !order) return sendJson(res, 404, { error: "Trabajo FRP no encontrado." });
+    if (!frpOrderIsReady(order)) return sendJson(res, 400, { error: "Falta pago validado, conexion enviada o autorizacion confirmada." });
+    if (!frpJobChecklistComplete(job)) return sendJson(res, 400, { error: "Completa conexion, estado requerido y modelo soportado." });
+    if (!["ESPERANDO_PREPARACION", "ESPERANDO_CLIENTE", "REQUIERE_REVISION"].includes(job.status)) {
+      return sendJson(res, 400, { error: "Este trabajo no puede enviarse a tecnico desde su estado actual." });
+    }
+    job.status = "LISTO_PARA_TECNICO";
+    job.readyAt = nowIso();
+    job.updatedAt = job.readyAt;
+    syncFrpOrderStatus(db, order);
+    audit(db, user.id, "FRP_JOB_READY", job.id, { code: job.code, order: order.code });
+    await writeDb(db);
+    return sendJson(res, 200, { job: publicFrpJob(job, db), frp: publicFrpState(db, user) });
+  }
+
+  if (req.method === "POST" && pathname === "/api/frp/jobs/take-next") {
+    if (!requireUser(user, res)) return;
+    const db = await readDb();
+    if (!(await requireFrpAccess(user, res, db, "FRP_JOB_TAKE_DENIED"))) return;
+    const activeJob = frpActiveJobForUser(db, user);
+    if (activeJob) return sendJson(res, 409, { error: `Ya tienes un FRP en proceso: ${activeJob.code}.` });
+    const job = db.frpJobs
+      .filter((candidate) => candidate.status === "LISTO_PARA_TECNICO")
+      .sort((a, b) => String(a.readyAt || a.updatedAt || a.createdAt).localeCompare(String(b.readyAt || b.updatedAt || b.createdAt)))[0];
+    if (!job) return sendJson(res, 404, { error: "No hay trabajos FRP listos." });
+    job.status = "EN_PROCESO";
+    job.technicianId = user.id;
+    job.takenAt = nowIso();
+    job.updatedAt = job.takenAt;
+    const order = db.frpOrders.find((candidate) => candidate.id === job.orderId);
+    if (order) syncFrpOrderStatus(db, order);
+    audit(db, user.id, "FRP_JOB_TAKEN", job.id, { code: job.code, order: order?.code || "" });
+    await writeDb(db);
+    return sendJson(res, 200, { job: publicFrpJob(job, db), frp: publicFrpState(db, user) });
+  }
+
+  const frpJobFinalizeMatch = pathname.match(/^\/api\/frp\/jobs\/([^/]+)\/finalize$/);
+  if (req.method === "PATCH" && frpJobFinalizeMatch) {
+    if (!requireUser(user, res)) return;
+    const input = await parseJson(req);
+    const db = await readDb();
+    if (!(await requireFrpAccess(user, res, db, "FRP_JOB_FINALIZE_DENIED", frpJobFinalizeMatch[1]))) return;
+    const job = db.frpJobs.find((candidate) => candidate.id === frpJobFinalizeMatch[1]);
+    const order = db.frpOrders.find((candidate) => candidate.id === job?.orderId);
+    if (!job || !order) return sendJson(res, 404, { error: "Trabajo FRP no encontrado." });
+    if (job.technicianId && job.technicianId !== user.id && user.role !== "ADMIN") return sendJson(res, 403, { error: "Este trabajo lo tomo otro tecnico." });
+    if (job.status !== "EN_PROCESO" && user.role !== "ADMIN") return sendJson(res, 400, { error: "Solo puedes finalizar un trabajo en proceso." });
+    const finalLog = cleanText(input.finalLog, 500);
+    const finalImages = sanitizeFinalLogImages(input.finalImages);
+    if (!finalLog && !finalImages.length) return sendJson(res, 400, { error: "Para finalizar se requiere log escrito o imagen." });
+    job.status = "FINALIZADO";
+    job.finalLog = finalLog || job.finalLog;
+    if (finalImages.length) job.finalImages = finalImages;
+    job.ardCode ||= nextFrpArdCode(db);
+    job.doneAt = nowIso();
+    job.updatedAt = job.doneAt;
+    job.technicianId ||= user.id;
+    syncFrpOrderStatus(db, order);
+    audit(db, user.id, "FRP_JOB_DONE", job.id, { code: job.code, order: order.code, ardCode: job.ardCode });
+    await writeDb(db);
+    return sendJson(res, 200, { job: publicFrpJob(job, db), frp: publicFrpState(db, user) });
+  }
+
+  const frpJobReviewMatch = pathname.match(/^\/api\/frp\/jobs\/([^/]+)\/review$/);
+  if (req.method === "PATCH" && frpJobReviewMatch) {
+    if (!requireUser(user, res)) return;
+    const input = await parseJson(req);
+    const db = await readDb();
+    if (!(await requireFrpAccess(user, res, db, "FRP_JOB_REVIEW_DENIED", frpJobReviewMatch[1]))) return;
+    const job = db.frpJobs.find((candidate) => candidate.id === frpJobReviewMatch[1]);
+    const order = db.frpOrders.find((candidate) => candidate.id === job?.orderId);
+    if (!job || !order) return sendJson(res, 404, { error: "Trabajo FRP no encontrado." });
+    if (job.technicianId && job.technicianId !== user.id && user.role !== "ADMIN") return sendJson(res, 403, { error: "Este trabajo lo tomo otro tecnico." });
+    const reason = cleanText(input.reason, 180);
+    if (!reason) return sendJson(res, 400, { error: "Indica motivo de revision." });
+    job.status = "REQUIERE_REVISION";
+    job.reviewReason = reason;
+    job.updatedAt = nowIso();
+    syncFrpOrderStatus(db, order);
+    audit(db, user.id, "FRP_JOB_REVIEW_REQUIRED", job.id, { code: job.code, order: order.code, reason });
+    await writeDb(db);
+    return sendJson(res, 200, { job: publicFrpJob(job, db), frp: publicFrpState(db, user) });
   }
 
   if (req.method === "POST" && pathname === "/api/clients") {
