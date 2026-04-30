@@ -3,6 +3,7 @@ const state = {
   catalog: null,
   activeTab: "login",
   pollTimer: null,
+  turnstileReady: null,
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -76,6 +77,53 @@ function setTab(tab) {
   setMessage($("#authMessage"), "");
 }
 
+function ensureTurnstileScript() {
+  if (!state.catalog?.turnstileEnabled || !state.catalog?.turnstileSiteKey) return Promise.resolve(false);
+  if (window.turnstile) return Promise.resolve(true);
+  if (state.turnstileReady) return state.turnstileReady;
+  state.turnstileReady = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+    script.async = true;
+    script.defer = true;
+    script.onload = () => resolve(true);
+    script.onerror = () => reject(new Error("No se pudo cargar la validacion anti-spam."));
+    document.head.append(script);
+  });
+  return state.turnstileReady;
+}
+
+async function renderTurnstileWidgets() {
+  if (!state.catalog?.turnstileEnabled || !state.catalog?.turnstileSiteKey) {
+    $$(".turnstile-box").forEach((box) => box.classList.remove("active"));
+    return;
+  }
+  await ensureTurnstileScript();
+  $$(".turnstile-box").forEach((box) => {
+    box.classList.add("active");
+    if (box.dataset.widgetId) return;
+    const widgetId = window.turnstile.render(box, {
+      sitekey: state.catalog.turnstileSiteKey,
+      callback: (token) => { box.dataset.token = token; },
+      "expired-callback": () => { box.dataset.token = ""; },
+      "error-callback": () => { box.dataset.token = ""; },
+    });
+    box.dataset.widgetId = widgetId;
+  });
+}
+
+function turnstileToken(name) {
+  if (!state.catalog?.turnstileEnabled) return "";
+  return $(`[data-turnstile-widget="${name}"]`)?.dataset.token || "";
+}
+
+function resetTurnstile(name) {
+  const box = $(`[data-turnstile-widget="${name}"]`);
+  if (!box?.dataset.widgetId || !window.turnstile) return;
+  box.dataset.token = "";
+  window.turnstile.reset(box.dataset.widgetId);
+}
+
 function renderCatalog() {
   const countries = state.catalog?.countries || [];
   const countrySelect = $("#countrySelect");
@@ -100,6 +148,7 @@ function renderCatalog() {
     if (binance) paymentSelect.value = "BINANCE_PAY";
   }
   updateQuote();
+  renderTurnstileWidgets().catch((error) => setMessage($("#authMessage"), error.message, "error"));
 }
 
 function estimatePortalPrice(quantity) {
@@ -297,13 +346,16 @@ function wireEvents() {
     setMessage($("#authMessage"), "");
     try {
       const body = Object.fromEntries(new FormData(event.currentTarget));
+      body.turnstileToken = turnstileToken("register");
       const payload = await api("/api/portal/register", { method: "POST", body: JSON.stringify(body) });
       state.customer = payload.customer;
       state.catalog = payload.catalog;
       renderCatalog();
       renderCustomer();
+      resetTurnstile("register");
     } catch (error) {
       setMessage($("#authMessage"), error.message, "error");
+      resetTurnstile("register");
     }
   });
 
@@ -334,6 +386,7 @@ function wireEvents() {
           paymentMethod: data.paymentMethod,
           items: parseItems(data.items, quantity),
           note: data.note,
+          turnstileToken: turnstileToken("order"),
         }),
       });
       state.customer = payload.customer;
@@ -341,9 +394,11 @@ function wireEvents() {
       $("#paymentSelect").value = data.paymentMethod;
       updateQuote();
       renderCustomer();
+      resetTurnstile("order");
       setMessage(message, `Solicitud ${payload.order.code} creada. Copia el pago o sube comprobante.`, "success");
     } catch (error) {
       setMessage(message, error.message, "error");
+      resetTurnstile("order");
     }
   });
 

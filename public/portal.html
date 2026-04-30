@@ -39,6 +39,7 @@
           <label>Contrasena <input name="password" type="password" autocomplete="new-password" minlength="8" required /></label>
           <label>WhatsApp <input name="whatsapp" autocomplete="tel" required /></label>
           <label>Pais <select name="country" id="countrySelect" required></select></label>
+          <div class="turnstile-box" data-turnstile-widget="register"></div>
           <button type="submit">Crear cuenta cliente</button>
         </form>
 
@@ -101,6 +102,7 @@
               </div>
               <button id="copyPaymentButton" class="ghost" type="button">Copiar pago</button>
             </div>
+            <div class="turnstile-box wide" data-turnstile-widget="order"></div>
             <button type="submit">Crear solicitud</button>
           </form>
           <p id="orderMessage" class="message" aria-live="polite"></p>

@@ -235,6 +235,14 @@ textarea:focus {
   color: var(--red);
 }
 
+.turnstile-box {
+  display: none;
+}
+
+.turnstile-box.active {
+  display: block;
+}
+
 .app-panel {
   grid-column: 1 / -1;
   display: grid;

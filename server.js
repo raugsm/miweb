@@ -40,6 +40,7 @@ const portalRateLimitWindowMs = 15 * 60 * 1000;
 const maxPortalRegisterRequestsPerWindow = 5;
 const maxPortalOrderRequestsPerWindow = 12;
 const maxPortalProofRequestsPerWindow = 20;
+const turnstileSiteKey = process.env.ARIAD_TURNSTILE_SITE_KEY || "";
 const turnstileSecret = process.env.ARIAD_TURNSTILE_SECRET || "";
 
 const roles = new Set(["ADMIN", "COORDINADOR", "ATENCION_TECNICA"]);
@@ -737,7 +738,8 @@ function publicPortalCatalog() {
     statuses: publicOrderStatuses,
     quantityTiers: frpQuantityTiers,
     monthlyTiers: frpMonthlyTiers,
-    turnstileEnabled: Boolean(turnstileSecret),
+    turnstileEnabled: Boolean(turnstileSecret && turnstileSiteKey),
+    turnstileSiteKey,
   };
 }
 
@@ -1466,7 +1468,7 @@ function enforcePortalRateLimit(db, req, bucket, key, maxAttempts, windowMs = po
 }
 
 async function validateTurnstileIfConfigured(req, input, action) {
-  if (!turnstileSecret) return { ok: true, skipped: true };
+  if (!turnstileSecret || !turnstileSiteKey) return { ok: true, skipped: true };
   const token = String(input.turnstileToken || input["cf-turnstile-response"] || "");
   if (!token) return { ok: false, error: "Validacion anti-spam requerida." };
   const controller = new AbortController();
