@@ -24,29 +24,35 @@
         <div class="tabs" role="tablist" aria-label="Acceso cliente">
           <button class="tab active" type="button" data-tab="login">Ingresar</button>
           <button class="tab" type="button" data-tab="register">Registro</button>
-          <button class="tab" type="button" data-tab="track">Seguimiento</button>
         </div>
 
         <form id="loginForm" class="auth-form active">
           <label>Correo <input name="email" type="email" autocomplete="email" required /></label>
           <label>Contrasena <input name="password" type="password" autocomplete="current-password" minlength="8" required /></label>
           <button type="submit">Entrar</button>
+          <button id="showTrackLink" class="text-link" type="button">Consultar pedido con codigo</button>
         </form>
 
         <form id="registerForm" class="auth-form">
-          <label>Nombre completo <input name="name" autocomplete="name" required /></label>
+          <label>Nombre y apellido <input name="name" autocomplete="name" maxlength="90" required /></label>
           <label>Correo <input name="email" type="email" autocomplete="email" required /></label>
           <label>Contrasena <input name="password" type="password" autocomplete="new-password" minlength="8" required /></label>
-          <label>WhatsApp <input name="whatsapp" autocomplete="tel" required /></label>
+          <label>WhatsApp <input name="whatsapp" type="tel" autocomplete="tel" inputmode="tel" placeholder="+573001234567" required /></label>
+          <small id="phoneCountryHint" class="field-hint">Escribe el numero con + y codigo internacional.</small>
           <label>Pais <select name="country" id="countrySelect" required></select></label>
           <div class="turnstile-box" data-turnstile-widget="register"></div>
           <button type="submit">Crear cuenta cliente</button>
         </form>
 
         <form id="trackForm" class="auth-form">
+          <div class="form-title">
+            <strong>Consultar pedido con codigo</strong>
+            <span>Usa esta opcion si recibiste un enlace o codigo por WhatsApp.</span>
+          </div>
           <label>Codigo de orden <input name="code" autocomplete="off" placeholder="CLI-20260429-001" required /></label>
           <label>Codigo de seguimiento <input name="accessCode" autocomplete="off" required /></label>
           <button type="submit">Consultar estado</button>
+          <button id="backToLoginLink" class="text-link" type="button">Volver al ingreso</button>
         </form>
 
         <p id="authMessage" class="message" aria-live="polite"></p>

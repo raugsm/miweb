@@ -82,6 +82,79 @@ function customerEmailVerified() {
   return Boolean(state.customer?.client?.emailVerified);
 }
 
+function normalizeForMatch(value) {
+  return String(value || "")
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+}
+
+function nameHasCountry(value) {
+  const normalized = ` ${normalizeForMatch(value)} `;
+  return (state.catalog?.countries || [])
+    .filter((country) => country !== "USDT")
+    .some((country) => normalized.includes(` ${normalizeForMatch(country)} `));
+}
+
+function validateRegisterName(value) {
+  const name = String(value || "").trim().replace(/\s+/g, " ");
+  if (!name) return { ok: false, error: "Escribe tu nombre y apellido." };
+  if (name.length < 5 || name.length > 90) return { ok: false, error: "Nombre y apellido deben tener entre 5 y 90 caracteres." };
+  if (/@|https?:\/\/|www\./i.test(name)) return { ok: false, error: "No escribas correo o enlaces en el nombre." };
+  if (/\d/.test(name) || /\+?\d[\d\s().-]{5,}\d/.test(name)) return { ok: false, error: "No escribas telefono ni numeros en el nombre." };
+  if (!/^[\p{L}\p{M}][\p{L}\p{M}'’ -]*[\p{L}\p{M}]$/u.test(name)) {
+    return { ok: false, error: "Usa solo letras, espacios, acentos, guiones o apostrofes en el nombre." };
+  }
+  const connectorWords = new Set(["de", "del", "la", "las", "los", "y", "da", "do", "dos"]);
+  const significantWords = name
+    .split(/\s+/)
+    .map((word) => normalizeForMatch(word.replace(/['’-]/g, "")))
+    .filter((word) => word.length >= 2 && !connectorWords.has(word));
+  if (significantWords.length < 2) return { ok: false, error: "Escribe al menos nombre y apellido." };
+  if (nameHasCountry(name)) return { ok: false, error: "No agregues el pais dentro del nombre." };
+  return { ok: true, name };
+}
+
+function phoneCountryEntries() {
+  return (state.catalog?.phoneCountries || [])
+    .flatMap((item) => (item.callingPrefixes || []).map((prefix) => ({ country: item.country, prefix })))
+    .sort((a, b) => b.prefix.length - a.prefix.length);
+}
+
+function normalizeWhatsappInput(value) {
+  const raw = String(value || "").trim();
+  const normalized = raw.replace(/[^\d+]/g, "");
+  if (!normalized) return { ok: false, error: "Escribe tu WhatsApp con codigo internacional." };
+  if (!normalized.startsWith("+")) return { ok: false, error: "WhatsApp debe iniciar con + y codigo de pais." };
+  if (!/^\+[1-9]\d{6,14}$/.test(normalized)) return { ok: false, error: "WhatsApp debe tener formato internacional. Ejemplo: +573001234567." };
+  return { ok: true, phone: normalized };
+}
+
+function detectCountryFromWhatsapp(value) {
+  const normalized = normalizeWhatsappInput(value);
+  if (!normalized.ok) return null;
+  const digits = normalized.phone.slice(1);
+  return phoneCountryEntries().find((entry) => digits.startsWith(entry.prefix)) || null;
+}
+
+function updatePhoneCountryFromInput() {
+  const input = $("#registerForm input[name='whatsapp']");
+  const countrySelect = $("#countrySelect");
+  const hint = $("#phoneCountryHint");
+  if (!input || !countrySelect || !hint) return;
+  const detected = detectCountryFromWhatsapp(input.value);
+  if (detected?.country && Array.from(countrySelect.options).some((option) => option.value === detected.country)) {
+    countrySelect.value = detected.country;
+    hint.textContent = `Pais detectado por WhatsApp: ${detected.country}.`;
+    hint.dataset.type = "success";
+    return;
+  }
+  hint.textContent = "Escribe el numero con + y codigo internacional.";
+  hint.dataset.type = input.value.trim() ? "warn" : "";
+}
+
 function ensureTurnstileScript() {
   if (!state.catalog?.turnstileEnabled || !state.catalog?.turnstileSiteKey) return Promise.resolve(false);
   if (window.turnstile) return Promise.resolve(true);
@@ -130,7 +203,7 @@ function resetTurnstile(name) {
 }
 
 function renderCatalog() {
-  const countries = state.catalog?.countries || [];
+  const countries = (state.catalog?.countries || []).filter((country) => country !== "USDT");
   const countrySelect = $("#countrySelect");
   if (countrySelect && !countrySelect.options.length) {
     countries.forEach((country) => {
@@ -140,6 +213,7 @@ function renderCatalog() {
       countrySelect.append(option);
     });
   }
+  updatePhoneCountryFromInput();
   const paymentSelect = $("#paymentSelect");
   if (paymentSelect) {
     paymentSelect.innerHTML = "";
@@ -407,6 +481,14 @@ function wireEvents() {
     setMessage($("#authMessage"), "");
     try {
       const body = Object.fromEntries(new FormData(event.currentTarget));
+      const name = validateRegisterName(body.name);
+      if (!name.ok) throw new Error(name.error);
+      const phone = normalizeWhatsappInput(body.whatsapp);
+      if (!phone.ok) throw new Error(phone.error);
+      const detected = detectCountryFromWhatsapp(phone.phone);
+      body.name = name.name;
+      body.whatsapp = phone.phone;
+      if (detected?.country) body.country = detected.country;
       body.turnstileToken = turnstileToken("register");
       const payload = await api("/api/portal/register", { method: "POST", body: JSON.stringify(body) });
       if (payload.customer) {
@@ -422,6 +504,14 @@ function wireEvents() {
       resetTurnstile("register");
     }
   });
+
+  $("#registerForm input[name='name']").addEventListener("input", (event) => {
+    const result = validateRegisterName(event.currentTarget.value);
+    event.currentTarget.setCustomValidity(result.ok || !event.currentTarget.value.trim() ? "" : result.error);
+  });
+  $("#registerForm input[name='whatsapp']").addEventListener("input", updatePhoneCountryFromInput);
+  $("#showTrackLink").addEventListener("click", () => setTab("track"));
+  $("#backToLoginLink").addEventListener("click", () => setTab("login"));
 
   $("#trackForm").addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -502,7 +592,7 @@ function renderTrackedOrder(order) {
   const tempCustomer = { orders: [order] };
   $("#appPanel").classList.remove("hidden");
   $("#accessPanel").classList.remove("hidden");
-  $("#clientTitle").textContent = "Seguimiento publico";
+  $("#clientTitle").textContent = "Consulta de pedido";
   $("#clientStatus").textContent = "Consulta";
   $("#monthlyUsage").textContent = "-";
   $("#deviceStatus").textContent = "-";
@@ -515,6 +605,10 @@ function applyQueryTracking() {
   const code = params.get("orden");
   const accessCode = params.get("codigo");
   if (!code || !accessCode) return;
+  if (state.customer?.user && state.customer?.client) {
+    setMessage($("#orderMessage"), "Ya tienes sesion activa. Revisa el avance desde Mis ordenes.", "success");
+    return;
+  }
   setTab("track");
   $("#trackForm input[name='code']").value = code;
   $("#trackForm input[name='accessCode']").value = accessCode;

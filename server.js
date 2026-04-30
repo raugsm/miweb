@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import crypto from "node:crypto";
 import nodemailer from "nodemailer";
+import { parsePhoneNumberFromString } from "libphonenumber-js/max";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, "public");
@@ -15,7 +16,7 @@ const enableSetupPasswordReset = ["true", "1", "yes"].includes(String(process.en
 const ownerRecoveryEmail = normalizeEmail(process.env.ARIAD_OWNER_RECOVERY_EMAIL || "");
 const publicBaseUrl = String(process.env.ARIAD_PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || `http://localhost:${port}`).replace(/\/+$/, "");
 const mailFrom = process.env.ARIAD_MAIL_FROM || '"AriadGSM Soporte" <soporte@ariadgsm.com>';
-const appVersion = "customer-orders-live-v1";
+const appVersion = "customer-registration-validation-v1";
 const sessionVersion = 7;
 const customerSessionVersion = 1;
 const trustedDeviceVersion = 3;
@@ -257,6 +258,27 @@ const countryByFlagIso = {
   UY: "Uruguay",
   VE: "Venezuela",
 };
+const portalPhoneCountryHints = [
+  { country: "Republica Dominicana", iso: "DO", callingPrefixes: ["1809", "1829", "1849"] },
+  { country: "Estados Unidos", iso: "US", callingPrefixes: ["1"] },
+  { country: "El Salvador", iso: "SV", callingPrefixes: ["503"] },
+  { country: "Costa Rica", iso: "CR", callingPrefixes: ["506"] },
+  { country: "Colombia", iso: "CO", callingPrefixes: ["57"] },
+  { country: "Mexico", iso: "MX", callingPrefixes: ["52"] },
+  { country: "Peru", iso: "PE", callingPrefixes: ["51"] },
+  { country: "Chile", iso: "CL", callingPrefixes: ["56"] },
+  { country: "Argentina", iso: "AR", callingPrefixes: ["54"] },
+  { country: "Ecuador", iso: "EC", callingPrefixes: ["593"] },
+  { country: "Bolivia", iso: "BO", callingPrefixes: ["591"] },
+  { country: "Venezuela", iso: "VE", callingPrefixes: ["58"] },
+  { country: "Uruguay", iso: "UY", callingPrefixes: ["598"] },
+  { country: "Paraguay", iso: "PY", callingPrefixes: ["595"] },
+  { country: "Guatemala", iso: "GT", callingPrefixes: ["502"] },
+  { country: "Honduras", iso: "HN", callingPrefixes: ["504"] },
+  { country: "Nicaragua", iso: "NI", callingPrefixes: ["505"] },
+  { country: "Panama", iso: "PA", callingPrefixes: ["507"] },
+  { country: "Espana", iso: "ES", callingPrefixes: ["34"] },
+];
 
 function moneyNumber(value) {
   const number = Number(value);
@@ -759,6 +781,7 @@ function publicPortalCatalog() {
     statuses: publicOrderStatuses,
     quantityTiers: frpQuantityTiers,
     monthlyTiers: frpMonthlyTiers,
+    phoneCountries: portalPhoneCountryHints,
     turnstileEnabled: Boolean(turnstileSecret && turnstileSiteKey),
     turnstileSiteKey,
   };
@@ -1732,6 +1755,55 @@ function cleanName(name) {
   return String(name || "").trim().replace(/\s+/g, " ");
 }
 
+function nameContainsCountry(value) {
+  const normalized = ` ${normalizeForMatch(value)} `;
+  return countries
+    .filter(([, country]) => country !== "USDT")
+    .some(([needle, country]) => {
+      const normalizedNeedle = normalizeForMatch(needle || country);
+      return normalizedNeedle && normalized.includes(` ${normalizedNeedle} `);
+    });
+}
+
+function validatePortalCustomerName(value) {
+  const name = cleanName(value);
+  if (!name) return { ok: false, error: "Escribe tu nombre y apellido." };
+  if (name.length < 5 || name.length > 90) return { ok: false, error: "Nombre y apellido deben tener entre 5 y 90 caracteres." };
+  if (/@|https?:\/\/|www\./i.test(name)) return { ok: false, error: "No escribas correo o enlaces en el nombre." };
+  if (/\d/.test(name) || /\+?\d[\d\s().-]{5,}\d/.test(name)) return { ok: false, error: "No escribas telefono ni numeros en el nombre." };
+  if (!/^[\p{L}\p{M}][\p{L}\p{M}'’ -]*[\p{L}\p{M}]$/u.test(name)) {
+    return { ok: false, error: "Usa solo letras, espacios, acentos, guiones o apostrofes en el nombre." };
+  }
+  const connectorWords = new Set(["de", "del", "la", "las", "los", "y", "da", "do", "dos"]);
+  const significantWords = name
+    .split(/\s+/)
+    .map((word) => normalizeForMatch(word.replace(/['’-]/g, "")))
+    .filter((word) => word.length >= 2 && !connectorWords.has(word));
+  if (significantWords.length < 2) return { ok: false, error: "Escribe al menos nombre y apellido." };
+  if (nameContainsCountry(name)) return { ok: false, error: "No agregues el pais dentro del nombre." };
+  return { ok: true, name };
+}
+
+function normalizePortalWhatsapp(value, selectedCountry = "") {
+  const raw = normalizePhone(value);
+  if (!raw) return { ok: false, error: "Escribe tu WhatsApp con codigo internacional." };
+  if (!raw.startsWith("+")) return { ok: false, error: "WhatsApp debe iniciar con + y codigo de pais. Ejemplo: +573001234567." };
+  if (!/^\+[1-9]\d{6,14}$/.test(raw)) return { ok: false, error: "WhatsApp debe estar en formato internacional valido." };
+  const parsed = parsePhoneNumberFromString(raw);
+  if (!parsed || !parsed.isPossible()) return { ok: false, error: "WhatsApp no parece tener un formato valido." };
+  const detectedCountry = countryByFlagIso[parsed.country] || "";
+  const fallbackCountry = normalizeCountryInput(selectedCountry);
+  const country = detectedCountry || fallbackCountry;
+  if (!country || country === "USDT") return { ok: false, error: "No se pudo confirmar el pais desde el WhatsApp." };
+  return {
+    ok: true,
+    whatsapp: parsed.number,
+    country,
+    detectedCountry,
+    countryIso: parsed.country || "",
+  };
+}
+
 function validatePassword(password) {
   return typeof password === "string" && password.length >= 8;
 }
@@ -2084,14 +2156,13 @@ async function handleApi(req, res, pathname) {
 
   if (req.method === "POST" && pathname === "/api/portal/register") {
     const input = await parseJson(req);
-    const name = cleanName(input.name);
+    const nameValidation = validatePortalCustomerName(input.name);
     const email = normalizeEmail(input.email);
     const password = String(input.password || "");
-    const whatsapp = normalizePhone(input.whatsapp);
-    const country = normalizeCountryInput(input.country);
+    const phoneValidation = normalizePortalWhatsapp(input.whatsapp, input.country);
     const db = await readDb();
     const { token: deviceToken, device } = ensureCustomerDevice(db, req);
-    const rateOk = enforcePortalRateLimit(db, req, "portal_register", email || whatsapp, maxPortalRegisterRequestsPerWindow);
+    const rateOk = enforcePortalRateLimit(db, req, "portal_register", email || phoneKey(input.whatsapp), maxPortalRegisterRequestsPerWindow);
     const turnstile = await validateTurnstileIfConfigured(req, input, "portal_register");
     if (!rateOk) {
       audit(db, null, "PORTAL_REGISTER_RATE_LIMITED", null, { emailHash: hashToken(email), ipHash: hashToken(clientIp(req)) });
@@ -2105,11 +2176,19 @@ async function handleApi(req, res, pathname) {
       res.setHeader("Set-Cookie", cookieHeader(customerDeviceCookieName, deviceToken, customerDeviceMaxAgeSeconds));
       return sendJson(res, 400, { error: turnstile.error });
     }
-    if (!name || !email.includes("@") || !validatePassword(password) || !whatsapp || !country) {
+    if (!nameValidation.ok || !email.includes("@") || !validatePassword(password) || !phoneValidation.ok) {
+      audit(db, null, "PORTAL_REGISTER_VALIDATION_FAILED", null, {
+        emailHash: hashToken(email),
+        reason: !nameValidation.ok ? "name" : (!phoneValidation.ok ? "whatsapp" : "required"),
+        ipHash: hashToken(clientIp(req)),
+      });
       await writeDb(db);
       res.setHeader("Set-Cookie", cookieHeader(customerDeviceCookieName, deviceToken, customerDeviceMaxAgeSeconds));
-      return sendJson(res, 400, { error: "Nombre, correo, contrasena, WhatsApp y pais son obligatorios." });
+      return sendJson(res, 400, { error: nameValidation.error || phoneValidation.error || "Nombre, correo, contrasena, WhatsApp y pais son obligatorios." });
     }
+    const name = nameValidation.name;
+    const whatsapp = phoneValidation.whatsapp;
+    const country = phoneValidation.country;
     if (db.customerUsers.some((candidate) => candidate.email === email)) {
       audit(db, null, "PORTAL_REGISTER_EXISTING_EMAIL", null, { emailHash: hashToken(email), ipHash: hashToken(clientIp(req)) });
       await writeDb(db);
@@ -2124,6 +2203,8 @@ async function handleApi(req, res, pathname) {
       name,
       whatsapp,
       country,
+      whatsappCountryIso: phoneValidation.countryIso,
+      whatsappDetectedCountry: phoneValidation.detectedCountry,
       status: "REGISTRADO_NO_VERIFICADO",
       primaryEmail: email,
       emailVerifiedAt: "",

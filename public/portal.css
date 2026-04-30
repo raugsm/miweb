@@ -152,7 +152,7 @@ h2 {
 
 .tabs {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 6px;
   padding: 6px;
   background: #eaf2ff;
@@ -183,6 +183,48 @@ h2 {
 .auth-form.active {
   display: grid;
   gap: 16px;
+}
+
+.text-link {
+  min-height: 38px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--blue);
+  font-weight: 900;
+  text-align: center;
+}
+
+.text-link:hover {
+  text-decoration: underline;
+}
+
+.field-hint,
+.form-title span {
+  display: block;
+  margin-top: -8px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.field-hint[data-type="success"] {
+  color: var(--green);
+}
+
+.field-hint[data-type="warn"] {
+  color: #9a6800;
+}
+
+.form-title {
+  display: grid;
+  gap: 4px;
+}
+
+.form-title strong {
+  color: var(--ink);
+  font-size: 1rem;
 }
 
 label {
