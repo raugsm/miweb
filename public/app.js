@@ -1263,6 +1263,17 @@ function renderJobChecklist(job) {
   `).join("");
 }
 
+function renderFrpEligibilityNote(job) {
+  if (!job?.eligibilityStatus || job.eligibilityStatus === "APTO_EXPRESS") return "";
+  const parts = [
+    job.eligibilityDetectedMatch ? `Coincidencia: ${job.eligibilityDetectedMatch}` : "",
+    job.eligibilityStatus ? `Estado: ${job.eligibilityStatus}` : "",
+    job.eligibilityInternalReason || job.reviewReason || "",
+  ].filter(Boolean);
+  if (!parts.length) return "";
+  return `<small class="frp-eligibility-note">${parts.map(escapeHtml).join(" | ")}</small>`;
+}
+
 function renderFrpJobRow(job) {
   const canMoveToReview = !["FINALIZADO", "CANCELADO"].includes(job.status);
   const canSendReady = ["ESPERANDO_PREPARACION", "ESPERANDO_CLIENTE", "REQUIERE_REVISION"].includes(job.status);
@@ -1277,6 +1288,7 @@ function renderFrpJobRow(job) {
         ${canSendReady ? `<button class="mini-btn" type="button" data-frp-ready="${escapeHtml(job.id)}">Enviar a tecnico</button>` : ""}
         ${canMoveToReview ? `<button class="mini-btn danger-mini" type="button" data-frp-review="${escapeHtml(job.id)}">Revision</button>` : ""}
       </div>
+      ${renderFrpEligibilityNote(job)}
     </div>
   `;
 }
@@ -1334,6 +1346,7 @@ function renderFrpJobCard(job, actions = "") {
         <em>${escapeHtml(frpStatusLabel(job.status))}</em>
       </header>
       <p>${escapeHtml(job.serviceName)}${job.ardCode ? ` - ${escapeHtml(job.ardCode)}` : ""}</p>
+      ${renderFrpEligibilityNote(job)}
       ${job.reviewReason ? `<small>Revision: ${escapeHtml(job.reviewReason)}</small>` : ""}
       ${actions}
     </article>

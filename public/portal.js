@@ -335,8 +335,22 @@ function statusLabel(code) {
   return state.catalog?.statuses?.find((status) => status.code === code)?.label || code || "Pendiente";
 }
 
+function itemStatusLabel(code) {
+  const labels = {
+    ESPERANDO_PREPARACION: "Preparacion",
+    LISTO_PARA_TECNICO: "Listo para conexion",
+    EN_PROCESO: "En proceso",
+    FINALIZADO: "Finalizado",
+    REQUIERE_REVISION: "Revision",
+    ESPERANDO_CLIENTE: "Esperando cliente",
+    CANCELADO: "Cancelado",
+  };
+  return labels[code] || statusLabel(code);
+}
+
 function customerNextAction(order) {
   if (order?.nextAction) return order.nextAction;
+  if (order?.publicStatus === "REVISION_COMPATIBILIDAD") return "AriadGSM revisara compatibilidad antes de pedir pago.";
   if (order?.publicStatus === "ESPERANDO_PAGO") return "Copia los datos de pago y sube el comprobante.";
   if (order?.publicStatus === "PAGO_EN_REVISION") return "Prepara USB Redirector mientras validamos el pago.";
   if (order?.publicStatus === "EN_PREPARACION") return "Marca que estas listo para conectar cuando tengas PC, cable y USB Redirector abierto.";
@@ -356,6 +370,7 @@ function orderBadges(order) {
 }
 
 function orderCopyText(order) {
+  const shouldIncludePayment = order?.publicStatus !== "REVISION_COMPATIBILIDAD";
   return [
     `Pedido ${order.code}`,
     `${order.serviceName}`,
@@ -365,7 +380,7 @@ function orderCopyText(order) {
     `Proxima accion: ${customerNextAction(order)}`,
     `Seguimiento: ${location.origin}/cliente?orden=${encodeURIComponent(order.code)}&codigo=${encodeURIComponent(order.accessCode || "")}`,
     "",
-    paymentText({ label: order.paymentLabel, details: order.paymentDetails }, order.priceFormatted || money(order.totalPrice)),
+    shouldIncludePayment ? paymentText({ label: order.paymentLabel, details: order.paymentDetails }, order.priceFormatted || money(order.totalPrice)) : "",
   ].join("\n");
 }
 
@@ -386,20 +401,24 @@ function renderOrders(orders) {
     $(".order-service", card).textContent = order.serviceName;
     $(".status-pill", card).textContent = statusLabel(order.publicStatus);
     $(".order-meta", card).textContent = `${order.quantity} equipo(s) - ${order.priceFormatted || money(order.totalPrice)} - ${order.discountLabel || "Precio base"}`;
+    const inCompatibilityReview = order.publicStatus === "REVISION_COMPATIBILIDAD";
     $(".next-action", card).innerHTML = [
       `<strong>Proxima accion</strong>`,
       `<span>${escapeHtml(customerNextAction(order))}</span>`,
       orderBadges(order).length ? `<div class="order-badges">${orderBadges(order).map((badge) => `<em>${escapeHtml(badge)}</em>`).join("")}</div>` : "",
     ].join("");
-    $(".payment-block", card).innerHTML = paymentText({ label: order.paymentLabel, details: order.paymentDetails }, order.priceFormatted || money(order.totalPrice))
-      .split("\n")
-      .map((line) => `<div>${escapeHtml(line)}</div>`)
-      .join("");
+    $(".payment-block", card).innerHTML = inCompatibilityReview
+      ? "<div>AriadGSM revisara compatibilidad antes de pedir pago.</div>"
+      : paymentText({ label: order.paymentLabel, details: order.paymentDetails }, order.priceFormatted || money(order.totalPrice))
+        .split("\n")
+        .map((line) => `<div>${escapeHtml(line)}</div>`)
+        .join("");
     $(".item-list", card).innerHTML = (order.items || []).map((item) => {
       const detail = [item.model, item.imei].filter(Boolean).join(" / ") || "Equipo sin detalle";
       const done = item.ardCode ? ` - ${item.ardCode}` : "";
-      const reason = item.reviewReason ? `<br><small class="danger-text">${escapeHtml(item.reviewReason)}</small>` : "";
-      return `<div class="item-row">#${item.sequence} ${escapeHtml(detail)}<br><small>${escapeHtml(statusLabel(item.status))}${escapeHtml(done)}</small>${reason}</div>`;
+      const message = item.eligibilityMessage || item.reviewReason || "";
+      const reason = message ? `<br><small class="danger-text">${escapeHtml(message)}</small>` : "";
+      return `<div class="item-row">#${item.sequence} ${escapeHtml(detail)}<br><small>${escapeHtml(itemStatusLabel(item.status))}${escapeHtml(done)}</small>${reason}</div>`;
     }).join("");
     $(".connection-block", card).innerHTML = `
       <strong>Preparacion de conexion</strong>
@@ -415,7 +434,7 @@ function renderOrders(orders) {
       || ["PAGO_EN_REVISION", "EN_PREPARACION", "LISTO_PARA_CONEXION", "EN_PROCESO"].includes(order.publicStatus);
     connectionReadyButton.disabled = !loggedCustomer || Boolean(order.customerConnectionReadyAt) || !canPrepareConnection;
     connectionReadyButton.textContent = order.customerConnectionReadyAt ? "Conexion marcada" : "Estoy listo para conectar";
-    dropzone.style.display = loggedCustomer ? "inline-flex" : "none";
+    dropzone.style.display = loggedCustomer && !inCompatibilityReview ? "inline-flex" : "none";
     connectionReadyButton.style.display = loggedCustomer ? "" : "none";
     copyConnectionButton.style.display = loggedCustomer ? "" : "none";
     const uploadProofFiles = async (files) => {
@@ -497,7 +516,7 @@ function parseItems(text, quantity) {
   return Array.from({ length: quantity }, (_, index) => {
     const line = lines[index] || "";
     const imei = (line.match(/\b\d{14,16}\b/) || [])[0] || "";
-    return { model: line.replace(imei, "").trim(), imei };
+    return { raw: line, model: line.replace(imei, "").trim(), imei };
   });
 }
 
@@ -725,7 +744,10 @@ function wireEvents() {
       updateQuote();
       renderCustomer();
       resetTurnstile("order");
-      setMessage(message, `Solicitud ${payload.order.code} creada. Copia el pago o sube comprobante.`, "success");
+      const createdMessage = payload.order?.publicStatus === "REVISION_COMPATIBILIDAD"
+        ? `Solicitud ${payload.order.code} creada para revision de compatibilidad. Espera confirmacion antes de pagar.`
+        : `Solicitud ${payload.order.code} creada. Copia el pago o sube comprobante.`;
+      setMessage(message, createdMessage, "success");
     } catch (error) {
       setMessage(message, error.message, "error");
       resetTurnstile("order");

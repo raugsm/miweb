@@ -1172,6 +1172,14 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
 .frp-job-row > em {
   justify-self: start;
 }
+.frp-eligibility-note {
+  grid-column: 1 / -1;
+  padding: 8px;
+  border: 1px solid #ffd7a6;
+  border-radius: var(--radius-sm);
+  background: #fff8ee;
+  color: #8a5a00 !important;
+}
 .full-action {
   min-height: 44px;
   border-radius: var(--radius-sm);

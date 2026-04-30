@@ -16,7 +16,7 @@ const enableSetupPasswordReset = ["true", "1", "yes"].includes(String(process.en
 const ownerRecoveryEmail = normalizeEmail(process.env.ARIAD_OWNER_RECOVERY_EMAIL || "");
 const publicBaseUrl = String(process.env.ARIAD_PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || `http://localhost:${port}`).replace(/\/+$/, "");
 const mailFrom = process.env.ARIAD_MAIL_FROM || '"AriadGSM Soporte" <soporte@ariadgsm.com>';
-const appVersion = "portal-frp-client-flow-v1";
+const appVersion = "frp-eligibility-v1";
 const sessionVersion = 7;
 const customerSessionVersion = 1;
 const trustedDeviceVersion = 3;
@@ -171,6 +171,49 @@ const frpJobStatuses = [
   { code: "ESPERANDO_CLIENTE", label: "Esperando cliente" },
   { code: "CANCELADO", label: "Cancelado" },
 ];
+const frpEligibilityStates = new Set(["APTO_EXPRESS", "NO_APTO_MODO", "NO_APTO_HERRAMIENTA", "REQUIERE_REVISION"]);
+const frpEligibilityCatalog = [
+  {
+    key: "redmi-a3x",
+    publicName: "Redmi A3X",
+    aliases: ["redmi a3x", "a3x", "klein", "klen"],
+    status: "NO_APTO_MODO",
+    internalReason: "Modelo no apto para FRP Express: no entra al modo requerido para este flujo.",
+    publicMessage: "Este modelo no aplica para FRP Express. Escribenos por WhatsApp 3 para revisar otra alternativa.",
+  },
+  {
+    key: "redmi-a3",
+    publicName: "Redmi A3",
+    aliases: ["redmi a3", "a3"],
+    status: "NO_APTO_MODO",
+    internalReason: "Modelo no apto para FRP Express: no entra al modo requerido para este flujo.",
+    publicMessage: "Este modelo no aplica para FRP Express. Escribenos por WhatsApp 3 para revisar otra alternativa.",
+  },
+  {
+    key: "redmi-a2",
+    publicName: "Redmi A2",
+    aliases: ["redmi a2", "a2"],
+    status: "NO_APTO_MODO",
+    internalReason: "Modelo no apto para FRP Express: no entra al modo requerido para este flujo.",
+    publicMessage: "Este modelo no aplica para FRP Express. Escribenos por WhatsApp 3 para revisar otra alternativa.",
+  },
+  {
+    key: "redmi-a5",
+    publicName: "Redmi A5",
+    aliases: ["redmi a5", "a5", "serenity"],
+    status: "NO_APTO_MODO",
+    internalReason: "Modelo no apto para FRP Express: no entra al modo requerido para este flujo.",
+    publicMessage: "Este modelo no aplica para FRP Express. Escribenos por WhatsApp 3 para revisar otra alternativa.",
+  },
+  {
+    key: "redmi-note-12s",
+    publicName: "Redmi Note 12S",
+    aliases: ["redmi note 12s", "note 12s", "sea", "ocean"],
+    status: "REQUIERE_REVISION",
+    internalReason: "Modelo reportado como capaz de entrar en modo requerido, pero requiere confirmar proveedor/herramienta antes de cobrar.",
+    publicMessage: "Este equipo requiere revision rapida de compatibilidad antes de continuar con el pago.",
+  },
+];
 const frpOrderChecklistKeys = ["priceSent", "paymentValidated", "connectionDataSent", "authorizationConfirmed"];
 const frpJobChecklistKeys = ["clientConnected", "requiredStateConfirmed", "modelSupported"];
 const frpQuantityTiers = [
@@ -206,6 +249,7 @@ const clientLinkSourceTypes = new Set(["INTERNAL_CLIENT", "PORTAL_CLIENT"]);
 const clientLinkSuggestionStatuses = new Set(["PENDING", "REJECTED", "BLOCKED", "LINKED"]);
 const publicOrderStatuses = [
   { code: "SOLICITUD_RECIBIDA", label: "Solicitud recibida" },
+  { code: "REVISION_COMPATIBILIDAD", label: "Revision de compatibilidad" },
   { code: "ESPERANDO_PAGO", label: "Esperando pago" },
   { code: "PAGO_EN_REVISION", label: "Pago en revision" },
   { code: "EN_COLA", label: "En preparacion" },
@@ -869,6 +913,7 @@ function deriveCustomerOrderStatus(order, db) {
   const items = db.customerOrderItems.filter((item) => item.orderId === order.id);
   const jobs = items.map((item) => db.frpJobs.find((job) => job.id === item.frpJobId)).filter(Boolean);
   if (order.publicStatus === "CANCELADO") return "CANCELADO";
+  if (order.publicStatus === "REVISION_COMPATIBILIDAD") return "REVISION_COMPATIBILIDAD";
   if (jobs.length && jobs.every((job) => job.status === "FINALIZADO")) return "FINALIZADO";
   if (jobs.some((job) => job.status === "REQUIERE_REVISION" || job.status === "ESPERANDO_CLIENTE")) return "REQUIERE_ATENCION";
   if (jobs.some((job) => job.status === "EN_PROCESO")) return "EN_PROCESO";
@@ -885,6 +930,7 @@ function publicCustomerOrderNextAction(order, db, publicStatus = "") {
   const items = db.customerOrderItems.filter((item) => item.orderId === order.id);
   const jobs = items.map((item) => db.frpJobs.find((job) => job.id === item.frpJobId)).filter(Boolean);
   const status = publicStatus || deriveCustomerOrderStatus(order, db);
+  if (status === "REVISION_COMPATIBILIDAD") return "AriadGSM revisara si el equipo aplica para FRP Express antes de pedir pago.";
   if (status === "ESPERANDO_PAGO") return "Copia los datos de pago y sube el comprobante para iniciar la validacion.";
   if (status === "POSTPAGO_SOLICITADO") return "Postpago solicitado. AriadGSM debe aprobarlo antes de procesar.";
   if (status === "PAGO_EN_REVISION") {
@@ -908,6 +954,7 @@ function publicCustomerOrder(order, db) {
   const payment = paymentMethods.find((candidate) => candidate.code === order.paymentMethod);
   const items = db.customerOrderItems.filter((item) => item.orderId === order.id);
   const publicStatus = deriveCustomerOrderStatus(order, db);
+  const hidePaymentDetails = publicStatus === "REVISION_COMPATIBILIDAD";
   return {
     id: order.id,
     code: order.code,
@@ -923,8 +970,8 @@ function publicCustomerOrder(order, db) {
     monthlyUsageAtCreation: order.monthlyUsageAtCreation || 0,
     nextMonthlyTier: order.nextMonthlyTier || null,
     paymentMethod: order.paymentMethod,
-    paymentLabel: order.paymentLabel,
-    paymentDetails: Array.isArray(order.paymentDetails) ? order.paymentDetails : payment?.details || [],
+    paymentLabel: hidePaymentDetails ? "" : order.paymentLabel,
+    paymentDetails: hidePaymentDetails ? [] : (Array.isArray(order.paymentDetails) ? order.paymentDetails : payment?.details || []),
     publicStatus,
     nextAction: publicCustomerOrderNextAction(order, db, publicStatus),
     customerConnectionReadyAt: order.customerConnectionReadyAt || "",
@@ -941,6 +988,9 @@ function publicCustomerOrder(order, db) {
     })) : [],
     items: items.map((item) => {
       const job = db.frpJobs.find((candidate) => candidate.id === item.frpJobId);
+      const eligibilityStatus = item.eligibilityStatus || job?.eligibilityStatus || "";
+      const eligibilityMessage = item.eligibilityPublicMessage || job?.eligibilityPublicMessage || "";
+      const publicReviewMessage = eligibilityMessage || (job?.status === "REQUIERE_REVISION" ? "Requiere revision del equipo." : "");
       return {
         id: item.id,
         sequence: item.sequence,
@@ -949,7 +999,9 @@ function publicCustomerOrder(order, db) {
         status: job?.status || item.status,
         ardCode: job?.ardCode || item.ardCode || "",
         finalLog: job?.finalLog || "",
-        reviewReason: job?.reviewReason || "",
+        eligibilityStatus,
+        eligibilityMessage,
+        reviewReason: publicReviewMessage,
       };
     }),
     createdAt: order.createdAt,
@@ -1126,6 +1178,80 @@ function defaultFrpJobChecklist() {
     clientConnected: false,
     requiredStateConfirmed: false,
     modelSupported: false,
+  };
+}
+
+function normalizeFrpEligibilityText(value) {
+  const spaced = normalizeForMatch(value)
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return {
+    spaced,
+    compact: spaced.replace(/\s+/g, ""),
+    tokens: spaced ? spaced.split(" ") : [],
+  };
+}
+
+function frpAliasMatches(textIndex, alias) {
+  const aliasIndex = normalizeFrpEligibilityText(alias);
+  if (!aliasIndex.spaced) return false;
+  if (/^[a-z0-9]{7,}$/i.test(aliasIndex.compact) && textIndex.compact.includes(aliasIndex.compact)) return true;
+  const pattern = new RegExp(`(^|\\s)${aliasIndex.spaced.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(\\s|$)`);
+  return pattern.test(textIndex.spaced);
+}
+
+function frpEquipmentLooksAmbiguous(textIndex, rawText) {
+  if (!rawText) return true;
+  const generic = new Set(["xiaomi", "redmi", "poco", "mi", "equipo", "telefono", "celular", "modelo", "frp"]);
+  const usefulTokens = textIndex.tokens.filter((token) => !generic.has(token) && !/^\d{14,16}$/.test(token));
+  if (!usefulTokens.length) return true;
+  if (usefulTokens.length === 1 && usefulTokens[0].length < 3) return true;
+  return false;
+}
+
+function frpEligibilityResult(rawText) {
+  const originalText = cleanText(rawText, 180);
+  const textIndex = normalizeFrpEligibilityText(originalText);
+  if (frpEquipmentLooksAmbiguous(textIndex, originalText)) {
+    return {
+      originalText,
+      detectedMatch: "",
+      matchedAlias: "",
+      status: "REQUIERE_REVISION",
+      internalReason: "Entrada ambigua o insuficiente para validar compatibilidad FRP Express.",
+      publicMessage: "Necesitamos revisar este equipo antes de continuar con el pago.",
+    };
+  }
+  for (const entry of frpEligibilityCatalog) {
+    const matchedAlias = entry.aliases.find((alias) => frpAliasMatches(textIndex, alias));
+    if (matchedAlias) {
+      return {
+        originalText,
+        detectedMatch: entry.publicName,
+        matchedAlias,
+        status: frpEligibilityStates.has(entry.status) ? entry.status : "REQUIERE_REVISION",
+        internalReason: entry.internalReason,
+        publicMessage: entry.publicMessage,
+      };
+    }
+  }
+  return {
+    originalText,
+    detectedMatch: originalText,
+    matchedAlias: "",
+    status: "APTO_EXPRESS",
+    internalReason: "Sin coincidencia en catalogo de bloqueos; se asume apto para FRP Express.",
+    publicMessage: "Equipo apto para FRP Express.",
+  };
+}
+
+function summarizeFrpEligibility(items) {
+  const results = items.map((item) => item.eligibility || frpEligibilityResult(item.originalText || item.model || ""));
+  return {
+    results,
+    blocked: results.filter((result) => ["NO_APTO_MODO", "NO_APTO_HERRAMIENTA"].includes(result.status)),
+    review: results.filter((result) => result.status === "REQUIERE_REVISION"),
   };
 }
 
@@ -3305,6 +3431,7 @@ function createPortalInternalClient(db, customerClient) {
 
 function createFrpOrderFromPortal(db, customerClient, customerOrder, customerItems) {
   const payment = paymentMethods.find((candidate) => candidate.code === customerOrder.paymentMethod);
+  const compatibilityReviewRequired = Boolean(customerOrder.compatibilityReviewRequired);
   const internalClient = findClientByIdentity(db, customerClient.name, customerClient.country, customerClient.whatsapp, frpWorkChannel)
     || createPortalInternalClient(db, customerClient);
   if (customerClient.masterClientId) {
@@ -3337,9 +3464,9 @@ function createFrpOrderFromPortal(db, customerClient, customerOrder, customerIte
     paymentLabel: payment.label,
     paymentDetails: payment.details,
     paymentProofs: [],
-    paymentStatus: "ESPERANDO_COMPROBANTE",
+    paymentStatus: compatibilityReviewRequired ? "REVISION_COMPATIBILIDAD" : "ESPERANDO_COMPROBANTE",
     orderStatus: "COTIZADA",
-    checklist: { ...defaultFrpOrderChecklist(), priceSent: true },
+    checklist: { ...defaultFrpOrderChecklist(), priceSent: !compatibilityReviewRequired },
     customerConnectionReadyAt: customerOrder.customerConnectionReadyAt || "",
     urgentRequested: Boolean(customerOrder.urgentRequested),
     urgentStatus: customerOrder.urgentStatus || "",
@@ -3348,6 +3475,7 @@ function createFrpOrderFromPortal(db, customerClient, customerOrder, customerIte
     createdBy: "portal",
     portalOrderId: customerOrder.id,
     pricingSnapshot: customerOrder.pricingSnapshot || null,
+    compatibilityReviewRequired,
     source: "PORTAL_CLIENTE",
     createdAt: nowIso(),
     updatedAt: nowIso(),
@@ -3365,8 +3493,14 @@ function createFrpOrderFromPortal(db, customerClient, customerOrder, customerIte
     country: order.country,
     model: item.model || "",
     imei: item.imei || "",
-    status: "ESPERANDO_PREPARACION",
-    checklist: defaultFrpJobChecklist(),
+    originalText: item.originalText || "",
+    eligibilityStatus: item.eligibilityStatus || "APTO_EXPRESS",
+    eligibilityDetectedMatch: item.eligibilityDetectedMatch || "",
+    eligibilityMatchedAlias: item.eligibilityMatchedAlias || "",
+    eligibilityInternalReason: item.eligibilityInternalReason || "",
+    eligibilityPublicMessage: item.eligibilityPublicMessage || "",
+    status: item.status || "ESPERANDO_PREPARACION",
+    checklist: { ...defaultFrpJobChecklist(), modelSupported: item.eligibilityStatus === "APTO_EXPRESS" },
     technicianId: "",
     portalOrderItemId: item.id,
     createdAt: nowIso(),
@@ -3374,6 +3508,7 @@ function createFrpOrderFromPortal(db, customerClient, customerOrder, customerIte
     finalLog: "",
     finalImages: [],
     ardCode: "",
+    reviewReason: item.eligibilityStatus === "REQUIERE_REVISION" ? item.eligibilityInternalReason || "Revision de compatibilidad requerida." : "",
   }));
   db.frpOrders.unshift(order);
   db.frpJobs.unshift(...jobs);
@@ -3391,6 +3526,7 @@ function createFrpOrderFromPortal(db, customerClient, customerOrder, customerIte
     quantity: order.quantity,
     unitPrice: order.unitPrice,
     totalPrice: order.totalPrice,
+    compatibilityReviewRequired,
   });
   return order;
 }
@@ -4155,21 +4291,83 @@ async function handleApi(req, res, pathname) {
       await writeDb(db);
       return sendJson(res, 503, { error: suggestion.error || "Xiaomi FRP no tiene precio activo en este momento." });
     }
+    const requestId = crypto.randomUUID();
+    const orderId = crypto.randomUUID();
+    const inputItems = Array.isArray(input.items) ? input.items : [];
+    const items = Array.from({ length: quantity }, (_, index) => {
+      const itemInput = inputItems[index] || {};
+      const originalText = cleanText(itemInput.raw || itemInput.model || input.model || "", 180);
+      const eligibility = frpEligibilityResult(originalText);
+      const status = eligibility.status === "REQUIERE_REVISION" ? "REQUIERE_REVISION" : "ESPERANDO_PREPARACION";
+      return {
+        id: crypto.randomUUID(),
+        requestId,
+        orderId,
+        clientId: context.client.id,
+        masterClientId: context.client.masterClientId || benefit.masterClientId || "",
+        sequence: index + 1,
+        originalText,
+        model: cleanText(itemInput.model || originalText || "", 120),
+        imei: cleanText(itemInput.imei || "", 40),
+        status,
+        eligibilityStatus: eligibility.status,
+        eligibilityDetectedMatch: eligibility.detectedMatch,
+        eligibilityMatchedAlias: eligibility.matchedAlias,
+        eligibilityInternalReason: eligibility.internalReason,
+        eligibilityPublicMessage: eligibility.publicMessage,
+        frpOrderId: "",
+        frpJobId: "",
+        createdAt: nowIso(),
+        updatedAt: nowIso(),
+      };
+    });
+    const eligibilitySummary = summarizeFrpEligibility(items);
+    audit(db, context.user.id, "PORTAL_FRP_ELIGIBILITY_VALIDATED", context.client.id, {
+      quantity,
+      results: eligibilitySummary.results.map((result, index) => ({
+        sequence: index + 1,
+        status: result.status,
+        detectedMatch: result.detectedMatch,
+        internalReason: result.internalReason,
+      })),
+    });
+    if (eligibilitySummary.blocked.length) {
+      audit(db, context.user.id, "PORTAL_FRP_ELIGIBILITY_BLOCKED", context.client.id, {
+        quantity,
+        blocked: eligibilitySummary.blocked.map((result) => ({
+          status: result.status,
+          detectedMatch: result.detectedMatch,
+          internalReason: result.internalReason,
+        })),
+      });
+      await writeDb(db);
+      return sendJson(res, 409, {
+        error: eligibilitySummary.blocked[0]?.publicMessage || "Uno de los equipos no aplica para FRP Express.",
+        eligibility: eligibilitySummary.results.map((result, index) => ({
+          sequence: index + 1,
+          status: result.status,
+          message: result.publicMessage,
+        })),
+      });
+    }
+    const compatibilityReviewRequired = eligibilitySummary.review.length > 0;
+    const initialPublicStatus = compatibilityReviewRequired ? "REVISION_COMPATIBILIDAD" : "ESPERANDO_PAGO";
+    const orderCode = nextCustomerOrderCode(db);
     const request = {
-      id: crypto.randomUUID(),
+      id: requestId,
       clientId: context.client.id,
       masterClientId: context.client.masterClientId || benefit.masterClientId || "",
       userId: context.user.id,
       serviceCode: service.code,
       serviceName: service.name,
       channel: frpWorkChannel,
-      status: "ESPERANDO_PAGO",
+      status: initialPublicStatus,
       createdAt: nowIso(),
       updatedAt: nowIso(),
     };
     const order = {
-      id: crypto.randomUUID(),
-      code: nextCustomerOrderCode(db),
+      id: orderId,
+      code: orderCode,
       accessCode: crypto.randomBytes(8).toString("base64url"),
       requestId: request.id,
       clientId: context.client.id,
@@ -4199,30 +4397,12 @@ async function handleApi(req, res, pathname) {
       urgentStatus: urgentRequested ? "SOLICITADO" : "",
       postpayRequested,
       postpayStatus: postpayRequested ? (postpayEligible ? "SOLICITADO" : "NO_ELEGIBLE") : "",
-      publicStatus: "ESPERANDO_PAGO",
+      publicStatus: initialPublicStatus,
+      compatibilityReviewRequired,
       createdAt: nowIso(),
       updatedAt: nowIso(),
       note: cleanText(input.note, 500),
     };
-    const inputItems = Array.isArray(input.items) ? input.items : [];
-    const items = Array.from({ length: quantity }, (_, index) => {
-      const itemInput = inputItems[index] || {};
-      return {
-        id: crypto.randomUUID(),
-        requestId: request.id,
-        orderId: order.id,
-        clientId: context.client.id,
-        masterClientId: context.client.masterClientId || benefit.masterClientId || "",
-        sequence: index + 1,
-        model: cleanText(itemInput.model || input.model || "", 80),
-        imei: cleanText(itemInput.imei || "", 40),
-        status: "ESPERANDO_PREPARACION",
-        frpOrderId: "",
-        frpJobId: "",
-        createdAt: nowIso(),
-        updatedAt: nowIso(),
-      };
-    });
     createFrpOrderFromPortal(db, context.client, order, items);
     db.customerRequests.unshift(request);
     db.customerOrders.unshift(order);
@@ -4246,7 +4426,18 @@ async function handleApi(req, res, pathname) {
       urgentRequested,
       postpayRequested,
       postpayStatus: order.postpayStatus,
+      compatibilityReviewRequired,
     });
+    if (compatibilityReviewRequired) {
+      audit(db, context.user.id, "PORTAL_FRP_ELIGIBILITY_REVIEW_CREATED", order.id, {
+        code: order.code,
+        review: eligibilitySummary.review.map((result) => ({
+          status: result.status,
+          detectedMatch: result.detectedMatch,
+          internalReason: result.internalReason,
+        })),
+      });
+    }
     if (urgentRequested) {
       audit(db, context.user.id, "PORTAL_FRP_URGENT_REQUESTED", order.id, { code: order.code });
     }
@@ -4342,6 +4533,11 @@ async function handleApi(req, res, pathname) {
     }
     const order = db.customerOrders.find((candidate) => candidate.id === portalProofMatch[1] && candidate.clientId === context.client.id);
     if (!order) return sendJson(res, 404, { error: "Orden no encontrada." });
+    if (order.publicStatus === "REVISION_COMPATIBILIDAD") {
+      audit(db, context.user.id, "PORTAL_PAYMENT_PROOF_BLOCKED_COMPATIBILITY_REVIEW", order.id, { code: order.code });
+      await writeDb(db);
+      return sendJson(res, 409, { error: "AriadGSM debe confirmar compatibilidad antes de recibir pago." });
+    }
     const proofs = sanitizePaymentProofImages(input.paymentProofs || input.proofs || []);
     if (!proofs.length) return sendJson(res, 400, { error: "Sube al menos una imagen de comprobante." });
     const duplicateHash = new Set();
