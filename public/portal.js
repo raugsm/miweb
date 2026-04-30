@@ -76,6 +76,20 @@ function paymentText(payment, totalText = "") {
   ].filter(Boolean).join("\n");
 }
 
+function connectionGuideText(order = null) {
+  return [
+    "AriadGSM - Preparacion Xiaomi FRP Express",
+    order?.code ? `Pedido: ${order.code}` : "",
+    "",
+    "1. Ten tu PC encendida y con internet estable.",
+    "2. Conecta el Xiaomi por cable USB directo a la PC.",
+    "3. Abre USB Redirector y espera indicaciones de AriadGSM.",
+    "4. No desconectes el equipo mientras el tecnico este procesando.",
+    "",
+    "Cuando estes listo, marca 'Estoy listo para conectar' en el portal.",
+  ].filter(Boolean).join("\n");
+}
+
 function copyText(text, messageNode) {
   const done = () => setMessage(messageNode, "Copiado. Ya puedes pegarlo.", "success");
   const fail = () => setMessage(messageNode, "No se pudo copiar automaticamente.", "error");
@@ -289,6 +303,10 @@ function estimatePortalPrice(quantity) {
 function updateQuote() {
   const qty = $("#orderForm input[name='quantity']")?.value || 1;
   const estimate = estimatePortalPrice(qty);
+  const unitNode = $("#currentUnitPrice");
+  const priceHint = $("#currentPriceHint");
+  if (unitNode) unitNode.textContent = paymentAmountText(estimate.unit);
+  if (priceHint) priceHint.textContent = `${estimate.label}. El total cambia segun cantidad y metodo de pago.`;
   $("#quoteTotal").textContent = paymentAmountText(estimate.total);
   $("#quoteHint").textContent = `${estimate.label}. El backend confirma el monto exacto.`;
 }
@@ -317,6 +335,26 @@ function statusLabel(code) {
   return state.catalog?.statuses?.find((status) => status.code === code)?.label || code || "Pendiente";
 }
 
+function customerNextAction(order) {
+  if (order?.nextAction) return order.nextAction;
+  if (order?.publicStatus === "ESPERANDO_PAGO") return "Copia los datos de pago y sube el comprobante.";
+  if (order?.publicStatus === "PAGO_EN_REVISION") return "Prepara USB Redirector mientras validamos el pago.";
+  if (order?.publicStatus === "EN_PREPARACION") return "Marca que estas listo para conectar cuando tengas PC, cable y USB Redirector abierto.";
+  if (order?.publicStatus === "LISTO_PARA_CONEXION") return "Mantente disponible. El tecnico tomara el equipo.";
+  if (order?.publicStatus === "EN_PROCESO") return "No desconectes el equipo. Tecnico procesando.";
+  if (order?.publicStatus === "FINALIZADO") return "Servicio finalizado. Revisa el Done.";
+  if (order?.publicStatus === "REQUIERE_ATENCION") return "Revisa el motivo y corrige lo solicitado.";
+  return "Revisa el avance de tu pedido.";
+}
+
+function orderBadges(order) {
+  const badges = [];
+  if (order?.customerConnectionReadyAt) badges.push("Conexion lista");
+  if (order?.urgentRequested) badges.push(order.urgentStatus === "APROBADO" ? "Urgente aprobado" : "Urgente solicitado");
+  if (order?.postpayRequested) badges.push(order.postpayStatus === "APROBADO" ? "Postpago aprobado" : "Postpago solicitado");
+  return badges;
+}
+
 function orderCopyText(order) {
   return [
     `Pedido ${order.code}`,
@@ -324,6 +362,7 @@ function orderCopyText(order) {
     `Equipos: ${order.quantity}`,
     `Total: ${order.priceFormatted || money(order.totalPrice)}`,
     `Estado: ${statusLabel(order.publicStatus)}`,
+    `Proxima accion: ${customerNextAction(order)}`,
     `Seguimiento: ${location.origin}/cliente?orden=${encodeURIComponent(order.code)}&codigo=${encodeURIComponent(order.accessCode || "")}`,
     "",
     paymentText({ label: order.paymentLabel, details: order.paymentDetails }, order.priceFormatted || money(order.totalPrice)),
@@ -347,6 +386,11 @@ function renderOrders(orders) {
     $(".order-service", card).textContent = order.serviceName;
     $(".status-pill", card).textContent = statusLabel(order.publicStatus);
     $(".order-meta", card).textContent = `${order.quantity} equipo(s) - ${order.priceFormatted || money(order.totalPrice)} - ${order.discountLabel || "Precio base"}`;
+    $(".next-action", card).innerHTML = [
+      `<strong>Proxima accion</strong>`,
+      `<span>${escapeHtml(customerNextAction(order))}</span>`,
+      orderBadges(order).length ? `<div class="order-badges">${orderBadges(order).map((badge) => `<em>${escapeHtml(badge)}</em>`).join("")}</div>` : "",
+    ].join("");
     $(".payment-block", card).innerHTML = paymentText({ label: order.paymentLabel, details: order.paymentDetails }, order.priceFormatted || money(order.totalPrice))
       .split("\n")
       .map((line) => `<div>${escapeHtml(line)}</div>`)
@@ -354,12 +398,26 @@ function renderOrders(orders) {
     $(".item-list", card).innerHTML = (order.items || []).map((item) => {
       const detail = [item.model, item.imei].filter(Boolean).join(" / ") || "Equipo sin detalle";
       const done = item.ardCode ? ` - ${item.ardCode}` : "";
-      return `<div class="item-row">#${item.sequence} ${escapeHtml(detail)}<br><small>${escapeHtml(statusLabel(item.status))}${escapeHtml(done)}</small></div>`;
+      const reason = item.reviewReason ? `<br><small class="danger-text">${escapeHtml(item.reviewReason)}</small>` : "";
+      return `<div class="item-row">#${item.sequence} ${escapeHtml(detail)}<br><small>${escapeHtml(statusLabel(item.status))}${escapeHtml(done)}</small>${reason}</div>`;
     }).join("");
+    $(".connection-block", card).innerHTML = `
+      <strong>Preparacion de conexion</strong>
+      <span>Ten PC, cable USB directo y USB Redirector abierto. Marca listo cuando ya puedas atender al tecnico.</span>
+    `;
     const fileInput = $("input[type='file']", card);
     const loggedCustomer = Boolean(state.customer?.user && state.customer?.client);
     const dropzone = $(".upload-button", card);
+    const connectionReadyButton = $(".connection-ready", card);
+    const copyConnectionButton = $(".copy-connection", card);
+    const canPrepareConnection = (order.paymentProofs || []).length > 0
+      || order.postpayStatus === "APROBADO"
+      || ["PAGO_EN_REVISION", "EN_PREPARACION", "LISTO_PARA_CONEXION", "EN_PROCESO"].includes(order.publicStatus);
+    connectionReadyButton.disabled = !loggedCustomer || Boolean(order.customerConnectionReadyAt) || !canPrepareConnection;
+    connectionReadyButton.textContent = order.customerConnectionReadyAt ? "Conexion marcada" : "Estoy listo para conectar";
     dropzone.style.display = loggedCustomer ? "inline-flex" : "none";
+    connectionReadyButton.style.display = loggedCustomer ? "" : "none";
+    copyConnectionButton.style.display = loggedCustomer ? "" : "none";
     const uploadProofFiles = async (files) => {
       const message = $(".order-message", card);
       setMessage(message, "Subiendo comprobante...");
@@ -379,6 +437,21 @@ function renderOrders(orders) {
         dropzone.classList.remove("drag-active");
       }
     };
+    connectionReadyButton.addEventListener("click", async () => {
+      const message = $(".order-message", card);
+      setMessage(message, "Marcando conexion lista...");
+      try {
+        const payload = await api(`/api/portal/orders/${order.id}/connection-ready`, {
+          method: "PATCH",
+          body: "{}",
+        });
+        state.customer = payload.customer;
+        setMessage(message, "Conexion marcada como lista.", "success");
+        renderCustomer();
+      } catch (error) {
+        setMessage(message, error.message, "error");
+      }
+    });
     fileInput.addEventListener("change", async () => {
       await uploadProofFiles(fileInput.files);
     });
@@ -405,6 +478,7 @@ function renderOrders(orders) {
       const files = event.dataTransfer?.files || [];
       await uploadProofFiles(files);
     });
+    copyConnectionButton.addEventListener("click", () => copyText(connectionGuideText(order), $(".order-message", card)));
     $(".copy-order", card).addEventListener("click", () => copyText(orderCopyText(order), $(".order-message", card)));
     list.append(card);
   });
@@ -636,6 +710,8 @@ function wireEvents() {
           paymentMethod: data.paymentMethod,
           items: parseItems(data.items, quantity),
           note: data.note,
+          urgentRequested: data.urgentRequested === "on",
+          postpayRequested: data.postpayRequested === "on",
           turnstileToken: turnstileToken("order"),
         }),
       });
@@ -661,6 +737,9 @@ function wireEvents() {
   $("#copyPaymentButton").addEventListener("click", () => {
     const estimate = estimatePortalPrice($("#orderForm input[name='quantity']").value);
     copyText(paymentText(currentPayment(), paymentAmountText(estimate.total)), $("#orderMessage"));
+  });
+  $("#copyConnectionGuideButton")?.addEventListener("click", () => {
+    copyText(connectionGuideText(), $("#orderMessage"));
   });
   $("#refreshButton").addEventListener("click", async () => {
     await refreshOrdersSilently();

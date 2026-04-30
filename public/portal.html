@@ -121,6 +121,23 @@
           <button id="resendVerificationButton" class="ghost" type="button">Reenviar correo</button>
         </section>
 
+        <section class="frp-flow-card">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Flujo FRP Express</p>
+              <h2>Pedido guiado sin depender de mensajes sueltos.</h2>
+            </div>
+            <span class="channel-pill">WhatsApp 3</span>
+          </div>
+          <div class="flow-steps" aria-label="Etapas Xiaomi FRP Express">
+            <article><span>1</span><strong>Precio</strong><small>Revisa el monto actual por equipo.</small></article>
+            <article><span>2</span><strong>Solicitud</strong><small>Registra uno o varios equipos.</small></article>
+            <article><span>3</span><strong>Pago</strong><small>Copia datos y sube comprobante.</small></article>
+            <article><span>4</span><strong>Conexión</strong><small>Prepara USB Redirector y espera turno.</small></article>
+            <article><span>5</span><strong>Done</strong><small>Recibe resultado y log final.</small></article>
+          </div>
+        </section>
+
         <section class="request-card">
           <div class="section-head">
             <div>
@@ -128,6 +145,20 @@
               <h2>Xiaomi FRP Express</h2>
             </div>
             <span class="channel-pill">WhatsApp 3</span>
+          </div>
+
+          <div class="price-prep-grid">
+            <article class="price-panel">
+              <span>Precio actual por equipo</span>
+              <strong id="currentUnitPrice">-</strong>
+              <small id="currentPriceHint">Se calcula con el proveedor FRP activo.</small>
+            </article>
+            <article class="prep-panel">
+              <span>Preparación USB Redirector</span>
+              <strong>Ten PC, cable y USB Redirector abierto.</strong>
+              <small>No desconectes el equipo cuando el técnico esté procesando.</small>
+              <button id="copyConnectionGuideButton" class="ghost" type="button">Copiar guía</button>
+            </article>
           </div>
 
           <form id="orderForm" class="order-form">
@@ -147,6 +178,18 @@
               </div>
               <button id="copyPaymentButton" class="ghost" type="button">Copiar pago</button>
             </div>
+            <details class="request-options wide">
+              <summary>Opciones sujetas a aprobación</summary>
+              <label class="inline-option">
+                <input name="urgentRequested" type="checkbox" />
+                Solicitar atención urgente
+              </label>
+              <label class="inline-option">
+                <input name="postpayRequested" type="checkbox" />
+                Solicitar postpago
+              </label>
+              <small>Estas opciones no saltan validación. AriadGSM decide si aplican.</small>
+            </details>
             <div class="turnstile-box wide" data-turnstile-widget="order"></div>
             <button id="orderSubmitButton" type="submit">Crear solicitud</button>
           </form>
@@ -157,7 +200,7 @@
           <div class="section-head">
             <div>
               <p class="eyebrow">Seguimiento</p>
-              <h2>Mis ordenes</h2>
+              <h2>Mis órdenes</h2>
               <span id="ordersLiveStatus" class="live-status" data-type="">Desconectado</span>
             </div>
             <button id="refreshButton" class="ghost" type="button">Actualizar</button>
@@ -177,13 +220,17 @@
           <span class="status-pill"></span>
         </div>
         <div class="order-meta"></div>
+        <div class="next-action"></div>
         <div class="payment-block"></div>
         <div class="item-list"></div>
+        <div class="connection-block"></div>
         <div class="order-actions">
           <label class="upload-button proof-dropzone">Subir o arrastrar comprobante
             <span>Imagen del pago</span>
             <input type="file" accept="image/*" multiple hidden />
           </label>
+          <button class="connection-ready ghost" type="button">Estoy listo para conectar</button>
+          <button class="copy-connection ghost" type="button">Copiar guía</button>
           <button class="copy-order ghost" type="button">Copiar datos</button>
         </div>
         <p class="message order-message" aria-live="polite"></p>

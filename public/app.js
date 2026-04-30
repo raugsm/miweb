@@ -1190,9 +1190,11 @@ function frpProofLabel(order) {
 
 function frpNextAction(order) {
   const stage = frpOrderStage(order);
+  if (order?.postpayRequested && order?.postpayStatus !== "APROBADO") return "Postpago solicitado: no procesar hasta aprobacion administrativa.";
   if (stage === "WEB_NUEVA") return "Esperar comprobante o reenviar datos de pago.";
   if (stage === "PAGO_COMPROBANTE") return canReviewPayments() ? "Validar o rechazar comprobante." : "Esperar validacion de pago.";
   if (stage === "PREPARACION") {
+    if (order.customerConnectionReadyAt && !order.checklist?.connectionDataSent) return "Cliente listo para conexion; enviar datos y marcar conexion enviada.";
     if (!order.checklist?.connectionDataSent) return "Copiar conexion y marcarla enviada.";
     if (!order.checklist?.authorizationConfirmed) return "Confirmar autorizacion/preparacion.";
     return "Enviar equipos listos a tecnico.";
@@ -1202,6 +1204,22 @@ function frpNextAction(order) {
   if (stage === "REVISION_PROBLEMA") return "Resolver motivo de revision.";
   if (stage === "FINALIZADO") return "Copiar Done si el cliente lo solicita.";
   return "Revisar solicitud.";
+}
+
+function renderFrpOrderBadges(order) {
+  const badges = [];
+  if (order?.customerConnectionReadyAt) badges.push("Cliente listo");
+  if (order?.urgentRequested) badges.push(order.urgentStatus === "APROBADO" ? "Urgente aprobado" : "Urgente solicitado");
+  if (order?.postpayRequested) {
+    const label = order.postpayStatus === "APROBADO"
+      ? "Postpago aprobado"
+      : order.postpayStatus === "NO_ELEGIBLE"
+        ? "Postpago no elegible"
+        : "Postpago solicitado";
+    badges.push(label);
+  }
+  if (!badges.length) return "";
+  return `<div class="frp-badge-row">${badges.map((badge) => `<span>${escapeHtml(badge)}</span>`).join("")}</div>`;
 }
 
 function renderFrpMetrics(webOrders = frpOrders().filter(isPortalFrpOrder)) {
@@ -1277,6 +1295,7 @@ function renderFrpOrder(order, options = {}) {
         </div>
         <em>${escapeHtml(options.stageLabel || frpStageLabel(stage))}</em>
       </header>
+      ${renderFrpOrderBadges(order)}
       <div class="frp-card-grid">
         <span><strong>Equipos</strong>${escapeHtml(order.quantity)}</span>
         <span><strong>Pago</strong>${escapeHtml(order.paymentLabel)}</span>

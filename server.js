@@ -16,7 +16,7 @@ const enableSetupPasswordReset = ["true", "1", "yes"].includes(String(process.en
 const ownerRecoveryEmail = normalizeEmail(process.env.ARIAD_OWNER_RECOVERY_EMAIL || "");
 const publicBaseUrl = String(process.env.ARIAD_PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || `http://localhost:${port}`).replace(/\/+$/, "");
 const mailFrom = process.env.ARIAD_MAIL_FROM || '"AriadGSM Soporte" <soporte@ariadgsm.com>';
-const appVersion = "frp-web-queue-v1";
+const appVersion = "portal-frp-client-flow-v1";
 const sessionVersion = 7;
 const customerSessionVersion = 1;
 const trustedDeviceVersion = 3;
@@ -214,6 +214,7 @@ const publicOrderStatuses = [
   { code: "EN_PROCESO", label: "En proceso" },
   { code: "FINALIZADO", label: "Finalizado" },
   { code: "REQUIERE_ATENCION", label: "Requiere atencion" },
+  { code: "POSTPAGO_SOLICITADO", label: "Postpago solicitado" },
   { code: "CANCELADO", label: "Cancelado" },
 ];
 const exchangeRateCountries = [
@@ -872,9 +873,35 @@ function deriveCustomerOrderStatus(order, db) {
   if (jobs.some((job) => job.status === "REQUIERE_REVISION" || job.status === "ESPERANDO_CLIENTE")) return "REQUIERE_ATENCION";
   if (jobs.some((job) => job.status === "EN_PROCESO")) return "EN_PROCESO";
   if (jobs.some((job) => job.status === "LISTO_PARA_TECNICO")) return "LISTO_PARA_CONEXION";
+  if ((frpOrder?.checklist?.paymentValidated || frpOrder?.paymentStatus === "PAGO_VALIDADO") && (order.customerConnectionReadyAt || frpOrder?.customerConnectionReadyAt)) return "LISTO_PARA_CONEXION";
   if (frpOrder?.checklist?.paymentValidated || frpOrder?.paymentStatus === "PAGO_VALIDADO") return "EN_PREPARACION";
   if (Array.isArray(order.paymentProofs) && order.paymentProofs.length) return "PAGO_EN_REVISION";
+  if (order.postpayRequested && order.postpayStatus === "SOLICITADO") return "POSTPAGO_SOLICITADO";
   return order.publicStatus || "ESPERANDO_PAGO";
+}
+
+function publicCustomerOrderNextAction(order, db, publicStatus = "") {
+  const frpOrder = db.frpOrders.find((candidate) => candidate.id === order.frpOrderId);
+  const items = db.customerOrderItems.filter((item) => item.orderId === order.id);
+  const jobs = items.map((item) => db.frpJobs.find((job) => job.id === item.frpJobId)).filter(Boolean);
+  const status = publicStatus || deriveCustomerOrderStatus(order, db);
+  if (status === "ESPERANDO_PAGO") return "Copia los datos de pago y sube el comprobante para iniciar la validacion.";
+  if (status === "POSTPAGO_SOLICITADO") return "Postpago solicitado. AriadGSM debe aprobarlo antes de procesar.";
+  if (status === "PAGO_EN_REVISION") {
+    return order.customerConnectionReadyAt
+      ? "Comprobante recibido. Ya indicaste que la conexion esta lista; espera validacion."
+      : "Comprobante recibido. Prepara USB Redirector mientras validamos el pago.";
+  }
+  if (status === "EN_PREPARACION") return "Pago validado. Prepara USB Redirector y marca que estas listo para conectar.";
+  if (status === "LISTO_PARA_CONEXION") return "Conexion lista. Mantente disponible para que el tecnico tome el equipo.";
+  if (status === "EN_PROCESO") return "Tecnico procesando. No desconectes el equipo hasta recibir el Done.";
+  if (status === "REQUIERE_ATENCION") {
+    const reason = jobs.find((job) => job.reviewReason)?.reviewReason || frpOrder?.reviewReason || "";
+    return reason ? `Requiere accion: ${reason}` : "Requiere accion del cliente o revision del equipo.";
+  }
+  if (status === "FINALIZADO") return "Servicio finalizado. Revisa el Done y el log de salida.";
+  if (status === "CANCELADO") return "Solicitud cancelada.";
+  return "Revisa el estado de tu solicitud.";
 }
 
 function publicCustomerOrder(order, db) {
@@ -894,10 +921,17 @@ function publicCustomerOrder(order, db) {
     discountLabel: order.discountLabel,
     discountLocked: Boolean(order.discountLocked),
     monthlyUsageAtCreation: order.monthlyUsageAtCreation || 0,
+    nextMonthlyTier: order.nextMonthlyTier || null,
     paymentMethod: order.paymentMethod,
     paymentLabel: order.paymentLabel,
     paymentDetails: Array.isArray(order.paymentDetails) ? order.paymentDetails : payment?.details || [],
     publicStatus,
+    nextAction: publicCustomerOrderNextAction(order, db, publicStatus),
+    customerConnectionReadyAt: order.customerConnectionReadyAt || "",
+    urgentRequested: Boolean(order.urgentRequested),
+    urgentStatus: order.urgentStatus || "",
+    postpayRequested: Boolean(order.postpayRequested),
+    postpayStatus: order.postpayStatus || "",
     paymentProofs: Array.isArray(order.paymentProofs) ? order.paymentProofs.map((proof) => ({
       id: proof.id,
       name: proof.name,
@@ -915,6 +949,7 @@ function publicCustomerOrder(order, db) {
         status: job?.status || item.status,
         ardCode: job?.ardCode || item.ardCode || "",
         finalLog: job?.finalLog || "",
+        reviewReason: job?.reviewReason || "",
       };
     }),
     createdAt: order.createdAt,
@@ -3305,6 +3340,11 @@ function createFrpOrderFromPortal(db, customerClient, customerOrder, customerIte
     paymentStatus: "ESPERANDO_COMPROBANTE",
     orderStatus: "COTIZADA",
     checklist: { ...defaultFrpOrderChecklist(), priceSent: true },
+    customerConnectionReadyAt: customerOrder.customerConnectionReadyAt || "",
+    urgentRequested: Boolean(customerOrder.urgentRequested),
+    urgentStatus: customerOrder.urgentStatus || "",
+    postpayRequested: Boolean(customerOrder.postpayRequested),
+    postpayStatus: customerOrder.postpayStatus || "",
     createdBy: "portal",
     portalOrderId: customerOrder.id,
     pricingSnapshot: customerOrder.pricingSnapshot || null,
@@ -4100,6 +4140,9 @@ async function handleApi(req, res, pathname) {
     const payment = resolvePortalPaymentForClient(requestedPaymentCode, context.client);
     if (!service) return sendJson(res, 503, { error: "Xiaomi FRP no esta disponible en el portal." });
     if (!payment) return sendJson(res, 400, { error: "Metodo de pago invalido para tu pais." });
+    const urgentRequested = Boolean(input.urgentRequested);
+    const postpayRequested = Boolean(input.postpayRequested);
+    const postpayEligible = ["VIP", "EMPRESA", "VERIFICADO"].includes(normalizeCustomerStatus(context.client.status));
     reconcilePortalClientLink(db, context.client, context.user.id);
     const benefit = customerBenefitFor(db, context.client.id, context.client.masterClientId || "");
     const canUseBenefits = customerCanUseBenefits(context, benefit);
@@ -4151,6 +4194,11 @@ async function handleApi(req, res, pathname) {
       paymentLabel: payment.label,
       paymentDetails: payment.details,
       paymentProofs: [],
+      customerConnectionReadyAt: "",
+      urgentRequested,
+      urgentStatus: urgentRequested ? "SOLICITADO" : "",
+      postpayRequested,
+      postpayStatus: postpayRequested ? (postpayEligible ? "SOLICITADO" : "NO_ELEGIBLE") : "",
       publicStatus: "ESPERANDO_PAGO",
       createdAt: nowIso(),
       updatedAt: nowIso(),
@@ -4195,7 +4243,20 @@ async function handleApi(req, res, pathname) {
       discountLabel: order.discountLabel,
       canUseBenefits,
       workChannel: frpWorkChannel,
+      urgentRequested,
+      postpayRequested,
+      postpayStatus: order.postpayStatus,
     });
+    if (urgentRequested) {
+      audit(db, context.user.id, "PORTAL_FRP_URGENT_REQUESTED", order.id, { code: order.code });
+    }
+    if (postpayRequested) {
+      audit(db, context.user.id, "PORTAL_FRP_POSTPAY_REQUESTED", order.id, {
+        code: order.code,
+        eligible: postpayEligible,
+        status: order.postpayStatus,
+      });
+    }
     await writeDb(db);
     publishPortalOrders(db, context.client.id, "order_created");
     return sendJson(res, 201, {
@@ -4226,6 +4287,45 @@ async function handleApi(req, res, pathname) {
       res.setHeader("Set-Cookie", cookieHeader(customerDeviceCookieName, context.deviceToken, customerDeviceMaxAgeSeconds));
     }
     return sendJson(res, 200, { order: publicCustomerOrder(order, db) });
+  }
+
+  const portalConnectionReadyMatch = pathname.match(/^\/api\/portal\/orders\/([^/]+)\/connection-ready$/);
+  if (req.method === "PATCH" && portalConnectionReadyMatch) {
+    const context = await getCurrentCustomerContext(req);
+    if (!requireCustomer(context, res)) return;
+    const db = context.db;
+    const order = db.customerOrders.find((candidate) => candidate.id === portalConnectionReadyMatch[1] && candidate.clientId === context.client.id);
+    if (!order) return sendJson(res, 404, { error: "Orden no encontrada." });
+    const frpOrder = db.frpOrders.find((candidate) => candidate.id === order.frpOrderId);
+    const hasProof = Array.isArray(order.paymentProofs) && order.paymentProofs.length > 0;
+    const paymentValidated = frpOrder?.checklist?.paymentValidated || frpOrder?.paymentStatus === "PAGO_VALIDADO";
+    const postpayApproved = order.postpayStatus === "APROBADO" || frpOrder?.postpayStatus === "APROBADO";
+    if (!hasProof && !paymentValidated && !postpayApproved) {
+      audit(db, context.user.id, "PORTAL_CONNECTION_READY_BLOCKED_NO_PAYMENT", order.id, { code: order.code });
+      await writeDb(db);
+      return sendJson(res, 409, { error: "Primero sube el comprobante o espera aprobacion de postpago." });
+    }
+    const timestamp = nowIso();
+    order.customerConnectionReadyAt = order.customerConnectionReadyAt || timestamp;
+    order.customerConnectionReadyBy = context.user.id;
+    order.updatedAt = timestamp;
+    if (frpOrder) {
+      frpOrder.customerConnectionReadyAt = frpOrder.customerConnectionReadyAt || order.customerConnectionReadyAt;
+      frpOrder.updatedAt = timestamp;
+      syncFrpOrderStatus(db, frpOrder);
+    }
+    audit(db, context.user.id, "PORTAL_CONNECTION_READY", order.id, {
+      code: order.code,
+      frpOrderId: order.frpOrderId || "",
+      paymentValidated: Boolean(paymentValidated),
+      proofCount: Array.isArray(order.paymentProofs) ? order.paymentProofs.length : 0,
+    });
+    await writeDb(db);
+    publishPortalOrders(db, context.client.id, "connection_ready");
+    return sendJson(res, 200, {
+      order: publicCustomerOrder(order, db),
+      customer: publicCustomerState(db, context),
+    });
   }
 
   const portalProofMatch = pathname.match(/^\/api\/portal\/orders\/([^/]+)\/payment-proof$/);

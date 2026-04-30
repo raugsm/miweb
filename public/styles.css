@@ -1092,6 +1092,22 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
 }
+.frp-badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.frp-badge-row span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #eef5ff;
+  color: var(--brand-2);
+  font-size: 11px;
+  font-weight: 900;
+}
 .frp-card-grid span,
 .frp-next-action {
   padding: 9px;
