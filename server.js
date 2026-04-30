@@ -16,7 +16,7 @@ const enableSetupPasswordReset = ["true", "1", "yes"].includes(String(process.en
 const ownerRecoveryEmail = normalizeEmail(process.env.ARIAD_OWNER_RECOVERY_EMAIL || "");
 const publicBaseUrl = String(process.env.ARIAD_PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || `http://localhost:${port}`).replace(/\/+$/, "");
 const mailFrom = process.env.ARIAD_MAIL_FROM || '"AriadGSM Soporte" <soporte@ariadgsm.com>';
-const appVersion = "responsive-foundation-v1";
+const appVersion = "master-client-link-v1";
 const sessionVersion = 7;
 const customerSessionVersion = 1;
 const trustedDeviceVersion = 3;
@@ -198,6 +198,9 @@ const portalPublicServices = [
   },
 ];
 const customerStatuses = new Set(["REGISTRADO_NO_VERIFICADO", "EMAIL_VERIFICADO", "REGISTRADO", "VERIFICADO", "VIP", "EMPRESA", "BLOQUEADO"]);
+const masterClientStatuses = new Set(["ACTIVO", "PENDIENTE_VERIFICACION", "BLOQUEADO", "MERGED"]);
+const clientLinkSourceTypes = new Set(["INTERNAL_CLIENT", "PORTAL_CLIENT"]);
+const clientLinkSuggestionStatuses = new Set(["PENDING", "REJECTED", "BLOCKED", "LINKED"]);
 const publicOrderStatuses = [
   { code: "SOLICITUD_RECIBIDA", label: "Solicitud recibida" },
   { code: "ESPERANDO_PAGO", label: "Esperando pago" },
@@ -378,6 +381,9 @@ async function ensureDb() {
       customerBenefits: [],
       customerEmailVerificationTokens: [],
       customerCounters: {},
+      masterClients: [],
+      clientLinks: [],
+      clientLinkSuggestions: [],
       portalRateLimits: [],
       clients: [],
       audit: [],
@@ -411,6 +417,9 @@ async function readDb() {
   db.customerBenefits ||= [];
   db.customerEmailVerificationTokens ||= [];
   db.customerCounters ||= {};
+  db.masterClients ||= [];
+  db.clientLinks ||= [];
+  db.clientLinkSuggestions ||= [];
   db.portalRateLimits ||= [];
   db.clients ||= [];
   db.audit ||= [];
@@ -451,6 +460,9 @@ async function readDb() {
     changed = true;
   }
   if (normalizeFrpRecords(db)) {
+    changed = true;
+  }
+  if (normalizeMasterClientRecords(db)) {
     changed = true;
   }
   for (const ticket of db.tickets) {
@@ -496,6 +508,7 @@ function publicClient(client, db = { users: [] }) {
   const creator = db.users.find((candidate) => candidate.id === client.createdBy);
   return {
     id: client.id,
+    masterClientId: client.masterClientId || "",
     name: client.name,
     whatsapp: client.whatsapp || "",
     country: client.country,
@@ -514,10 +527,11 @@ function customerEmailIsVerified(client) {
   return ["EMAIL_VERIFICADO", "VERIFICADO", "VIP", "EMPRESA"].includes(normalizeCustomerStatus(client?.status));
 }
 
-function defaultCustomerBenefit(clientId) {
+function defaultCustomerBenefit(clientId, masterClientId = "") {
   return {
     id: crypto.randomUUID(),
     clientId,
+    masterClientId,
     quantityDiscountEnabled: true,
     monthlyDiscountEnabled: true,
     goalDiscountEnabled: false,
@@ -530,11 +544,19 @@ function defaultCustomerBenefit(clientId) {
   };
 }
 
-function customerBenefitFor(db, clientId) {
-  let benefit = db.customerBenefits.find((candidate) => candidate.clientId === clientId);
+function customerBenefitFor(db, clientId, masterClientId = "") {
+  const resolvedMasterClientId = masterClientId || masterClientIdForSource(db, "PORTAL_CLIENT", clientId);
+  let benefit = resolvedMasterClientId
+    ? db.customerBenefits.find((candidate) => candidate.masterClientId === resolvedMasterClientId && candidate.active !== false)
+    : null;
+  if (!benefit) benefit = db.customerBenefits.find((candidate) => candidate.clientId === clientId);
   if (!benefit) {
-    benefit = defaultCustomerBenefit(clientId);
+    benefit = defaultCustomerBenefit(clientId, resolvedMasterClientId);
     db.customerBenefits.push(benefit);
+  }
+  if (resolvedMasterClientId && !benefit.masterClientId) {
+    benefit.masterClientId = resolvedMasterClientId;
+    benefit.updatedAt = nowIso();
   }
   benefit.quantityDiscountEnabled = benefit.quantityDiscountEnabled !== false;
   benefit.monthlyDiscountEnabled = benefit.monthlyDiscountEnabled !== false;
@@ -580,10 +602,18 @@ function ensureCustomerDevice(db, req) {
   return { token, device };
 }
 
-function customerMonthlyUsage(db, clientId, value = new Date()) {
+function customerMonthlyUsage(db, clientId, value = new Date(), masterClientId = "") {
   const stamp = limaDateStamp(value).slice(0, 6);
+  const resolvedMasterClientId = masterClientId || masterClientIdForSource(db, "PORTAL_CLIENT", clientId);
+  const linkedClientIds = resolvedMasterClientId
+    ? new Set(sourceIdsForMaster(db, "PORTAL_CLIENT", resolvedMasterClientId).concat(clientId))
+    : new Set([clientId]);
   return db.customerOrderItems.filter((item) => {
-    if (item.clientId !== clientId) return false;
+    if (resolvedMasterClientId) {
+      if (item.masterClientId !== resolvedMasterClientId && !linkedClientIds.has(item.clientId)) return false;
+    } else if (item.clientId !== clientId) {
+      return false;
+    }
     const job = db.frpJobs.find((candidate) => candidate.id === item.frpJobId);
     const done = item.status === "FINALIZADO" || job?.status === "FINALIZADO";
     if (!done) return false;
@@ -601,7 +631,7 @@ function customerCanUseBenefits(context, benefit) {
   return true;
 }
 
-function portalFrpPriceSuggestion(db, clientId, quantity, canUseBenefits, benefit) {
+function portalFrpPriceSuggestion(db, clientId, quantity, canUseBenefits, benefit, masterClientId = "") {
   const safeQuantity = Math.max(1, Math.min(50, Number.parseInt(quantity, 10) || 1));
   const baseUnitPrice = 25;
   if (!canUseBenefits) {
@@ -610,12 +640,12 @@ function portalFrpPriceSuggestion(db, clientId, quantity, canUseBenefits, benefi
       unitPrice: baseUnitPrice,
       label: "Precio base",
       total: moneyNumber(baseUnitPrice * safeQuantity),
-      monthlyUsage: customerMonthlyUsage(db, clientId),
+      monthlyUsage: customerMonthlyUsage(db, clientId, new Date(), masterClientId || benefit?.masterClientId || ""),
       discountLocked: true,
       nextMonthlyTier: frpMonthlyTiers.at(-1),
     };
   }
-  const monthlyUsage = customerMonthlyUsage(db, clientId);
+  const monthlyUsage = customerMonthlyUsage(db, clientId, new Date(), masterClientId || benefit?.masterClientId || "");
   const quantityTier = benefit.quantityDiscountEnabled ? frpTierForQuantity(safeQuantity) : { unitPrice: baseUnitPrice, label: "Precio base", minQty: 1 };
   const monthlyTier = benefit.monthlyDiscountEnabled ? frpTierForMonthlyUsage(monthlyUsage) : null;
   const goalTier = benefit.goalDiscountEnabled && benefit.monthlyGoal > 0 && monthlyUsage >= benefit.monthlyGoal
@@ -643,6 +673,7 @@ function publicCustomerClient(client) {
   if (!client) return null;
   return {
     id: client.id,
+    masterClientId: client.masterClientId || "",
     name: client.name,
     whatsapp: client.whatsapp,
     country: client.country,
@@ -670,6 +701,7 @@ function publicCustomerUser(user) {
 function publicCustomerBenefit(benefit, canUseBenefits) {
   if (!benefit) return null;
   return {
+    masterClientId: benefit.masterClientId || "",
     quantityDiscountEnabled: Boolean(benefit.quantityDiscountEnabled),
     monthlyDiscountEnabled: Boolean(benefit.monthlyDiscountEnabled),
     goalDiscountEnabled: Boolean(benefit.goalDiscountEnabled),
@@ -749,9 +781,9 @@ function publicCustomerState(db, context) {
   const client = context?.client || null;
   const user = context?.user || null;
   const device = context?.device || null;
-  const benefit = client ? customerBenefitFor(db, client.id) : null;
+  const benefit = client ? customerBenefitFor(db, client.id, client.masterClientId) : null;
   const canUseBenefits = customerCanUseBenefits(context, benefit);
-  const monthlyUsage = client ? customerMonthlyUsage(db, client.id) : 0;
+  const monthlyUsage = client ? customerMonthlyUsage(db, client.id, new Date(), client.masterClientId || benefit?.masterClientId || "") : 0;
   const nextMonthlyTier = client ? [...frpMonthlyTiers].reverse().find((tier) => monthlyUsage < tier.minJobs) || null : null;
   const orders = client ? publicCustomerOrdersForClient(db, client.id) : [];
   return {
@@ -951,9 +983,14 @@ function frpActiveJobForUser(db, user) {
 
 function frpMonthlyUsage(db, clientId, value = new Date()) {
   const period = limaMonthStamp(value);
+  const masterClientId = masterClientIdForSource(db, "INTERNAL_CLIENT", clientId);
+  const linkedClientIds = masterClientId
+    ? new Set(sourceIdsForMaster(db, "INTERNAL_CLIENT", masterClientId).concat(clientId))
+    : new Set([clientId]);
   return db.frpJobs.filter((job) => {
     const order = db.frpOrders.find((candidate) => candidate.id === job.orderId);
-    return order?.clientId === clientId && job.status === "FINALIZADO" && limaMonthStamp(job.doneAt || job.updatedAt || job.createdAt) === period;
+    const sameMaster = masterClientId && order?.masterClientId === masterClientId;
+    return (sameMaster || linkedClientIds.has(order?.clientId)) && job.status === "FINALIZADO" && limaMonthStamp(job.doneAt || job.updatedAt || job.createdAt) === period;
   }).length;
 }
 
@@ -1080,6 +1117,523 @@ function audit(db, actorId, action, targetId, detail = {}) {
     createdAt: nowIso(),
   });
   db.audit = db.audit.slice(0, 200);
+}
+
+function normalizeMasterClientStatus(value) {
+  const status = cleanText(value, 40).toUpperCase();
+  return masterClientStatuses.has(status) ? status : "ACTIVO";
+}
+
+function sourceRecordForLink(db, sourceType, sourceId) {
+  if (sourceType === "INTERNAL_CLIENT") return db.clients.find((client) => client.id === sourceId) || null;
+  if (sourceType === "PORTAL_CLIENT") return db.customerClients.find((client) => client.id === sourceId) || null;
+  return null;
+}
+
+function sourceClientName(source) {
+  return cleanText(source?.name || source?.clientName || "Cliente", 90);
+}
+
+function sourceClientWhatsapp(source) {
+  return normalizePhone(source?.whatsapp || source?.clientWhatsapp || "");
+}
+
+function sourceClientCountry(source) {
+  return cleanText(source?.country || "", 40);
+}
+
+function sourceClientEmail(sourceType, source, db) {
+  if (sourceType !== "PORTAL_CLIENT") return "";
+  const user = db.customerUsers.find((candidate) => candidate.clientId === source?.id && candidate.active !== false);
+  return normalizeEmail(source?.primaryEmail || user?.email || "");
+}
+
+function countryCompatible(a, b) {
+  const left = normalizeForMatch(a);
+  const right = normalizeForMatch(b);
+  return Boolean(left && right && left === right);
+}
+
+function activeClientLinks(db) {
+  return (db.clientLinks || []).filter((link) => link.active !== false && !link.unlinkedAt);
+}
+
+function activeClientLinkForSource(db, sourceType, sourceId) {
+  return activeClientLinks(db).find((link) => link.sourceType === sourceType && link.sourceId === sourceId) || null;
+}
+
+function masterClientForSource(db, sourceType, sourceId) {
+  const link = activeClientLinkForSource(db, sourceType, sourceId);
+  return link ? db.masterClients.find((master) => master.id === link.masterClientId && normalizeMasterClientStatus(master.status) !== "MERGED") || null : null;
+}
+
+function masterClientIdForSource(db, sourceType, sourceId) {
+  return masterClientForSource(db, sourceType, sourceId)?.id || "";
+}
+
+function sourceIdsForMaster(db, sourceType, masterClientId) {
+  return activeClientLinks(db)
+    .filter((link) => link.masterClientId === masterClientId && link.sourceType === sourceType)
+    .map((link) => link.sourceId);
+}
+
+function linkedPortalClientsForMaster(db, masterClientId) {
+  const ids = new Set(sourceIdsForMaster(db, "PORTAL_CLIENT", masterClientId));
+  return db.customerClients.filter((client) => ids.has(client.id));
+}
+
+function masterHasUnverifiedPortal(db, masterClientId) {
+  return linkedPortalClientsForMaster(db, masterClientId).some((client) => !customerEmailIsVerified(client));
+}
+
+function mastersByWhatsapp(db, whatsapp) {
+  const targetPhone = phoneKey(whatsapp);
+  if (!targetPhone) return [];
+  return db.masterClients.filter((master) => {
+    if (["MERGED", "BLOQUEADO"].includes(normalizeMasterClientStatus(master.status))) return false;
+    return phoneKey(master.primaryWhatsapp) === targetPhone;
+  });
+}
+
+function mastersByNameCountry(db, name, country) {
+  const nameKey = normalizeForMatch(name);
+  const countryKey = normalizeForMatch(country);
+  if (!nameKey || !countryKey) return [];
+  return db.masterClients.filter((master) => {
+    if (["MERGED", "BLOQUEADO"].includes(normalizeMasterClientStatus(master.status))) return false;
+    return normalizeForMatch(master.displayName) === nameKey && normalizeForMatch(master.country) === countryKey;
+  });
+}
+
+function publicMasterClient(master) {
+  return {
+    id: master.id,
+    displayName: master.displayName,
+    primaryWhatsapp: master.primaryWhatsapp || "",
+    country: master.country || "",
+    primaryEmail: master.primaryEmail || "",
+    status: normalizeMasterClientStatus(master.status),
+    createdAt: master.createdAt,
+    updatedAt: master.updatedAt,
+  };
+}
+
+function publicClientLink(link, db) {
+  const source = sourceRecordForLink(db, link.sourceType, link.sourceId);
+  const master = db.masterClients.find((candidate) => candidate.id === link.masterClientId);
+  return {
+    id: link.id,
+    masterClientId: link.masterClientId,
+    masterName: master?.displayName || "",
+    sourceType: link.sourceType,
+    sourceId: link.sourceId,
+    sourceName: sourceClientName(source),
+    sourceWhatsapp: sourceClientWhatsapp(source),
+    sourceCountry: sourceClientCountry(source),
+    confidence: link.confidence || "",
+    active: link.active !== false && !link.unlinkedAt,
+    createdAt: link.createdAt,
+    updatedAt: link.updatedAt,
+  };
+}
+
+function publicClientLinkSuggestion(suggestion, db) {
+  const source = sourceRecordForLink(db, suggestion.sourceType, suggestion.sourceId);
+  const master = db.masterClients.find((candidate) => candidate.id === suggestion.candidateMasterClientId);
+  return {
+    id: suggestion.id,
+    status: suggestion.status,
+    sourceType: suggestion.sourceType,
+    sourceId: suggestion.sourceId,
+    sourceName: sourceClientName(source),
+    sourceWhatsapp: sourceClientWhatsapp(source),
+    sourceCountry: sourceClientCountry(source),
+    candidateMasterClientId: suggestion.candidateMasterClientId || "",
+    candidateName: master?.displayName || "",
+    candidateWhatsapp: master?.primaryWhatsapp || "",
+    candidateCountry: master?.country || "",
+    reason: suggestion.reason || "",
+    confidence: suggestion.confidence || "",
+    createdAt: suggestion.createdAt,
+    updatedAt: suggestion.updatedAt,
+  };
+}
+
+function publicClientMasterState(db) {
+  return {
+    masters: db.masterClients.slice(0, 300).map(publicMasterClient),
+    links: activeClientLinks(db).slice(0, 300).map((link) => publicClientLink(link, db)),
+    suggestions: db.clientLinkSuggestions
+      .filter((suggestion) => ["PENDING", "BLOCKED"].includes(suggestion.status))
+      .slice(0, 100)
+      .map((suggestion) => publicClientLinkSuggestion(suggestion, db)),
+  };
+}
+
+function createMasterClient(db, sourceType, source, actorId, detail = {}) {
+  const status = sourceType === "PORTAL_CLIENT" && !customerEmailIsVerified(source) ? "PENDIENTE_VERIFICACION" : "ACTIVO";
+  const master = {
+    id: crypto.randomUUID(),
+    displayName: sourceClientName(source),
+    primaryWhatsapp: sourceClientWhatsapp(source),
+    country: sourceClientCountry(source),
+    primaryEmail: sourceClientEmail(sourceType, source, db),
+    status,
+    source: sourceType,
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
+  };
+  db.masterClients.unshift(master);
+  audit(db, actorId, "CLIENT_MASTER_CREATED", master.id, {
+    sourceType,
+    sourceId: source?.id || "",
+    status,
+    ...detail,
+  });
+  return master;
+}
+
+function updateMasterFromSource(db, master, sourceType, source) {
+  let changed = false;
+  const whatsapp = sourceClientWhatsapp(source);
+  const country = sourceClientCountry(source);
+  const email = sourceClientEmail(sourceType, source, db);
+  if (!master.displayName && sourceClientName(source)) {
+    master.displayName = sourceClientName(source);
+    changed = true;
+  }
+  if (!phoneKey(master.primaryWhatsapp) && whatsapp) {
+    master.primaryWhatsapp = whatsapp;
+    changed = true;
+  }
+  if (!master.country && country) {
+    master.country = country;
+    changed = true;
+  }
+  if (!master.primaryEmail && email) {
+    master.primaryEmail = email;
+    changed = true;
+  }
+  if (sourceType === "PORTAL_CLIENT" && customerEmailIsVerified(source) && normalizeMasterClientStatus(master.status) === "PENDIENTE_VERIFICACION") {
+    master.status = "ACTIVO";
+    changed = true;
+  }
+  if (changed) master.updatedAt = nowIso();
+  return changed;
+}
+
+function moveCustomerBenefitsToMaster(db, clientId, masterClientId) {
+  let changed = false;
+  const existingMasterBenefit = db.customerBenefits.find((benefit) => benefit.masterClientId === masterClientId && benefit.active !== false);
+  const clientBenefits = db.customerBenefits.filter((benefit) => benefit.clientId === clientId);
+  if (!existingMasterBenefit && !clientBenefits.length) {
+    db.customerBenefits.push(defaultCustomerBenefit(clientId, masterClientId));
+    return true;
+  }
+  for (const benefit of clientBenefits) {
+    if (!benefit.masterClientId) {
+      benefit.masterClientId = masterClientId;
+      benefit.updatedAt = nowIso();
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+function markSuggestionsForSource(db, sourceType, sourceId, status, actorId, reason = "") {
+  let changed = false;
+  for (const suggestion of db.clientLinkSuggestions) {
+    if (suggestion.sourceType !== sourceType || suggestion.sourceId !== sourceId) continue;
+    if (!["PENDING", "BLOCKED"].includes(suggestion.status)) continue;
+    suggestion.status = status;
+    suggestion.reviewedBy = actorId || "";
+    suggestion.reviewedAt = nowIso();
+    suggestion.updatedAt = suggestion.reviewedAt;
+    if (reason) suggestion.reviewReason = reason;
+    changed = true;
+  }
+  return changed;
+}
+
+function maybeMergeOrphanMaster(db, oldMasterId, newMasterId, actorId, reason = "reassigned") {
+  if (!oldMasterId || oldMasterId === newMasterId) return false;
+  const hasActiveLinks = activeClientLinks(db).some((link) => link.masterClientId === oldMasterId);
+  if (hasActiveLinks) return false;
+  const master = db.masterClients.find((candidate) => candidate.id === oldMasterId);
+  if (!master || normalizeMasterClientStatus(master.status) === "MERGED") return false;
+  master.status = "MERGED";
+  master.mergedIntoMasterClientId = newMasterId;
+  master.mergedAt = nowIso();
+  master.updatedAt = master.mergedAt;
+  for (const benefit of db.customerBenefits) {
+    if (benefit.masterClientId === oldMasterId) {
+      benefit.masterClientId = newMasterId;
+      benefit.updatedAt = nowIso();
+    }
+  }
+  audit(db, actorId, "CLIENT_MASTER_MERGED", oldMasterId, { into: newMasterId, reason });
+  return true;
+}
+
+function linkSourceToMaster(db, sourceType, source, masterClientId, actorId, detail = {}) {
+  if (!clientLinkSourceTypes.has(sourceType) || !source?.id || !masterClientId) return false;
+  const master = db.masterClients.find((candidate) => candidate.id === masterClientId);
+  if (!master || ["MERGED", "BLOQUEADO"].includes(normalizeMasterClientStatus(master.status))) return false;
+  let changed = false;
+  const current = activeClientLinkForSource(db, sourceType, source.id);
+  if (current?.masterClientId === masterClientId) {
+    let sameMasterChanged = false;
+    if (source.masterClientId !== masterClientId) {
+      source.masterClientId = masterClientId;
+      source.updatedAt = nowIso();
+      sameMasterChanged = true;
+    }
+    sameMasterChanged = updateMasterFromSource(db, master, sourceType, source) || sameMasterChanged;
+    if (sourceType === "PORTAL_CLIENT") {
+      sameMasterChanged = moveCustomerBenefitsToMaster(db, source.id, masterClientId) || sameMasterChanged;
+    }
+    return sameMasterChanged;
+  }
+  if (current) {
+    current.active = false;
+    current.unlinkedAt = nowIso();
+    current.unlinkedBy = actorId || "";
+    current.updatedAt = current.unlinkedAt;
+    audit(db, actorId, "CLIENT_MASTER_UNLINKED", current.id, {
+      sourceType,
+      sourceId: source.id,
+      from: current.masterClientId,
+      reason: detail.reason || "reassigned",
+    });
+    changed = true;
+    maybeMergeOrphanMaster(db, current.masterClientId, masterClientId, actorId, detail.reason || "reassigned");
+  }
+  const link = {
+    id: crypto.randomUUID(),
+    masterClientId,
+    sourceType,
+    sourceId: source.id,
+    confidence: detail.confidence || "EXACT_WHATSAPP",
+    signals: detail.signals || {},
+    active: true,
+    createdBy: actorId || "system",
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
+  };
+  db.clientLinks.unshift(link);
+  source.masterClientId = masterClientId;
+  source.updatedAt = nowIso();
+  updateMasterFromSource(db, master, sourceType, source);
+  if (sourceType === "PORTAL_CLIENT") moveCustomerBenefitsToMaster(db, source.id, masterClientId);
+  markSuggestionsForSource(db, sourceType, source.id, "LINKED", actorId, detail.reason || "linked");
+  audit(db, actorId, "CLIENT_MASTER_LINKED", masterClientId, {
+    linkId: link.id,
+    sourceType,
+    sourceId: source.id,
+    confidence: link.confidence,
+    reason: detail.reason || "",
+  });
+  return true;
+}
+
+function ensureIsolatedMasterForSource(db, sourceType, source, actorId, reason = "isolated") {
+  const currentMaster = masterClientForSource(db, sourceType, source.id);
+  if (currentMaster) {
+    updateMasterFromSource(db, currentMaster, sourceType, source);
+    return currentMaster;
+  }
+  const master = createMasterClient(db, sourceType, source, actorId, { reason });
+  linkSourceToMaster(db, sourceType, source, master.id, actorId, { confidence: "SOURCE_RECORD", reason });
+  return master;
+}
+
+function ensureClientLinkSuggestion(db, sourceType, source, candidateMasterClientId, status, reason, confidence, actorId, signals = {}) {
+  if (!source?.id || !clientLinkSourceTypes.has(sourceType)) return false;
+  const normalizedStatus = clientLinkSuggestionStatuses.has(status) ? status : "PENDING";
+  const existing = db.clientLinkSuggestions.find((suggestion) => {
+    return suggestion.sourceType === sourceType
+      && suggestion.sourceId === source.id
+      && suggestion.candidateMasterClientId === (candidateMasterClientId || "")
+      && suggestion.reason === reason
+      && ["PENDING", "BLOCKED"].includes(suggestion.status);
+  });
+  if (existing) return false;
+  const suggestion = {
+    id: crypto.randomUUID(),
+    sourceType,
+    sourceId: source.id,
+    candidateMasterClientId: candidateMasterClientId || "",
+    status: normalizedStatus,
+    reason,
+    confidence,
+    signals,
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
+  };
+  db.clientLinkSuggestions.unshift(suggestion);
+  audit(db, actorId, normalizedStatus === "BLOCKED" ? "CLIENT_MASTER_LINK_BLOCKED" : "CLIENT_MASTER_LINK_SUGGESTED", suggestion.id, {
+    sourceType,
+    sourceId: source.id,
+    candidateMasterClientId: candidateMasterClientId || "",
+    reason,
+    confidence,
+  });
+  return true;
+}
+
+function compatibleExactMastersForSource(db, source, excludeMasterId = "") {
+  const whatsapp = sourceClientWhatsapp(source);
+  const country = sourceClientCountry(source);
+  return mastersByWhatsapp(db, whatsapp).filter((master) => {
+    if (excludeMasterId && master.id === excludeMasterId) return false;
+    return countryCompatible(master.country, country);
+  });
+}
+
+function reconcileInternalClientLink(db, client, actorId = null) {
+  if (!client?.id) return false;
+  let changed = false;
+  const currentMaster = masterClientForSource(db, "INTERNAL_CLIENT", client.id);
+  if (currentMaster) changed = updateMasterFromSource(db, currentMaster, "INTERNAL_CLIENT", client) || changed;
+  const whatsapp = sourceClientWhatsapp(client);
+  const country = sourceClientCountry(client);
+  if (whatsapp) {
+    const compatible = compatibleExactMastersForSource(db, client, currentMaster?.id || "");
+    const blocked = mastersByWhatsapp(db, whatsapp).filter((master) => !countryCompatible(master.country, country));
+    if (blocked.length) {
+      ensureIsolatedMasterForSource(db, "INTERNAL_CLIENT", client, actorId, "whatsapp_country_conflict");
+      if (!currentMaster) changed = true;
+      for (const master of blocked) {
+        changed = ensureClientLinkSuggestion(db, "INTERNAL_CLIENT", client, master.id, "BLOCKED", "PAIS_CONFLICTIVO", "EXACT_WHATSAPP", actorId, {
+          whatsapp,
+          sourceCountry: country,
+          masterCountry: master.country,
+        }) || changed;
+      }
+      return changed;
+    }
+    const safeCompatible = compatible.filter((master) => !masterHasUnverifiedPortal(db, master.id));
+    if (safeCompatible.length === 1) {
+      return linkSourceToMaster(db, "INTERNAL_CLIENT", client, safeCompatible[0].id, actorId, {
+        confidence: "EXACT_WHATSAPP",
+        reason: "internal_exact_whatsapp",
+        signals: { whatsapp, country },
+      }) || changed;
+    }
+    if (compatible.length) {
+      ensureIsolatedMasterForSource(db, "INTERNAL_CLIENT", client, actorId, "exact_whatsapp_review");
+      if (!currentMaster) changed = true;
+      for (const master of compatible) {
+        changed = ensureClientLinkSuggestion(db, "INTERNAL_CLIENT", client, master.id, "PENDING", masterHasUnverifiedPortal(db, master.id) ? "PORTAL_EMAIL_NO_VERIFICADO" : "MULTIPLES_COINCIDENCIAS", "EXACT_WHATSAPP", actorId, { whatsapp, country }) || changed;
+      }
+      return changed;
+    }
+  }
+  const own = ensureIsolatedMasterForSource(db, "INTERNAL_CLIENT", client, actorId, "internal_client_created");
+  if (!currentMaster) changed = true;
+  const weakMatches = mastersByNameCountry(db, client.name, client.country).filter((master) => master.id !== own.id);
+  for (const master of weakMatches) {
+    changed = ensureClientLinkSuggestion(db, "INTERNAL_CLIENT", client, master.id, "PENDING", "NOMBRE_PAIS", "WEAK_NAME_COUNTRY", actorId, {
+      sourceName: client.name,
+      sourceCountry: client.country,
+    }) || changed;
+  }
+  return changed;
+}
+
+function reconcilePortalClientLink(db, client, actorId = null) {
+  if (!client?.id) return false;
+  let changed = false;
+  const currentMaster = masterClientForSource(db, "PORTAL_CLIENT", client.id);
+  if (currentMaster) changed = updateMasterFromSource(db, currentMaster, "PORTAL_CLIENT", client) || changed;
+  const ownMaster = currentMaster || ensureIsolatedMasterForSource(db, "PORTAL_CLIENT", client, actorId, "portal_client_created");
+  if (!currentMaster) changed = true;
+  const whatsapp = sourceClientWhatsapp(client);
+  const country = sourceClientCountry(client);
+  if (!whatsapp || normalizeCustomerStatus(client.status) === "BLOQUEADO") return changed;
+  const compatible = compatibleExactMastersForSource(db, client, ownMaster.id);
+  const blocked = mastersByWhatsapp(db, whatsapp).filter((master) => master.id !== ownMaster.id && !countryCompatible(master.country, country));
+  if (blocked.length) {
+    for (const master of blocked) {
+      changed = ensureClientLinkSuggestion(db, "PORTAL_CLIENT", client, master.id, "BLOCKED", "PAIS_CONFLICTIVO", "EXACT_WHATSAPP", actorId, {
+        whatsapp,
+        sourceCountry: country,
+        masterCountry: master.country,
+      }) || changed;
+    }
+    return changed;
+  }
+  if (!customerEmailIsVerified(client)) {
+    for (const master of compatible) {
+      changed = ensureClientLinkSuggestion(db, "PORTAL_CLIENT", client, master.id, "PENDING", "EMAIL_NO_VERIFICADO", "EXACT_WHATSAPP", actorId, { whatsapp, country }) || changed;
+    }
+    return changed;
+  }
+  if (compatible.length === 1) {
+    return linkSourceToMaster(db, "PORTAL_CLIENT", client, compatible[0].id, actorId, {
+      confidence: "EXACT_WHATSAPP_VERIFIED_EMAIL",
+      reason: "portal_verified_exact_whatsapp",
+      signals: { whatsapp, country, emailVerified: true },
+    }) || changed;
+  }
+  if (compatible.length > 1) {
+    for (const master of compatible) {
+      changed = ensureClientLinkSuggestion(db, "PORTAL_CLIENT", client, master.id, "PENDING", "MULTIPLES_COINCIDENCIAS", "EXACT_WHATSAPP", actorId, { whatsapp, country }) || changed;
+    }
+    return changed;
+  }
+  const weakMatches = mastersByNameCountry(db, client.name, client.country).filter((master) => master.id !== ownMaster.id);
+  for (const master of weakMatches) {
+    changed = ensureClientLinkSuggestion(db, "PORTAL_CLIENT", client, master.id, "PENDING", "NOMBRE_PAIS", "WEAK_NAME_COUNTRY", actorId, {
+      sourceName: client.name,
+      sourceCountry: client.country,
+    }) || changed;
+  }
+  return changed;
+}
+
+function normalizeMasterClientRecords(db) {
+  db.masterClients ||= [];
+  db.clientLinks ||= [];
+  db.clientLinkSuggestions ||= [];
+  let changed = false;
+  for (const master of db.masterClients) {
+    const status = normalizeMasterClientStatus(master.status);
+    if (master.status !== status) {
+      master.status = status;
+      changed = true;
+    }
+    master.displayName = cleanText(master.displayName || master.name || "Cliente", 90);
+    master.primaryWhatsapp = normalizePhone(master.primaryWhatsapp || "");
+    master.country = cleanText(master.country || "", 40);
+    master.primaryEmail = normalizeEmail(master.primaryEmail || "");
+    master.createdAt ||= nowIso();
+    master.updatedAt ||= master.createdAt;
+  }
+  for (const link of db.clientLinks) {
+    if (!clientLinkSourceTypes.has(link.sourceType)) {
+      link.active = false;
+      changed = true;
+    }
+    link.active = link.active !== false && !link.unlinkedAt;
+    link.createdAt ||= nowIso();
+    link.updatedAt ||= link.createdAt;
+  }
+  for (const suggestion of db.clientLinkSuggestions) {
+    if (!clientLinkSuggestionStatuses.has(suggestion.status)) {
+      suggestion.status = "PENDING";
+      changed = true;
+    }
+    suggestion.createdAt ||= nowIso();
+    suggestion.updatedAt ||= suggestion.createdAt;
+  }
+  for (const client of db.clients) {
+    changed = reconcileInternalClientLink(db, client, null) || changed;
+  }
+  for (const client of db.customerClients) {
+    changed = reconcilePortalClientLink(db, client, null) || changed;
+  }
+  return changed;
 }
 
 async function hashPassword(password) {
@@ -1675,6 +2229,7 @@ function createPortalInternalClient(db, customerClient) {
     name: cleanText(customerClient.name),
     whatsapp: normalizePhone(customerClient.whatsapp),
     country: cleanText(customerClient.country, 40),
+    masterClientId: customerClient.masterClientId || "",
     workChannel: frpWorkChannel,
     createdBy: "portal",
     createdAt: nowIso(),
@@ -1687,6 +2242,14 @@ function createPortalInternalClient(db, customerClient) {
     country: internalClient.country,
     workChannel: internalClient.workChannel,
   });
+  if (customerClient.masterClientId) {
+    linkSourceToMaster(db, "INTERNAL_CLIENT", internalClient, customerClient.masterClientId, null, {
+      confidence: "PORTAL_ORDER_BRIDGE",
+      reason: "portal_created_internal_client",
+    });
+  } else {
+    reconcileInternalClientLink(db, internalClient, null);
+  }
   return internalClient;
 }
 
@@ -1694,10 +2257,17 @@ function createFrpOrderFromPortal(db, customerClient, customerOrder, customerIte
   const payment = paymentMethods.find((candidate) => candidate.code === customerOrder.paymentMethod);
   const internalClient = findClientByIdentity(db, customerClient.name, customerClient.country, customerClient.whatsapp, frpWorkChannel)
     || createPortalInternalClient(db, customerClient);
+  if (customerClient.masterClientId) {
+    linkSourceToMaster(db, "INTERNAL_CLIENT", internalClient, customerClient.masterClientId, null, {
+      confidence: "PORTAL_ORDER_BRIDGE",
+      reason: "portal_frp_order",
+    });
+  }
   const order = {
     id: crypto.randomUUID(),
     code: nextFrpOrderCode(db),
     clientId: internalClient.id,
+    masterClientId: internalClient.masterClientId || customerClient.masterClientId || "",
     clientName: internalClient.name,
     clientWhatsapp: internalClient.whatsapp,
     country: internalClient.country,
@@ -2092,6 +2662,7 @@ function createClient(db, user, name, country, whatsapp = "", workChannelOverrid
   };
   db.clients.unshift(client);
   audit(db, user.id, "CLIENT_CREATED", client.id, { name: client.name, country: client.country, workChannel: client.workChannel, automatic: true });
+  reconcileInternalClientLink(db, client, user.id);
   return client;
 }
 
@@ -2113,6 +2684,7 @@ function completeClientFromContext(db, user, client, whatsapp = "", workChannelO
       whatsapp: client.whatsapp || "",
       workChannel: client.workChannel || "",
     });
+    reconcileInternalClientLink(db, client, user.id);
   }
 }
 
@@ -2189,6 +2761,7 @@ async function handleApi(req, res, pathname) {
     }
     client.updatedAt = nowIso();
     customerUser.updatedAt = nowIso();
+    reconcilePortalClientLink(db, client, customerUser.id);
     audit(db, customerUser.id, "PORTAL_EMAIL_VERIFIED", client.id, { email: customerUser.email });
     await writeDb(db);
     return sendJson(res, 200, { message: "Correo verificado. Ya puedes crear solicitudes." });
@@ -2263,10 +2836,11 @@ async function handleApi(req, res, pathname) {
       createdAt: nowIso(),
       updatedAt: nowIso(),
     };
-    const benefit = defaultCustomerBenefit(client.id);
     authorizeCustomerDevice(device, client.id);
     db.customerClients.unshift(client);
     db.customerUsers.unshift(customerUser);
+    reconcilePortalClientLink(db, client, null);
+    const benefit = defaultCustomerBenefit(client.id, client.masterClientId || "");
     db.customerBenefits.push(benefit);
     const token = crypto.randomBytes(32).toString("base64url");
     db.customerSessions.push({
@@ -2507,12 +3081,14 @@ async function handleApi(req, res, pathname) {
     const payment = resolvePortalPaymentForClient(requestedPaymentCode, context.client);
     if (!service) return sendJson(res, 503, { error: "Xiaomi FRP no esta disponible en el portal." });
     if (!payment) return sendJson(res, 400, { error: "Metodo de pago invalido para tu pais." });
-    const benefit = customerBenefitFor(db, context.client.id);
+    reconcilePortalClientLink(db, context.client, context.user.id);
+    const benefit = customerBenefitFor(db, context.client.id, context.client.masterClientId || "");
     const canUseBenefits = customerCanUseBenefits(context, benefit);
-    const suggestion = portalFrpPriceSuggestion(db, context.client.id, quantity, canUseBenefits, benefit);
+    const suggestion = portalFrpPriceSuggestion(db, context.client.id, quantity, canUseBenefits, benefit, context.client.masterClientId || benefit.masterClientId || "");
     const request = {
       id: crypto.randomUUID(),
       clientId: context.client.id,
+      masterClientId: context.client.masterClientId || benefit.masterClientId || "",
       userId: context.user.id,
       serviceCode: service.code,
       serviceName: service.name,
@@ -2527,6 +3103,7 @@ async function handleApi(req, res, pathname) {
       accessCode: crypto.randomBytes(8).toString("base64url"),
       requestId: request.id,
       clientId: context.client.id,
+      masterClientId: context.client.masterClientId || benefit.masterClientId || "",
       userId: context.user.id,
       serviceCode: service.code,
       internalServiceCode: service.internalServiceCode,
@@ -2559,6 +3136,7 @@ async function handleApi(req, res, pathname) {
         requestId: request.id,
         orderId: order.id,
         clientId: context.client.id,
+        masterClientId: context.client.masterClientId || benefit.masterClientId || "",
         sequence: index + 1,
         model: cleanText(itemInput.model || input.model || "", 80),
         imei: cleanText(itemInput.imei || "", 40),
@@ -2695,6 +3273,7 @@ async function handleApi(req, res, pathname) {
       presence: publicPresence(db),
       deviceSecurity: publicDeviceSecurity(db, user),
       pricingConfig: publicPricingConfigForUser(db.pricingConfig, db, user),
+      clientMasterLinks: user.role === "ADMIN" ? publicClientMasterState(db) : { masters: [], links: [], suggestions: [] },
       roles: user.role === "ADMIN" ? Array.from(roles).map((role) => ({ value: role, label: roleLabels[role] })) : [],
       catalog: { services: catalogServicesForUser(user), paymentMethods, workChannels, ticketStatuses, countries: countries.map(([, country]) => country) },
       frp: publicFrpState(db, user),
@@ -3075,6 +3654,116 @@ async function handleApi(req, res, pathname) {
     return sendNoContent(res);
   }
 
+  if (req.method === "GET" && pathname === "/api/client-masters") {
+    const db = await readDb();
+    if (!(await requireAdminWithAudit(user, res, db, "CLIENT_MASTER_READ_DENIED", "client-masters", { route: pathname }))) return;
+    return sendJson(res, 200, { clientMasterLinks: publicClientMasterState(db) });
+  }
+
+  const clientLinkSuggestionMatch = pathname.match(/^\/api\/client-link-suggestions\/([^/]+)$/);
+  if (req.method === "PATCH" && clientLinkSuggestionMatch) {
+    const db = await readDb();
+    if (!(await requireAdminWithAudit(user, res, db, "CLIENT_MASTER_REVIEW_DENIED", clientLinkSuggestionMatch[1], { route: pathname }))) return;
+    const input = await parseJson(req);
+    const action = cleanText(input.action, 20).toLowerCase();
+    const suggestion = db.clientLinkSuggestions.find((candidate) => candidate.id === clientLinkSuggestionMatch[1]);
+    if (!suggestion) return sendJson(res, 404, { error: "Sugerencia no encontrada." });
+    if (!["PENDING", "BLOCKED"].includes(suggestion.status)) {
+      return sendJson(res, 409, { error: "Esta sugerencia ya fue revisada." });
+    }
+    const source = sourceRecordForLink(db, suggestion.sourceType, suggestion.sourceId);
+    if (!source) return sendJson(res, 404, { error: "Cliente origen no encontrado." });
+    if (action === "approve") {
+      if (suggestion.status === "BLOCKED") {
+        audit(db, user.id, "CLIENT_MASTER_BLOCKED_APPROVAL_DENIED", suggestion.id, { reason: suggestion.reason });
+        await writeDb(db);
+        return sendJson(res, 409, { error: "Esta coincidencia esta bloqueada por conflicto. No se puede aprobar sin corregir datos." });
+      }
+      const targetMaster = db.masterClients.find((master) => master.id === suggestion.candidateMasterClientId);
+      if (!targetMaster || ["MERGED", "BLOQUEADO"].includes(normalizeMasterClientStatus(targetMaster.status))) {
+        return sendJson(res, 404, { error: "Cliente maestro destino no disponible." });
+      }
+      const sourceCountry = sourceClientCountry(source);
+      if (phoneKey(sourceClientWhatsapp(source)) && phoneKey(targetMaster.primaryWhatsapp) === phoneKey(sourceClientWhatsapp(source)) && !countryCompatible(sourceCountry, targetMaster.country)) {
+        audit(db, user.id, "CLIENT_MASTER_APPROVAL_COUNTRY_CONFLICT", suggestion.id, {
+          sourceCountry,
+          targetCountry: targetMaster.country,
+        });
+        await writeDb(db);
+        return sendJson(res, 409, { error: "Pais conflictivo. Corrige el cliente antes de vincular." });
+      }
+      linkSourceToMaster(db, suggestion.sourceType, source, targetMaster.id, user.id, {
+        confidence: "ADMIN_REVIEW",
+        reason: `suggestion_${suggestion.reason}`,
+      });
+      suggestion.status = "LINKED";
+      suggestion.reviewedBy = user.id;
+      suggestion.reviewedAt = nowIso();
+      suggestion.updatedAt = suggestion.reviewedAt;
+      audit(db, user.id, "CLIENT_MASTER_SUGGESTION_APPROVED", suggestion.id, {
+        sourceType: suggestion.sourceType,
+        sourceId: suggestion.sourceId,
+        masterClientId: targetMaster.id,
+      });
+    } else if (action === "reject") {
+      suggestion.status = "REJECTED";
+      suggestion.reviewedBy = user.id;
+      suggestion.reviewedAt = nowIso();
+      suggestion.updatedAt = suggestion.reviewedAt;
+      audit(db, user.id, "CLIENT_MASTER_SUGGESTION_REJECTED", suggestion.id, {
+        sourceType: suggestion.sourceType,
+        sourceId: suggestion.sourceId,
+        masterClientId: suggestion.candidateMasterClientId || "",
+        reason: cleanText(input.reason, 140),
+      });
+    } else if (action === "block") {
+      suggestion.status = "BLOCKED";
+      suggestion.reviewedBy = user.id;
+      suggestion.reviewedAt = nowIso();
+      suggestion.updatedAt = suggestion.reviewedAt;
+      suggestion.reviewReason = cleanText(input.reason, 140) || "Bloqueado por administrador";
+      audit(db, user.id, "CLIENT_MASTER_SUGGESTION_BLOCKED", suggestion.id, {
+        sourceType: suggestion.sourceType,
+        sourceId: suggestion.sourceId,
+        masterClientId: suggestion.candidateMasterClientId || "",
+        reason: suggestion.reviewReason,
+      });
+    } else {
+      return sendJson(res, 400, { error: "Accion invalida." });
+    }
+    await writeDb(db);
+    return sendJson(res, 200, { clientMasterLinks: publicClientMasterState(db) });
+  }
+
+  const clientLinkMatch = pathname.match(/^\/api\/client-links\/([^/]+)$/);
+  if (req.method === "PATCH" && clientLinkMatch) {
+    const db = await readDb();
+    if (!(await requireAdminWithAudit(user, res, db, "CLIENT_MASTER_UNLINK_DENIED", clientLinkMatch[1], { route: pathname }))) return;
+    const input = await parseJson(req);
+    const action = cleanText(input.action, 20).toLowerCase();
+    if (action !== "unlink") return sendJson(res, 400, { error: "Accion invalida." });
+    const link = db.clientLinks.find((candidate) => candidate.id === clientLinkMatch[1] && candidate.active !== false && !candidate.unlinkedAt);
+    if (!link) return sendJson(res, 404, { error: "Vinculo activo no encontrado." });
+    const source = sourceRecordForLink(db, link.sourceType, link.sourceId);
+    if (!source) return sendJson(res, 404, { error: "Cliente origen no encontrado." });
+    const previousMasterId = link.masterClientId;
+    link.active = false;
+    link.unlinkedBy = user.id;
+    link.unlinkedAt = nowIso();
+    link.updatedAt = link.unlinkedAt;
+    source.masterClientId = "";
+    source.updatedAt = nowIso();
+    const isolated = ensureIsolatedMasterForSource(db, link.sourceType, source, user.id, "admin_unlinked");
+    audit(db, user.id, "CLIENT_MASTER_UNLINKED_BY_ADMIN", link.id, {
+      sourceType: link.sourceType,
+      sourceId: link.sourceId,
+      from: previousMasterId,
+      isolatedMasterClientId: isolated.id,
+    });
+    await writeDb(db);
+    return sendJson(res, 200, { clientMasterLinks: publicClientMasterState(db) });
+  }
+
   if (req.method === "GET" && pathname === "/api/users") {
     const db = await readDb();
     if (!(await requireAdminWithAudit(user, res, db, "USERS_READ_DENIED", "users", { route: pathname }))) return;
@@ -3192,6 +3881,7 @@ async function handleApi(req, res, pathname) {
       id: crypto.randomUUID(),
       code: nextFrpOrderCode(db),
       clientId: client.id,
+      masterClientId: client.masterClientId || masterClientIdForSource(db, "INTERNAL_CLIENT", client.id),
       clientName: client.name,
       clientWhatsapp: client.whatsapp,
       country: client.country,
@@ -3534,6 +4224,7 @@ async function handleApi(req, res, pathname) {
       id: crypto.randomUUID(),
       code: nextTicketCode(db),
       clientId: client.id,
+      masterClientId: client.masterClientId || masterClientIdForSource(db, "INTERNAL_CLIENT", client.id),
       clientName: client.name,
       clientWhatsapp: client.whatsapp,
       country: client.country,

@@ -64,6 +64,10 @@ const modelField = document.querySelector("#model-field");
 const clientForm = document.querySelector("#client-form");
 const clientMessage = document.querySelector("#client-message");
 const clientsTable = document.querySelector("#clients-table");
+const clientMasterSection = document.querySelector("#client-master-section");
+const refreshClientMasters = document.querySelector("#refresh-client-masters");
+const clientMasterSuggestions = document.querySelector("#client-master-suggestions");
+const clientMasterMessage = document.querySelector("#client-master-message");
 const finalLogModal = document.querySelector("#final-log-modal");
 const finalLogForm = document.querySelector("#final-log-form");
 const finalLogInput = document.querySelector("#final-log-input");
@@ -85,6 +89,7 @@ function emptySession() {
     presence: { onlineUsersCount: 0, onlineUsers: [] },
     deviceSecurity: { pendingApprovals: [] },
     pricingConfig: { exchangeRates: [], serviceRules: [] },
+    clientMasterLinks: { masters: [], links: [], suggestions: [] },
     catalog: { services: [], paymentMethods: [] },
     frp: { enabled: false, orders: [], jobs: [], metrics: {}, statuses: { orders: [], jobs: [] } },
   };
@@ -508,12 +513,14 @@ function renderUsers() {
 function renderClients() {
   if (!session.clients?.length) {
     clientsTable.innerHTML = `<tr><td colspan="5" class="muted-cell">Todavia no hay clientes agregados.</td></tr>`;
+    renderClientMasters();
     return;
   }
 
   const clients = filteredClients();
   if (!clients.length) {
     clientsTable.innerHTML = `<tr><td colspan="5" class="muted-cell">No hay clientes para este canal.</td></tr>`;
+    renderClientMasters();
     return;
   }
 
@@ -527,6 +534,51 @@ function renderClients() {
         <td>${formatDate(client.createdAt)}</td>
       </tr>
     `)
+    .join("");
+  renderClientMasters();
+}
+
+function clientSourceLabel(sourceType) {
+  if (sourceType === "PORTAL_CLIENT") return "Portal Cliente";
+  if (sourceType === "INTERNAL_CLIENT") return "Cliente interno";
+  return sourceType || "Cliente";
+}
+
+function renderClientMasters() {
+  if (!clientMasterSection || !clientMasterSuggestions) return;
+  const isAllowed = isAdmin();
+  clientMasterSection.classList.toggle("hidden", !isAllowed);
+  if (!isAllowed) return;
+  const suggestions = session.clientMasterLinks?.suggestions || [];
+  if (!suggestions.length) {
+    clientMasterSuggestions.innerHTML = `<tr><td colspan="5" class="muted-cell">Sin duplicados pendientes o bloqueados.</td></tr>`;
+    return;
+  }
+  clientMasterSuggestions.innerHTML = suggestions
+    .map((suggestion) => {
+      const blocked = suggestion.status === "BLOCKED";
+      const origin = `
+        <strong>${escapeHtml(suggestion.sourceName || "-")}</strong>
+        <span class="table-subtext">${escapeHtml(clientSourceLabel(suggestion.sourceType))}</span>
+        <span class="table-subtext">${escapeHtml([suggestion.sourceWhatsapp, suggestion.sourceCountry].filter(Boolean).join(" - "))}</span>
+      `;
+      const candidate = suggestion.candidateMasterClientId
+        ? `<strong>${escapeHtml(suggestion.candidateName || "ClienteMaestro")}</strong><span class="table-subtext">${escapeHtml([suggestion.candidateWhatsapp, suggestion.candidateCountry].filter(Boolean).join(" - ") || suggestion.candidateMasterClientId)}</span>`
+        : `<span class="table-subtext">Sin candidato unico</span>`;
+      return `
+        <tr>
+          <td>${origin}</td>
+          <td>${candidate}</td>
+          <td><strong>${escapeHtml(suggestion.confidence || "-")}</strong><span class="table-subtext">${escapeHtml(suggestion.reason || "")}</span></td>
+          <td><span class="status-pill ${blocked ? "danger-pill" : ""}">${escapeHtml(blocked ? "Bloqueado" : "Revision")}</span></td>
+          <td class="action-cell">
+            <button class="mini-btn" type="button" data-review-link="${escapeHtml(suggestion.id)}" data-link-action="approve" ${blocked ? "disabled" : ""}>Vincular</button>
+            <button class="mini-btn" type="button" data-review-link="${escapeHtml(suggestion.id)}" data-link-action="reject">Rechazar</button>
+            <button class="mini-btn" type="button" data-review-link="${escapeHtml(suggestion.id)}" data-link-action="block">Bloquear</button>
+          </td>
+        </tr>
+      `;
+    })
     .join("");
 }
 
@@ -1690,6 +1742,13 @@ async function refreshSession() {
   renderLayout();
 }
 
+async function refreshClientMasterLinks() {
+  if (!isAdmin()) return;
+  const payload = await api("/api/client-masters");
+  session.clientMasterLinks = payload.clientMasterLinks || { masters: [], links: [], suggestions: [] };
+  renderClientMasters();
+}
+
 async function refreshPresence() {
   if (!session.user) return;
   try {
@@ -2143,6 +2202,42 @@ clientForm.addEventListener("submit", async (event) => {
   } catch (error) {
     clientMessage.textContent = error.message;
     clientMessage.dataset.type = "error";
+  } finally {
+    button.disabled = false;
+  }
+});
+
+refreshClientMasters?.addEventListener("click", async () => {
+  clientMasterMessage.textContent = "";
+  try {
+    await refreshClientMasterLinks();
+    clientMasterMessage.textContent = "Vinculos actualizados.";
+    clientMasterMessage.dataset.type = "success";
+  } catch (error) {
+    clientMasterMessage.textContent = error.message;
+    clientMasterMessage.dataset.type = "error";
+  }
+});
+
+clientMasterSuggestions?.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-review-link]");
+  if (!button) return;
+  const suggestionId = button.dataset.reviewLink;
+  const action = button.dataset.linkAction;
+  clientMasterMessage.textContent = "";
+  button.disabled = true;
+  try {
+    const payload = await api(`/api/client-link-suggestions/${encodeURIComponent(suggestionId)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ action }),
+    });
+    session.clientMasterLinks = payload.clientMasterLinks || session.clientMasterLinks;
+    renderClientMasters();
+    clientMasterMessage.textContent = "Revision guardada.";
+    clientMasterMessage.dataset.type = "success";
+  } catch (error) {
+    clientMasterMessage.textContent = error.message;
+    clientMasterMessage.dataset.type = "error";
   } finally {
     button.disabled = false;
   }

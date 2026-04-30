@@ -336,6 +336,31 @@
                 <tbody id="clients-table"></tbody>
               </table>
             </div>
+
+            <div id="client-master-section" class="client-master-section hidden">
+              <div class="section-heading compact-heading">
+                <div>
+                  <p class="eyebrow">ClienteMaestro</p>
+                  <h3>Vinculacion controlada</h3>
+                </div>
+                <button id="refresh-client-masters" class="secondary-btn" type="button">Actualizar vinculos</button>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Origen</th>
+                      <th>Posible maestro</th>
+                      <th>Regla</th>
+                      <th>Estado</th>
+                      <th>Accion</th>
+                    </tr>
+                  </thead>
+                  <tbody id="client-master-suggestions"></tbody>
+                </table>
+              </div>
+              <p id="client-master-message" class="message" aria-live="polite"></p>
+            </div>
           </section>
 
           <section id="users-panel" class="panel">
