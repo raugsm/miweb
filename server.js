@@ -16,7 +16,7 @@ const enableSetupPasswordReset = ["true", "1", "yes"].includes(String(process.en
 const ownerRecoveryEmail = normalizeEmail(process.env.ARIAD_OWNER_RECOVERY_EMAIL || "");
 const publicBaseUrl = String(process.env.ARIAD_PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || `http://localhost:${port}`).replace(/\/+$/, "");
 const mailFrom = process.env.ARIAD_MAIL_FROM || '"AriadGSM Soporte" <soporte@ariadgsm.com>';
-const appVersion = "frp-dynamic-pricing-v1";
+const appVersion = "frp-web-queue-v1";
 const sessionVersion = 7;
 const customerSessionVersion = 1;
 const trustedDeviceVersion = 3;
@@ -208,7 +208,9 @@ const publicOrderStatuses = [
   { code: "SOLICITUD_RECIBIDA", label: "Solicitud recibida" },
   { code: "ESPERANDO_PAGO", label: "Esperando pago" },
   { code: "PAGO_EN_REVISION", label: "Pago en revision" },
-  { code: "EN_COLA", label: "En cola" },
+  { code: "EN_COLA", label: "En preparacion" },
+  { code: "EN_PREPARACION", label: "En preparacion" },
+  { code: "LISTO_PARA_CONEXION", label: "Listo para conexion" },
   { code: "EN_PROCESO", label: "En proceso" },
   { code: "FINALIZADO", label: "Finalizado" },
   { code: "REQUIERE_ATENCION", label: "Requiere atencion" },
@@ -869,7 +871,8 @@ function deriveCustomerOrderStatus(order, db) {
   if (jobs.length && jobs.every((job) => job.status === "FINALIZADO")) return "FINALIZADO";
   if (jobs.some((job) => job.status === "REQUIERE_REVISION" || job.status === "ESPERANDO_CLIENTE")) return "REQUIERE_ATENCION";
   if (jobs.some((job) => job.status === "EN_PROCESO")) return "EN_PROCESO";
-  if (frpOrder?.checklist?.paymentValidated || frpOrder?.paymentStatus === "PAGO_VALIDADO") return "EN_COLA";
+  if (jobs.some((job) => job.status === "LISTO_PARA_TECNICO")) return "LISTO_PARA_CONEXION";
+  if (frpOrder?.checklist?.paymentValidated || frpOrder?.paymentStatus === "PAGO_VALIDADO") return "EN_PREPARACION";
   if (Array.isArray(order.paymentProofs) && order.paymentProofs.length) return "PAGO_EN_REVISION";
   return order.publicStatus || "ESPERANDO_PAGO";
 }
@@ -3320,6 +3323,8 @@ function createFrpOrderFromPortal(db, customerClient, customerOrder, customerIte
     serviceName: order.serviceName,
     clientName: order.clientName,
     country: order.country,
+    model: item.model || "",
+    imei: item.imei || "",
     status: "ESPERANDO_PREPARACION",
     checklist: defaultFrpJobChecklist(),
     technicianId: "",

@@ -198,31 +198,33 @@
               <button id="refresh-frp" class="secondary-btn" type="button">Actualizar</button>
             </div>
 
-            <form id="frp-form" class="ticket-form frp-order-form">
-              <label>
-                Cliente
-                <input name="clientText" id="frp-client" list="client-options" autocomplete="off" placeholder="Carlos Perez Colombia" required />
-              </label>
-              <label>
-                Equipos
-                <input name="quantity" id="frp-quantity" type="number" min="1" max="50" value="1" required />
-              </label>
-              <label>
-                Precio calculado
-                <input name="unitPrice" id="frp-unit-price" type="number" min="0" step="0.01" readonly required />
-              </label>
-              <label>
-                Metodo de pago
-                <select name="paymentMethod" id="frp-payment" required></select>
-              </label>
-              <div id="frp-suggestion" class="payment-summary frp-suggestion" aria-live="polite"></div>
-              <button class="primary-btn ticket-submit-btn" type="submit">Crear orden FRP</button>
-              <p id="frp-message" class="message" aria-live="polite"></p>
-            </form>
-            <div id="frp-pricing-box" class="frp-pricing-box"></div>
-
+            <p id="frp-message" class="message" aria-live="polite"></p>
             <div id="frp-metrics" class="metrics frp-metrics"></div>
             <div id="frp-workbench" class="frp-workbench"></div>
+            <details id="frp-manual-panel" class="secondary-panel frp-manual-panel">
+              <summary>Crear orden manual</summary>
+              <form id="frp-form" class="ticket-form frp-order-form">
+                <label>
+                  Cliente
+                  <input name="clientText" id="frp-client" list="client-options" autocomplete="off" placeholder="Carlos Perez Colombia" required />
+                </label>
+                <label>
+                  Equipos
+                  <input name="quantity" id="frp-quantity" type="number" min="1" max="50" value="1" required />
+                </label>
+                <label>
+                  Precio por equipo
+                  <input name="unitPrice" id="frp-unit-price" type="number" min="0" step="0.01" readonly required />
+                </label>
+                <label>
+                  Metodo de pago
+                  <select name="paymentMethod" id="frp-payment" required></select>
+                </label>
+                <div id="frp-suggestion" class="payment-summary frp-suggestion" aria-live="polite"></div>
+                <button class="primary-btn ticket-submit-btn" type="submit">Crear orden manual</button>
+              </form>
+            </details>
+            <div id="frp-pricing-box" class="frp-pricing-box"></div>
             <input id="frp-proof-files" class="hidden" type="file" accept="image/png,image/jpeg,image/webp" multiple />
           </section>
 

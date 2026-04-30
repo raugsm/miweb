@@ -123,6 +123,7 @@ let pendingFinalLogResolve = null;
 let pendingFinalLogImages = [];
 let pendingPaymentProofTicketId = "";
 let pendingFrpProofOrderId = "";
+let frpWebFilter = "ALL";
 let draggingTicketId = "";
 let selectedChannelFilter = "mine";
 let adminPreviewChannel = localStorage.getItem("ariad_admin_preview_channel") || "";
@@ -1017,12 +1018,12 @@ function syncFrpSuggestion() {
   frpUnitPrice.value = Number(tier.unitPrice || pricing?.summary?.unitPrice || 0).toFixed(2);
   const payment = frpPaymentByCode(frpPayment.value) || binancePayment();
   const total = Number(tier.unitPrice || frpUnitPrice.value || 0) * quantity;
-  const activeProvider = pricing?.summary?.providerName ? `Proveedor activo: ${pricing.summary.providerName}. ` : "";
   frpSuggestion.innerHTML = `
     <div class="payment-main">
-      <strong>Total sugerido: ${escapeHtml(formatAmountForPayment(total, payment))}</strong>
-      <span>${escapeHtml(tier.label)} - ${Number(tier.unitPrice || frpUnitPrice.value).toFixed(2)} por equipo</span>
-      <em>${escapeHtml(activeProvider)}El servidor valida descuentos por consumo frecuente y metas.</em>
+      <span>Total sugerido</span>
+      <strong>${escapeHtml(formatAmountForPayment(total, payment))}</strong>
+      <span>${escapeHtml(quantity)} equipo(s) x ${escapeHtml(formatAmountForPayment(Number(tier.unitPrice || frpUnitPrice.value || 0), payment))}</span>
+      <em>${escapeHtml(tier.label)}. El servidor valida descuentos por consumo frecuente y metas.</em>
     </div>
   `;
 }
@@ -1141,16 +1142,73 @@ function checklistDone(checklist, keys) {
   return keys.filter((key) => checklist?.[key]).length;
 }
 
-function renderFrpMetrics() {
-  const metrics = session.frp?.metrics || {};
-  const items = [
-    ["FRP hoy", metrics.ordersToday || 0],
-    ["Listos", metrics.ready || 0],
-    ["En proceso", metrics.inProcess || 0],
-    ["Revision", metrics.review || 0],
-    ["Finalizados hoy", metrics.finishedToday || 0],
-  ];
-  frpMetrics.innerHTML = items.map(([label, value]) => `
+const frpWebFilters = [
+  { code: "ALL", label: "Todas" },
+  { code: "WEB_NUEVA", label: "Nuevas" },
+  { code: "PAGO_COMPROBANTE", label: "Pago/comprobante" },
+  { code: "PREPARACION", label: "Preparacion" },
+  { code: "LISTO_TECNICO", label: "Listo tecnico" },
+  { code: "EN_PROCESO", label: "En proceso" },
+  { code: "REVISION_PROBLEMA", label: "Revision/problema" },
+  { code: "FINALIZADO", label: "Finalizadas" },
+];
+
+function isPortalFrpOrder(order) {
+  return order?.source === "PORTAL_CLIENTE" || Boolean(order?.portalOrderId);
+}
+
+function frpOrderJobs(order) {
+  return Array.isArray(order?.jobs) ? order.jobs : frpJobs().filter((job) => job.orderId === order?.id);
+}
+
+function frpOrderStage(order) {
+  const jobs = frpOrderJobs(order);
+  const paymentValidated = Boolean(order?.checklist?.paymentValidated || order?.paymentStatus === "COMPROBANTE_RECIBIDO" || order?.paymentStatus === "PAGO_VALIDADO");
+  const proofCount = Array.isArray(order?.paymentProofs) ? order.paymentProofs.length : 0;
+  if (order?.orderStatus === "CERRADA" || (jobs.length && jobs.every((job) => ["FINALIZADO", "CANCELADO"].includes(job.status)))) return "FINALIZADO";
+  if (order?.paymentStatus === "COMPROBANTE_RECHAZADO" || jobs.some((job) => ["REQUIERE_REVISION", "ESPERANDO_CLIENTE"].includes(job.status))) return "REVISION_PROBLEMA";
+  if (jobs.some((job) => job.status === "EN_PROCESO")) return "EN_PROCESO";
+  if (jobs.some((job) => job.status === "LISTO_PARA_TECNICO")) return "LISTO_TECNICO";
+  if (paymentValidated || ["PAGO_VALIDADO", "EN_PREPARACION", "PARCIAL_LISTA", "LISTA_PARA_TECNICO"].includes(order?.orderStatus)) return "PREPARACION";
+  if (proofCount || ["PAGO_EN_VALIDACION", "COMPROBANTE_RECIBIDO"].includes(order?.paymentStatus)) return "PAGO_COMPROBANTE";
+  return "WEB_NUEVA";
+}
+
+function frpStageLabel(stage) {
+  return frpWebFilters.find((filter) => filter.code === stage)?.label || stage || "-";
+}
+
+function frpProofLabel(order) {
+  const proofs = Array.isArray(order?.paymentProofs) ? order.paymentProofs : [];
+  if (!proofs.length) return "Sin comprobante";
+  const pending = proofs.filter((proof) => !proof.reviewStatus || proof.reviewStatus === "PENDIENTE").length;
+  const rejected = proofs.filter((proof) => proof.reviewStatus === "RECHAZADO").length;
+  if (rejected) return `${proofs.length} comprobante(s) - rechazado`;
+  if (pending) return `${proofs.length} comprobante(s) - pendiente`;
+  return `${proofs.length} comprobante(s) - validado`;
+}
+
+function frpNextAction(order) {
+  const stage = frpOrderStage(order);
+  if (stage === "WEB_NUEVA") return "Esperar comprobante o reenviar datos de pago.";
+  if (stage === "PAGO_COMPROBANTE") return canReviewPayments() ? "Validar o rechazar comprobante." : "Esperar validacion de pago.";
+  if (stage === "PREPARACION") {
+    if (!order.checklist?.connectionDataSent) return "Copiar conexion y marcarla enviada.";
+    if (!order.checklist?.authorizationConfirmed) return "Confirmar autorizacion/preparacion.";
+    return "Enviar equipos listos a tecnico.";
+  }
+  if (stage === "LISTO_TECNICO") return "Tecnico debe tomar el siguiente equipo.";
+  if (stage === "EN_PROCESO") return "Tecnico procesando.";
+  if (stage === "REVISION_PROBLEMA") return "Resolver motivo de revision.";
+  if (stage === "FINALIZADO") return "Copiar Done si el cliente lo solicita.";
+  return "Revisar solicitud.";
+}
+
+function renderFrpMetrics(webOrders = frpOrders().filter(isPortalFrpOrder)) {
+  const counts = frpWebFilters
+    .filter((filter) => filter.code !== "ALL")
+    .map((filter) => [filter.label, webOrders.filter((order) => frpOrderStage(order) === filter.code).length]);
+  frpMetrics.innerHTML = counts.map(([label, value]) => `
     <article>
       <span>${escapeHtml(label)}</span>
       <strong>${escapeHtml(value)}</strong>
@@ -1187,24 +1245,50 @@ function renderJobChecklist(job) {
   `).join("");
 }
 
-function renderFrpOrder(order) {
+function renderFrpJobRow(job) {
+  const canMoveToReview = !["FINALIZADO", "CANCELADO"].includes(job.status);
+  const canSendReady = ["ESPERANDO_PREPARACION", "ESPERANDO_CLIENTE", "REQUIERE_REVISION"].includes(job.status);
+  const reference = [job.model, job.imei].filter(Boolean).join(" - ");
+  return `
+    <div class="frp-job-row">
+      <strong>${escapeHtml(job.code)}</strong>
+      <span>${escapeHtml(reference || `${frpStatusLabel(job.status)} - equipo ${job.sequence}`)}</span>
+      <em>${escapeHtml(frpStatusLabel(job.status))}</em>
+      <div class="frp-checks">${renderJobChecklist(job)}</div>
+      <div class="action-row">
+        ${canSendReady ? `<button class="mini-btn" type="button" data-frp-ready="${escapeHtml(job.id)}">Enviar a tecnico</button>` : ""}
+        ${canMoveToReview ? `<button class="mini-btn danger-mini" type="button" data-frp-review="${escapeHtml(job.id)}">Revision</button>` : ""}
+      </div>
+    </div>
+  `;
+}
+
+function renderFrpOrder(order, options = {}) {
+  const stage = frpOrderStage(order);
   const readyCount = order.jobCounts?.LISTO_PARA_TECNICO || 0;
   const finishedCount = order.jobCounts?.FINALIZADO || 0;
+  const jobs = frpOrderJobs(order);
   return `
-    <article class="frp-card">
+    <article class="frp-card ${isPortalFrpOrder(order) ? "frp-card-web" : "frp-card-manual"}">
       <header>
         <div>
           <strong>${escapeHtml(order.code)}</strong>
           <span>${escapeHtml(order.clientName)} - ${escapeHtml(order.country || "")}</span>
         </div>
-        <em>${escapeHtml(frpStatusLabel(order.orderStatus, "orders"))}</em>
+        <em>${escapeHtml(options.stageLabel || frpStageLabel(stage))}</em>
       </header>
-      <p>${escapeHtml(order.quantity)} equipo(s) - ${escapeHtml(order.priceFormatted || `${order.totalPrice} USDT`)} - ${escapeHtml(order.paymentLabel)}</p>
+      <div class="frp-card-grid">
+        <span><strong>Equipos</strong>${escapeHtml(order.quantity)}</span>
+        <span><strong>Pago</strong>${escapeHtml(order.paymentLabel)}</span>
+        <span><strong>Total</strong>${escapeHtml(order.priceFormatted || `${order.totalPrice} USDT`)}</span>
+        <span><strong>Comprobante</strong>${escapeHtml(frpProofLabel(order))}</span>
+      </div>
+      <p class="frp-next-action"><strong>Proxima accion:</strong> ${escapeHtml(frpNextAction(order))}</p>
       <small>${escapeHtml(order.discountLabel || "Normal")} - uso mensual al crear: ${escapeHtml(order.monthlyUsageAtCreation || 0)}</small>
       ${order.nextMonthlyTier ? `<small>Meta: faltan ${escapeHtml(order.nextMonthlyTier.remaining)} para ${escapeHtml(order.nextMonthlyTier.label)} (${escapeHtml(order.nextMonthlyTier.unitPrice)} USDT)</small>` : ""}
       <div class="frp-checks">${renderOrderChecklist(order)}</div>
       <div class="action-row">
-        <button class="mini-btn" type="button" data-frp-copy-price="${escapeHtml(order.id)}">Copiar precio</button>
+        <button class="mini-btn" type="button" data-frp-copy-price="${escapeHtml(order.id)}">Copiar pago</button>
         <button class="mini-btn" type="button" data-frp-copy-connection="${escapeHtml(order.id)}">Copiar conexion</button>
         <button class="mini-btn" type="button" data-frp-upload-proof="${escapeHtml(order.id)}">Comprobante</button>
         ${canReviewPayments() && order.paymentStatus === "PAGO_EN_VALIDACION" && order.paymentProofs?.length ? `
@@ -1214,14 +1298,7 @@ function renderFrpOrder(order) {
       </div>
       <small>${escapeHtml(readyCount)} listo(s), ${escapeHtml(finishedCount)} finalizado(s), ${escapeHtml(order.paymentProofs?.length || 0)} comprobante(s)</small>
       <div class="frp-job-list">
-        ${(order.jobs || []).map((job) => `
-          <div class="frp-job-row">
-            <strong>${escapeHtml(job.code)}</strong>
-            <span>${escapeHtml(frpStatusLabel(job.status))}</span>
-            <div class="frp-checks">${renderJobChecklist(job)}</div>
-            ${["ESPERANDO_PREPARACION", "ESPERANDO_CLIENTE", "REQUIERE_REVISION"].includes(job.status) ? `<button class="mini-btn" type="button" data-frp-ready="${escapeHtml(job.id)}">Enviar a tecnico</button>` : ""}
-          </div>
-        `).join("")}
+        ${jobs.map(renderFrpJobRow).join("")}
       </div>
     </article>
   `;
@@ -1257,18 +1334,38 @@ function renderFrp() {
   syncFrpSuggestion();
   const frpSubmit = frpForm?.querySelector("button[type='submit']");
   if (frpSubmit) frpSubmit.disabled = session.frp?.pricing?.summary?.available === false;
-  renderFrpMetrics();
   const orders = frpOrders();
   const jobs = frpJobs();
-  const prepOrders = orders.filter((order) => !["CERRADA", "CANCELADA"].includes(order.orderStatus));
+  const webOrders = orders.filter(isPortalFrpOrder);
+  const manualOrders = orders.filter((order) => !isPortalFrpOrder(order) && !["CERRADA", "CANCELADA"].includes(order.orderStatus));
+  if (!frpWebFilters.some((filter) => filter.code === frpWebFilter)) frpWebFilter = "ALL";
+  const filteredWebOrders = frpWebFilter === "ALL"
+    ? webOrders
+    : webOrders.filter((order) => frpOrderStage(order) === frpWebFilter);
+  renderFrpMetrics(webOrders);
   const readyJobs = jobs.filter((job) => job.status === "LISTO_PARA_TECNICO");
   const myActiveJobs = jobs.filter((job) => job.status === "EN_PROCESO" && job.technicianId === session.user?.id);
   const reviewJobs = jobs.filter((job) => job.status === "REQUIERE_REVISION");
   const finishedJobs = jobs.filter((job) => job.status === "FINALIZADO").slice(0, 8);
+  const filterHtml = `
+    <div class="frp-filterbar" role="tablist" aria-label="Filtros FRP web">
+      ${frpWebFilters.map((filter) => {
+        const count = filter.code === "ALL" ? webOrders.length : webOrders.filter((order) => frpOrderStage(order) === filter.code).length;
+        return `<button class="mini-btn ${frpWebFilter === filter.code ? "active" : ""}" type="button" data-frp-web-filter="${escapeHtml(filter.code)}">${escapeHtml(filter.label)} <span>${escapeHtml(count)}</span></button>`;
+      }).join("")}
+    </div>
+  `;
   frpWorkbench.innerHTML = `
     <section class="frp-lane wide">
-      <header><span>Preparacion</span><strong>${prepOrders.length}</strong></header>
-      ${prepOrders.length ? prepOrders.map(renderFrpOrder).join("") : `<p class="muted-cell">Sin ordenes FRP en preparacion.</p>`}
+      <header><span>Solicitudes FRP Web</span><strong>${filteredWebOrders.length}</strong></header>
+      ${filterHtml}
+      ${filteredWebOrders.length ? filteredWebOrders.map((order) => renderFrpOrder(order)).join("") : `<p class="muted-cell">No hay solicitudes web en este filtro.</p>`}
+      ${manualOrders.length ? `
+        <details class="frp-manual-orders">
+          <summary>Ordenes manuales activas (${manualOrders.length})</summary>
+          ${manualOrders.slice(0, 8).map((order) => renderFrpOrder(order, { stageLabel: "Manual" })).join("")}
+        </details>
+      ` : ""}
     </section>
     <section class="frp-lane">
       <header><span>Listo para tecnico</span><strong>${readyJobs.length}</strong></header>
@@ -2769,6 +2866,13 @@ frpForm?.addEventListener("submit", async (event) => {
 });
 
 frpWorkbench?.addEventListener("click", async (event) => {
+  const filterButton = event.target.closest("[data-frp-web-filter]");
+  if (filterButton) {
+    frpWebFilter = filterButton.dataset.frpWebFilter || "ALL";
+    renderFrp();
+    return;
+  }
+
   const priceButton = event.target.closest("[data-frp-copy-price]");
   if (priceButton) {
     const order = frpOrders().find((candidate) => candidate.id === priceButton.dataset.frpCopyPrice);
