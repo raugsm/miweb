@@ -15,7 +15,7 @@ const enableSetupPasswordReset = ["true", "1", "yes"].includes(String(process.en
 const ownerRecoveryEmail = normalizeEmail(process.env.ARIAD_OWNER_RECOVERY_EMAIL || "");
 const publicBaseUrl = String(process.env.ARIAD_PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || `http://localhost:${port}`).replace(/\/+$/, "");
 const mailFrom = process.env.ARIAD_MAIL_FROM || '"AriadGSM Soporte" <soporte@ariadgsm.com>';
-const appVersion = "customer-email-verification-v1";
+const appVersion = "customer-orders-live-v1";
 const sessionVersion = 7;
 const customerSessionVersion = 1;
 const trustedDeviceVersion = 3;
@@ -43,8 +43,10 @@ const maxPortalProofRequestsPerWindow = 20;
 const maxPortalVerificationEmailRequestsPerWindow = 3;
 const customerEmailVerificationExpiresMs = 24 * 60 * 60 * 1000;
 const customerPortalBaseUrl = String(process.env.ARIAD_CUSTOMER_PUBLIC_URL || process.env.ARIAD_PORTAL_PUBLIC_URL || publicBaseUrl).replace(/\/+$/, "");
+const portalOrdersSseHeartbeatMs = 25 * 1000;
 const turnstileSiteKey = process.env.ARIAD_TURNSTILE_SITE_KEY || "";
 const turnstileSecret = process.env.ARIAD_TURNSTILE_SECRET || "";
+const portalOrderStreams = new Map();
 
 const roles = new Set(["ADMIN", "COORDINADOR", "ATENCION_TECNICA"]);
 const roleLabels = {
@@ -713,6 +715,13 @@ function publicCustomerOrder(order, db) {
   };
 }
 
+function publicCustomerOrdersForClient(db, clientId) {
+  return db.customerOrders
+    .filter((order) => order.clientId === clientId)
+    .slice(0, 60)
+    .map((order) => publicCustomerOrder(order, db));
+}
+
 function publicCustomerState(db, context) {
   const client = context?.client || null;
   const user = context?.user || null;
@@ -721,9 +730,7 @@ function publicCustomerState(db, context) {
   const canUseBenefits = customerCanUseBenefits(context, benefit);
   const monthlyUsage = client ? customerMonthlyUsage(db, client.id) : 0;
   const nextMonthlyTier = client ? [...frpMonthlyTiers].reverse().find((tier) => monthlyUsage < tier.minJobs) || null : null;
-  const orders = client
-    ? db.customerOrders.filter((order) => order.clientId === client.id).slice(0, 60).map((order) => publicCustomerOrder(order, db))
-    : [];
+  const orders = client ? publicCustomerOrdersForClient(db, client.id) : [];
   return {
     user: publicCustomerUser(user),
     client: publicCustomerClient(client),
@@ -1306,6 +1313,56 @@ function sendHtml(res, status, html) {
 function sendNoContent(res) {
   res.writeHead(204, { "Cache-Control": "no-store" });
   res.end();
+}
+
+function sendSseEvent(res, event, payload, id = "") {
+  if (id) res.write(`id: ${id}\n`);
+  if (event) res.write(`event: ${event}\n`);
+  const body = JSON.stringify(payload);
+  for (const line of body.split(/\r?\n/)) {
+    res.write(`data: ${line}\n`);
+  }
+  res.write("\n");
+}
+
+function addPortalOrderStream(clientId, stream) {
+  if (!portalOrderStreams.has(clientId)) portalOrderStreams.set(clientId, new Set());
+  portalOrderStreams.get(clientId).add(stream);
+}
+
+function removePortalOrderStream(clientId, stream) {
+  const streams = portalOrderStreams.get(clientId);
+  if (!streams) return;
+  streams.delete(stream);
+  if (!streams.size) portalOrderStreams.delete(clientId);
+}
+
+function publishPortalOrders(db, clientId, reason = "orders_updated") {
+  if (!clientId) return;
+  const streams = portalOrderStreams.get(clientId);
+  if (!streams?.size) return;
+  const payload = {
+    reason,
+    updatedAt: nowIso(),
+    orders: publicCustomerOrdersForClient(db, clientId),
+  };
+  for (const stream of [...streams]) {
+    if (stream.closed || stream.res.destroyed || stream.res.writableEnded) {
+      removePortalOrderStream(clientId, stream);
+      continue;
+    }
+    try {
+      sendSseEvent(stream.res, "orders", payload, `${Date.now()}`);
+    } catch {
+      stream.closed = true;
+      removePortalOrderStream(clientId, stream);
+    }
+  }
+}
+
+function publishPortalOrdersForFrpOrder(db, frpOrder, reason = "frp_order_updated") {
+  const portalOrder = db.customerOrders.find((order) => order.id === frpOrder?.portalOrderId);
+  if (portalOrder) publishPortalOrders(db, portalOrder.clientId, reason);
 }
 
 async function parseJson(req) {
@@ -2235,6 +2292,72 @@ async function handleApi(req, res, pathname) {
     return sendJson(res, 200, { orders: publicCustomerState(context.db, context).orders });
   }
 
+  if (req.method === "GET" && pathname === "/api/portal/orders/events") {
+    const context = await getCurrentCustomerContext(req);
+    const db = context.db;
+    if (!context.user || !context.client) {
+      audit(db, null, "PORTAL_ORDERS_STREAM_BLOCKED", null, {
+        reason: "missing_customer_session",
+        ipHash: hashToken(clientIp(req)),
+      });
+      await writeDb(db);
+      return sendJson(res, 401, { error: "Cuenta de cliente requerida." });
+    }
+    const streamId = crypto.randomUUID();
+    audit(db, context.user.id, "PORTAL_ORDERS_STREAM_CONNECTED", context.client.id, {
+      streamId,
+      ipHash: hashToken(clientIp(req)),
+    });
+    await writeDb(db);
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-store, no-transform",
+      "Connection": "keep-alive",
+      "X-Accel-Buffering": "no",
+      "Set-Cookie": cookieHeader(customerDeviceCookieName, context.deviceToken, customerDeviceMaxAgeSeconds),
+    });
+    res.write("retry: 5000\n\n");
+    const stream = {
+      id: streamId,
+      clientId: context.client.id,
+      userId: context.user.id,
+      res,
+      startedAtMs: Date.now(),
+      closed: false,
+    };
+    addPortalOrderStream(context.client.id, stream);
+    sendSseEvent(res, "orders", {
+      reason: "connected",
+      updatedAt: nowIso(),
+      orders: publicCustomerOrdersForClient(db, context.client.id),
+    }, `${Date.now()}`);
+    const heartbeat = setInterval(() => {
+      if (stream.closed || res.destroyed || res.writableEnded) return;
+      res.write(`: heartbeat ${Date.now()}\n\n`);
+    }, portalOrdersSseHeartbeatMs);
+    const cleanup = () => {
+      if (stream.closed) return;
+      stream.closed = true;
+      clearInterval(heartbeat);
+      removePortalOrderStream(context.client.id, stream);
+      (async () => {
+        try {
+          const disconnectDb = await readDb();
+          audit(disconnectDb, context.user.id, "PORTAL_ORDERS_STREAM_DISCONNECTED", context.client.id, {
+            streamId,
+            durationMs: Date.now() - stream.startedAtMs,
+          });
+          await writeDb(disconnectDb);
+        } catch (error) {
+          console.error(error);
+        }
+      })();
+    };
+    req.on("close", cleanup);
+    res.on("error", cleanup);
+    return;
+  }
+
   if (req.method === "POST" && pathname === "/api/portal/orders/frp") {
     const context = await getCurrentCustomerContext(req);
     if (!requireCustomer(context, res)) return;
@@ -2338,6 +2461,7 @@ async function handleApi(req, res, pathname) {
       workChannel: frpWorkChannel,
     });
     await writeDb(db);
+    publishPortalOrders(db, context.client.id, "order_created");
     return sendJson(res, 201, {
       order: publicCustomerOrder(order, db),
       customer: publicCustomerState(db, context),
@@ -2420,6 +2544,7 @@ async function handleApi(req, res, pathname) {
       frpOrderId: order.frpOrderId || "",
     });
     await writeDb(db);
+    publishPortalOrders(db, context.client.id, "payment_proof_uploaded");
     return sendJson(res, 200, {
       order: publicCustomerOrder(order, db),
       customer: publicCustomerState(db, context),
@@ -3020,6 +3145,7 @@ async function handleApi(req, res, pathname) {
     syncFrpOrderStatus(db, order);
     audit(db, user.id, actionByKey[key] || "FRP_ORDER_CHECKLIST_UPDATED", order.id, { key, value: order.checklist[key], orderStatus: order.orderStatus });
     await writeDb(db);
+    publishPortalOrdersForFrpOrder(db, order, "frp_order_checklist_updated");
     return sendJson(res, 200, { order: publicFrpOrder(order, db), frp: publicFrpState(db, user) });
   }
 
@@ -3055,6 +3181,7 @@ async function handleApi(req, res, pathname) {
     order.updatedAt = nowIso();
     audit(db, user.id, "FRP_PAYMENT_PROOF_UPLOADED", order.id, { code: order.code, proofCount: proofs.length });
     await writeDb(db);
+    publishPortalOrdersForFrpOrder(db, order, "frp_payment_proof_uploaded");
     return sendJson(res, 200, { order: publicFrpOrder(order, db), frp: publicFrpState(db, user) });
   }
 
@@ -3089,6 +3216,7 @@ async function handleApi(req, res, pathname) {
     syncFrpOrderStatus(db, order);
     audit(db, user.id, action === "approve" ? "FRP_PAYMENT_VALIDATED" : "FRP_PAYMENT_REJECTED", order.id, { code: order.code, orderStatus: order.orderStatus });
     await writeDb(db);
+    publishPortalOrdersForFrpOrder(db, order, action === "approve" ? "frp_payment_validated" : "frp_payment_rejected");
     return sendJson(res, 200, { order: publicFrpOrder(order, db), frp: publicFrpState(db, user) });
   }
 
@@ -3128,6 +3256,7 @@ async function handleApi(req, res, pathname) {
     syncFrpOrderStatus(db, order);
     audit(db, user.id, "FRP_JOB_READY", job.id, { code: job.code, order: order.code });
     await writeDb(db);
+    publishPortalOrdersForFrpOrder(db, order, "frp_job_ready");
     return sendJson(res, 200, { job: publicFrpJob(job, db), frp: publicFrpState(db, user) });
   }
 
@@ -3149,6 +3278,7 @@ async function handleApi(req, res, pathname) {
     if (order) syncFrpOrderStatus(db, order);
     audit(db, user.id, "FRP_JOB_TAKEN", job.id, { code: job.code, order: order?.code || "" });
     await writeDb(db);
+    publishPortalOrdersForFrpOrder(db, order, "frp_job_taken");
     return sendJson(res, 200, { job: publicFrpJob(job, db), frp: publicFrpState(db, user) });
   }
 
@@ -3176,6 +3306,7 @@ async function handleApi(req, res, pathname) {
     syncFrpOrderStatus(db, order);
     audit(db, user.id, "FRP_JOB_DONE", job.id, { code: job.code, order: order.code, ardCode: job.ardCode });
     await writeDb(db);
+    publishPortalOrdersForFrpOrder(db, order, "frp_job_done");
     return sendJson(res, 200, { job: publicFrpJob(job, db), frp: publicFrpState(db, user) });
   }
 
@@ -3197,6 +3328,7 @@ async function handleApi(req, res, pathname) {
     syncFrpOrderStatus(db, order);
     audit(db, user.id, "FRP_JOB_REVIEW_REQUIRED", job.id, { code: job.code, order: order.code, reason });
     await writeDb(db);
+    publishPortalOrdersForFrpOrder(db, order, "frp_job_review_required");
     return sendJson(res, 200, { job: publicFrpJob(job, db), frp: publicFrpState(db, user) });
   }
 

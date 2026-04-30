@@ -3,6 +3,7 @@ const state = {
   catalog: null,
   activeTab: "login",
   pollTimer: null,
+  ordersStream: null,
   turnstileReady: null,
 };
 
@@ -190,7 +191,7 @@ function renderCustomer() {
   $("#accessPanel").classList.toggle("hidden", logged);
   $("#appPanel").classList.toggle("hidden", !logged);
   if (!logged) {
-    stopPolling();
+    stopOrdersLive();
     return;
   }
   $("#clientTitle").textContent = `${customer.client.name}`;
@@ -201,7 +202,7 @@ function renderCustomer() {
   $("#orderSubmitButton").disabled = !customer.client.emailVerified;
   $("#copyPaymentButton").disabled = !customer.client.emailVerified;
   renderOrders(customer.orders || []);
-  startPolling();
+  startOrdersLive();
 }
 
 function statusLabel(code) {
@@ -305,6 +306,20 @@ async function filesToProofs(fileList) {
   })));
 }
 
+function setOrdersLiveStatus(text, type = "") {
+  const node = $("#ordersLiveStatus");
+  if (!node) return;
+  node.textContent = text;
+  node.dataset.type = type;
+}
+
+async function refreshOrdersSilently() {
+  if (!state.customer?.user || !state.customer?.client) return;
+  const payload = await api("/api/portal/orders");
+  state.customer.orders = payload.orders || [];
+  renderOrders(state.customer.orders);
+}
+
 async function loadSession() {
   const payload = await api("/api/portal/session");
   state.customer = payload.customer;
@@ -313,22 +328,61 @@ async function loadSession() {
   renderCustomer();
 }
 
-function startPolling() {
-  if (state.pollTimer) return;
-  state.pollTimer = setInterval(async () => {
+function startFallbackPolling() {
+  if (state.pollTimer || !state.customer?.user) return;
+  const tick = async () => {
     try {
-      const payload = await api("/api/portal/orders");
-      state.customer.orders = payload.orders || [];
-      renderOrders(state.customer.orders);
+      await refreshOrdersSilently();
     } catch {
-      stopPolling();
+      stopFallbackPolling();
+      setOrdersLiveStatus("Sin conexion", "error");
+      return;
     }
-  }, 8000);
+    state.pollTimer = setTimeout(tick, 20000);
+  };
+  state.pollTimer = setTimeout(tick, 3000);
 }
 
-function stopPolling() {
-  if (state.pollTimer) clearInterval(state.pollTimer);
+function stopFallbackPolling() {
+  if (state.pollTimer) clearTimeout(state.pollTimer);
   state.pollTimer = null;
+}
+
+function startOrdersLive() {
+  if (!state.customer?.user || !state.customer?.client || state.ordersStream) return;
+  if (!window.EventSource) {
+    setOrdersLiveStatus("Modo respaldo", "warn");
+    startFallbackPolling();
+    return;
+  }
+  setOrdersLiveStatus("Conectando", "warn");
+  const stream = new EventSource("/api/portal/orders/events");
+  state.ordersStream = stream;
+  stream.onopen = () => {
+    stopFallbackPolling();
+    setOrdersLiveStatus("En vivo", "success");
+  };
+  stream.addEventListener("orders", (event) => {
+    try {
+      const payload = JSON.parse(event.data || "{}");
+      state.customer.orders = payload.orders || [];
+      renderOrders(state.customer.orders);
+      setOrdersLiveStatus("En vivo", "success");
+    } catch {
+      setOrdersLiveStatus("Revisar conexion", "warn");
+    }
+  });
+  stream.onerror = () => {
+    setOrdersLiveStatus("Reconectando", "warn");
+    startFallbackPolling();
+  };
+}
+
+function stopOrdersLive() {
+  stopFallbackPolling();
+  if (state.ordersStream) state.ordersStream.close();
+  state.ordersStream = null;
+  setOrdersLiveStatus("Desconectado", "");
 }
 
 function wireEvents() {
@@ -419,9 +473,8 @@ function wireEvents() {
     copyText(paymentText(currentPayment(), money(estimate.total)), $("#orderMessage"));
   });
   $("#refreshButton").addEventListener("click", async () => {
-    const payload = await api("/api/portal/orders");
-    state.customer.orders = payload.orders || [];
-    renderOrders(state.customer.orders);
+    await refreshOrdersSilently();
+    setOrdersLiveStatus(state.ordersStream ? "En vivo" : "Actualizado", state.ordersStream ? "success" : "warn");
   });
   $("#resendVerificationButton").addEventListener("click", async () => {
     setMessage($("#orderMessage"), "");
@@ -435,7 +488,7 @@ function wireEvents() {
   $("#logoutButton").addEventListener("click", async () => {
     await api("/api/portal/logout", { method: "POST", body: "{}" });
     state.customer = null;
-    stopPolling();
+    stopOrdersLive();
     renderCustomer();
     setTab("login");
   });

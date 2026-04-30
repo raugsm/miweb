@@ -356,6 +356,47 @@ textarea:focus {
   margin-top: 18px;
 }
 
+.live-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  margin-top: 8px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  background: #fff;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.live-status::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  margin-right: 7px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.live-status[data-type="success"] {
+  border-color: #b7ead6;
+  color: #0f9f6e;
+  background: #edfbf5;
+}
+
+.live-status[data-type="warn"] {
+  border-color: #f6d58b;
+  color: #9a6800;
+  background: #fff8ea;
+}
+
+.live-status[data-type="error"] {
+  border-color: #fac2c9;
+  color: #dc3f49;
+  background: #fff1f3;
+}
+
 .order-card {
   border: 1px solid var(--line);
   background: #ffffff;
