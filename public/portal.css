@@ -291,6 +291,27 @@ textarea:focus {
   box-shadow: none;
 }
 
+.verification-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid #f6c76d;
+  border-radius: 8px;
+  background: #fff8ea;
+}
+
+.verification-card.hidden {
+  display: none;
+}
+
+.verification-card p {
+  margin: 8px 0 0;
+  color: #805c18;
+  font-weight: 750;
+}
+
 .order-form {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

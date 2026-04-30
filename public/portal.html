@@ -76,6 +76,15 @@
           </article>
         </div>
 
+        <section id="verificationCard" class="verification-card hidden">
+          <div>
+            <p class="eyebrow">Verificacion pendiente</p>
+            <h2>Confirma tu correo para crear solicitudes.</h2>
+            <p>Mientras no confirmes el correo, el portal no permitira pedidos ni beneficios.</p>
+          </div>
+          <button id="resendVerificationButton" class="ghost" type="button">Reenviar correo</button>
+        </section>
+
         <section class="request-card">
           <div class="section-head">
             <div>
@@ -103,7 +112,7 @@
               <button id="copyPaymentButton" class="ghost" type="button">Copiar pago</button>
             </div>
             <div class="turnstile-box wide" data-turnstile-widget="order"></div>
-            <button type="submit">Crear solicitud</button>
+            <button id="orderSubmitButton" type="submit">Crear solicitud</button>
           </form>
           <p id="orderMessage" class="message" aria-live="polite"></p>
         </section>

@@ -15,7 +15,7 @@ const enableSetupPasswordReset = ["true", "1", "yes"].includes(String(process.en
 const ownerRecoveryEmail = normalizeEmail(process.env.ARIAD_OWNER_RECOVERY_EMAIL || "");
 const publicBaseUrl = String(process.env.ARIAD_PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || `http://localhost:${port}`).replace(/\/+$/, "");
 const mailFrom = process.env.ARIAD_MAIL_FROM || '"AriadGSM Soporte" <soporte@ariadgsm.com>';
-const appVersion = "customer-portal-v1";
+const appVersion = "customer-email-verification-v1";
 const sessionVersion = 7;
 const customerSessionVersion = 1;
 const trustedDeviceVersion = 3;
@@ -40,6 +40,9 @@ const portalRateLimitWindowMs = 15 * 60 * 1000;
 const maxPortalRegisterRequestsPerWindow = 5;
 const maxPortalOrderRequestsPerWindow = 12;
 const maxPortalProofRequestsPerWindow = 20;
+const maxPortalVerificationEmailRequestsPerWindow = 3;
+const customerEmailVerificationExpiresMs = 24 * 60 * 60 * 1000;
+const customerPortalBaseUrl = String(process.env.ARIAD_CUSTOMER_PUBLIC_URL || process.env.ARIAD_PORTAL_PUBLIC_URL || publicBaseUrl).replace(/\/+$/, "");
 const turnstileSiteKey = process.env.ARIAD_TURNSTILE_SITE_KEY || "";
 const turnstileSecret = process.env.ARIAD_TURNSTILE_SECRET || "";
 
@@ -190,7 +193,7 @@ const portalPublicServices = [
     description: "Servicio remoto para Xiaomi Cuenta Google / FRP con preparacion, pago y seguimiento en linea.",
   },
 ];
-const customerStatuses = new Set(["REGISTRADO", "VERIFICADO", "VIP", "EMPRESA", "BLOQUEADO"]);
+const customerStatuses = new Set(["REGISTRADO_NO_VERIFICADO", "EMAIL_VERIFICADO", "REGISTRADO", "VERIFICADO", "VIP", "EMPRESA", "BLOQUEADO"]);
 const publicOrderStatuses = [
   { code: "SOLICITUD_RECIBIDA", label: "Solicitud recibida" },
   { code: "ESPERANDO_PAGO", label: "Esperando pago" },
@@ -348,6 +351,7 @@ async function ensureDb() {
       customerOrders: [],
       customerOrderItems: [],
       customerBenefits: [],
+      customerEmailVerificationTokens: [],
       customerCounters: {},
       portalRateLimits: [],
       clients: [],
@@ -380,6 +384,7 @@ async function readDb() {
   db.customerOrders ||= [];
   db.customerOrderItems ||= [];
   db.customerBenefits ||= [];
+  db.customerEmailVerificationTokens ||= [];
   db.customerCounters ||= {};
   db.portalRateLimits ||= [];
   db.clients ||= [];
@@ -401,14 +406,17 @@ async function readDb() {
   const deviceApprovalCount = db.deviceApprovals.length;
   const customerSessionCount = db.customerSessions.length;
   const portalRateLimitCount = db.portalRateLimits.length;
+  const customerEmailVerificationTokenCount = db.customerEmailVerificationTokens.length;
   db.deviceApprovals = db.deviceApprovals.filter((approval) => !approval.approvedAt && approval.expiresAt > now);
   db.customerSessions = db.customerSessions.filter((session) => session.expiresAt > now && session.version === customerSessionVersion);
+  db.customerEmailVerificationTokens = db.customerEmailVerificationTokens.filter((token) => !token.usedAt && token.expiresAt > now);
   db.portalRateLimits = db.portalRateLimits.filter((item) => item.createdAtMs > now - portalRateLimitWindowMs);
   if (
     db.passwordResetTokens.length !== resetTokenCount
     || db.passwordResetRequests.length !== resetRequestCount
     || db.deviceApprovals.length !== deviceApprovalCount
     || db.customerSessions.length !== customerSessionCount
+    || db.customerEmailVerificationTokens.length !== customerEmailVerificationTokenCount
     || db.portalRateLimits.length !== portalRateLimitCount
   ) {
     changed = true;
@@ -474,7 +482,11 @@ function publicClient(client, db = { users: [] }) {
 
 function normalizeCustomerStatus(value) {
   const status = cleanText(value, 30).toUpperCase();
-  return customerStatuses.has(status) ? status : "REGISTRADO";
+  return customerStatuses.has(status) ? status : "REGISTRADO_NO_VERIFICADO";
+}
+
+function customerEmailIsVerified(client) {
+  return ["EMAIL_VERIFICADO", "VERIFICADO", "VIP", "EMPRESA"].includes(normalizeCustomerStatus(client?.status));
 }
 
 function defaultCustomerBenefit(clientId) {
@@ -559,7 +571,7 @@ function customerCanUseBenefits(context, benefit) {
   const device = context?.device;
   if (!client || !benefit?.active) return false;
   if (client.status === "BLOQUEADO") return false;
-  if (!["REGISTRADO", "VERIFICADO", "VIP", "EMPRESA"].includes(client.status)) return false;
+  if (!customerEmailIsVerified(client)) return false;
   if (benefit.deviceRequired && !customerDeviceIsAuthorized(device, client.id)) return false;
   return true;
 }
@@ -610,6 +622,8 @@ function publicCustomerClient(client) {
     whatsapp: client.whatsapp,
     country: client.country,
     status: normalizeCustomerStatus(client.status),
+    emailVerified: customerEmailIsVerified(client),
+    emailVerifiedAt: client.emailVerifiedAt || "",
     createdAt: client.createdAt,
     updatedAt: client.updatedAt,
   };
@@ -1204,6 +1218,67 @@ async function sendPasswordResetEmail(user, token) {
         <p><a href="${htmlEscape(resetUrl)}" style="display:inline-block;padding:12px 16px;background:#2177f2;color:#fff;text-decoration:none;border-radius:8px;font-weight:700">Cambiar contrasena</a></p>
         <p>Este enlace vence en 15 minutos y solo se puede usar una vez.</p>
         <p style="color:#667085;font-size:13px">Si no solicitaste este cambio, ignora este correo.</p>
+      </div>
+    `,
+  });
+}
+
+function createCustomerEmailVerificationToken(db, customerUser, reason = "register") {
+  const token = crypto.randomBytes(32).toString("base64url");
+  const now = Date.now();
+  db.customerEmailVerificationTokens = (db.customerEmailVerificationTokens || []).filter((candidate) => {
+    return candidate.userId !== customerUser.id || candidate.usedAt || candidate.expiresAt <= now;
+  });
+  db.customerEmailVerificationTokens.push({
+    id: crypto.randomUUID(),
+    userId: customerUser.id,
+    clientId: customerUser.clientId,
+    email: customerUser.email,
+    tokenHash: hashToken(token),
+    reason,
+    createdAt: nowIso(),
+    createdAtMs: now,
+    expiresAt: now + customerEmailVerificationExpiresMs,
+    usedAt: "",
+  });
+  return token;
+}
+
+async function sendCustomerVerificationEmail(customerUser, client, token) {
+  const config = smtpConfig();
+  if (!mailIsConfigured()) {
+    const error = new Error("Correo de verificacion no configurado en Render.");
+    error.status = 503;
+    throw error;
+  }
+  const verifyUrl = `${customerPortalBaseUrl}/cliente?verifyEmail=${encodeURIComponent(token)}`;
+  const transporter = nodemailer.createTransport({
+    host: config.host,
+    port: config.port,
+    secure: config.secure,
+    auth: config.auth,
+  });
+  const safeName = htmlEscape(client.name || customerUser.name || "AriadGSM");
+  await transporter.sendMail({
+    from: mailFrom,
+    to: customerUser.email,
+    subject: "Verifica tu correo - AriadGSM",
+    text: [
+      `Hola ${client.name || customerUser.name || ""},`,
+      "",
+      "Confirma este correo para activar tu portal cliente AriadGSM.",
+      `Abre este enlace antes de 24 horas: ${verifyUrl}`,
+      "",
+      "Si no creaste esta cuenta, ignora este correo.",
+    ].join("\n"),
+    html: `
+      <div style="font-family:Arial,sans-serif;color:#101827;line-height:1.5">
+        <h2 style="margin:0 0 12px">AriadGSM Portal Cliente</h2>
+        <p>Hola ${safeName},</p>
+        <p>Confirma este correo para activar tu portal cliente y crear solicitudes.</p>
+        <p><a href="${htmlEscape(verifyUrl)}" style="display:inline-block;padding:12px 16px;background:#2177f2;color:#fff;text-decoration:none;border-radius:8px;font-weight:700">Verificar correo</a></p>
+        <p>Este enlace vence en 24 horas y solo se puede usar una vez.</p>
+        <p style="color:#667085;font-size:13px">Si no creaste esta cuenta, ignora este correo.</p>
       </div>
     `,
   });
@@ -1917,6 +1992,39 @@ async function handleApi(req, res, pathname) {
     });
   }
 
+  if (req.method === "POST" && pathname === "/api/portal/verify-email") {
+    const input = await parseJson(req);
+    const token = String(input.token || "").trim();
+    const db = await readDb();
+    const tokenRecord = token ? db.customerEmailVerificationTokens.find((candidate) => {
+      return !candidate.usedAt && candidate.expiresAt > Date.now() && candidate.tokenHash === hashToken(token);
+    }) : null;
+    if (!tokenRecord) {
+      audit(db, null, "PORTAL_EMAIL_VERIFICATION_FAILED", null, { ipHash: hashToken(clientIp(req)) });
+      await writeDb(db);
+      return sendJson(res, 400, { error: "Enlace de verificacion invalido o vencido." });
+    }
+    const customerUser = db.customerUsers.find((candidate) => candidate.id === tokenRecord.userId && candidate.active !== false);
+    const client = customerUser ? db.customerClients.find((candidate) => candidate.id === customerUser.clientId) : null;
+    if (!customerUser || !client || client.status === "BLOQUEADO") {
+      tokenRecord.usedAt = nowIso();
+      audit(db, null, "PORTAL_EMAIL_VERIFICATION_FAILED", tokenRecord.clientId, { reason: "missing_or_blocked_account" });
+      await writeDb(db);
+      return sendJson(res, 400, { error: "Enlace de verificacion invalido o vencido." });
+    }
+    tokenRecord.usedAt = nowIso();
+    customerUser.emailVerifiedAt ||= nowIso();
+    client.emailVerifiedAt ||= nowIso();
+    if (!["VIP", "EMPRESA", "VERIFICADO"].includes(normalizeCustomerStatus(client.status))) {
+      client.status = "EMAIL_VERIFICADO";
+    }
+    client.updatedAt = nowIso();
+    customerUser.updatedAt = nowIso();
+    audit(db, customerUser.id, "PORTAL_EMAIL_VERIFIED", client.id, { email: customerUser.email });
+    await writeDb(db);
+    return sendJson(res, 200, { message: "Correo verificado. Ya puedes crear solicitudes." });
+  }
+
   if (req.method === "POST" && pathname === "/api/portal/register") {
     const input = await parseJson(req);
     const name = cleanName(input.name);
@@ -1946,17 +2054,22 @@ async function handleApi(req, res, pathname) {
       return sendJson(res, 400, { error: "Nombre, correo, contrasena, WhatsApp y pais son obligatorios." });
     }
     if (db.customerUsers.some((candidate) => candidate.email === email)) {
+      audit(db, null, "PORTAL_REGISTER_EXISTING_EMAIL", null, { emailHash: hashToken(email), ipHash: hashToken(clientIp(req)) });
       await writeDb(db);
       res.setHeader("Set-Cookie", cookieHeader(customerDeviceCookieName, deviceToken, customerDeviceMaxAgeSeconds));
-      return sendJson(res, 409, { error: "Ya existe una cuenta cliente con ese correo." });
+      return sendJson(res, 200, {
+        message: "Si los datos son validos, revisa tu correo para continuar.",
+        emailVerification: { required: true },
+      });
     }
     const client = {
       id: crypto.randomUUID(),
       name,
       whatsapp,
       country,
-      status: "REGISTRADO",
+      status: "REGISTRADO_NO_VERIFICADO",
       primaryEmail: email,
+      emailVerifiedAt: "",
       createdAt: nowIso(),
       updatedAt: nowIso(),
     };
@@ -1968,6 +2081,7 @@ async function handleApi(req, res, pathname) {
       passwordHash: await hashPassword(password),
       role: "OWNER",
       active: true,
+      emailVerifiedAt: "",
       createdAt: nowIso(),
       updatedAt: nowIso(),
     };
@@ -1990,7 +2104,20 @@ async function handleApi(req, res, pathname) {
       expiresAt: Date.now() + customerSessionMaxAgeSeconds * 1000,
     });
     audit(db, null, "PORTAL_CUSTOMER_REGISTERED", client.id, { email, country, deviceId: device.id });
+    const verificationToken = createCustomerEmailVerificationToken(db, customerUser, "register");
     await writeDb(db);
+    let verificationSent = false;
+    try {
+      await sendCustomerVerificationEmail(customerUser, client, verificationToken);
+      verificationSent = true;
+      const emailDb = await readDb();
+      audit(emailDb, customerUser.id, "PORTAL_EMAIL_VERIFICATION_SENT", client.id, { email });
+      await writeDb(emailDb);
+    } catch (error) {
+      const failureDb = await readDb();
+      audit(failureDb, customerUser.id, "PORTAL_EMAIL_VERIFICATION_SEND_FAILED", client.id, { email, error: cleanText(error.message, 160) });
+      await writeDb(failureDb);
+    }
     res.setHeader("Set-Cookie", [
       cookieHeader(customerSessionCookieName, token, customerSessionMaxAgeSeconds),
       cookieHeader(customerDeviceCookieName, deviceToken, customerDeviceMaxAgeSeconds),
@@ -1998,7 +2125,40 @@ async function handleApi(req, res, pathname) {
     return sendJson(res, 201, {
       customer: publicCustomerState(db, { user: customerUser, client, device }),
       catalog: publicPortalCatalog(),
+      message: verificationSent ? "Cuenta creada. Revisa tu correo para verificarla." : "Cuenta creada. No pudimos enviar el correo de verificacion; intenta reenviarlo.",
+      emailVerification: { required: true, sent: verificationSent },
     });
+  }
+
+  if (req.method === "POST" && pathname === "/api/portal/resend-verification") {
+    const context = await getCurrentCustomerContext(req);
+    if (!requireCustomer(context, res)) return;
+    const db = context.db;
+    const rateOk = enforcePortalRateLimit(db, req, "portal_email_verification", context.user.email, maxPortalVerificationEmailRequestsPerWindow);
+    const genericMessage = "Si tu cuenta necesita verificacion, enviaremos un correo en unos minutos.";
+    if (!rateOk) {
+      audit(db, context.user.id, "PORTAL_EMAIL_VERIFICATION_RESEND_RATE_LIMITED", context.client.id, { ipHash: hashToken(clientIp(req)) });
+      await writeDb(db);
+      return sendJson(res, 429, { error: "Demasiados intentos. Intenta mas tarde." });
+    }
+    if (customerEmailIsVerified(context.client)) {
+      audit(db, context.user.id, "PORTAL_EMAIL_VERIFICATION_RESEND_SKIPPED", context.client.id, { reason: "already_verified" });
+      await writeDb(db);
+      return sendJson(res, 200, { message: genericMessage });
+    }
+    const verificationToken = createCustomerEmailVerificationToken(db, context.user, "resend");
+    await writeDb(db);
+    try {
+      await sendCustomerVerificationEmail(context.user, context.client, verificationToken);
+      const emailDb = await readDb();
+      audit(emailDb, context.user.id, "PORTAL_EMAIL_VERIFICATION_RESENT", context.client.id, { email: context.user.email });
+      await writeDb(emailDb);
+    } catch (error) {
+      const failureDb = await readDb();
+      audit(failureDb, context.user.id, "PORTAL_EMAIL_VERIFICATION_RESEND_FAILED", context.client.id, { error: cleanText(error.message, 160) });
+      await writeDb(failureDb);
+    }
+    return sendJson(res, 200, { message: genericMessage });
   }
 
   if (req.method === "POST" && pathname === "/api/portal/login") {
@@ -2080,6 +2240,11 @@ async function handleApi(req, res, pathname) {
     if (!requireCustomer(context, res)) return;
     const input = await parseJson(req);
     const db = context.db;
+    if (!customerEmailIsVerified(context.client)) {
+      audit(db, context.user.id, "PORTAL_ORDER_BLOCKED_EMAIL_UNVERIFIED", context.client.id, { service: "PORTAL-XIAOMI-FRP" });
+      await writeDb(db);
+      return sendJson(res, 403, { error: "Verifica tu correo antes de crear solicitudes." });
+    }
     const rateOk = enforcePortalRateLimit(db, req, "portal_order_frp", context.client.id, maxPortalOrderRequestsPerWindow);
     const turnstile = await validateTurnstileIfConfigured(req, input, "portal_order_frp");
     if (!rateOk) {

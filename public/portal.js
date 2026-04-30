@@ -77,6 +77,10 @@ function setTab(tab) {
   setMessage($("#authMessage"), "");
 }
 
+function customerEmailVerified() {
+  return Boolean(state.customer?.client?.emailVerified);
+}
+
 function ensureTurnstileScript() {
   if (!state.catalog?.turnstileEnabled || !state.catalog?.turnstileSiteKey) return Promise.resolve(false);
   if (window.turnstile) return Promise.resolve(true);
@@ -190,9 +194,12 @@ function renderCustomer() {
     return;
   }
   $("#clientTitle").textContent = `${customer.client.name}`;
-  $("#clientStatus").textContent = customer.client.status || "REGISTRADO";
+  $("#clientStatus").textContent = customer.client.emailVerified ? "Correo verificado" : "Correo pendiente";
   $("#monthlyUsage").textContent = String(customer.monthlyUsage || 0);
   $("#deviceStatus").textContent = customer.device?.authorizedForBenefits ? "Autorizado" : "Sin beneficios";
+  $("#verificationCard").classList.toggle("hidden", customer.client.emailVerified);
+  $("#orderSubmitButton").disabled = !customer.client.emailVerified;
+  $("#copyPaymentButton").disabled = !customer.client.emailVerified;
   renderOrders(customer.orders || []);
   startPolling();
 }
@@ -348,10 +355,13 @@ function wireEvents() {
       const body = Object.fromEntries(new FormData(event.currentTarget));
       body.turnstileToken = turnstileToken("register");
       const payload = await api("/api/portal/register", { method: "POST", body: JSON.stringify(body) });
-      state.customer = payload.customer;
-      state.catalog = payload.catalog;
-      renderCatalog();
-      renderCustomer();
+      if (payload.customer) {
+        state.customer = payload.customer;
+        state.catalog = payload.catalog;
+        renderCatalog();
+        renderCustomer();
+      }
+      setMessage($("#authMessage"), payload.message || "Si los datos son validos, revisa tu correo para continuar.", "success");
       resetTurnstile("register");
     } catch (error) {
       setMessage($("#authMessage"), error.message, "error");
@@ -413,6 +423,15 @@ function wireEvents() {
     state.customer.orders = payload.orders || [];
     renderOrders(state.customer.orders);
   });
+  $("#resendVerificationButton").addEventListener("click", async () => {
+    setMessage($("#orderMessage"), "");
+    try {
+      const payload = await api("/api/portal/resend-verification", { method: "POST", body: "{}" });
+      setMessage($("#orderMessage"), payload.message || "Revisa tu correo.", "success");
+    } catch (error) {
+      setMessage($("#orderMessage"), error.message, "error");
+    }
+  });
   $("#logoutButton").addEventListener("click", async () => {
     await api("/api/portal/logout", { method: "POST", body: "{}" });
     state.customer = null;
@@ -448,5 +467,25 @@ function applyQueryTracking() {
   $("#trackForm input[name='accessCode']").value = accessCode;
 }
 
+async function applyEmailVerification() {
+  const params = new URLSearchParams(location.search);
+  const token = params.get("verifyEmail");
+  if (!token) return;
+  try {
+    const payload = await api("/api/portal/verify-email", {
+      method: "POST",
+      body: JSON.stringify({ token }),
+    });
+    setMessage($("#authMessage"), payload.message || "Correo verificado.", "success");
+    history.replaceState({}, "", location.pathname);
+    await loadSession();
+  } catch (error) {
+    setMessage($("#authMessage"), error.message, "error");
+  }
+}
+
 wireEvents();
-loadSession().then(applyQueryTracking).catch((error) => setMessage($("#authMessage"), error.message, "error"));
+loadSession()
+  .then(applyEmailVerification)
+  .then(applyQueryTracking)
+  .catch((error) => setMessage($("#authMessage"), error.message, "error"));
