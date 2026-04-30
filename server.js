@@ -15,13 +15,18 @@ const enableSetupPasswordReset = ["true", "1", "yes"].includes(String(process.en
 const ownerRecoveryEmail = normalizeEmail(process.env.ARIAD_OWNER_RECOVERY_EMAIL || "");
 const publicBaseUrl = String(process.env.ARIAD_PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || `http://localhost:${port}`).replace(/\/+$/, "");
 const mailFrom = process.env.ARIAD_MAIL_FROM || '"AriadGSM Soporte" <soporte@ariadgsm.com>';
-const appVersion = "admin-channel-preview-v1";
+const appVersion = "customer-portal-v1";
 const sessionVersion = 7;
+const customerSessionVersion = 1;
 const trustedDeviceVersion = 3;
 const deviceApprovalExpiresMs = 15 * 60 * 1000;
 const sessionMaxAgeSeconds = 60 * 60 * 8;
 const deviceCookieName = "ariad_device";
+const customerSessionCookieName = "ariad_customer_session";
+const customerDeviceCookieName = "ariad_customer_device";
 const deviceMaxAgeSeconds = 60 * 60 * 24 * 180;
+const customerSessionMaxAgeSeconds = 60 * 60 * 24 * 14;
+const customerDeviceMaxAgeSeconds = 60 * 60 * 24 * 180;
 const presenceWindowMs = 45 * 1000;
 const presenceWriteIntervalMs = 10 * 1000;
 const resetTokenExpiresMs = 15 * 60 * 1000;
@@ -31,6 +36,11 @@ const maxJsonBodyBytes = 12 * 1024 * 1024;
 const maxFinalLogImages = 4;
 const maxPaymentProofImages = 4;
 const maxFinalLogImageBytes = 2 * 1024 * 1024;
+const portalRateLimitWindowMs = 15 * 60 * 1000;
+const maxPortalRegisterRequestsPerWindow = 5;
+const maxPortalOrderRequestsPerWindow = 12;
+const maxPortalProofRequestsPerWindow = 20;
+const turnstileSecret = process.env.ARIAD_TURNSTILE_SECRET || "";
 
 const roles = new Set(["ADMIN", "COORDINADOR", "ATENCION_TECNICA"]);
 const roleLabels = {
@@ -165,6 +175,30 @@ const frpMonthlyTiers = [
   { minJobs: 100, unitPrice: 22, label: "Meta 100+" },
   { minJobs: 60, unitPrice: 23, label: "Meta 60+" },
   { minJobs: 30, unitPrice: 24, label: "Meta 30+" },
+];
+const portalPublicServices = [
+  {
+    code: "PORTAL-XIAOMI-FRP",
+    name: "Xiaomi FRP Express",
+    internalServiceCode: frpServiceCode,
+    workChannel: frpWorkChannel,
+    baseUnitPrice: 25,
+    currency: "USDT",
+    enabled: true,
+    maxQuantity: 50,
+    description: "Servicio remoto para Xiaomi Cuenta Google / FRP con preparacion, pago y seguimiento en linea.",
+  },
+];
+const customerStatuses = new Set(["REGISTRADO", "VERIFICADO", "VIP", "EMPRESA", "BLOQUEADO"]);
+const publicOrderStatuses = [
+  { code: "SOLICITUD_RECIBIDA", label: "Solicitud recibida" },
+  { code: "ESPERANDO_PAGO", label: "Esperando pago" },
+  { code: "PAGO_EN_REVISION", label: "Pago en revision" },
+  { code: "EN_COLA", label: "En cola" },
+  { code: "EN_PROCESO", label: "En proceso" },
+  { code: "FINALIZADO", label: "Finalizado" },
+  { code: "REQUIERE_ATENCION", label: "Requiere atencion" },
+  { code: "CANCELADO", label: "Cancelado" },
 ];
 const exchangeRateCountries = [
   { key: "mexico", country: "Mexico", currency: "MXN" },
@@ -305,6 +339,16 @@ async function ensureDb() {
       sessions: [],
       devices: [],
       deviceApprovals: [],
+      customerClients: [],
+      customerUsers: [],
+      customerSessions: [],
+      customerDevices: [],
+      customerRequests: [],
+      customerOrders: [],
+      customerOrderItems: [],
+      customerBenefits: [],
+      customerCounters: {},
+      portalRateLimits: [],
       clients: [],
       audit: [],
       tickets: [],
@@ -327,6 +371,16 @@ async function readDb() {
   db.sessions ||= [];
   db.devices ||= [];
   db.deviceApprovals ||= [];
+  db.customerClients ||= [];
+  db.customerUsers ||= [];
+  db.customerSessions ||= [];
+  db.customerDevices ||= [];
+  db.customerRequests ||= [];
+  db.customerOrders ||= [];
+  db.customerOrderItems ||= [];
+  db.customerBenefits ||= [];
+  db.customerCounters ||= {};
+  db.portalRateLimits ||= [];
   db.clients ||= [];
   db.audit ||= [];
   db.tickets ||= [];
@@ -344,8 +398,18 @@ async function readDb() {
   db.passwordResetTokens = db.passwordResetTokens.filter((token) => !token.usedAt && token.expiresAt > now);
   db.passwordResetRequests = db.passwordResetRequests.filter((request) => request.createdAtMs > now - resetRequestWindowMs);
   const deviceApprovalCount = db.deviceApprovals.length;
+  const customerSessionCount = db.customerSessions.length;
+  const portalRateLimitCount = db.portalRateLimits.length;
   db.deviceApprovals = db.deviceApprovals.filter((approval) => !approval.approvedAt && approval.expiresAt > now);
-  if (db.passwordResetTokens.length !== resetTokenCount || db.passwordResetRequests.length !== resetRequestCount || db.deviceApprovals.length !== deviceApprovalCount) {
+  db.customerSessions = db.customerSessions.filter((session) => session.expiresAt > now && session.version === customerSessionVersion);
+  db.portalRateLimits = db.portalRateLimits.filter((item) => item.createdAtMs > now - portalRateLimitWindowMs);
+  if (
+    db.passwordResetTokens.length !== resetTokenCount
+    || db.passwordResetRequests.length !== resetRequestCount
+    || db.deviceApprovals.length !== deviceApprovalCount
+    || db.customerSessions.length !== customerSessionCount
+    || db.portalRateLimits.length !== portalRateLimitCount
+  ) {
     changed = true;
   }
   if (JSON.stringify(db.pricingConfig || {}) !== JSON.stringify(normalizedPricingConfig)) {
@@ -404,6 +468,276 @@ function publicClient(client, db = { users: [] }) {
     workChannel: client.workChannel || creator?.workChannel || "",
     createdAt: client.createdAt,
     updatedAt: client.updatedAt,
+  };
+}
+
+function normalizeCustomerStatus(value) {
+  const status = cleanText(value, 30).toUpperCase();
+  return customerStatuses.has(status) ? status : "REGISTRADO";
+}
+
+function defaultCustomerBenefit(clientId) {
+  return {
+    id: crypto.randomUUID(),
+    clientId,
+    quantityDiscountEnabled: true,
+    monthlyDiscountEnabled: true,
+    goalDiscountEnabled: false,
+    vipUnitPrice: 0,
+    monthlyGoal: 0,
+    deviceRequired: true,
+    active: true,
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
+  };
+}
+
+function customerBenefitFor(db, clientId) {
+  let benefit = db.customerBenefits.find((candidate) => candidate.clientId === clientId);
+  if (!benefit) {
+    benefit = defaultCustomerBenefit(clientId);
+    db.customerBenefits.push(benefit);
+  }
+  benefit.quantityDiscountEnabled = benefit.quantityDiscountEnabled !== false;
+  benefit.monthlyDiscountEnabled = benefit.monthlyDiscountEnabled !== false;
+  benefit.goalDiscountEnabled = Boolean(benefit.goalDiscountEnabled);
+  benefit.vipUnitPrice = moneyNumber(benefit.vipUnitPrice || 0);
+  benefit.monthlyGoal = Number.parseInt(benefit.monthlyGoal, 10) || 0;
+  benefit.deviceRequired = benefit.deviceRequired !== false;
+  benefit.active = benefit.active !== false;
+  return benefit;
+}
+
+function customerDeviceIsAuthorized(device, clientId) {
+  return Boolean(device?.authorizedClientIds?.includes(clientId));
+}
+
+function authorizeCustomerDevice(device, clientId) {
+  device.authorizedClientIds ||= [];
+  if (!device.authorizedClientIds.includes(clientId)) {
+    device.authorizedClientIds.push(clientId);
+  }
+  device.authorizedAt ||= nowIso();
+}
+
+function ensureCustomerDevice(db, req) {
+  let token = getCookie(req, customerDeviceCookieName);
+  if (!token) token = crypto.randomBytes(32).toString("base64url");
+  const tokenHash = hashToken(token);
+  let device = db.customerDevices.find((candidate) => candidate.tokenHash === tokenHash);
+  if (!device) {
+    device = {
+      id: crypto.randomUUID(),
+      tokenHash,
+      authorizedClientIds: [],
+      userAgent: cleanText(req.headers["user-agent"] || "unknown", 180),
+      firstIpHash: hashToken(clientIp(req)),
+      createdAt: nowIso(),
+    };
+    db.customerDevices.push(device);
+  }
+  device.authorizedClientIds ||= [];
+  device.lastSeenAt = nowIso();
+  device.lastSeenAtMs = Date.now();
+  return { token, device };
+}
+
+function customerMonthlyUsage(db, clientId, value = new Date()) {
+  const stamp = limaDateStamp(value).slice(0, 6);
+  return db.customerOrderItems.filter((item) => {
+    if (item.clientId !== clientId) return false;
+    const job = db.frpJobs.find((candidate) => candidate.id === item.frpJobId);
+    const done = item.status === "FINALIZADO" || job?.status === "FINALIZADO";
+    if (!done) return false;
+    return limaDateStamp(job?.doneAt || item.doneAt || job?.updatedAt || item.updatedAt || item.createdAt).startsWith(stamp);
+  }).length;
+}
+
+function customerCanUseBenefits(context, benefit) {
+  const client = context?.client;
+  const device = context?.device;
+  if (!client || !benefit?.active) return false;
+  if (client.status === "BLOQUEADO") return false;
+  if (!["REGISTRADO", "VERIFICADO", "VIP", "EMPRESA"].includes(client.status)) return false;
+  if (benefit.deviceRequired && !customerDeviceIsAuthorized(device, client.id)) return false;
+  return true;
+}
+
+function portalFrpPriceSuggestion(db, clientId, quantity, canUseBenefits, benefit) {
+  const safeQuantity = Math.max(1, Math.min(50, Number.parseInt(quantity, 10) || 1));
+  const baseUnitPrice = 25;
+  if (!canUseBenefits) {
+    return {
+      quantity: safeQuantity,
+      unitPrice: baseUnitPrice,
+      label: "Precio base",
+      total: moneyNumber(baseUnitPrice * safeQuantity),
+      monthlyUsage: customerMonthlyUsage(db, clientId),
+      discountLocked: true,
+      nextMonthlyTier: frpMonthlyTiers.at(-1),
+    };
+  }
+  const monthlyUsage = customerMonthlyUsage(db, clientId);
+  const quantityTier = benefit.quantityDiscountEnabled ? frpTierForQuantity(safeQuantity) : { unitPrice: baseUnitPrice, label: "Precio base", minQty: 1 };
+  const monthlyTier = benefit.monthlyDiscountEnabled ? frpTierForMonthlyUsage(monthlyUsage) : null;
+  const goalTier = benefit.goalDiscountEnabled && benefit.monthlyGoal > 0 && monthlyUsage >= benefit.monthlyGoal
+    ? { unitPrice: Math.max(1, baseUnitPrice - 1), label: `Meta ${benefit.monthlyGoal}+` }
+    : null;
+  const vipTier = clientId && benefit.vipUnitPrice > 0 ? { unitPrice: benefit.vipUnitPrice, label: "VIP aprobado" } : null;
+  const selected = [quantityTier, monthlyTier, goalTier, vipTier]
+    .filter(Boolean)
+    .sort((a, b) => a.unitPrice - b.unitPrice)[0] || { unitPrice: baseUnitPrice, label: "Precio base" };
+  const nextMonthlyTier = [...frpMonthlyTiers].reverse().find((tier) => monthlyUsage < tier.minJobs) || null;
+  return {
+    quantity: safeQuantity,
+    unitPrice: selected.unitPrice,
+    label: selected.label,
+    total: moneyNumber(selected.unitPrice * safeQuantity),
+    monthlyUsage,
+    quantityTier: { minQty: quantityTier.minQty || 1, unitPrice: quantityTier.unitPrice, label: quantityTier.label },
+    monthlyTier: monthlyTier ? { minJobs: monthlyTier.minJobs, unitPrice: monthlyTier.unitPrice, label: monthlyTier.label } : null,
+    nextMonthlyTier: nextMonthlyTier ? { minJobs: nextMonthlyTier.minJobs, unitPrice: nextMonthlyTier.unitPrice, label: nextMonthlyTier.label, remaining: nextMonthlyTier.minJobs - monthlyUsage } : null,
+    discountLocked: false,
+  };
+}
+
+function publicCustomerClient(client) {
+  if (!client) return null;
+  return {
+    id: client.id,
+    name: client.name,
+    whatsapp: client.whatsapp,
+    country: client.country,
+    status: normalizeCustomerStatus(client.status),
+    createdAt: client.createdAt,
+    updatedAt: client.updatedAt,
+  };
+}
+
+function publicCustomerUser(user) {
+  if (!user) return null;
+  return {
+    id: user.id,
+    clientId: user.clientId,
+    name: user.name,
+    email: user.email,
+    role: user.role || "OWNER",
+    active: user.active !== false,
+    createdAt: user.createdAt,
+  };
+}
+
+function publicCustomerBenefit(benefit, canUseBenefits) {
+  if (!benefit) return null;
+  return {
+    quantityDiscountEnabled: Boolean(benefit.quantityDiscountEnabled),
+    monthlyDiscountEnabled: Boolean(benefit.monthlyDiscountEnabled),
+    goalDiscountEnabled: Boolean(benefit.goalDiscountEnabled),
+    monthlyGoal: Number(benefit.monthlyGoal || 0),
+    vipUnitPrice: moneyNumber(benefit.vipUnitPrice || 0),
+    deviceRequired: benefit.deviceRequired !== false,
+    usableNow: Boolean(canUseBenefits),
+  };
+}
+
+function deriveCustomerOrderStatus(order, db) {
+  const frpOrder = db.frpOrders.find((candidate) => candidate.id === order.frpOrderId);
+  const items = db.customerOrderItems.filter((item) => item.orderId === order.id);
+  const jobs = items.map((item) => db.frpJobs.find((job) => job.id === item.frpJobId)).filter(Boolean);
+  if (order.publicStatus === "CANCELADO") return "CANCELADO";
+  if (jobs.length && jobs.every((job) => job.status === "FINALIZADO")) return "FINALIZADO";
+  if (jobs.some((job) => job.status === "REQUIERE_REVISION" || job.status === "ESPERANDO_CLIENTE")) return "REQUIERE_ATENCION";
+  if (jobs.some((job) => job.status === "EN_PROCESO")) return "EN_PROCESO";
+  if (frpOrder?.checklist?.paymentValidated || frpOrder?.paymentStatus === "PAGO_VALIDADO") return "EN_COLA";
+  if (Array.isArray(order.paymentProofs) && order.paymentProofs.length) return "PAGO_EN_REVISION";
+  return order.publicStatus || "ESPERANDO_PAGO";
+}
+
+function publicCustomerOrder(order, db) {
+  const payment = paymentMethods.find((candidate) => candidate.code === order.paymentMethod);
+  const items = db.customerOrderItems.filter((item) => item.orderId === order.id);
+  const publicStatus = deriveCustomerOrderStatus(order, db);
+  return {
+    id: order.id,
+    code: order.code,
+    accessCode: order.accessCode,
+    serviceCode: order.serviceCode,
+    serviceName: order.serviceName,
+    quantity: order.quantity,
+    unitPrice: order.unitPrice,
+    totalPrice: order.totalPrice,
+    priceFormatted: order.priceFormatted,
+    discountLabel: order.discountLabel,
+    discountLocked: Boolean(order.discountLocked),
+    monthlyUsageAtCreation: order.monthlyUsageAtCreation || 0,
+    paymentMethod: order.paymentMethod,
+    paymentLabel: order.paymentLabel,
+    paymentDetails: Array.isArray(order.paymentDetails) ? order.paymentDetails : payment?.details || [],
+    publicStatus,
+    paymentProofs: Array.isArray(order.paymentProofs) ? order.paymentProofs.map((proof) => ({
+      id: proof.id,
+      name: proof.name,
+      type: proof.type,
+      size: proof.size,
+      createdAt: proof.createdAt,
+    })) : [],
+    items: items.map((item) => {
+      const job = db.frpJobs.find((candidate) => candidate.id === item.frpJobId);
+      return {
+        id: item.id,
+        sequence: item.sequence,
+        model: item.model || "",
+        imei: item.imei || "",
+        status: job?.status || item.status,
+        ardCode: job?.ardCode || item.ardCode || "",
+        finalLog: job?.finalLog || "",
+      };
+    }),
+    createdAt: order.createdAt,
+    updatedAt: order.updatedAt,
+  };
+}
+
+function publicCustomerState(db, context) {
+  const client = context?.client || null;
+  const user = context?.user || null;
+  const device = context?.device || null;
+  const benefit = client ? customerBenefitFor(db, client.id) : null;
+  const canUseBenefits = customerCanUseBenefits(context, benefit);
+  const monthlyUsage = client ? customerMonthlyUsage(db, client.id) : 0;
+  const nextMonthlyTier = client ? [...frpMonthlyTiers].reverse().find((tier) => monthlyUsage < tier.minJobs) || null : null;
+  const orders = client
+    ? db.customerOrders.filter((order) => order.clientId === client.id).slice(0, 60).map((order) => publicCustomerOrder(order, db))
+    : [];
+  return {
+    user: publicCustomerUser(user),
+    client: publicCustomerClient(client),
+    device: device ? {
+      id: device.id,
+      authorizedForBenefits: client ? customerDeviceIsAuthorized(device, client.id) : false,
+      createdAt: device.createdAt,
+      lastSeenAt: device.lastSeenAt,
+    } : null,
+    benefit: publicCustomerBenefit(benefit, canUseBenefits),
+    monthlyUsage,
+    nextMonthlyTier: nextMonthlyTier ? { ...nextMonthlyTier, remaining: nextMonthlyTier.minJobs - monthlyUsage } : null,
+    orders,
+  };
+}
+
+function allowedPortalPaymentMethods() {
+  return allowedTicketPaymentMethods();
+}
+
+function publicPortalCatalog() {
+  return {
+    services: portalPublicServices.filter((service) => service.enabled),
+    paymentMethods: allowedPortalPaymentMethods(),
+    countries: countries.map(([, country]) => country),
+    statuses: publicOrderStatuses,
+    quantityTiers: frpQuantityTiers,
+    monthlyTiers: frpMonthlyTiers,
+    turnstileEnabled: Boolean(turnstileSecret),
   };
 }
 
@@ -970,6 +1304,47 @@ async function getCurrentUser(req) {
   return user;
 }
 
+async function getCurrentCustomerContext(req) {
+  const token = getCookie(req, customerSessionCookieName);
+  const db = await readDb();
+  const { token: deviceToken, device } = ensureCustomerDevice(db, req);
+  let shouldWrite = true;
+  if (!token) {
+    await writeDb(db);
+    return { db, user: null, client: null, device, deviceToken };
+  }
+  const now = Date.now();
+  const before = db.customerSessions.length;
+  db.customerSessions = db.customerSessions.filter((session) => session.expiresAt > now && session.version === customerSessionVersion);
+  const session = db.customerSessions.find((candidate) => candidate.tokenHash === hashToken(token));
+  shouldWrite = shouldWrite || before !== db.customerSessions.length;
+  if (!session) {
+    await writeDb(db);
+    return { db, user: null, client: null, device, deviceToken };
+  }
+  const user = db.customerUsers.find((candidate) => candidate.id === session.userId && candidate.active !== false);
+  const client = user ? db.customerClients.find((candidate) => candidate.id === user.clientId && candidate.status !== "BLOQUEADO") : null;
+  if (!user || !client) {
+    db.customerSessions = db.customerSessions.filter((candidate) => candidate.id !== session.id);
+    await writeDb(db);
+    return { db, user: null, client: null, device, deviceToken };
+  }
+  if (now - Number(session.lastSeenAtMs || 0) > presenceWriteIntervalMs) {
+    session.lastSeenAtMs = now;
+    session.lastSeenAt = new Date(now).toISOString();
+  }
+  await writeDb(db);
+  return { db, user, client, device, session, deviceToken };
+}
+
+function requireCustomer(context, res) {
+  if (!context?.user || !context?.client) {
+    sendJson(res, 401, { error: "Cuenta de cliente requerida." });
+    return false;
+  }
+  return true;
+}
+
 function publicPresence(db) {
   const now = Date.now();
   const latestByUser = new Map();
@@ -1070,6 +1445,151 @@ async function requireFrpPaymentReviewer(user, res, db, targetId) {
   return false;
 }
 
+function enforcePortalRateLimit(db, req, bucket, key, maxAttempts, windowMs = portalRateLimitWindowMs) {
+  const now = Date.now();
+  const ipHash = hashToken(clientIp(req));
+  const keyHash = key ? hashToken(key) : "";
+  db.portalRateLimits = (db.portalRateLimits || []).filter((item) => item.createdAtMs > now - windowMs);
+  const attempts = db.portalRateLimits.filter((item) => {
+    if (item.bucket !== bucket) return false;
+    return item.ipHash === ipHash || (keyHash && item.keyHash === keyHash);
+  }).length;
+  db.portalRateLimits.push({
+    id: crypto.randomUUID(),
+    bucket,
+    ipHash,
+    keyHash,
+    createdAt: nowIso(),
+    createdAtMs: now,
+  });
+  return attempts < maxAttempts;
+}
+
+async function validateTurnstileIfConfigured(req, input, action) {
+  if (!turnstileSecret) return { ok: true, skipped: true };
+  const token = String(input.turnstileToken || input["cf-turnstile-response"] || "");
+  if (!token) return { ok: false, error: "Validacion anti-spam requerida." };
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+  try {
+    const response = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        secret: turnstileSecret,
+        response: token,
+        remoteip: clientIp(req),
+      }),
+      signal: controller.signal,
+    });
+    const payload = await response.json();
+    const ok = Boolean(payload.success);
+    return { ok, error: ok ? "" : "Validacion anti-spam invalida.", action };
+  } catch {
+    return { ok: false, error: "No se pudo validar anti-spam. Intenta otra vez." };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function createPortalInternalClient(db, customerClient) {
+  const internalClient = {
+    id: crypto.randomUUID(),
+    name: cleanText(customerClient.name),
+    whatsapp: normalizePhone(customerClient.whatsapp),
+    country: cleanText(customerClient.country, 40),
+    workChannel: frpWorkChannel,
+    createdBy: "portal",
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
+  };
+  db.clients.unshift(internalClient);
+  audit(db, null, "PORTAL_INTERNAL_CLIENT_CREATED", internalClient.id, {
+    customerClientId: customerClient.id,
+    name: internalClient.name,
+    country: internalClient.country,
+    workChannel: internalClient.workChannel,
+  });
+  return internalClient;
+}
+
+function createFrpOrderFromPortal(db, customerClient, customerOrder, customerItems) {
+  const payment = paymentMethods.find((candidate) => candidate.code === customerOrder.paymentMethod);
+  const internalClient = findClientByIdentity(db, customerClient.name, customerClient.country, customerClient.whatsapp, frpWorkChannel)
+    || createPortalInternalClient(db, customerClient);
+  const order = {
+    id: crypto.randomUUID(),
+    code: nextFrpOrderCode(db),
+    clientId: internalClient.id,
+    clientName: internalClient.name,
+    clientWhatsapp: internalClient.whatsapp,
+    country: internalClient.country,
+    serviceCode: frpServiceCode,
+    serviceName: services.find((service) => service.code === frpServiceCode)?.name || "Xiaomi Cuenta Google",
+    workChannel: frpWorkChannel,
+    quantity: customerOrder.quantity,
+    baseUnitPrice: 25,
+    suggestedUnitPrice: customerOrder.suggestedUnitPrice,
+    unitPrice: customerOrder.unitPrice,
+    discountLabel: customerOrder.discountLabel,
+    monthlyUsageAtCreation: customerOrder.monthlyUsageAtCreation,
+    nextMonthlyTier: customerOrder.nextMonthlyTier || null,
+    totalPrice: customerOrder.totalPrice,
+    priceFormatted: customerOrder.priceFormatted,
+    paymentMethod: payment.code,
+    paymentLabel: payment.label,
+    paymentDetails: payment.details,
+    paymentProofs: [],
+    paymentStatus: "ESPERANDO_COMPROBANTE",
+    orderStatus: "COTIZADA",
+    checklist: { ...defaultFrpOrderChecklist(), priceSent: true },
+    createdBy: "portal",
+    portalOrderId: customerOrder.id,
+    source: "PORTAL_CLIENTE",
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
+  };
+  const jobs = customerItems.map((item) => ({
+    id: crypto.randomUUID(),
+    code: `${order.code}-${item.sequence}`,
+    orderId: order.id,
+    sequence: item.sequence,
+    totalJobs: customerItems.length,
+    workChannel: frpWorkChannel,
+    serviceCode: frpServiceCode,
+    serviceName: order.serviceName,
+    clientName: order.clientName,
+    country: order.country,
+    status: "ESPERANDO_PREPARACION",
+    checklist: defaultFrpJobChecklist(),
+    technicianId: "",
+    portalOrderItemId: item.id,
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
+    finalLog: "",
+    finalImages: [],
+    ardCode: "",
+  }));
+  db.frpOrders.unshift(order);
+  db.frpJobs.unshift(...jobs);
+  for (const item of customerItems) {
+    const job = jobs.find((candidate) => candidate.sequence === item.sequence);
+    item.frpOrderId = order.id;
+    item.frpJobId = job?.id || "";
+  }
+  customerOrder.frpOrderId = order.id;
+  customerOrder.internalClientId = internalClient.id;
+  syncFrpOrderStatus(db, order);
+  audit(db, null, "PORTAL_FRP_ORDER_CREATED", order.id, {
+    customerOrderId: customerOrder.id,
+    customerClientId: customerClient.id,
+    quantity: order.quantity,
+    unitPrice: order.unitPrice,
+    totalPrice: order.totalPrice,
+  });
+  return order;
+}
+
 function normalizeEmail(email) {
   return String(email || "").trim().toLowerCase();
 }
@@ -1121,6 +1641,15 @@ function nextFrpOrderCode(db) {
   const next = (db.frpCounters.orders[stamp] || 0) + 1;
   db.frpCounters.orders[stamp] = next;
   return `ORD-${stamp}-${String(next).padStart(3, "0")}`;
+}
+
+function nextCustomerOrderCode(db) {
+  const stamp = limaDateStamp();
+  db.customerCounters ||= {};
+  db.customerCounters.orders ||= {};
+  const next = (db.customerCounters.orders[stamp] || 0) + 1;
+  db.customerCounters.orders[stamp] = next;
+  return `CL-${stamp}-${String(next).padStart(3, "0")}`;
 }
 
 function nextFrpArdCode(db) {
@@ -1257,6 +1786,12 @@ function parseClientText(value) {
   return null;
 }
 
+function normalizeCountryInput(value) {
+  const normalized = normalizeForMatch(value);
+  const match = countries.find(([needle, country]) => normalized === needle || normalized === normalizeForMatch(country));
+  return match?.[1] || cleanText(value, 40);
+}
+
 function allowedTicketPaymentMethods() {
   return paymentMethods.filter((payment) => payment.ticketOption);
 }
@@ -1364,7 +1899,364 @@ async function handleApi(req, res, pathname) {
   const user = await getCurrentUser(req);
 
   if (req.method === "GET" && pathname === "/api/health") {
-    return sendJson(res, 200, { ok: true, appVersion, sessionVersion, trustedDeviceVersion });
+    return sendJson(res, 200, { ok: true, appVersion, sessionVersion, customerSessionVersion, trustedDeviceVersion });
+  }
+
+  if (req.method === "GET" && pathname === "/api/portal/catalog") {
+    return sendJson(res, 200, { catalog: publicPortalCatalog() });
+  }
+
+  if (req.method === "GET" && pathname === "/api/portal/session") {
+    const context = await getCurrentCustomerContext(req);
+    res.setHeader("Set-Cookie", cookieHeader(customerDeviceCookieName, context.deviceToken, customerDeviceMaxAgeSeconds));
+    return sendJson(res, 200, {
+      customer: publicCustomerState(context.db, context),
+      catalog: publicPortalCatalog(),
+    });
+  }
+
+  if (req.method === "POST" && pathname === "/api/portal/register") {
+    const input = await parseJson(req);
+    const name = cleanName(input.name);
+    const email = normalizeEmail(input.email);
+    const password = String(input.password || "");
+    const whatsapp = normalizePhone(input.whatsapp);
+    const country = normalizeCountryInput(input.country);
+    const db = await readDb();
+    const { token: deviceToken, device } = ensureCustomerDevice(db, req);
+    const rateOk = enforcePortalRateLimit(db, req, "portal_register", email || whatsapp, maxPortalRegisterRequestsPerWindow);
+    const turnstile = await validateTurnstileIfConfigured(req, input, "portal_register");
+    if (!rateOk) {
+      audit(db, null, "PORTAL_REGISTER_RATE_LIMITED", null, { emailHash: hashToken(email), ipHash: hashToken(clientIp(req)) });
+      await writeDb(db);
+      res.setHeader("Set-Cookie", cookieHeader(customerDeviceCookieName, deviceToken, customerDeviceMaxAgeSeconds));
+      return sendJson(res, 429, { error: "Demasiados intentos. Intenta mas tarde." });
+    }
+    if (!turnstile.ok) {
+      audit(db, null, "PORTAL_REGISTER_TURNSTILE_FAILED", null, { emailHash: hashToken(email), reason: turnstile.error });
+      await writeDb(db);
+      res.setHeader("Set-Cookie", cookieHeader(customerDeviceCookieName, deviceToken, customerDeviceMaxAgeSeconds));
+      return sendJson(res, 400, { error: turnstile.error });
+    }
+    if (!name || !email.includes("@") || !validatePassword(password) || !whatsapp || !country) {
+      await writeDb(db);
+      res.setHeader("Set-Cookie", cookieHeader(customerDeviceCookieName, deviceToken, customerDeviceMaxAgeSeconds));
+      return sendJson(res, 400, { error: "Nombre, correo, contrasena, WhatsApp y pais son obligatorios." });
+    }
+    if (db.customerUsers.some((candidate) => candidate.email === email)) {
+      await writeDb(db);
+      res.setHeader("Set-Cookie", cookieHeader(customerDeviceCookieName, deviceToken, customerDeviceMaxAgeSeconds));
+      return sendJson(res, 409, { error: "Ya existe una cuenta cliente con ese correo." });
+    }
+    const client = {
+      id: crypto.randomUUID(),
+      name,
+      whatsapp,
+      country,
+      status: "REGISTRADO",
+      primaryEmail: email,
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+    };
+    const customerUser = {
+      id: crypto.randomUUID(),
+      clientId: client.id,
+      name,
+      email,
+      passwordHash: await hashPassword(password),
+      role: "OWNER",
+      active: true,
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+    };
+    const benefit = defaultCustomerBenefit(client.id);
+    authorizeCustomerDevice(device, client.id);
+    db.customerClients.unshift(client);
+    db.customerUsers.unshift(customerUser);
+    db.customerBenefits.push(benefit);
+    const token = crypto.randomBytes(32).toString("base64url");
+    db.customerSessions.push({
+      id: crypto.randomUUID(),
+      userId: customerUser.id,
+      clientId: client.id,
+      tokenHash: hashToken(token),
+      deviceId: device.id,
+      version: customerSessionVersion,
+      createdAt: nowIso(),
+      lastSeenAt: nowIso(),
+      lastSeenAtMs: Date.now(),
+      expiresAt: Date.now() + customerSessionMaxAgeSeconds * 1000,
+    });
+    audit(db, null, "PORTAL_CUSTOMER_REGISTERED", client.id, { email, country, deviceId: device.id });
+    await writeDb(db);
+    res.setHeader("Set-Cookie", [
+      cookieHeader(customerSessionCookieName, token, customerSessionMaxAgeSeconds),
+      cookieHeader(customerDeviceCookieName, deviceToken, customerDeviceMaxAgeSeconds),
+    ]);
+    return sendJson(res, 201, {
+      customer: publicCustomerState(db, { user: customerUser, client, device }),
+      catalog: publicPortalCatalog(),
+    });
+  }
+
+  if (req.method === "POST" && pathname === "/api/portal/login") {
+    const input = await parseJson(req);
+    const email = normalizeEmail(input.email);
+    const password = String(input.password || "");
+    const db = await readDb();
+    const { token: deviceToken, device } = ensureCustomerDevice(db, req);
+    const rateOk = enforcePortalRateLimit(db, req, "portal_login", email, maxPortalRegisterRequestsPerWindow);
+    if (!rateOk) {
+      audit(db, null, "PORTAL_LOGIN_RATE_LIMITED", null, { emailHash: hashToken(email), ipHash: hashToken(clientIp(req)) });
+      await writeDb(db);
+      res.setHeader("Set-Cookie", cookieHeader(customerDeviceCookieName, deviceToken, customerDeviceMaxAgeSeconds));
+      return sendJson(res, 429, { error: "Demasiados intentos. Intenta mas tarde." });
+    }
+    const customerUser = db.customerUsers.find((candidate) => candidate.email === email && candidate.active !== false);
+    if (!customerUser || !(await verifyPassword(password, customerUser.passwordHash))) {
+      audit(db, null, "PORTAL_LOGIN_FAILED", customerUser?.clientId || null, { emailHash: hashToken(email) });
+      await writeDb(db);
+      res.setHeader("Set-Cookie", cookieHeader(customerDeviceCookieName, deviceToken, customerDeviceMaxAgeSeconds));
+      return sendJson(res, 401, { error: "Credenciales de cliente invalidas." });
+    }
+    const client = db.customerClients.find((candidate) => candidate.id === customerUser.clientId);
+    if (!client || client.status === "BLOQUEADO") {
+      await writeDb(db);
+      res.setHeader("Set-Cookie", cookieHeader(customerDeviceCookieName, deviceToken, customerDeviceMaxAgeSeconds));
+      return sendJson(res, 403, { error: "Cuenta cliente bloqueada o no disponible." });
+    }
+    const token = crypto.randomBytes(32).toString("base64url");
+    db.customerSessions = db.customerSessions.filter((session) => session.expiresAt > Date.now() && session.version === customerSessionVersion);
+    db.customerSessions.push({
+      id: crypto.randomUUID(),
+      userId: customerUser.id,
+      clientId: client.id,
+      tokenHash: hashToken(token),
+      deviceId: device.id,
+      version: customerSessionVersion,
+      createdAt: nowIso(),
+      lastSeenAt: nowIso(),
+      lastSeenAtMs: Date.now(),
+      expiresAt: Date.now() + customerSessionMaxAgeSeconds * 1000,
+    });
+    audit(db, null, "PORTAL_LOGIN_SUCCESS", client.id, {
+      email,
+      deviceId: device.id,
+      authorizedForBenefits: customerDeviceIsAuthorized(device, client.id),
+    });
+    await writeDb(db);
+    res.setHeader("Set-Cookie", [
+      cookieHeader(customerSessionCookieName, token, customerSessionMaxAgeSeconds),
+      cookieHeader(customerDeviceCookieName, deviceToken, customerDeviceMaxAgeSeconds),
+    ]);
+    return sendJson(res, 200, {
+      customer: publicCustomerState(db, { user: customerUser, client, device }),
+      catalog: publicPortalCatalog(),
+    });
+  }
+
+  if (req.method === "POST" && pathname === "/api/portal/logout") {
+    const token = getCookie(req, customerSessionCookieName);
+    const db = await readDb();
+    if (token) {
+      db.customerSessions = db.customerSessions.filter((session) => session.tokenHash !== hashToken(token));
+      await writeDb(db);
+    }
+    res.setHeader("Set-Cookie", cookieHeader(customerSessionCookieName, "", 0));
+    return sendJson(res, 200, { message: "Sesion cliente cerrada." });
+  }
+
+  if (req.method === "GET" && pathname === "/api/portal/orders") {
+    const context = await getCurrentCustomerContext(req);
+    if (!requireCustomer(context, res)) return;
+    res.setHeader("Set-Cookie", cookieHeader(customerDeviceCookieName, context.deviceToken, customerDeviceMaxAgeSeconds));
+    return sendJson(res, 200, { orders: publicCustomerState(context.db, context).orders });
+  }
+
+  if (req.method === "POST" && pathname === "/api/portal/orders/frp") {
+    const context = await getCurrentCustomerContext(req);
+    if (!requireCustomer(context, res)) return;
+    const input = await parseJson(req);
+    const db = context.db;
+    const rateOk = enforcePortalRateLimit(db, req, "portal_order_frp", context.client.id, maxPortalOrderRequestsPerWindow);
+    const turnstile = await validateTurnstileIfConfigured(req, input, "portal_order_frp");
+    if (!rateOk) {
+      audit(db, context.user.id, "PORTAL_ORDER_RATE_LIMITED", context.client.id, { ipHash: hashToken(clientIp(req)) });
+      await writeDb(db);
+      return sendJson(res, 429, { error: "Demasiadas solicitudes. Intenta mas tarde." });
+    }
+    if (!turnstile.ok) {
+      audit(db, context.user.id, "PORTAL_ORDER_TURNSTILE_FAILED", context.client.id, { reason: turnstile.error });
+      await writeDb(db);
+      return sendJson(res, 400, { error: turnstile.error });
+    }
+    const quantity = Math.max(1, Math.min(50, Number.parseInt(input.quantity, 10) || 1));
+    const service = portalPublicServices.find((candidate) => candidate.code === "PORTAL-XIAOMI-FRP" && candidate.enabled);
+    const payment = allowedPortalPaymentMethods().find((candidate) => candidate.code === input.paymentMethod);
+    if (!service) return sendJson(res, 503, { error: "Xiaomi FRP no esta disponible en el portal." });
+    if (!payment) return sendJson(res, 400, { error: "Metodo de pago invalido." });
+    const benefit = customerBenefitFor(db, context.client.id);
+    const canUseBenefits = customerCanUseBenefits(context, benefit);
+    const suggestion = portalFrpPriceSuggestion(db, context.client.id, quantity, canUseBenefits, benefit);
+    const request = {
+      id: crypto.randomUUID(),
+      clientId: context.client.id,
+      userId: context.user.id,
+      serviceCode: service.code,
+      serviceName: service.name,
+      channel: frpWorkChannel,
+      status: "ESPERANDO_PAGO",
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+    };
+    const order = {
+      id: crypto.randomUUID(),
+      code: nextCustomerOrderCode(db),
+      accessCode: crypto.randomBytes(8).toString("base64url"),
+      requestId: request.id,
+      clientId: context.client.id,
+      userId: context.user.id,
+      serviceCode: service.code,
+      internalServiceCode: service.internalServiceCode,
+      serviceName: service.name,
+      workChannel: frpWorkChannel,
+      quantity,
+      baseUnitPrice: service.baseUnitPrice,
+      suggestedUnitPrice: suggestion.unitPrice,
+      unitPrice: suggestion.unitPrice,
+      totalPrice: suggestion.total,
+      priceFormatted: formatPaymentAmount(suggestion.total, payment),
+      discountLabel: suggestion.label,
+      discountLocked: suggestion.discountLocked,
+      monthlyUsageAtCreation: suggestion.monthlyUsage,
+      nextMonthlyTier: suggestion.nextMonthlyTier,
+      paymentMethod: payment.code,
+      paymentLabel: payment.label,
+      paymentDetails: payment.details,
+      paymentProofs: [],
+      publicStatus: "ESPERANDO_PAGO",
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+      note: cleanText(input.note, 500),
+    };
+    const inputItems = Array.isArray(input.items) ? input.items : [];
+    const items = Array.from({ length: quantity }, (_, index) => {
+      const itemInput = inputItems[index] || {};
+      return {
+        id: crypto.randomUUID(),
+        requestId: request.id,
+        orderId: order.id,
+        clientId: context.client.id,
+        sequence: index + 1,
+        model: cleanText(itemInput.model || input.model || "", 80),
+        imei: cleanText(itemInput.imei || "", 40),
+        status: "ESPERANDO_PREPARACION",
+        frpOrderId: "",
+        frpJobId: "",
+        createdAt: nowIso(),
+        updatedAt: nowIso(),
+      };
+    });
+    createFrpOrderFromPortal(db, context.client, order, items);
+    db.customerRequests.unshift(request);
+    db.customerOrders.unshift(order);
+    db.customerOrderItems.unshift(...items);
+    audit(db, context.user.id, "PORTAL_CUSTOMER_ORDER_CREATED", order.id, {
+      code: order.code,
+      clientId: context.client.id,
+      quantity,
+      unitPrice: order.unitPrice,
+      discountLabel: order.discountLabel,
+      canUseBenefits,
+      workChannel: frpWorkChannel,
+    });
+    await writeDb(db);
+    return sendJson(res, 201, {
+      order: publicCustomerOrder(order, db),
+      customer: publicCustomerState(db, context),
+    });
+  }
+
+  const portalOrderMatch = pathname.match(/^\/api\/portal\/orders\/([^/]+)$/);
+  if (req.method === "GET" && portalOrderMatch) {
+    const context = await getCurrentCustomerContext(req);
+    const db = context.db;
+    const codeOrId = cleanText(decodeURIComponent(portalOrderMatch[1]), 80);
+    const accessCode = cleanText(new URL(req.url || "/", `http://${req.headers.host || "localhost"}`).searchParams.get("accessCode") || "", 80);
+    const order = db.customerOrders.find((candidate) => candidate.id === codeOrId || candidate.code === codeOrId);
+    if (!order) return sendJson(res, 404, { error: "Orden no encontrada." });
+    const ownsOrder = context.user && context.client && order.clientId === context.client.id;
+    const hasAccessCode = accessCode && order.accessCode === accessCode;
+    if (!ownsOrder && !hasAccessCode) {
+      audit(db, context.user?.id || null, "PORTAL_ORDER_LOOKUP_BLOCKED", order.id, {
+        code: order.code,
+        ipHash: hashToken(clientIp(req)),
+      });
+      await writeDb(db);
+      return sendJson(res, 403, { error: "Codigo de seguimiento invalido." });
+    }
+    if (context.deviceToken) {
+      res.setHeader("Set-Cookie", cookieHeader(customerDeviceCookieName, context.deviceToken, customerDeviceMaxAgeSeconds));
+    }
+    return sendJson(res, 200, { order: publicCustomerOrder(order, db) });
+  }
+
+  const portalProofMatch = pathname.match(/^\/api\/portal\/orders\/([^/]+)\/payment-proof$/);
+  if (req.method === "PATCH" && portalProofMatch) {
+    const context = await getCurrentCustomerContext(req);
+    if (!requireCustomer(context, res)) return;
+    const input = await parseJson(req);
+    const db = context.db;
+    const rateOk = enforcePortalRateLimit(db, req, "portal_payment_proof", context.client.id, maxPortalProofRequestsPerWindow);
+    if (!rateOk) {
+      audit(db, context.user.id, "PORTAL_PAYMENT_PROOF_RATE_LIMITED", context.client.id, { ipHash: hashToken(clientIp(req)) });
+      await writeDb(db);
+      return sendJson(res, 429, { error: "Demasiados comprobantes enviados. Intenta mas tarde." });
+    }
+    const order = db.customerOrders.find((candidate) => candidate.id === portalProofMatch[1] && candidate.clientId === context.client.id);
+    if (!order) return sendJson(res, 404, { error: "Orden no encontrada." });
+    const proofs = sanitizePaymentProofImages(input.paymentProofs || input.proofs || []);
+    if (!proofs.length) return sendJson(res, 400, { error: "Sube al menos una imagen de comprobante." });
+    const duplicateHash = new Set();
+    for (const candidateOrder of db.customerOrders) {
+      for (const proof of candidateOrder.paymentProofs || []) duplicateHash.add(proof.hash);
+    }
+    for (const frpOrder of db.frpOrders) {
+      for (const proof of frpOrder.paymentProofs || []) duplicateHash.add(proof.hash);
+    }
+    for (const ticket of db.tickets) {
+      for (const proof of ticket.paymentProofs || []) duplicateHash.add(proof.hash);
+    }
+    if (proofs.some((proof) => duplicateHash.has(proof.hash))) {
+      audit(db, context.user.id, "PORTAL_PAYMENT_PROOF_DUPLICATE_BLOCKED", order.id, { code: order.code });
+      await writeDb(db);
+      return sendJson(res, 409, { error: "Ese comprobante ya fue cargado antes." });
+    }
+    order.paymentProofs = (order.paymentProofs || []).concat(proofs);
+    order.publicStatus = "PAGO_EN_REVISION";
+    order.updatedAt = nowIso();
+    const request = db.customerRequests.find((candidate) => candidate.id === order.requestId);
+    if (request) {
+      request.status = "PAGO_EN_REVISION";
+      request.updatedAt = nowIso();
+    }
+    const frpOrder = db.frpOrders.find((candidate) => candidate.id === order.frpOrderId);
+    if (frpOrder) {
+      frpOrder.paymentProofs = (frpOrder.paymentProofs || []).concat(proofs);
+      frpOrder.paymentStatus = "PAGO_EN_VALIDACION";
+      frpOrder.updatedAt = nowIso();
+      syncFrpOrderStatus(db, frpOrder);
+    }
+    audit(db, context.user.id, "PORTAL_PAYMENT_PROOF_UPLOADED", order.id, {
+      code: order.code,
+      proofCount: proofs.length,
+      frpOrderId: order.frpOrderId || "",
+    });
+    await writeDb(db);
+    return sendJson(res, 200, {
+      order: publicCustomerOrder(order, db),
+      customer: publicCustomerState(db, context),
+    });
   }
 
   if (req.method === "GET" && pathname === "/api/session") {
@@ -2552,6 +3444,19 @@ function ownerRecoveryPage() {
 </html>`;
 }
 
+function requestHost(req) {
+  return String(req.headers.host || "").split(":")[0].toLowerCase();
+}
+
+function requestUsesCustomerPortal(req, pathname) {
+  const host = requestHost(req);
+  return host === "ariadgsm.com"
+    || host === "www.ariadgsm.com"
+    || pathname === "/cliente"
+    || pathname.startsWith("/cliente/")
+    || pathname === "/portal";
+}
+
 async function serveStatic(req, res, pathname) {
   if (pathname === "/owner-recovery") {
     if (!enableSetupPasswordReset) {
@@ -2561,7 +3466,13 @@ async function serveStatic(req, res, pathname) {
     return sendHtml(res, 200, ownerRecoveryPage());
   }
 
-  const safePath = pathname === "/" ? "/index.html" : pathname;
+  const portalRequest = requestUsesCustomerPortal(req, pathname);
+  let safePath = pathname;
+  if (portalRequest && (pathname === "/" || pathname === "/cliente" || pathname.startsWith("/cliente/") || pathname === "/portal")) {
+    safePath = "/portal.html";
+  } else if (pathname === "/") {
+    safePath = "/index.html";
+  }
   const resolved = path.normalize(path.join(publicDir, safePath));
   if (!resolved.startsWith(publicDir)) {
     res.writeHead(403);
@@ -2582,7 +3493,7 @@ async function serveStatic(req, res, pathname) {
     res.writeHead(200, { "Content-Type": type, "Cache-Control": "no-store" });
     res.end(file);
   } catch {
-    const index = await fs.readFile(path.join(publicDir, "index.html"));
+    const index = await fs.readFile(path.join(publicDir, portalRequest ? "portal.html" : "index.html"));
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
     res.end(index);
   }

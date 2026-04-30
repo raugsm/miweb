@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AriadGSM Portal Cliente</title>
+    <link rel="stylesheet" href="/portal.css" />
+  </head>
+  <body>
+    <main class="portal-shell">
+      <section class="brand-panel" aria-label="AriadGSM">
+        <img class="brand-logo" src="/ariadgsm-logo-cropped.png" alt="AriadGSM" />
+        <p class="eyebrow">Portal cliente</p>
+        <h1>Xiaomi FRP Express con seguimiento en linea.</h1>
+        <p class="lead">Registra tus equipos, sube comprobante y revisa el avance sin depender de mensajes sueltos.</p>
+        <div class="service-strip">
+          <span>WhatsApp 3</span>
+          <span>Multi-equipo</span>
+          <span>Descuentos verificados</span>
+        </div>
+      </section>
+
+      <section class="access-panel" id="accessPanel">
+        <div class="tabs" role="tablist" aria-label="Acceso cliente">
+          <button class="tab active" type="button" data-tab="login">Ingresar</button>
+          <button class="tab" type="button" data-tab="register">Registro</button>
+          <button class="tab" type="button" data-tab="track">Seguimiento</button>
+        </div>
+
+        <form id="loginForm" class="auth-form active">
+          <label>Correo <input name="email" type="email" autocomplete="email" required /></label>
+          <label>Contrasena <input name="password" type="password" autocomplete="current-password" minlength="8" required /></label>
+          <button type="submit">Entrar</button>
+        </form>
+
+        <form id="registerForm" class="auth-form">
+          <label>Nombre completo <input name="name" autocomplete="name" required /></label>
+          <label>Correo <input name="email" type="email" autocomplete="email" required /></label>
+          <label>Contrasena <input name="password" type="password" autocomplete="new-password" minlength="8" required /></label>
+          <label>WhatsApp <input name="whatsapp" autocomplete="tel" required /></label>
+          <label>Pais <select name="country" id="countrySelect" required></select></label>
+          <button type="submit">Crear cuenta cliente</button>
+        </form>
+
+        <form id="trackForm" class="auth-form">
+          <label>Codigo de orden <input name="code" autocomplete="off" placeholder="CLI-20260429-001" required /></label>
+          <label>Codigo de seguimiento <input name="accessCode" autocomplete="off" required /></label>
+          <button type="submit">Consultar estado</button>
+        </form>
+
+        <p id="authMessage" class="message" aria-live="polite"></p>
+      </section>
+
+      <section id="appPanel" class="app-panel hidden">
+        <header class="app-header">
+          <div>
+            <p class="eyebrow">Sesion cliente</p>
+            <h2 id="clientTitle">Portal AriadGSM</h2>
+          </div>
+          <button id="logoutButton" class="ghost" type="button">Salir</button>
+        </header>
+
+        <div class="summary-grid">
+          <article>
+            <span>Estado cliente</span>
+            <strong id="clientStatus">-</strong>
+          </article>
+          <article>
+            <span>Equipos este mes</span>
+            <strong id="monthlyUsage">0</strong>
+          </article>
+          <article>
+            <span>Dispositivo</span>
+            <strong id="deviceStatus">-</strong>
+          </article>
+        </div>
+
+        <section class="request-card">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Nuevo pedido</p>
+              <h2>Xiaomi FRP Express</h2>
+            </div>
+            <span class="channel-pill">WhatsApp 3</span>
+          </div>
+
+          <form id="orderForm" class="order-form">
+            <label>Cantidad de equipos <input name="quantity" type="number" min="1" max="50" value="1" required /></label>
+            <label>Metodo de pago <select name="paymentMethod" id="paymentSelect" required></select></label>
+            <label class="wide">Equipos / IMEI / referencia
+              <textarea name="items" rows="5" placeholder="Un equipo por linea. Ej: Redmi Note 12 - IMEI 1"></textarea>
+            </label>
+            <label class="wide">Nota para preparacion
+              <textarea name="note" rows="3" placeholder="Detalles de conexion, horario o aclaraciones"></textarea>
+            </label>
+            <div class="quote-box wide">
+              <div>
+                <span>Total estimado</span>
+                <strong id="quoteTotal">25.00 USDT</strong>
+                <small id="quoteHint">Precio base. El backend confirma el monto exacto.</small>
+              </div>
+              <button id="copyPaymentButton" class="ghost" type="button">Copiar pago</button>
+            </div>
+            <button type="submit">Crear solicitud</button>
+          </form>
+          <p id="orderMessage" class="message" aria-live="polite"></p>
+        </section>
+
+        <section class="orders-section">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Seguimiento</p>
+              <h2>Mis ordenes</h2>
+            </div>
+            <button id="refreshButton" class="ghost" type="button">Actualizar</button>
+          </div>
+          <div id="ordersList" class="orders-list"></div>
+        </section>
+      </section>
+    </main>
+
+    <template id="orderTemplate">
+      <article class="order-card">
+        <div class="order-top">
+          <div>
+            <strong class="order-code"></strong>
+            <span class="order-service"></span>
+          </div>
+          <span class="status-pill"></span>
+        </div>
+        <div class="order-meta"></div>
+        <div class="payment-block"></div>
+        <div class="item-list"></div>
+        <div class="order-actions">
+          <label class="upload-button">Subir comprobante
+            <input type="file" accept="image/*" multiple hidden />
+          </label>
+          <button class="copy-order ghost" type="button">Copiar datos</button>
+        </div>
+        <p class="message order-message" aria-live="polite"></p>
+      </article>
+    </template>
+
+    <script src="/portal.js" type="module"></script>
+  </body>
+</html>
