@@ -16,7 +16,7 @@ const enableSetupPasswordReset = ["true", "1", "yes"].includes(String(process.en
 const ownerRecoveryEmail = normalizeEmail(process.env.ARIAD_OWNER_RECOVERY_EMAIL || "");
 const publicBaseUrl = String(process.env.ARIAD_PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || `http://localhost:${port}`).replace(/\/+$/, "");
 const mailFrom = process.env.ARIAD_MAIL_FROM || '"AriadGSM Soporte" <soporte@ariadgsm.com>';
-const appVersion = "portal-proof-dropzone-v1";
+const appVersion = "daily-close-v1";
 const sessionVersion = 7;
 const customerSessionVersion = 1;
 const trustedDeviceVersion = 3;
@@ -218,6 +218,8 @@ const exchangeRateCountries = [
   { key: "chile", country: "Chile", currency: "CLP" },
   { key: "usdt", country: "USDT", currency: "USDT" },
 ];
+const dailyCloseStatuses = new Set(["ABIERTO", "CERRADO", "REABIERTO"]);
+const dailyAdjustmentTypes = new Set(["AJUSTE", "REEMBOLSO"]);
 const pricingModes = new Set(["USDT_BASE", "COMPONENTS", "MANUAL"]);
 const countries = [
   ["republica dominicana", "Republica Dominicana"],
@@ -384,6 +386,10 @@ async function ensureDb() {
       masterClients: [],
       clientLinks: [],
       clientLinkSuggestions: [],
+      paymentLedgerEntries: [],
+      dailyCloses: [],
+      dailyCloseLines: [],
+      dailyAdjustments: [],
       portalRateLimits: [],
       clients: [],
       audit: [],
@@ -420,6 +426,10 @@ async function readDb() {
   db.masterClients ||= [];
   db.clientLinks ||= [];
   db.clientLinkSuggestions ||= [];
+  db.paymentLedgerEntries ||= [];
+  db.dailyCloses ||= [];
+  db.dailyCloseLines ||= [];
+  db.dailyAdjustments ||= [];
   db.portalRateLimits ||= [];
   db.clients ||= [];
   db.audit ||= [];
@@ -463,6 +473,9 @@ async function readDb() {
     changed = true;
   }
   if (normalizeMasterClientRecords(db)) {
+    changed = true;
+  }
+  if (normalizeDailyAccountingRecords(db)) {
     changed = true;
   }
   for (const ticket of db.tickets) {
@@ -1116,7 +1129,702 @@ function audit(db, actorId, action, targetId, detail = {}) {
     detail,
     createdAt: nowIso(),
   });
-  db.audit = db.audit.slice(0, 200);
+  db.audit = db.audit.slice(0, 2000);
+}
+
+function normalizeDailyCloseDate(value = "") {
+  const text = cleanText(value, 20);
+  if (/^\d{8}$/.test(text)) return text;
+  const dashed = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (dashed) return `${dashed[1]}${dashed[2]}${dashed[3]}`;
+  return limaDateStamp();
+}
+
+function dailyCloseInputDate(dateStamp) {
+  const stamp = normalizeDailyCloseDate(dateStamp);
+  return `${stamp.slice(0, 4)}-${stamp.slice(4, 6)}-${stamp.slice(6, 8)}`;
+}
+
+function dailyCloseDisplayDate(dateStamp) {
+  const input = dailyCloseInputDate(dateStamp);
+  const date = new Date(`${input}T12:00:00-05:00`);
+  if (Number.isNaN(date.getTime())) return input;
+  return new Intl.DateTimeFormat("es-PE", { timeZone: "America/Lima", dateStyle: "medium" }).format(date);
+}
+
+function paymentCurrencyAmount(value, payment) {
+  const amount = Number(value || 0);
+  if (!Number.isFinite(amount)) return 0;
+  if (payment?.amountMode === "thousands" && amount > 0 && amount < 1000) {
+    return Math.round(amount * 1000);
+  }
+  return moneyNumber(amount);
+}
+
+function exchangeRateForCurrency(db, currency) {
+  const normalized = normalizePricingConfig(db.pricingConfig);
+  const rate = normalized.exchangeRates.find((candidate) => candidate.currency === currency);
+  if (currency === "USDT") return { ratePerUsdt: 1, exchangeRateDate: rate?.updatedAt || "" };
+  return {
+    ratePerUsdt: moneyNumber(rate?.ratePerUsdt || 0),
+    exchangeRateDate: rate?.updatedAt || "",
+  };
+}
+
+function ledgerAmountUsdt(db, amount, currency) {
+  const rate = exchangeRateForCurrency(db, currency);
+  return ledgerAmountUsdtFromRate(amount, currency, rate.ratePerUsdt);
+}
+
+function ledgerAmountUsdtFromRate(amount, currency, ratePerUsdt) {
+  if (currency === "USDT") return moneyNumber(amount);
+  if (!ratePerUsdt) return 0;
+  return moneyNumber(Number(amount || 0) / ratePerUsdt);
+}
+
+function userNameById(db, id) {
+  if (!id) return "Sistema";
+  return db.users.find((user) => user.id === id)?.name
+    || db.customerUsers.find((user) => user.id === id)?.name
+    || "Sistema";
+}
+
+function ledgerComparable(entry) {
+  const { id, createdAt, updatedAt, ...rest } = entry || {};
+  return rest;
+}
+
+function upsertPaymentLedgerEntry(db, nextEntry) {
+  db.paymentLedgerEntries ||= [];
+  const existing = db.paymentLedgerEntries.find((entry) => entry.sourceType === nextEntry.sourceType && entry.sourceId === nextEntry.sourceId && entry.entryType === nextEntry.entryType);
+  if (!existing) {
+    db.paymentLedgerEntries.unshift({
+      id: crypto.randomUUID(),
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+      ...nextEntry,
+    });
+    return true;
+  }
+  const nextComparable = ledgerComparable({ ...existing, ...nextEntry });
+  if (JSON.stringify(ledgerComparable(existing)) === JSON.stringify(nextComparable)) return false;
+  Object.assign(existing, nextEntry, { updatedAt: nowIso() });
+  return true;
+}
+
+function voidPaymentLedgerEntry(db, sourceType, sourceId) {
+  const existing = (db.paymentLedgerEntries || []).find((entry) => entry.sourceType === sourceType && entry.sourceId === sourceId && entry.entryType === "PAYMENT");
+  if (!existing || existing.status === "VOIDED") return false;
+  existing.status = "VOIDED";
+  existing.voidedAt = nowIso();
+  existing.updatedAt = existing.voidedAt;
+  return true;
+}
+
+function syncTicketLedgerEntry(db, ticket) {
+  const payment = paymentMethods.find((candidate) => candidate.code === ticket.paymentMethod);
+  if (!payment || ticket.paymentStatus !== "COMPROBANTE_RECIBIDO") {
+    return voidPaymentLedgerEntry(db, "TICKET", ticket.id);
+  }
+  const amount = paymentCurrencyAmount(ticket.price, payment);
+  const existing = (db.paymentLedgerEntries || []).find((entry) => entry.sourceType === "TICKET" && entry.sourceId === ticket.id && entry.entryType === "PAYMENT");
+  const currentExchange = exchangeRateForCurrency(db, payment.currency);
+  const exchange = existing?.exchangeRateToUsdt
+    ? { ratePerUsdt: existing.exchangeRateToUsdt, exchangeRateDate: existing.exchangeRateDate || "" }
+    : currentExchange;
+  return upsertPaymentLedgerEntry(db, {
+    entryType: "PAYMENT",
+    sourceType: "TICKET",
+    sourceId: ticket.id,
+    sourceCode: ticket.code,
+    clientId: ticket.clientId || "",
+    masterClientId: ticket.masterClientId || "",
+    clientName: ticket.clientName || "",
+    country: ticket.country || "",
+    serviceCode: ticket.serviceCode || "",
+    serviceName: ticket.serviceName || "",
+    workChannel: fallbackTicketChannel(ticket, db),
+    quantity: 1,
+    amount,
+    currency: payment.currency,
+    paymentMethod: payment.code,
+    paymentLabel: payment.label,
+    exchangeRateToUsdt: exchange.ratePerUsdt,
+    exchangeRateDate: exchange.exchangeRateDate,
+    amountUsdtEstimate: ledgerAmountUsdtFromRate(amount, payment.currency, exchange.ratePerUsdt),
+    status: "VALIDATED",
+    validatedBy: ticket.paymentReviewedBy || ticket.lastHandledBy || ticket.createdBy || "",
+    validatedAt: ticket.paymentReviewedAt || ticket.updatedAt || ticket.createdAt || nowIso(),
+    proofCount: Array.isArray(ticket.paymentProofs) ? ticket.paymentProofs.length : 0,
+  });
+}
+
+function syncFrpLedgerEntry(db, order) {
+  const payment = paymentMethods.find((candidate) => candidate.code === order.paymentMethod);
+  const isValidated = order.paymentStatus === "COMPROBANTE_RECIBIDO" || Boolean(order.checklist?.paymentValidated);
+  if (!payment || !isValidated) {
+    return voidPaymentLedgerEntry(db, "FRP_ORDER", order.id);
+  }
+  const amount = paymentCurrencyAmount(order.totalPrice, payment);
+  const existing = (db.paymentLedgerEntries || []).find((entry) => entry.sourceType === "FRP_ORDER" && entry.sourceId === order.id && entry.entryType === "PAYMENT");
+  const currentExchange = exchangeRateForCurrency(db, payment.currency);
+  const exchange = existing?.exchangeRateToUsdt
+    ? { ratePerUsdt: existing.exchangeRateToUsdt, exchangeRateDate: existing.exchangeRateDate || "" }
+    : currentExchange;
+  return upsertPaymentLedgerEntry(db, {
+    entryType: "PAYMENT",
+    sourceType: "FRP_ORDER",
+    sourceId: order.id,
+    sourceCode: order.code,
+    clientId: order.clientId || "",
+    masterClientId: order.masterClientId || "",
+    clientName: order.clientName || "",
+    country: order.country || "",
+    serviceCode: order.serviceCode || frpServiceCode,
+    serviceName: order.serviceName || "Xiaomi Cuenta Google",
+    workChannel: order.workChannel || frpWorkChannel,
+    quantity: Number(order.quantity || db.frpJobs.filter((job) => job.orderId === order.id).length || 1),
+    amount,
+    currency: payment.currency,
+    paymentMethod: payment.code,
+    paymentLabel: payment.label,
+    exchangeRateToUsdt: exchange.ratePerUsdt,
+    exchangeRateDate: exchange.exchangeRateDate,
+    amountUsdtEstimate: ledgerAmountUsdtFromRate(amount, payment.currency, exchange.ratePerUsdt),
+    status: "VALIDATED",
+    validatedBy: order.paymentReviewedBy || order.createdBy || "",
+    validatedAt: order.paymentReviewedAt || order.updatedAt || order.createdAt || nowIso(),
+    proofCount: Array.isArray(order.paymentProofs) ? order.paymentProofs.length : 0,
+  });
+}
+
+function normalizeDailyAccountingRecords(db) {
+  db.paymentLedgerEntries ||= [];
+  db.dailyCloses ||= [];
+  db.dailyCloseLines ||= [];
+  db.dailyAdjustments ||= [];
+  let changed = false;
+  for (const ticket of db.tickets || []) {
+    if (syncTicketLedgerEntry(db, ticket)) changed = true;
+  }
+  for (const order of db.frpOrders || []) {
+    if (syncFrpLedgerEntry(db, order)) changed = true;
+  }
+  for (const adjustment of db.dailyAdjustments) {
+    const type = cleanText(adjustment.type, 20).toUpperCase();
+    const normalizedType = dailyAdjustmentTypes.has(type) ? type : "AJUSTE";
+    const normalizedDate = normalizeDailyCloseDate(adjustment.dateStamp || adjustment.date);
+    if (adjustment.type !== normalizedType || adjustment.dateStamp !== normalizedDate) {
+      adjustment.type = normalizedType;
+      adjustment.dateStamp = normalizedDate;
+      changed = true;
+    }
+    adjustment.status ||= "APPROVED";
+    adjustment.currency = cleanText(adjustment.currency, 10).toUpperCase();
+    adjustment.amount = moneyNumber(adjustment.amount || 0);
+  }
+  for (const close of db.dailyCloses) {
+    const status = cleanText(close.status, 20).toUpperCase();
+    const normalizedStatus = dailyCloseStatuses.has(status) ? status : "ABIERTO";
+    const normalizedDate = normalizeDailyCloseDate(close.dateStamp || close.date);
+    if (close.status !== normalizedStatus || close.dateStamp !== normalizedDate) {
+      close.status = normalizedStatus;
+      close.dateStamp = normalizedDate;
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+function dailyGroupKey(parts) {
+  return parts.map((part) => cleanText(part || "-", 120)).join("||");
+}
+
+function ensureDailyGroup(map, parts, seed = {}) {
+  const key = dailyGroupKey(parts);
+  if (!map.has(key)) {
+    map.set(key, {
+      key,
+      grossAmount: 0,
+      refundAmount: 0,
+      adjustmentAmount: 0,
+      netAmount: 0,
+      paymentCount: 0,
+      equipmentCount: 0,
+      ...seed,
+    });
+  }
+  return map.get(key);
+}
+
+function applyLedgerToGroup(group, entry) {
+  group.grossAmount = moneyNumber(group.grossAmount + Number(entry.amount || 0));
+  group.netAmount = moneyNumber(group.netAmount + Number(entry.amount || 0));
+  group.paymentCount += 1;
+  group.equipmentCount += Number(entry.quantity || 0);
+}
+
+function applyAdjustmentToGroup(group, adjustment) {
+  const amount = moneyNumber(adjustment.amount || 0);
+  if (adjustment.type === "REEMBOLSO") {
+    group.refundAmount = moneyNumber(group.refundAmount + amount);
+    group.netAmount = moneyNumber(group.netAmount - amount);
+  } else {
+    group.adjustmentAmount = moneyNumber(group.adjustmentAmount + amount);
+    group.netAmount = moneyNumber(group.netAmount + amount);
+  }
+}
+
+function dailyProofSummary(db, dateStamp) {
+  const allProofs = dailyProofRecords(db, dateStamp);
+  return {
+    pending: allProofs.filter((proof) => proof.status === "PENDIENTE").length,
+    rejectedToday: allProofs.filter((proof) => proof.status === "RECHAZADO" && proof.dateStamp === dateStamp).length,
+    validatedToday: allProofs.filter((proof) => proof.status === "VALIDADO" && proof.dateStamp === dateStamp).length,
+  };
+}
+
+function buildDailyCloseReport(db, rawDate = "") {
+  normalizeDailyAccountingRecords(db);
+  const dateStamp = normalizeDailyCloseDate(rawDate);
+  const close = db.dailyCloses.find((candidate) => candidate.dateStamp === dateStamp) || {
+    dateStamp,
+    status: "ABIERTO",
+  };
+  const ledgerEntries = (db.paymentLedgerEntries || []).filter((entry) => entry.status === "VALIDATED" && limaDateStamp(entry.validatedAt) === dateStamp);
+  const adjustments = (db.dailyAdjustments || []).filter((adjustment) => adjustment.status !== "VOIDED" && adjustment.dateStamp === dateStamp);
+  const proofs = dailyProofRecords(db, dateStamp);
+  const byCurrency = new Map();
+  const byPaymentMethod = new Map();
+  const byChannel = new Map();
+  const byService = new Map();
+  const byValidator = new Map();
+
+  for (const entry of ledgerEntries) {
+    applyLedgerToGroup(ensureDailyGroup(byCurrency, [entry.currency], { currency: entry.currency }), entry);
+    applyLedgerToGroup(ensureDailyGroup(byPaymentMethod, [entry.paymentMethod], { paymentMethod: entry.paymentMethod, paymentLabel: entry.paymentLabel, currency: entry.currency }), entry);
+    applyLedgerToGroup(ensureDailyGroup(byChannel, [entry.workChannel, entry.currency], { workChannel: entry.workChannel, currency: entry.currency }), entry);
+    applyLedgerToGroup(ensureDailyGroup(byService, [entry.serviceCode, entry.currency], { serviceCode: entry.serviceCode, serviceName: entry.serviceName, currency: entry.currency }), entry);
+    applyLedgerToGroup(ensureDailyGroup(byValidator, [entry.validatedBy, entry.currency], { userId: entry.validatedBy, userName: userNameById(db, entry.validatedBy), currency: entry.currency }), entry);
+  }
+
+  for (const adjustment of adjustments) {
+    const currency = cleanText(adjustment.currency, 10).toUpperCase();
+    applyAdjustmentToGroup(ensureDailyGroup(byCurrency, [currency], { currency }), adjustment);
+    applyAdjustmentToGroup(ensureDailyGroup(byPaymentMethod, [adjustment.paymentMethod || "-", currency], {
+      paymentMethod: adjustment.paymentMethod || "-",
+      paymentLabel: paymentMethods.find((method) => method.code === adjustment.paymentMethod)?.label || "Ajuste manual",
+      currency,
+    }), adjustment);
+    applyAdjustmentToGroup(ensureDailyGroup(byChannel, [adjustment.workChannel || "-", currency], { workChannel: adjustment.workChannel || "-", currency }), adjustment);
+    applyAdjustmentToGroup(ensureDailyGroup(byService, [adjustment.serviceCode || "-", currency], {
+      serviceCode: adjustment.serviceCode || "-",
+      serviceName: services.find((service) => service.code === adjustment.serviceCode)?.name || "Ajuste manual",
+      currency,
+    }), adjustment);
+  }
+
+  const createdTickets = (db.tickets || []).filter((ticket) => limaDateStamp(ticket.createdAt) === dateStamp);
+  const createdFrpOrders = (db.frpOrders || []).filter((order) => limaDateStamp(order.createdAt) === dateStamp);
+  const finalizedTickets = (db.tickets || []).filter((ticket) => ticket.operationalStatus === "FINALIZADO" && limaDateStamp(ticket.updatedAt) === dateStamp);
+  const finalizedFrpJobs = (db.frpJobs || []).filter((job) => job.status === "FINALIZADO" && limaDateStamp(job.doneAt || job.updatedAt) === dateStamp);
+  const technicians = new Map();
+  for (const ticket of finalizedTickets) {
+    const id = ticket.lastHandledBy || ticket.createdBy || "";
+    const group = ensureDailyGroup(technicians, [id], { userId: id, userName: userNameById(db, id), finalizedCount: 0, equipmentCount: 0 });
+    group.finalizedCount += 1;
+    group.equipmentCount += 1;
+  }
+  for (const job of finalizedFrpJobs) {
+    const id = job.technicianId || "";
+    const group = ensureDailyGroup(technicians, [id], { userId: id, userName: userNameById(db, id), finalizedCount: 0, equipmentCount: 0 });
+    group.finalizedCount += 1;
+    group.equipmentCount += 1;
+  }
+
+  const totals = {
+    createdTickets: createdTickets.length,
+    createdFrpOrders: createdFrpOrders.length,
+    createdOrders: createdTickets.length + createdFrpOrders.length,
+    validatedPayments: ledgerEntries.length,
+    finalizedTickets: finalizedTickets.length,
+    finalizedFrpJobs: finalizedFrpJobs.length,
+    finalizedServices: finalizedTickets.length + finalizedFrpJobs.length,
+    equipmentCreated: createdTickets.length + createdFrpOrders.reduce((sum, order) => sum + Number(order.quantity || 0), 0),
+    equipmentFinalized: finalizedTickets.length + finalizedFrpJobs.length,
+    pendingProofs: dailyProofSummary(db, dateStamp).pending,
+    rejectedProofs: dailyProofSummary(db, dateStamp).rejectedToday,
+    validatedProofs: dailyProofSummary(db, dateStamp).validatedToday,
+  };
+
+  return {
+    dateStamp,
+    dateInput: dailyCloseInputDate(dateStamp),
+    dateLabel: dailyCloseDisplayDate(dateStamp),
+    timezone: "America/Lima",
+    status: close.status || "ABIERTO",
+    close: {
+      id: close.id || "",
+      status: close.status || "ABIERTO",
+      closedAt: close.closedAt || "",
+      closedBy: close.closedBy || "",
+      closedByName: userNameById(db, close.closedBy),
+      reopenedAt: close.reopenedAt || "",
+      reopenedBy: close.reopenedBy || "",
+      reopenedByName: userNameById(db, close.reopenedBy),
+      reopenReason: close.reopenReason || "",
+      notes: close.notes || "",
+    },
+    totals,
+    byCurrency: Array.from(byCurrency.values()).sort((a, b) => String(a.currency).localeCompare(String(b.currency))),
+    byPaymentMethod: Array.from(byPaymentMethod.values()).sort((a, b) => String(a.paymentLabel).localeCompare(String(b.paymentLabel))),
+    byChannel: Array.from(byChannel.values()).sort((a, b) => String(a.workChannel).localeCompare(String(b.workChannel))),
+    byService: Array.from(byService.values()).sort((a, b) => String(a.serviceName).localeCompare(String(b.serviceName))),
+    byValidator: Array.from(byValidator.values()).sort((a, b) => String(a.userName).localeCompare(String(b.userName))),
+    technicians: Array.from(technicians.values()).sort((a, b) => String(a.userName).localeCompare(String(b.userName))),
+    ledgerEntries: ledgerEntries.map((entry) => ({ ...entry, validatedByName: userNameById(db, entry.validatedBy) })),
+    proofs,
+    adjustments: adjustments.map((adjustment) => ({
+      ...adjustment,
+      createdByName: userNameById(db, adjustment.createdBy),
+      approvedByName: userNameById(db, adjustment.approvedBy),
+    })),
+    proofSummary: dailyProofSummary(db, dateStamp),
+    audit: (db.audit || []).filter((event) => limaDateStamp(event.createdAt) === dateStamp).slice(0, 80).map((event) => ({
+      ...event,
+      actorName: userNameById(db, event.actorId),
+    })),
+  };
+}
+
+function dailyCloseLinesFromReport(report) {
+  const rows = [];
+  const addRows = (type, sourceRows) => {
+    sourceRows.forEach((row) => rows.push({
+      id: crypto.randomUUID(),
+      dailyCloseId: "",
+      dateStamp: report.dateStamp,
+      type,
+      currency: row.currency || "",
+      paymentMethod: row.paymentMethod || "",
+      workChannel: row.workChannel || "",
+      serviceCode: row.serviceCode || "",
+      grossAmount: moneyNumber(row.grossAmount),
+      refundAmount: moneyNumber(row.refundAmount),
+      adjustmentAmount: moneyNumber(row.adjustmentAmount),
+      netAmount: moneyNumber(row.netAmount),
+      paymentCount: Number(row.paymentCount || 0),
+      equipmentCount: Number(row.equipmentCount || 0),
+      createdAt: nowIso(),
+    }));
+  };
+  addRows("MONEDA", report.byCurrency);
+  addRows("METODO_PAGO", report.byPaymentMethod);
+  addRows("CANAL", report.byChannel);
+  addRows("SERVICIO", report.byService);
+  return rows;
+}
+
+function closeDailyReport(db, dateStamp, user, notes = "") {
+  const report = buildDailyCloseReport(db, dateStamp);
+  let close = db.dailyCloses.find((candidate) => candidate.dateStamp === report.dateStamp);
+  if (close?.status === "CERRADO") {
+    const error = new Error("El cierre de este dia ya esta cerrado.");
+    error.status = 409;
+    throw error;
+  }
+  if (!close) {
+    close = { id: crypto.randomUUID(), dateStamp: report.dateStamp, openedAt: nowIso(), createdAt: nowIso() };
+    db.dailyCloses.unshift(close);
+  }
+  close.status = "CERRADO";
+  close.closedAt = nowIso();
+  close.closedBy = user.id;
+  close.notes = cleanText(notes, 500);
+  close.totals = report.totals;
+  close.updatedAt = close.closedAt;
+  db.dailyCloseLines = (db.dailyCloseLines || []).filter((line) => line.dateStamp !== report.dateStamp);
+  const lines = dailyCloseLinesFromReport(report).map((line) => ({ ...line, dailyCloseId: close.id }));
+  db.dailyCloseLines.push(...lines);
+  audit(db, user.id, "DAILY_CLOSE_CLOSED", close.id, { dateStamp: report.dateStamp, lineCount: lines.length, totals: report.totals });
+  return buildDailyCloseReport(db, report.dateStamp);
+}
+
+function reopenDailyReport(db, dateStamp, user, reason = "") {
+  const close = db.dailyCloses.find((candidate) => candidate.dateStamp === normalizeDailyCloseDate(dateStamp));
+  const cleanReason = cleanText(reason, 300);
+  if (!close || close.status !== "CERRADO") {
+    const error = new Error("Solo se puede reabrir un cierre cerrado.");
+    error.status = 400;
+    throw error;
+  }
+  if (!cleanReason) {
+    const error = new Error("Indica el motivo para reabrir.");
+    error.status = 400;
+    throw error;
+  }
+  close.status = "REABIERTO";
+  close.reopenedAt = nowIso();
+  close.reopenedBy = user.id;
+  close.reopenReason = cleanReason;
+  close.updatedAt = close.reopenedAt;
+  audit(db, user.id, "DAILY_CLOSE_REOPENED", close.id, { dateStamp: close.dateStamp, reason: cleanReason });
+  return buildDailyCloseReport(db, close.dateStamp);
+}
+
+function createDailyAdjustment(db, dateStamp, user, input = {}) {
+  const type = cleanText(input.type, 20).toUpperCase();
+  const normalizedType = dailyAdjustmentTypes.has(type) ? type : "";
+  const amount = moneyNumber(input.amount || 0);
+  const currency = cleanText(input.currency, 10).toUpperCase();
+  const reason = cleanText(input.reason, 300);
+  const paymentMethod = cleanText(input.paymentMethod, 80);
+  const workChannel = normalizeWorkChannel(input.workChannel) || "";
+  const serviceCode = cleanText(input.serviceCode, 80);
+  if (!normalizedType) {
+    const error = new Error("Tipo de ajuste invalido.");
+    error.status = 400;
+    throw error;
+  }
+  if (!amount || amount <= 0 || !currency) {
+    const error = new Error("Monto y moneda son obligatorios.");
+    error.status = 400;
+    throw error;
+  }
+  if (!reason) {
+    const error = new Error("El motivo del ajuste o reembolso es obligatorio.");
+    error.status = 400;
+    throw error;
+  }
+  const exchange = exchangeRateForCurrency(db, currency);
+  const adjustment = {
+    id: crypto.randomUUID(),
+    dateStamp: normalizeDailyCloseDate(dateStamp),
+    type: normalizedType,
+    amount,
+    currency,
+    amountUsdtEstimate: ledgerAmountUsdtFromRate(amount, currency, exchange.ratePerUsdt),
+    exchangeRateToUsdt: exchange.ratePerUsdt,
+    exchangeRateDate: exchange.exchangeRateDate,
+    paymentMethod,
+    paymentLabel: paymentMethods.find((method) => method.code === paymentMethod)?.label || "",
+    workChannel,
+    serviceCode,
+    serviceName: services.find((service) => service.code === serviceCode)?.name || "",
+    reason,
+    status: "APPROVED",
+    createdBy: user.id,
+    approvedBy: user.id,
+    createdAt: nowIso(),
+    approvedAt: nowIso(),
+    updatedAt: nowIso(),
+  };
+  db.dailyAdjustments.unshift(adjustment);
+  audit(db, user.id, normalizedType === "REEMBOLSO" ? "DAILY_CLOSE_REFUND_ADDED" : "DAILY_CLOSE_ADJUSTMENT_ADDED", adjustment.id, {
+    dateStamp: adjustment.dateStamp,
+    amount,
+    currency,
+    paymentMethod,
+    workChannel,
+    serviceCode,
+    reason,
+  });
+  return adjustment;
+}
+
+function dailyProofRecords(db, dateStamp = "") {
+  const proofs = [];
+  const pushProof = (proof, source) => {
+    const status = proof.reviewStatus || "PENDIENTE";
+    const dateSource = proof.reviewedAt || proof.updatedAt || proof.uploadedAt || proof.createdAt;
+    proofs.push({
+      sourceType: source.sourceType,
+      sourceCode: source.sourceCode,
+      clientName: source.clientName || "",
+      serviceName: source.serviceName || "",
+      workChannel: source.workChannel || "",
+      status,
+      uploadedAt: proof.uploadedAt || proof.createdAt || "",
+      uploadedByName: userNameById(db, proof.uploadedBy),
+      reviewedAt: proof.reviewedAt || "",
+      reviewedByName: userNameById(db, proof.reviewedBy),
+      dateStamp: limaDateStamp(dateSource),
+      hash: proof.hash || "",
+    });
+  };
+  for (const ticket of db.tickets || []) {
+    for (const proof of ticket.paymentProofs || []) {
+      pushProof(proof, {
+        sourceType: "TICKET",
+        sourceCode: ticket.code,
+        clientName: ticket.clientName,
+        serviceName: ticket.serviceName,
+        workChannel: fallbackTicketChannel(ticket, db),
+      });
+    }
+  }
+  for (const order of db.frpOrders || []) {
+    for (const proof of order.paymentProofs || []) {
+      pushProof(proof, {
+        sourceType: "FRP_ORDER",
+        sourceCode: order.code,
+        clientName: order.clientName,
+        serviceName: order.serviceName,
+        workChannel: order.workChannel || frpWorkChannel,
+      });
+    }
+  }
+  if (!dateStamp) return proofs;
+  return proofs.filter((proof) => proof.status === "PENDIENTE" || proof.dateStamp === dateStamp);
+}
+
+function xmlEscape(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function excelCell(value) {
+  const type = typeof value === "number" && Number.isFinite(value) ? "Number" : "String";
+  const text = type === "Number" ? String(value) : xmlEscape(value);
+  return `<Cell><Data ss:Type="${type}">${text}</Data></Cell>`;
+}
+
+function excelRow(values) {
+  return `<Row>${values.map(excelCell).join("")}</Row>`;
+}
+
+function excelWorksheet(name, rows) {
+  const safeName = xmlEscape(cleanText(name, 31) || "Hoja");
+  return `<Worksheet ss:Name="${safeName}"><Table>${rows.map(excelRow).join("")}</Table></Worksheet>`;
+}
+
+function dailyCloseWorkbookXml(report) {
+  const commonMoneyHeaders = ["Clave", "Etiqueta", "Moneda", "Bruto", "Reembolsos", "Ajustes", "Neto", "Pagos", "Equipos"];
+  const groupRows = (rows, labelKey, keyKey = "key") => [
+    commonMoneyHeaders,
+    ...rows.map((row) => [
+      row[keyKey] || row.key || "",
+      row[labelKey] || row.paymentLabel || row.serviceName || row.workChannel || row.currency || "",
+      row.currency || "",
+      row.grossAmount || 0,
+      row.refundAmount || 0,
+      row.adjustmentAmount || 0,
+      row.netAmount || 0,
+      row.paymentCount || 0,
+      row.equipmentCount || 0,
+    ]),
+  ];
+  const sheets = [
+    excelWorksheet("Resumen", [
+      ["Fecha", report.dateLabel],
+      ["Zona horaria", report.timezone],
+      ["Estado", report.status],
+      ["Cerrado por", report.close.closedByName || ""],
+      ["Cerrado en", report.close.closedAt || ""],
+      ["Reabierto por", report.close.reopenedByName || ""],
+      ["Motivo reapertura", report.close.reopenReason || ""],
+      ["Ordenes creadas", report.totals.createdOrders],
+      ["Pagos validados", report.totals.validatedPayments],
+      ["Servicios finalizados", report.totals.finalizedServices],
+      ["Equipos creados", report.totals.equipmentCreated],
+      ["Equipos finalizados", report.totals.equipmentFinalized],
+      ["Comprobantes pendientes", report.totals.pendingProofs],
+      ["Comprobantes rechazados", report.totals.rejectedProofs],
+      ["Comprobantes validados", report.totals.validatedProofs],
+    ]),
+    excelWorksheet("Monedas", groupRows(report.byCurrency, "currency", "currency")),
+    excelWorksheet("Metodos", groupRows(report.byPaymentMethod, "paymentLabel", "paymentMethod")),
+    excelWorksheet("WhatsApp", groupRows(report.byChannel, "workChannel", "workChannel")),
+    excelWorksheet("Servicios", groupRows(report.byService, "serviceName", "serviceCode")),
+    excelWorksheet("Validadores", [
+      commonMoneyHeaders,
+      ...report.byValidator.map((row) => [
+        row.userId || "",
+        row.userName || "",
+        row.currency || "",
+        row.grossAmount || 0,
+        row.refundAmount || 0,
+        row.adjustmentAmount || 0,
+        row.netAmount || 0,
+        row.paymentCount || 0,
+        row.equipmentCount || 0,
+      ]),
+    ]),
+    excelWorksheet("Tecnicos", [
+      ["Usuario", "Finalizados", "Equipos"],
+      ...report.technicians.map((row) => [row.userName || row.userId || "Sistema", row.finalizedCount || 0, row.equipmentCount || 0]),
+    ]),
+    excelWorksheet("Pagos", [
+      ["Codigo", "Origen", "Cliente", "Servicio", "WhatsApp", "Monto", "Moneda", "Metodo", "Valido por", "Validado en", "Tasa USDT", "USDT estimado", "Comprobantes"],
+      ...report.ledgerEntries.map((entry) => [
+        entry.sourceCode,
+        entry.sourceType,
+        entry.clientName,
+        entry.serviceName,
+        entry.workChannel,
+        entry.amount,
+        entry.currency,
+        entry.paymentLabel,
+        entry.validatedByName,
+        entry.validatedAt,
+        entry.exchangeRateToUsdt || 0,
+        entry.amountUsdtEstimate || 0,
+        entry.proofCount || 0,
+      ]),
+    ]),
+    excelWorksheet("Comprobantes", [
+      ["Codigo", "Origen", "Cliente", "Servicio", "WhatsApp", "Estado", "Subido en", "Subido por", "Revisado en", "Revisado por"],
+      ...report.proofs.map((proof) => [
+        proof.sourceCode,
+        proof.sourceType,
+        proof.clientName,
+        proof.serviceName,
+        proof.workChannel,
+        proof.status,
+        proof.uploadedAt,
+        proof.uploadedByName,
+        proof.reviewedAt,
+        proof.reviewedByName,
+      ]),
+    ]),
+    excelWorksheet("Ajustes", [
+      ["Tipo", "Monto", "Moneda", "Metodo", "WhatsApp", "Servicio", "Motivo", "Creado por", "Creado en", "Tasa USDT", "USDT estimado"],
+      ...report.adjustments.map((adjustment) => [
+        adjustment.type,
+        adjustment.amount,
+        adjustment.currency,
+        adjustment.paymentLabel || adjustment.paymentMethod,
+        adjustment.workChannel,
+        adjustment.serviceName || adjustment.serviceCode,
+        adjustment.reason,
+        adjustment.createdByName,
+        adjustment.createdAt,
+        adjustment.exchangeRateToUsdt || 0,
+        adjustment.amountUsdtEstimate || 0,
+      ]),
+    ]),
+    excelWorksheet("Auditoria", [
+      ["Evento", "Actor", "Objetivo", "Fecha", "Detalle"],
+      ...report.audit.map((event) => [
+        event.action,
+        event.actorName,
+        event.targetId || "",
+        event.createdAt,
+        JSON.stringify(event.detail || {}),
+      ]),
+    ]),
+  ];
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:x="urn:schemas-microsoft-com:office:excel"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+${sheets.join("")}
+</Workbook>`;
 }
 
 function normalizeMasterClientStatus(value) {
@@ -3259,6 +3967,61 @@ async function handleApi(req, res, pathname) {
     });
   }
 
+  if (req.method === "GET" && pathname === "/api/daily-close") {
+    const db = await readDb();
+    if (!(await requireAdminWithAudit(user, res, db, "DAILY_CLOSE_VIEW_DENIED", "daily-close", { route: pathname }))) return;
+    const date = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`).searchParams.get("date") || "";
+    return sendJson(res, 200, { dailyClose: buildDailyCloseReport(db, date) });
+  }
+
+  const dailyCloseActionMatch = pathname.match(/^\/api\/daily-close\/([^/]+)\/(close|reopen|adjustments|export)$/);
+  if (dailyCloseActionMatch) {
+    const db = await readDb();
+    const dateStamp = normalizeDailyCloseDate(decodeURIComponent(dailyCloseActionMatch[1]));
+    const action = dailyCloseActionMatch[2];
+    if (!(await requireAdminWithAudit(user, res, db, "DAILY_CLOSE_ADMIN_DENIED", `daily-close:${dateStamp}`, { route: pathname, action }))) return;
+    try {
+      if (req.method === "POST" && action === "close") {
+        const input = await parseJson(req);
+        const dailyClose = closeDailyReport(db, dateStamp, user, input.notes || "");
+        await writeDb(db);
+        return sendJson(res, 200, { dailyClose });
+      }
+      if (req.method === "POST" && action === "reopen") {
+        const input = await parseJson(req);
+        const dailyClose = reopenDailyReport(db, dateStamp, user, input.reason || "");
+        await writeDb(db);
+        return sendJson(res, 200, { dailyClose });
+      }
+      if (req.method === "POST" && action === "adjustments") {
+        const input = await parseJson(req);
+        const adjustment = createDailyAdjustment(db, dateStamp, user, input);
+        const dailyClose = buildDailyCloseReport(db, dateStamp);
+        await writeDb(db);
+        return sendJson(res, 201, { adjustment, dailyClose });
+      }
+      if (req.method === "GET" && action === "export") {
+        const report = buildDailyCloseReport(db, dateStamp);
+        audit(db, user.id, "DAILY_CLOSE_EXPORTED", `daily-close:${dateStamp}`, {
+          dateStamp,
+          status: report.status,
+          validatedPayments: report.totals.validatedPayments,
+        });
+        await writeDb(db);
+        const workbook = dailyCloseWorkbookXml(report);
+        res.writeHead(200, {
+          "Content-Type": "application/vnd.ms-excel; charset=utf-8",
+          "Content-Disposition": `attachment; filename="AriadGSM_Cierre_Diario_${dailyCloseInputDate(dateStamp)}.xls"`,
+          "Cache-Control": "no-store",
+        });
+        return res.end(workbook);
+      }
+      return sendJson(res, 405, { error: "Metodo no permitido." });
+    } catch (error) {
+      return sendJson(res, error.status || 500, { error: error.message || "No se pudo procesar cierre diario." });
+    }
+  }
+
   if (req.method === "GET" && pathname === "/api/session") {
     const db = await readDb();
     const setupRequired = db.users.length === 0 && Boolean(setupToken);
@@ -3273,6 +4036,7 @@ async function handleApi(req, res, pathname) {
       presence: publicPresence(db),
       deviceSecurity: publicDeviceSecurity(db, user),
       pricingConfig: publicPricingConfigForUser(db.pricingConfig, db, user),
+      dailyClose: user.role === "ADMIN" ? buildDailyCloseReport(db, limaDateStamp()) : null,
       clientMasterLinks: user.role === "ADMIN" ? publicClientMasterState(db) : { masters: [], links: [], suggestions: [] },
       roles: user.role === "ADMIN" ? Array.from(roles).map((role) => ({ value: role, label: roleLabels[role] })) : [],
       catalog: { services: catalogServicesForUser(user), paymentMethods, workChannels, ticketStatuses, countries: countries.map(([, country]) => country) },

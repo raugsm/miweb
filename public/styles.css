@@ -1019,11 +1019,95 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
   border-radius: var(--radius-sm);
 }
 
+.daily-close-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.daily-close-toolbar input,
+.daily-close-notes input,
+.daily-adjustment-form input,
+.daily-adjustment-form select {
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: #f8fbff;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 800;
+}
+.daily-close-toolbar input,
+.daily-close-notes input {
+  padding: 0 12px;
+}
+.daily-close-metrics {
+  margin: 12px 0 14px;
+}
+.daily-close-actions {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto auto;
+  gap: 10px;
+  align-items: end;
+  margin-bottom: 14px;
+}
+.daily-close-notes,
+.daily-adjustment-form label {
+  display: grid;
+  gap: 7px;
+  color: #344563;
+  font-size: 12px;
+  font-weight: 900;
+}
+.daily-adjustment-form {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(120px, 1fr)) auto;
+  gap: 10px;
+  align-items: end;
+  padding: 12px;
+  border: 1px solid #d6e3f6;
+  border-radius: var(--radius-md);
+  background: #fbfdff;
+}
+.daily-adjustment-form input,
+.daily-adjustment-form select {
+  width: 100%;
+  padding: 0 10px;
+}
+.daily-adjustment-reason {
+  grid-column: span 2;
+}
+.daily-close-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+.daily-close-grid .table-wrap {
+  min-width: 0;
+}
+.daily-close-grid h4 {
+  margin: 0 0 10px;
+  color: #344563;
+  font-size: 13px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
 @media (max-width: 1180px) {
   .ticket-form,
   .client-form,
   .frp-order-form {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .daily-adjustment-form {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .daily-adjustment-reason {
+    grid-column: 1 / -1;
   }
 
   .payment-summary {
@@ -1055,7 +1139,7 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
 
 @media (max-width: 900px) {
   .shell { padding: 14px; }
-  .auth-grid, .dashboard, .metrics, .step-list, .security-form, .ticket-form, .client-form, .ticket-board, .frp-workbench, .frp-job-row { grid-template-columns: 1fr; }
+  .auth-grid, .dashboard, .metrics, .step-list, .security-form, .ticket-form, .client-form, .ticket-board, .frp-workbench, .frp-job-row, .daily-close-grid, .daily-close-actions, .daily-adjustment-form { grid-template-columns: 1fr; }
   .payment-summary { grid-column: 1; }
   .ticket-submit-btn { min-height: 52px; }
   .image-preview-list { grid-template-columns: 1fr; }
@@ -1080,7 +1164,10 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
   .security-form,
   .metrics,
   .step-list,
-  .frp-job-row {
+  .frp-job-row,
+  .daily-close-actions,
+  .daily-adjustment-form,
+  .daily-close-grid {
     grid-template-columns: 1fr;
   }
 

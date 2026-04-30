@@ -34,6 +34,27 @@ const auditList = document.querySelector("#audit-list");
 const pricingRatesTable = document.querySelector("#pricing-rates-table");
 const pricingRulesTable = document.querySelector("#pricing-rules-table");
 const pricingMessage = document.querySelector("#pricing-message");
+const dailyCloseDate = document.querySelector("#daily-close-date");
+const refreshDailyCloseButton = document.querySelector("#refresh-daily-close");
+const exportDailyCloseButton = document.querySelector("#export-daily-close");
+const closeDailyCloseButton = document.querySelector("#close-daily-close");
+const reopenDailyCloseButton = document.querySelector("#reopen-daily-close");
+const dailyCloseNotes = document.querySelector("#daily-close-notes");
+const dailyCloseSummary = document.querySelector("#daily-close-summary");
+const dailyCloseMessage = document.querySelector("#daily-close-message");
+const dailyAdjustmentForm = document.querySelector("#daily-adjustment-form");
+const dailyAdjustmentCurrency = document.querySelector("#daily-adjustment-currency");
+const dailyAdjustmentPayment = document.querySelector("#daily-adjustment-payment");
+const dailyAdjustmentChannel = document.querySelector("#daily-adjustment-channel");
+const dailyAdjustmentService = document.querySelector("#daily-adjustment-service");
+const dailyCurrencyTable = document.querySelector("#daily-currency-table");
+const dailyPaymentTable = document.querySelector("#daily-payment-table");
+const dailyChannelTable = document.querySelector("#daily-channel-table");
+const dailyServiceTable = document.querySelector("#daily-service-table");
+const dailyTechnicianTable = document.querySelector("#daily-technician-table");
+const dailyValidatorTable = document.querySelector("#daily-validator-table");
+const dailyProofTable = document.querySelector("#daily-proof-table");
+const dailyAdjustmentTable = document.querySelector("#daily-adjustment-table");
 const ticketForm = document.querySelector("#ticket-form");
 const ticketClient = document.querySelector("#ticket-client");
 const clientOptions = document.querySelector("#client-options");
@@ -89,6 +110,7 @@ function emptySession() {
     presence: { onlineUsersCount: 0, onlineUsers: [] },
     deviceSecurity: { pendingApprovals: [] },
     pricingConfig: { exchangeRates: [], serviceRules: [] },
+    dailyClose: null,
     clientMasterLinks: { masters: [], links: [], suggestions: [] },
     catalog: { services: [], paymentMethods: [] },
     frp: { enabled: false, orders: [], jobs: [], metrics: {}, statuses: { orders: [], jobs: [] } },
@@ -106,7 +128,7 @@ let adminPreviewChannel = localStorage.getItem("ariad_admin_preview_channel") ||
 let lastPaymentCountryKey = "";
 let resetMode = "request";
 let presenceTimer = null;
-const adminPanelIds = new Set(["users-panel", "audit-panel"]);
+const adminPanelIds = new Set(["users-panel", "audit-panel", "daily-close-panel"]);
 const pricingManagerPanelIds = new Set(["pricing-panel"]);
 const presenceRefreshMs = 15 * 1000;
 const maxFinalLogImages = 4;
@@ -439,6 +461,7 @@ function renderLayout() {
   renderCatalog();
   renderClients();
   renderPricing();
+  renderDailyClose();
   renderFrp();
   renderTicketBoard();
   renderTickets();
@@ -656,6 +679,162 @@ function renderPricing() {
       </tr>
     `)
     .join("");
+}
+
+function todayLimaInput() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Lima",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const part = (type) => parts.find((item) => item.type === type)?.value || "";
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}
+
+function dailyCloseDateValue() {
+  return dailyCloseDate?.value || session.dailyClose?.dateInput || todayLimaInput();
+}
+
+function formatCloseMoney(value, currency = "") {
+  const number = Number(value || 0);
+  const formatted = new Intl.NumberFormat("es-PE", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(number);
+  return `${formatted}${currency ? ` ${currency}` : ""}`;
+}
+
+function setDailyCloseMessage(text = "", type = "neutral") {
+  if (!dailyCloseMessage) return;
+  dailyCloseMessage.textContent = text;
+  dailyCloseMessage.dataset.type = type;
+}
+
+function renderDailyCloseOptions() {
+  if (!dailyAdjustmentCurrency || !dailyAdjustmentPayment || !dailyAdjustmentChannel || !dailyAdjustmentService) return;
+  const currencies = Array.from(new Set((session.pricingConfig?.exchangeRates || []).map((rate) => rate.currency).filter(Boolean).concat(["USDT"])));
+  dailyAdjustmentCurrency.innerHTML = currencies
+    .map((currency) => `<option value="${escapeHtml(currency)}">${escapeHtml(currency)}</option>`)
+    .join("");
+  dailyAdjustmentPayment.innerHTML = `<option value="">Sin metodo</option>` + (session.catalog?.paymentMethods || [])
+    .map((payment) => `<option value="${escapeHtml(payment.code)}">${escapeHtml(payment.label)}</option>`)
+    .join("");
+  dailyAdjustmentChannel.innerHTML = `<option value="">General</option>` + (session.catalog?.workChannels || [])
+    .map((channel) => `<option value="${escapeHtml(channel)}">${escapeHtml(channel)}</option>`)
+    .join("");
+  dailyAdjustmentService.innerHTML = `<option value="">General</option>` + (session.catalog?.services || [])
+    .map((service) => `<option value="${escapeHtml(service.code)}">${escapeHtml(service.name)}</option>`)
+    .join("");
+}
+
+function renderDailyCloseRows(table, rows, emptyText, mapper) {
+  if (!table) return;
+  if (!rows?.length) {
+    const colspan = table.closest("table")?.querySelectorAll("thead th").length || 4;
+    table.innerHTML = `<tr><td colspan="${colspan}" class="muted-cell">${escapeHtml(emptyText)}</td></tr>`;
+    return;
+  }
+  table.innerHTML = rows.map(mapper).join("");
+}
+
+function renderDailyClose() {
+  if (!dailyCloseSummary) return;
+  renderDailyCloseOptions();
+  if (!isAdmin()) {
+    dailyCloseSummary.innerHTML = "";
+    return;
+  }
+  const report = session.dailyClose;
+  if (!dailyCloseDate.value) dailyCloseDate.value = report?.dateInput || todayLimaInput();
+  if (!report) {
+    dailyCloseSummary.innerHTML = `<article><span>Cierre diario</span><strong>Sin datos</strong></article>`;
+    return;
+  }
+  const isClosed = report.status === "CERRADO";
+  closeDailyCloseButton.disabled = isClosed;
+  reopenDailyCloseButton.disabled = !isClosed;
+  dailyCloseSummary.innerHTML = `
+    <article><span>Fecha</span><strong>${escapeHtml(report.dateLabel || report.dateInput)}</strong></article>
+    <article><span>Estado</span><strong>${escapeHtml(report.status || "ABIERTO")}</strong></article>
+    <article><span>Ordenes creadas</span><strong>${escapeHtml(report.totals?.createdOrders || 0)}</strong></article>
+    <article><span>Pagos validados</span><strong>${escapeHtml(report.totals?.validatedPayments || 0)}</strong></article>
+    <article><span>Finalizados</span><strong>${escapeHtml(report.totals?.finalizedServices || 0)}</strong></article>
+    <article><span>Pendientes/rechazados</span><strong>${escapeHtml(`${report.totals?.pendingProofs || 0}/${report.totals?.rejectedProofs || 0}`)}</strong></article>
+  `;
+  renderDailyCloseRows(dailyCurrencyTable, report.byCurrency, "Sin pagos validados para esta fecha.", (row) => `
+    <tr>
+      <td><strong>${escapeHtml(row.currency)}</strong></td>
+      <td>${escapeHtml(formatCloseMoney(row.grossAmount, row.currency))}</td>
+      <td>${escapeHtml(formatCloseMoney(row.refundAmount, row.currency))}</td>
+      <td>${escapeHtml(formatCloseMoney(row.adjustmentAmount, row.currency))}</td>
+      <td><strong>${escapeHtml(formatCloseMoney(row.netAmount, row.currency))}</strong></td>
+      <td>${escapeHtml(row.paymentCount || 0)}</td>
+    </tr>
+  `);
+  renderDailyCloseRows(dailyPaymentTable, report.byPaymentMethod, "Sin metodos con pagos.", (row) => `
+    <tr>
+      <td>${escapeHtml(row.paymentLabel || row.paymentMethod || "-")}</td>
+      <td>${escapeHtml(row.currency || "-")}</td>
+      <td><strong>${escapeHtml(formatCloseMoney(row.netAmount, row.currency))}</strong></td>
+      <td>${escapeHtml(row.paymentCount || 0)}</td>
+    </tr>
+  `);
+  renderDailyCloseRows(dailyChannelTable, report.byChannel, "Sin canales con pagos.", (row) => `
+    <tr>
+      <td>${escapeHtml(row.workChannel || "-")}</td>
+      <td>${escapeHtml(row.currency || "-")}</td>
+      <td><strong>${escapeHtml(formatCloseMoney(row.netAmount, row.currency))}</strong></td>
+      <td>${escapeHtml(row.equipmentCount || 0)}</td>
+    </tr>
+  `);
+  renderDailyCloseRows(dailyServiceTable, report.byService, "Sin servicios con pagos.", (row) => `
+    <tr>
+      <td>${escapeHtml(row.serviceName || row.serviceCode || "-")}</td>
+      <td>${escapeHtml(row.currency || "-")}</td>
+      <td><strong>${escapeHtml(formatCloseMoney(row.netAmount, row.currency))}</strong></td>
+      <td>${escapeHtml(row.equipmentCount || 0)}</td>
+    </tr>
+  `);
+  renderDailyCloseRows(dailyTechnicianTable, report.technicians, "Sin finalizados por tecnico.", (row) => `
+    <tr>
+      <td>${escapeHtml(row.userName || row.userId || "Sistema")}</td>
+      <td>${escapeHtml(row.finalizedCount || 0)}</td>
+      <td>${escapeHtml(row.equipmentCount || 0)}</td>
+    </tr>
+  `);
+  renderDailyCloseRows(dailyValidatorTable, report.byValidator, "Sin pagos validados.", (row) => `
+    <tr>
+      <td>${escapeHtml(row.userName || row.userId || "Sistema")}</td>
+      <td>${escapeHtml(row.currency || "-")}</td>
+      <td><strong>${escapeHtml(formatCloseMoney(row.netAmount, row.currency))}</strong></td>
+      <td>${escapeHtml(row.paymentCount || 0)}</td>
+    </tr>
+  `);
+  renderDailyCloseRows(dailyProofTable, report.proofs, "Sin comprobantes pendientes o revisados hoy.", (proof) => `
+    <tr>
+      <td><strong>${escapeHtml(proof.sourceCode)}</strong><span class="table-subtext">${escapeHtml(proof.sourceType)}</span></td>
+      <td><span class="status-pill">${escapeHtml(proof.status)}</span></td>
+      <td>${escapeHtml(proof.serviceName || "-")}<span class="table-subtext">${escapeHtml(proof.workChannel || "")}</span></td>
+      <td>${escapeHtml(proof.reviewedByName || "-")}<span class="table-subtext">${escapeHtml(proof.reviewedAt ? formatDate(proof.reviewedAt) : "")}</span></td>
+    </tr>
+  `);
+  renderDailyCloseRows(dailyAdjustmentTable, report.adjustments, "Sin reembolsos ni ajustes.", (adjustment) => `
+    <tr>
+      <td><span class="status-pill ${adjustment.type === "REEMBOLSO" ? "danger-pill" : ""}">${escapeHtml(adjustment.type)}</span></td>
+      <td><strong>${escapeHtml(formatCloseMoney(adjustment.amount, adjustment.currency))}</strong></td>
+      <td>${escapeHtml(adjustment.reason)}</td>
+      <td>${escapeHtml(adjustment.createdByName || "-")}<span class="table-subtext">${escapeHtml(formatDate(adjustment.createdAt))}</span></td>
+    </tr>
+  `);
+}
+
+async function loadDailyClose(date = dailyCloseDateValue()) {
+  setDailyCloseMessage("");
+  const payload = await api(`/api/daily-close?date=${encodeURIComponent(date)}`);
+  session.dailyClose = payload.dailyClose;
+  if (dailyCloseDate && payload.dailyClose?.dateInput) dailyCloseDate.value = payload.dailyClose.dateInput;
+  renderDailyClose();
 }
 
 function renderAudit() {
@@ -2072,6 +2251,87 @@ pricingRulesTable.addEventListener("click", async (event) => {
   } catch (error) {
     pricingMessage.textContent = error.message;
     pricingMessage.dataset.type = "error";
+  } finally {
+    button.disabled = false;
+  }
+});
+
+dailyCloseDate?.addEventListener("change", async () => {
+  try {
+    await loadDailyClose(dailyCloseDate.value);
+  } catch (error) {
+    setDailyCloseMessage(error.message, "error");
+  }
+});
+
+refreshDailyCloseButton?.addEventListener("click", async () => {
+  refreshDailyCloseButton.disabled = true;
+  try {
+    await loadDailyClose();
+    setDailyCloseMessage("Cierre actualizado.", "success");
+  } catch (error) {
+    setDailyCloseMessage(error.message, "error");
+  } finally {
+    refreshDailyCloseButton.disabled = false;
+  }
+});
+
+exportDailyCloseButton?.addEventListener("click", () => {
+  window.location.href = `/api/daily-close/${encodeURIComponent(dailyCloseDateValue())}/export`;
+});
+
+closeDailyCloseButton?.addEventListener("click", async () => {
+  closeDailyCloseButton.disabled = true;
+  try {
+    const payload = await api(`/api/daily-close/${encodeURIComponent(dailyCloseDateValue())}/close`, {
+      method: "POST",
+      body: JSON.stringify({ notes: dailyCloseNotes?.value || "" }),
+    });
+    session.dailyClose = payload.dailyClose;
+    renderDailyClose();
+    setDailyCloseMessage("Dia cerrado y lineas guardadas.", "success");
+  } catch (error) {
+    setDailyCloseMessage(error.message, "error");
+  } finally {
+    renderDailyClose();
+  }
+});
+
+reopenDailyCloseButton?.addEventListener("click", async () => {
+  const reason = window.prompt("Motivo para reabrir el cierre");
+  if (!reason) return;
+  reopenDailyCloseButton.disabled = true;
+  try {
+    const payload = await api(`/api/daily-close/${encodeURIComponent(dailyCloseDateValue())}/reopen`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    });
+    session.dailyClose = payload.dailyClose;
+    renderDailyClose();
+    setDailyCloseMessage("Cierre reabierto con auditoria.", "success");
+  } catch (error) {
+    setDailyCloseMessage(error.message, "error");
+  } finally {
+    renderDailyClose();
+  }
+});
+
+dailyAdjustmentForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const button = dailyAdjustmentForm.querySelector("button[type='submit']");
+  const form = new FormData(dailyAdjustmentForm);
+  button.disabled = true;
+  try {
+    const payload = await api(`/api/daily-close/${encodeURIComponent(dailyCloseDateValue())}/adjustments`, {
+      method: "POST",
+      body: JSON.stringify(Object.fromEntries(form.entries())),
+    });
+    session.dailyClose = payload.dailyClose;
+    dailyAdjustmentForm.reset();
+    renderDailyClose();
+    setDailyCloseMessage("Ajuste registrado.", "success");
+  } catch (error) {
+    setDailyCloseMessage(error.message, "error");
   } finally {
     button.disabled = false;
   }

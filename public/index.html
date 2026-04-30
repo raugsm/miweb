@@ -109,6 +109,7 @@
             <button class="nav-item" type="button" data-panel="frp-panel">FRP Express</button>
             <button class="nav-item" type="button" data-panel="clients-panel">Clientes</button>
             <button class="nav-item" type="button" data-panel="pricing-panel" data-pricing-manager-only="true">Precios</button>
+            <button class="nav-item" type="button" data-panel="daily-close-panel" data-admin-only="true">Cierre diario</button>
             <button class="nav-item" type="button" data-panel="users-panel" data-admin-only="true">Usuarios</button>
             <button class="nav-item" type="button" data-panel="audit-panel" data-admin-only="true">Auditoria</button>
           </nav>
@@ -451,6 +452,142 @@
               </table>
             </div>
             <p id="pricing-message" class="message" aria-live="polite"></p>
+          </section>
+
+          <section id="daily-close-panel" class="panel">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Caja operativa</p>
+                <h3>Cierre diario</h3>
+              </div>
+              <div class="daily-close-toolbar">
+                <input id="daily-close-date" type="date" />
+                <button id="refresh-daily-close" class="secondary-btn" type="button">Actualizar</button>
+                <button id="export-daily-close" class="secondary-btn" type="button">Exportar Excel</button>
+              </div>
+            </div>
+
+            <div id="daily-close-summary" class="metrics daily-close-metrics"></div>
+
+            <div class="daily-close-actions">
+              <label class="daily-close-notes">
+                Nota de cierre
+                <input id="daily-close-notes" autocomplete="off" placeholder="Opcional" />
+              </label>
+              <button id="close-daily-close" class="primary-btn" type="button">Cerrar dia</button>
+              <button id="reopen-daily-close" class="secondary-btn" type="button">Reabrir con motivo</button>
+            </div>
+
+            <form id="daily-adjustment-form" class="daily-adjustment-form">
+              <label>
+                Tipo
+                <select name="type" required>
+                  <option value="AJUSTE">Ajuste</option>
+                  <option value="REEMBOLSO">Reembolso</option>
+                </select>
+              </label>
+              <label>
+                Monto
+                <input name="amount" type="number" min="0.01" step="0.01" required />
+              </label>
+              <label>
+                Moneda
+                <select name="currency" id="daily-adjustment-currency" required></select>
+              </label>
+              <label>
+                Metodo
+                <select name="paymentMethod" id="daily-adjustment-payment"></select>
+              </label>
+              <label>
+                WhatsApp
+                <select name="workChannel" id="daily-adjustment-channel"></select>
+              </label>
+              <label>
+                Servicio
+                <select name="serviceCode" id="daily-adjustment-service"></select>
+              </label>
+              <label class="daily-adjustment-reason">
+                Motivo obligatorio
+                <input name="reason" autocomplete="off" required />
+              </label>
+              <button class="secondary-btn" type="submit">Agregar</button>
+            </form>
+            <p id="daily-close-message" class="message" aria-live="polite"></p>
+
+            <div class="daily-close-grid">
+              <div class="table-wrap">
+                <h4>Por moneda</h4>
+                <table>
+                  <thead>
+                    <tr><th>Moneda</th><th>Bruto</th><th>Reembolsos</th><th>Ajustes</th><th>Neto</th><th>Pagos</th></tr>
+                  </thead>
+                  <tbody id="daily-currency-table"></tbody>
+                </table>
+              </div>
+              <div class="table-wrap">
+                <h4>Por metodo</h4>
+                <table>
+                  <thead>
+                    <tr><th>Metodo</th><th>Moneda</th><th>Neto</th><th>Pagos</th></tr>
+                  </thead>
+                  <tbody id="daily-payment-table"></tbody>
+                </table>
+              </div>
+              <div class="table-wrap">
+                <h4>Por WhatsApp</h4>
+                <table>
+                  <thead>
+                    <tr><th>Canal</th><th>Moneda</th><th>Neto</th><th>Equipos</th></tr>
+                  </thead>
+                  <tbody id="daily-channel-table"></tbody>
+                </table>
+              </div>
+              <div class="table-wrap">
+                <h4>Por servicio</h4>
+                <table>
+                  <thead>
+                    <tr><th>Servicio</th><th>Moneda</th><th>Neto</th><th>Equipos</th></tr>
+                  </thead>
+                  <tbody id="daily-service-table"></tbody>
+                </table>
+              </div>
+              <div class="table-wrap">
+                <h4>Tecnicos</h4>
+                <table>
+                  <thead>
+                    <tr><th>Usuario</th><th>Finalizados</th><th>Equipos</th></tr>
+                  </thead>
+                  <tbody id="daily-technician-table"></tbody>
+                </table>
+              </div>
+              <div class="table-wrap">
+                <h4>Validadores</h4>
+                <table>
+                  <thead>
+                    <tr><th>Usuario</th><th>Moneda</th><th>Neto</th><th>Pagos</th></tr>
+                  </thead>
+                  <tbody id="daily-validator-table"></tbody>
+                </table>
+              </div>
+              <div class="table-wrap">
+                <h4>Comprobantes</h4>
+                <table>
+                  <thead>
+                    <tr><th>Codigo</th><th>Estado</th><th>Servicio</th><th>Revisado por</th></tr>
+                  </thead>
+                  <tbody id="daily-proof-table"></tbody>
+                </table>
+              </div>
+              <div class="table-wrap">
+                <h4>Reembolsos y ajustes</h4>
+                <table>
+                  <thead>
+                    <tr><th>Tipo</th><th>Monto</th><th>Motivo</th><th>Creado por</th></tr>
+                  </thead>
+                  <tbody id="daily-adjustment-table"></tbody>
+                </table>
+              </div>
+            </div>
           </section>
 
           <section id="audit-panel" class="panel">
