@@ -358,12 +358,13 @@ function renderOrders(orders) {
     }).join("");
     const fileInput = $("input[type='file']", card);
     const loggedCustomer = Boolean(state.customer?.user && state.customer?.client);
-    $(".upload-button", card).style.display = loggedCustomer ? "inline-flex" : "none";
-    fileInput.addEventListener("change", async () => {
+    const dropzone = $(".upload-button", card);
+    dropzone.style.display = loggedCustomer ? "inline-flex" : "none";
+    const uploadProofFiles = async (files) => {
       const message = $(".order-message", card);
       setMessage(message, "Subiendo comprobante...");
       try {
-        const proofs = await filesToProofs(fileInput.files);
+        const proofs = await filesToProofs(files);
         const payload = await api(`/api/portal/orders/${order.id}/payment-proof`, {
           method: "PATCH",
           body: JSON.stringify({ paymentProofs: proofs }),
@@ -375,7 +376,34 @@ function renderOrders(orders) {
         setMessage(message, error.message, "error");
       } finally {
         fileInput.value = "";
+        dropzone.classList.remove("drag-active");
       }
+    };
+    fileInput.addEventListener("change", async () => {
+      await uploadProofFiles(fileInput.files);
+    });
+    ["dragenter", "dragover"].forEach((eventName) => {
+      dropzone.addEventListener(eventName, (event) => {
+        if (!loggedCustomer) return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+        dropzone.classList.add("drag-active");
+      });
+    });
+    ["dragleave", "dragend"].forEach((eventName) => {
+      dropzone.addEventListener(eventName, (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        dropzone.classList.remove("drag-active");
+      });
+    });
+    dropzone.addEventListener("drop", async (event) => {
+      if (!loggedCustomer) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const files = event.dataTransfer?.files || [];
+      await uploadProofFiles(files);
     });
     $(".copy-order", card).addEventListener("click", () => copyText(orderCopyText(order), $(".order-message", card)));
     list.append(card);
@@ -412,6 +440,23 @@ async function filesToProofs(fileList) {
     reader.onerror = () => reject(new Error("No se pudo leer la imagen."));
     reader.readAsDataURL(file);
   })));
+}
+
+function hasDraggedFiles(event) {
+  const data = event.dataTransfer;
+  if (!data) return false;
+  return Array.from(data.items || []).some((item) => item.kind === "file") || Array.from(data.files || []).length > 0;
+}
+
+function wireGlobalFileDropGuard() {
+  ["dragover", "drop"].forEach((eventName) => {
+    window.addEventListener(eventName, (event) => {
+      if (!hasDraggedFiles(event)) return;
+      if (event.target?.closest?.(".proof-dropzone")) return;
+      event.preventDefault();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "none";
+    });
+  });
 }
 
 function setOrdersLiveStatus(text, type = "") {
@@ -510,6 +555,7 @@ function wirePasswordToggles() {
 
 function wireEvents() {
   wirePasswordToggles();
+  wireGlobalFileDropGuard();
   $$(".tab").forEach((button) => button.addEventListener("click", () => setTab(button.dataset.tab)));
   $("#loginForm").addEventListener("submit", async (event) => {
     event.preventDefault();

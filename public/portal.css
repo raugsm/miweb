@@ -605,6 +605,27 @@ textarea:focus {
   cursor: pointer;
 }
 
+.proof-dropzone {
+  flex-direction: column;
+  gap: 3px;
+  min-width: 210px;
+  border: 1px dashed rgba(255, 255, 255, 0.72);
+  text-align: center;
+  transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+}
+
+.proof-dropzone span {
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.proof-dropzone.drag-active {
+  transform: translateY(-1px);
+  border-color: #ffffff;
+  box-shadow: 0 14px 30px rgba(47, 109, 243, 0.28);
+}
+
 @media (max-width: 920px) {
   .portal-shell {
     grid-template-columns: 1fr;
