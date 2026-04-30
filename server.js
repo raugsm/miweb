@@ -16,7 +16,7 @@ const enableSetupPasswordReset = ["true", "1", "yes"].includes(String(process.en
 const ownerRecoveryEmail = normalizeEmail(process.env.ARIAD_OWNER_RECOVERY_EMAIL || "");
 const publicBaseUrl = String(process.env.ARIAD_PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || `http://localhost:${port}`).replace(/\/+$/, "");
 const mailFrom = process.env.ARIAD_MAIL_FROM || '"AriadGSM Soporte" <soporte@ariadgsm.com>';
-const appVersion = "customer-registration-validation-v1";
+const appVersion = "portal-country-payment-v1";
 const sessionVersion = 7;
 const customerSessionVersion = 1;
 const trustedDeviceVersion = 3;
@@ -771,6 +771,25 @@ function publicCustomerState(db, context) {
 
 function allowedPortalPaymentMethods() {
   return allowedTicketPaymentMethods();
+}
+
+function allowedPortalPaymentMethodsForCountry(country) {
+  const normalizedCountry = normalizeCountryInput(country);
+  const methods = allowedPortalPaymentMethods();
+  const localMethods = methods.filter((payment) => payment.country === normalizedCountry);
+  const globalMethods = methods.filter((payment) => payment.globalOption);
+  return localMethods.concat(globalMethods);
+}
+
+function defaultPortalPaymentForCountry(country) {
+  const compatible = allowedPortalPaymentMethodsForCountry(country);
+  return compatible.find((payment) => !payment.globalOption) || compatible[0] || allowedPortalPaymentMethods()[0] || null;
+}
+
+function resolvePortalPaymentForClient(paymentCode, client) {
+  const code = cleanText(paymentCode, 60);
+  const compatible = allowedPortalPaymentMethodsForCountry(client?.country);
+  return compatible.find((payment) => payment.code === code) || defaultPortalPaymentForCountry(client?.country);
 }
 
 function publicPortalCatalog() {
@@ -2463,9 +2482,10 @@ async function handleApi(req, res, pathname) {
     }
     const quantity = Math.max(1, Math.min(50, Number.parseInt(input.quantity, 10) || 1));
     const service = portalPublicServices.find((candidate) => candidate.code === "PORTAL-XIAOMI-FRP" && candidate.enabled);
-    const payment = allowedPortalPaymentMethods().find((candidate) => candidate.code === input.paymentMethod);
+    const requestedPaymentCode = cleanText(input.paymentMethod, 60);
+    const payment = resolvePortalPaymentForClient(requestedPaymentCode, context.client);
     if (!service) return sendJson(res, 503, { error: "Xiaomi FRP no esta disponible en el portal." });
-    if (!payment) return sendJson(res, 400, { error: "Metodo de pago invalido." });
+    if (!payment) return sendJson(res, 400, { error: "Metodo de pago invalido para tu pais." });
     const benefit = customerBenefitFor(db, context.client.id);
     const canUseBenefits = customerCanUseBenefits(context, benefit);
     const suggestion = portalFrpPriceSuggestion(db, context.client.id, quantity, canUseBenefits, benefit);
@@ -2532,6 +2552,14 @@ async function handleApi(req, res, pathname) {
     db.customerRequests.unshift(request);
     db.customerOrders.unshift(order);
     db.customerOrderItems.unshift(...items);
+    if (requestedPaymentCode && requestedPaymentCode !== payment.code) {
+      audit(db, context.user.id, "PORTAL_PAYMENT_METHOD_ALIGNED", order.id, {
+        code: order.code,
+        clientCountry: context.client.country,
+        requestedPayment: requestedPaymentCode,
+        selectedPayment: payment.code,
+      });
+    }
     audit(db, context.user.id, "PORTAL_CUSTOMER_ORDER_CREATED", order.id, {
       code: order.code,
       clientId: context.client.id,

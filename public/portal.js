@@ -34,9 +34,36 @@ function money(value) {
   return `${Number(value || 0).toFixed(2)} USDT`;
 }
 
+function paymentAmountText(value, payment = currentPayment()) {
+  const amount = Number(value || 0);
+  if (!Number.isFinite(amount)) return "";
+  if (payment?.amountMode === "thousands") {
+    const normalizedAmount = amount > 0 && amount < 1000 ? Math.round(amount * 1000) : Math.round(amount);
+    return `${new Intl.NumberFormat("es-CO", { maximumFractionDigits: 0 }).format(normalizedAmount)} ${payment.currency}`;
+  }
+  if (payment?.currency === "PEN") return `S/ ${amount.toFixed(2)}`;
+  if (payment?.currency === "USDT") return `${amount.toFixed(2)} USDT`;
+  if (payment?.currency === "MXN") return `$${amount.toFixed(2)} MXN`;
+  return `$${amount.toFixed(2)} ${payment?.currency || "USD"}`;
+}
+
+function compatiblePaymentMethodsForCustomer() {
+  const methods = state.catalog?.paymentMethods || [];
+  const country = state.customer?.client?.country;
+  if (!country) return methods;
+  const local = methods.filter((payment) => payment.country === country);
+  const global = methods.filter((payment) => payment.globalOption);
+  return local.concat(global);
+}
+
+function preferredPaymentForCustomer() {
+  const compatible = compatiblePaymentMethodsForCustomer();
+  return compatible.find((payment) => !payment.globalOption) || compatible[0] || null;
+}
+
 function currentPayment() {
   const paymentCode = $("#paymentSelect")?.value;
-  return state.catalog?.paymentMethods?.find((payment) => payment.code === paymentCode) || state.catalog?.paymentMethods?.[0] || null;
+  return compatiblePaymentMethodsForCustomer().find((payment) => payment.code === paymentCode) || preferredPaymentForCustomer();
 }
 
 function paymentText(payment, totalText = "") {
@@ -216,15 +243,22 @@ function renderCatalog() {
   updatePhoneCountryFromInput();
   const paymentSelect = $("#paymentSelect");
   if (paymentSelect) {
+    const previousValue = paymentSelect.value;
+    const compatiblePayments = compatiblePaymentMethodsForCustomer();
     paymentSelect.innerHTML = "";
-    (state.catalog?.paymentMethods || []).forEach((payment) => {
+    compatiblePayments.forEach((payment) => {
       const option = document.createElement("option");
       option.value = payment.code;
       option.textContent = payment.label;
       paymentSelect.append(option);
     });
-    const binance = Array.from(paymentSelect.options).find((option) => option.value === "BINANCE_PAY");
-    if (binance) paymentSelect.value = "BINANCE_PAY";
+    const previousOption = Array.from(paymentSelect.options).find((option) => option.value === previousValue);
+    const preferred = preferredPaymentForCustomer();
+    if (previousOption) {
+      paymentSelect.value = previousValue;
+    } else if (preferred) {
+      paymentSelect.value = preferred.code;
+    }
   }
   updateQuote();
   renderTurnstileWidgets().catch((error) => setMessage($("#authMessage"), error.message, "error"));
@@ -255,7 +289,7 @@ function estimatePortalPrice(quantity) {
 function updateQuote() {
   const qty = $("#orderForm input[name='quantity']")?.value || 1;
   const estimate = estimatePortalPrice(qty);
-  $("#quoteTotal").textContent = money(estimate.total);
+  $("#quoteTotal").textContent = paymentAmountText(estimate.total);
   $("#quoteHint").textContent = `${estimate.label}. El backend confirma el monto exacto.`;
 }
 
@@ -544,8 +578,12 @@ function wireEvents() {
         }),
       });
       state.customer = payload.customer;
+      const selectedPayment = payload.order?.paymentMethod || data.paymentMethod;
       form.reset();
-      $("#paymentSelect").value = data.paymentMethod;
+      renderCatalog();
+      if (selectedPayment && Array.from($("#paymentSelect").options).some((option) => option.value === selectedPayment)) {
+        $("#paymentSelect").value = selectedPayment;
+      }
       updateQuote();
       renderCustomer();
       resetTurnstile("order");
@@ -560,7 +598,7 @@ function wireEvents() {
   $("#paymentSelect").addEventListener("change", updateQuote);
   $("#copyPaymentButton").addEventListener("click", () => {
     const estimate = estimatePortalPrice($("#orderForm input[name='quantity']").value);
-    copyText(paymentText(currentPayment(), money(estimate.total)), $("#orderMessage"));
+    copyText(paymentText(currentPayment(), paymentAmountText(estimate.total)), $("#orderMessage"));
   });
   $("#refreshButton").addEventListener("click", async () => {
     await refreshOrdersSilently();
