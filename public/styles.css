@@ -15,10 +15,13 @@
   --radius-md: 12px;
   --radius-lg: 18px;
   --shadow: 0 24px 70px rgba(16, 24, 39, 0.13);
+  --motion-fast: 160ms ease;
+  --motion-medium: 220ms ease;
 }
 
-* { box-sizing: border-box; }
+*, *::before, *::after { box-sizing: border-box; }
 html, body { min-height: 100%; }
+html { -webkit-text-size-adjust: 100%; }
 body {
   margin: 0;
   color: var(--ink);
@@ -28,15 +31,54 @@ body {
     var(--bg);
   font-family: "Plus Jakarta Sans", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   letter-spacing: 0;
+  overflow-x: hidden;
 }
 
-button, input, select, textarea { font: inherit; }
-button { cursor: pointer; }
-.shell { min-height: 100vh; padding: 24px; }
+button, input, select, textarea { font: inherit; max-width: 100%; }
+img, picture, svg, canvas, video { max-width: 100%; }
+button {
+  cursor: pointer;
+  line-height: 1.18;
+  white-space: normal;
+}
+.shell { min-height: 100vh; padding: clamp(12px, 2vw, 24px); }
 .hidden { display: none !important; }
 .app-booting #auth-view,
 .app-booting #dashboard-view {
   visibility: hidden;
+}
+
+:where(.auth-grid, .dashboard, .sidebar, .content, .topbar, .panel, .brand-panel, .auth-card, .workflow, .table-wrap, .ticket-form, .client-form, .payment-summary, .payment-preview, .ticket-board, .ticket-column, .ticket-card, .audit-list article, .modal-card, .image-preview, .frp-workbench, .frp-lane, .frp-card, .frp-job-row) {
+  min-width: 0;
+}
+
+:where(.content, .panel, .workflow, .ticket-form, .client-form, .payment-summary, .payment-preview, .ticket-card, .frp-card, .frp-job-row, .table-wrap, .modal-card) {
+  overflow-wrap: anywhere;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :where(button, input, select, textarea, .tab, .nav-item, .channel-chip, .ticket-card, .frp-card, .frp-lane, .workflow, .table-wrap, .payment-summary, .modal-card, .role-badge) {
+    transition:
+      background-color var(--motion-fast),
+      border-color var(--motion-fast),
+      box-shadow var(--motion-fast),
+      color var(--motion-fast),
+      opacity var(--motion-fast),
+      transform var(--motion-medium);
+  }
+
+  :where(.primary-btn, .secondary-btn, .ghost-btn, .mini-btn, .ticket-card, .frp-card):hover {
+    transform: translateY(-1px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 .auth-grid {
@@ -233,7 +275,7 @@ input:focus, select:focus {
 
 .dashboard {
   display: grid;
-  grid-template-columns: 270px minmax(0, 1fr);
+  grid-template-columns: clamp(220px, 22vw, 270px) minmax(0, 1fr);
   gap: 18px;
   min-height: calc(100vh - 48px);
 }
@@ -545,9 +587,12 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
 }
 .ticket-board {
   display: grid;
-  grid-template-columns: repeat(4, minmax(190px, 1fr));
+  grid-template-columns: repeat(4, minmax(240px, 1fr));
   gap: 12px;
   margin-bottom: 18px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-gutter: stable;
 }
 .ticket-column {
   min-height: 210px;
@@ -857,7 +902,7 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
 }
 .frp-workbench {
   display: grid;
-  grid-template-columns: minmax(320px, 1.25fr) minmax(260px, 0.85fr);
+  grid-template-columns: minmax(0, 1.25fr) minmax(260px, 0.85fr);
   gap: 14px;
 }
 .frp-lane {
@@ -906,6 +951,7 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
   align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
+  flex-wrap: wrap;
 }
 .frp-card header div,
 .frp-card p,
@@ -939,6 +985,9 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
   flex-wrap: wrap;
   gap: 8px;
 }
+.frp-checks .inline-check {
+  flex: 1 1 150px;
+}
 .frp-job-list {
   display: grid;
   gap: 8px;
@@ -958,6 +1007,40 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
   border-radius: var(--radius-sm);
 }
 
+@media (max-width: 1180px) {
+  .ticket-form,
+  .client-form,
+  .frp-order-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .payment-summary {
+    grid-column: 1 / -1;
+  }
+
+  .ticket-submit-btn {
+    grid-column: auto;
+    min-height: 52px;
+  }
+
+  .frp-workbench {
+    grid-template-columns: 1fr;
+  }
+
+  .frp-lane.wide {
+    grid-row: auto;
+  }
+
+  .frp-job-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .frp-job-row .full-action,
+  .frp-job-row button {
+    grid-column: 1 / -1;
+  }
+}
+
 @media (max-width: 900px) {
   .shell { padding: 14px; }
   .auth-grid, .dashboard, .metrics, .step-list, .security-form, .ticket-form, .client-form, .ticket-board, .frp-workbench, .frp-job-row { grid-template-columns: 1fr; }
@@ -969,4 +1052,46 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
   .sidebar { min-height: auto; }
   .topbar, .section-heading { align-items: flex-start; flex-direction: column; }
   .side-logo { width: 150px; }
+}
+
+@media (max-width: 720px) {
+  .auth-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tabs {
+    grid-template-columns: 1fr;
+  }
+
+  .ticket-form,
+  .client-form,
+  .security-form,
+  .metrics,
+  .step-list,
+  .frp-job-row {
+    grid-template-columns: 1fr;
+  }
+
+  .payment-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .payment-copy-btn,
+  .ticket-submit-btn,
+  .primary-btn,
+  .secondary-btn,
+  .ghost-btn,
+  .mini-btn {
+    width: 100%;
+  }
+
+  .modal {
+    padding: 12px;
+  }
+
+  .modal-actions,
+  .action-stack,
+  .topbar-actions {
+    width: 100%;
+  }
 }
