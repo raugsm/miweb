@@ -15,6 +15,8 @@ const setupTokenField = document.querySelector("#setup-token-field");
 const setupTokenNote = document.querySelector("#setup-token-note");
 const welcomeTitle = document.querySelector("#welcome-title");
 const roleBadge = document.querySelector("#role-badge");
+const adminChannelSwitcher = document.querySelector("#admin-channel-switcher");
+const adminOperationalChannel = document.querySelector("#admin-operational-channel");
 const currentRoleLabel = document.querySelector("#current-role-label");
 const activeUsersCount = document.querySelector("#active-users-count");
 const pendingUsersLabel = document.querySelector("#pending-users-label");
@@ -95,6 +97,7 @@ let pendingPaymentProofTicketId = "";
 let pendingFrpProofOrderId = "";
 let draggingTicketId = "";
 let selectedChannelFilter = "mine";
+let adminPreviewChannel = localStorage.getItem("ariad_admin_preview_channel") || "";
 let lastPaymentCountryKey = "";
 let resetMode = "request";
 let presenceTimer = null;
@@ -216,7 +219,7 @@ function canManagePricing() {
 }
 
 function enabledServiceNames() {
-  return (session.catalog?.services || []).map((service) => service.name || service.code).filter(Boolean);
+  return servicesForCurrentChannel().map((service) => service.name || service.code).filter(Boolean);
 }
 
 function availableWorkChannels() {
@@ -225,8 +228,25 @@ function availableWorkChannels() {
     : ["WhatsApp 1", "WhatsApp 2", "WhatsApp 3"];
 }
 
+function normalizeAdminPreviewChannel() {
+  const channels = availableWorkChannels();
+  if (!isAdmin()) return "";
+  if (!channels.includes(adminPreviewChannel)) {
+    adminPreviewChannel = channels.includes(session.user?.workChannel) ? session.user.workChannel : channels[0] || "";
+    if (adminPreviewChannel) localStorage.setItem("ariad_admin_preview_channel", adminPreviewChannel);
+  }
+  return adminPreviewChannel;
+}
+
 function currentUserChannel() {
+  if (isAdmin()) return normalizeAdminPreviewChannel();
   return session.user?.workChannel || "";
+}
+
+function servicesForCurrentChannel() {
+  const channel = currentUserChannel();
+  const serviceList = session.catalog?.services || [];
+  return serviceList.filter((service) => !channel || service.workChannel === channel);
 }
 
 function ticketCurrentChannel(ticket) {
@@ -312,6 +332,17 @@ function renderChannelFilter() {
     .join("");
 }
 
+function renderAdminChannelSwitcher() {
+  if (!adminChannelSwitcher || !adminOperationalChannel) return;
+  adminChannelSwitcher.classList.toggle("hidden", !isAdmin());
+  if (!isAdmin()) return;
+  const channels = availableWorkChannels();
+  const selected = normalizeAdminPreviewChannel();
+  adminOperationalChannel.innerHTML = channels
+    .map((channel) => `<option value="${escapeHtml(channel)}" ${channel === selected ? "selected" : ""}>${escapeHtml(channel)}</option>`)
+    .join("");
+}
+
 function renderDeviceApprovals() {
   const approvals = session.deviceSecurity?.pendingApprovals || [];
   if (!isAdmin() || !approvals.length) {
@@ -388,6 +419,7 @@ function renderLayout() {
   welcomeTitle.textContent = `Hola, ${session.user.name}`;
   roleBadge.textContent = session.user.roleLabel;
   currentRoleLabel.textContent = session.user.roleLabel;
+  renderAdminChannelSwitcher();
   syncNavigationForRole();
   startPresenceRefresh();
 
@@ -408,7 +440,7 @@ function renderLayout() {
 }
 
 function renderCatalog() {
-  const services = session.catalog?.services || [];
+  const services = servicesForCurrentChannel();
   const clients = filteredClients();
   clientOptions.innerHTML = clients
     .map((client) => `<option value="${escapeHtml([client.name, client.country].filter(Boolean).join(" "))}"></option>`)
@@ -1623,7 +1655,7 @@ function requestFinalLog(ticket) {
 }
 
 function selectedService() {
-  return (session.catalog?.services || []).find((service) => service.code === ticketService.value);
+  return servicesForCurrentChannel().find((service) => service.code === ticketService.value);
 }
 
 function syncSelectedService() {
@@ -1885,6 +1917,19 @@ document.querySelectorAll(".nav-item").forEach((button) => {
   });
 });
 
+adminOperationalChannel?.addEventListener("change", () => {
+  adminPreviewChannel = adminOperationalChannel.value;
+  localStorage.setItem("ariad_admin_preview_channel", adminPreviewChannel);
+  selectedChannelFilter = "mine";
+  renderAdminChannelSwitcher();
+  renderChannelFilter();
+  renderOverviewForRole();
+  renderCatalog();
+  renderClients();
+  renderTicketBoard();
+  renderTickets();
+});
+
 ticketChannelFilter.addEventListener("click", (event) => {
   const button = event.target.closest("[data-channel-filter]");
   if (!button) return;
@@ -2112,6 +2157,8 @@ ticketForm.addEventListener("submit", async (event) => {
   }
   normalizeTicketClientDisplay();
   const form = new FormData(ticketForm);
+  const input = Object.fromEntries(form);
+  if (isAdmin()) input.workChannel = currentUserChannel();
   const button = ticketForm.querySelector("button[type='submit']");
   button.disabled = true;
   ticketMessage.textContent = "";
@@ -2119,7 +2166,7 @@ ticketForm.addEventListener("submit", async (event) => {
   try {
     const payload = await api("/api/tickets", {
       method: "POST",
-      body: JSON.stringify(Object.fromEntries(form)),
+      body: JSON.stringify(input),
     });
     ticketMessage.textContent = `Ticket ${payload.ticket.code} generado.`;
     ticketMessage.dataset.type = "success";

@@ -15,7 +15,7 @@ const enableSetupPasswordReset = ["true", "1", "yes"].includes(String(process.en
 const ownerRecoveryEmail = normalizeEmail(process.env.ARIAD_OWNER_RECOVERY_EMAIL || "");
 const publicBaseUrl = String(process.env.ARIAD_PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || `http://localhost:${port}`).replace(/\/+$/, "");
 const mailFrom = process.env.ARIAD_MAIL_FROM || '"AriadGSM Soporte" <soporte@ariadgsm.com>';
-const appVersion = "frp-express-v1";
+const appVersion = "admin-channel-preview-v1";
 const sessionVersion = 7;
 const trustedDeviceVersion = 3;
 const deviceApprovalExpiresMs = 15 * 60 * 1000;
@@ -1261,33 +1261,50 @@ function allowedTicketPaymentMethods() {
   return paymentMethods.filter((payment) => payment.ticketOption);
 }
 
-function allowedServicesForUser(user) {
-  const channel = normalizeWorkChannel(user?.workChannel);
+function allowedServicesForUser(user, channelOverride = "") {
+  const requestedChannel = normalizeWorkChannel(channelOverride);
+  const channel = user?.role === "ADMIN" && requestedChannel
+    ? requestedChannel
+    : normalizeWorkChannel(user?.workChannel);
   return services.filter((service) => service.workChannel === channel);
 }
 
-function serviceAllowedForUser(service, user) {
-  return Boolean(service && allowedServicesForUser(user).some((candidate) => candidate.code === service.code));
+function catalogServicesForUser(user) {
+  return user?.role === "ADMIN" ? services : allowedServicesForUser(user);
 }
 
-function findClientByIdentity(db, name, country, whatsapp = "") {
+function serviceAllowedForUser(service, user, channelOverride = "") {
+  if (!service) return false;
+  if (user?.role === "ADMIN") {
+    const requestedChannel = normalizeWorkChannel(channelOverride);
+    return requestedChannel ? service.workChannel === requestedChannel : true;
+  }
+  return allowedServicesForUser(user).some((candidate) => candidate.code === service.code);
+}
+
+function findClientByIdentity(db, name, country, whatsapp = "", workChannel = "") {
   const nameKey = normalizeForMatch(name);
   const countryKey = normalizeForMatch(country);
   const targetPhoneKey = phoneKey(whatsapp);
+  const preferredChannel = normalizeWorkChannel(workChannel);
   const sameNameCountry = db.clients.filter((client) => normalizeForMatch(client.name) === nameKey && normalizeForMatch(client.country) === countryKey);
-  if (!targetPhoneKey) return sameNameCountry[0];
-  return sameNameCountry.find((client) => phoneKey(client.whatsapp) === targetPhoneKey)
+  const sameChannel = preferredChannel ? sameNameCountry.filter((client) => normalizeWorkChannel(client.workChannel) === preferredChannel) : [];
+  if (!targetPhoneKey) return sameChannel[0] || sameNameCountry[0];
+  return sameChannel.find((client) => phoneKey(client.whatsapp) === targetPhoneKey)
+    || sameChannel.find((client) => !phoneKey(client.whatsapp))
+    || sameNameCountry.find((client) => phoneKey(client.whatsapp) === targetPhoneKey)
     || sameNameCountry.find((client) => !phoneKey(client.whatsapp))
     || null;
 }
 
-function createClient(db, user, name, country, whatsapp = "") {
+function createClient(db, user, name, country, whatsapp = "", workChannelOverride = "") {
+  const workChannel = normalizeWorkChannel(workChannelOverride) || normalizeWorkChannel(user.workChannel);
   const client = {
     id: crypto.randomUUID(),
     name: cleanText(name),
     whatsapp: normalizePhone(whatsapp),
     country: cleanText(country, 40),
-    workChannel: user.workChannel || "",
+    workChannel,
     createdBy: user.id,
     createdAt: nowIso(),
     updatedAt: nowIso(),
@@ -1297,15 +1314,16 @@ function createClient(db, user, name, country, whatsapp = "") {
   return client;
 }
 
-function completeClientFromContext(db, user, client, whatsapp = "") {
+function completeClientFromContext(db, user, client, whatsapp = "", workChannelOverride = "") {
   let changed = false;
   const phone = normalizePhone(whatsapp);
   if (phone && !phoneKey(client.whatsapp)) {
     client.whatsapp = phone;
     changed = true;
   }
-  if (!client.workChannel && user.workChannel) {
-    client.workChannel = user.workChannel;
+  const workChannel = normalizeWorkChannel(workChannelOverride) || normalizeWorkChannel(user.workChannel);
+  if (!client.workChannel && workChannel) {
+    client.workChannel = workChannel;
     changed = true;
   }
   if (changed) {
@@ -1364,7 +1382,7 @@ async function handleApi(req, res, pathname) {
       deviceSecurity: publicDeviceSecurity(db, user),
       pricingConfig: publicPricingConfigForUser(db.pricingConfig, db, user),
       roles: user.role === "ADMIN" ? Array.from(roles).map((role) => ({ value: role, label: roleLabels[role] })) : [],
-      catalog: { services: allowedServicesForUser(user), paymentMethods, workChannels, ticketStatuses, countries: countries.map(([, country]) => country) },
+      catalog: { services: catalogServicesForUser(user), paymentMethods, workChannels, ticketStatuses, countries: countries.map(([, country]) => country) },
       frp: publicFrpState(db, user),
     });
   }
@@ -2145,31 +2163,39 @@ async function handleApi(req, res, pathname) {
     if (!requireUser(user, res)) return;
     const input = await parseJson(req);
     const db = await readDb();
+    const service = services.find((candidate) => candidate.code === input.serviceCode);
+    const payment = paymentMethods.find((candidate) => candidate.code === input.paymentMethod);
+    const ticketChannel = user.role === "ADMIN"
+      ? (normalizeWorkChannel(input.workChannel) || normalizeWorkChannel(service?.workChannel) || normalizeWorkChannel(user.workChannel))
+      : normalizeWorkChannel(user.workChannel);
+    const model = cleanText(input.model, 80);
+    const price = Number(input.price);
+
+    if (!service || !payment || !ticketChannel || !Number.isFinite(price) || price < 0) {
+      return sendJson(res, 400, { error: "Cliente, servicio, precio y metodo de pago son obligatorios." });
+    }
     let client = db.clients.find((candidate) => candidate.id === input.clientId);
     if (!client) {
       const parsedClient = parseClientText(input.clientText);
       if (!parsedClient) {
         return sendJson(res, 400, { error: "Escribe cliente y pais. Ejemplo: Javier Lozano Colombia." });
       }
-      client = findClientByIdentity(db, parsedClient.name, parsedClient.country, parsedClient.whatsapp)
-        || createClient(db, user, parsedClient.name, parsedClient.country, parsedClient.whatsapp);
-      completeClientFromContext(db, user, client, parsedClient.whatsapp);
+      client = findClientByIdentity(db, parsedClient.name, parsedClient.country, parsedClient.whatsapp, ticketChannel)
+        || createClient(db, user, parsedClient.name, parsedClient.country, parsedClient.whatsapp, ticketChannel);
+      completeClientFromContext(db, user, client, parsedClient.whatsapp, ticketChannel);
     }
-    completeClientFromContext(db, user, client);
-    const service = services.find((candidate) => candidate.code === input.serviceCode);
-    const payment = paymentMethods.find((candidate) => candidate.code === input.paymentMethod);
-    const model = cleanText(input.model, 80);
-    const price = Number(input.price);
+    completeClientFromContext(db, user, client, "", ticketChannel);
 
-    if (!client || !service || !payment || !Number.isFinite(price) || price < 0) {
+    if (!client) {
       return sendJson(res, 400, { error: "Cliente, servicio, precio y metodo de pago son obligatorios." });
     }
-    if (!serviceAllowedForUser(service, user)) {
+    if (!serviceAllowedForUser(service, user, ticketChannel)) {
       audit(db, user.id, "TICKET_SERVICE_DENIED", null, {
         requestedService: service.code,
         requestedServiceName: service.name,
         serviceChannel: service.workChannel || "",
         userChannel: user.workChannel || "",
+        requestedChannel: ticketChannel,
       });
       await writeDb(db);
       return sendJson(res, 403, { error: "Este servicio no pertenece a tu WhatsApp asignado." });
@@ -2183,7 +2209,6 @@ async function handleApi(req, res, pathname) {
       return sendJson(res, 400, { error: "Este servicio requiere modelo del equipo." });
     }
 
-    const ticketChannel = normalizeWorkChannel(user.workChannel);
     const ticket = {
       id: crypto.randomUUID(),
       code: nextTicketCode(db),
