@@ -1,8 +1,11 @@
-@media (max-width: 920px) {
-  .portal-shell {
-    grid-template-columns: 1fr;
-  }
+/* Reglas responsive que NO son layout de columnas y por tanto siguen viviendo aqui:
+   son ajustes de padding, margin, ancho de botones y orientacion flex que el sistema
+   mobile-first principal (00-breakpoints.css) no necesita migrar. Las reglas que SI
+   son layout (.portal-shell, .summary-grid, .flow-steps.compact, .flow-price-lines,
+   .quote-total-lines, .orders-list) se reescribieron mobile-first en sus archivos
+   correspondientes y ya no aparecen aqui. */
 
+@media (max-width: 920px) {
   .brand-panel {
     min-height: auto;
     padding: 32px;
@@ -12,12 +15,7 @@
     margin-top: 0;
   }
 
-  .order-form,
-  .express-order-form,
-  .flow-submit-area,
-  .summary-grid,
-  .price-prep-grid,
-  .flow-steps.compact {
+  .flow-submit-area {
     grid-template-columns: 1fr;
   }
 
@@ -27,17 +25,9 @@
     grid-row: auto;
   }
 
-  .payment-step,
-  .connection-step,
-  .note-step,
   .request-options,
-  .express-order-form .turnstile-box,
-  .express-order-form #orderSubmitButton {
+  #orderSubmitButton {
     grid-column: span 1;
-  }
-
-  .payment-step > div:last-child {
-    grid-template-columns: 1fr;
   }
 
   .wide {
@@ -66,10 +56,6 @@
   .verification-card {
     align-items: stretch;
     flex-direction: column;
-  }
-
-  .express-step {
-    grid-template-columns: 1fr;
   }
 
   .connection-code-row {

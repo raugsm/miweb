@@ -1,8 +1,19 @@
+/* QUE: listado de tarjetas de pedidos del cliente.
+   Mobile-first: 1 columna en celular; 2 columnas desde md (>=768px) cuando hay ancho de tablet.
+   POR QUE: cada tarjeta lleva contenido detallado (estado, items, conexion, pagos);
+   forzar 3 o 4 columnas en lg estrecharia demasiado y partiria texto. 2 columnas es el tope
+   util para este componente, aun en monitores ultrawide. */
 .orders-list {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+  grid-template-columns: 1fr;
   gap: 14px;
   margin-top: 18px;
+}
+
+@media (min-width: 768px) {
+  .orders-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .live-status {

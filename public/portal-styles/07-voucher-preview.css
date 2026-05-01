@@ -1,0 +1,19 @@
+/* Estilos del recuadro demostrativo de comprobante de pago (.voucher-preview).
+   El archivo se llamaba antes 07-redirector-keyframes.css cuando vivia el mockup
+   animado del redirector USB; al rediseno del paso 4 se le quitaron las @keyframes
+   y solo quedaron los estilos del voucher demo. Renombrado para reflejar el
+   contenido actual. */
+
+.voucher-preview {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 1px dashed #bcd0f7;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.voucher-preview span {
+  color: var(--muted);
+  font-weight: 800;
+}

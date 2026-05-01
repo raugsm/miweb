@@ -6,17 +6,19 @@
   box-shadow: none;
 }
 
+/* QUE: contenedor base del flujo FRP. Solo aporta display, gap y margin; las
+   columnas las define .flow-steps.compact en el archivo
+   06-flow-grid.css con sistema mobile-first.
+   POR QUE: en el HTML actual la clase siempre va con .compact, asi que tener aqui un
+   grid-template-columns era codigo muerto que se sobrescribia siempre. */
 .flow-steps {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr));
   gap: 10px;
   margin-top: 16px;
   align-items: start;
 }
 
 .flow-steps article,
-.price-panel,
-.prep-panel,
 .next-action,
 .connection-block,
 .request-options {
@@ -26,10 +28,17 @@
   padding: 14px;
 }
 
+/* QUE: cada tarjeta del flujo es un contenedor flexbox vertical simple.
+   POR QUE: antes era display grid con grid-template-rows artificiales y ademas
+   container query container; esa combinacion (grid item + container-type +
+   align-content start + min-height 0) producia colapsos de altura que apilaban
+   visualmente las tarjetas en pantalla maximizada. Flex column es predecible:
+   los hijos se apilan en orden natural y margin-top auto sirve para empujar
+   un hijo al fondo cuando hace falta. */
 .flow-steps article {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 8px;
-  align-content: start;
   min-width: 0;
 }
 
@@ -45,8 +54,6 @@
 }
 
 .flow-steps strong,
-.price-panel strong,
-.prep-panel strong,
 .next-action strong,
 .connection-block strong {
   color: var(--ink);
@@ -55,8 +62,6 @@
 
 .flow-steps small,
 .flow-price-lines em,
-.price-panel small,
-.prep-panel small,
 .next-action span,
 .connection-block span,
 .request-options small {
@@ -65,10 +70,22 @@
   line-height: 1.4;
 }
 
+/* QUE: sub-grid del paso 1 (precio): caja USDT junto a caja moneda local.
+   Mobile-first: 1 columna apilada; 2 columnas a partir de md (>=768px).
+   POR QUE: volvemos a media query desde container query porque las tarjetas dejaron
+   de ser containment contexts en este refactor. El breakpoint md alinea con el
+   sistema Tailwind del grid principal: cuando hay 2 columnas afuera, las cajas
+   internas pueden mostrarse en 2 columnas tambien. */
 .flow-price-lines {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 8px;
+}
+
+@media (min-width: 768px) {
+  .flow-price-lines {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .flow-price-lines span {
@@ -91,7 +108,7 @@
   color: var(--ink);
   font-size: 0.95rem;
   font-weight: 950;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 .payment-choice {
@@ -141,10 +158,6 @@
   gap: 12px;
 }
 
-.flow-step-card {
-  min-height: 0;
-}
-
 .flow-step-card label {
   gap: 6px;
   font-size: 0.82rem;
@@ -161,11 +174,6 @@
 .flow-request-card textarea {
   min-height: 76px;
   resize: vertical;
-}
-
-.flow-payment-card,
-.flow-connect-card {
-  grid-template-rows: auto auto auto auto 1fr;
 }
 
 .flow-mini-quote {
@@ -198,14 +206,23 @@
   color: var(--ink);
   font-size: 1rem;
   font-weight: 950;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
+/* QUE: sub-grid del paso 3 (pago): total USDT junto a total en moneda local.
+   Mobile-first: 1 columna apilada; 2 columnas a partir de md (>=768px).
+   POR QUE: misma logica que .flow-price-lines en el paso 1. */
 .quote-total-lines {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 8px;
   min-width: 0;
+}
+
+@media (min-width: 768px) {
+  .quote-total-lines {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .quote-total-lines span {
@@ -230,7 +247,7 @@
   color: var(--ink);
   font-size: 0.94rem;
   font-weight: 950;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 .flow-mini-quote button {
@@ -239,8 +256,14 @@
   flex: 0 0 auto;
 }
 
+/* QUE: el voucher demo del paso 3 absorbe el espacio vertical sobrante para que
+   el card se vea balanceado cuando comparte fila con cards mas altos.
+   POR QUE: antes esto venia de grid-template-rows: auto auto auto auto 1fr en
+   .flow-payment-card; al pasar el card a flex column, el equivalente directo es
+   flex-grow 1 en el voucher. Conserva el visual original sin huecos arriba. */
 .flow-payment-card .voucher-preview {
   padding: 9px 10px;
+  flex-grow: 1;
 }
 
 .flow-proof-dropzone {
@@ -260,36 +283,6 @@
 .flow-proof-dropzone.is-disabled span,
 .flow-proof-dropzone[data-disabled="true"] span {
   color: #6d7f99;
-}
-
-.flow-connect-card .redirector-mini {
-  gap: 6px;
-}
-
-.flow-connect-card .redirector-window {
-  gap: 6px;
-  padding: 10px;
-}
-
-.flow-connect-card .window-bar {
-  margin: -10px -10px 0;
-  padding: 7px 9px;
-}
-
-.flow-connect-card .redirector-window label {
-  font-size: 0.72rem;
-}
-
-.flow-connect-card .redirector-window code {
-  min-height: 30px;
-  padding: 6px 8px;
-  font-size: 0.76rem;
-}
-
-.flow-connect-card .redirector-window button {
-  min-height: 30px;
-  padding: 0 12px;
-  font-size: 0.78rem;
 }
 
 .connection-actions {
@@ -320,4 +313,197 @@
 
 .flow-submit-area .turnstile-box {
   grid-column: 1;
+}
+
+.step-guide {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  margin-top: 8px;
+  border: 1px solid #d5dfef;
+  border-radius: 10px;
+  background: #fbfdff;
+}
+
+.step-row {
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  gap: 10px;
+  align-items: start;
+}
+
+.step-row-number {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent, #2177f2);
+  color: #ffffff;
+  font-weight: 900;
+  font-size: 0.92rem;
+}
+
+.step-row-content {
+  display: grid;
+  gap: 6px;
+  color: var(--ink);
+  font-size: 0.92rem;
+  line-height: 1.4;
+}
+
+.step-row-content strong {
+  font-weight: 900;
+}
+
+.step-row-content small {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.step-row-content a {
+  color: var(--accent, #2177f2);
+  text-decoration: underline;
+  font-weight: 700;
+}
+
+.step-row-content .download-btn {
+  justify-self: start;
+  display: inline-block;
+  min-height: 36px;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--accent, #2177f2);
+  color: #ffffff;
+  font-weight: 800;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.step-row-content .download-btn:hover {
+  filter: brightness(1.05);
+}
+
+.copy-field {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid #d5dfef;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+/* QUE: el codigo (Technician ID o codigo del cliente) se muestra en una linea con
+   ellipsis si no cabe, y permite scroll horizontal solo dentro de la caja propia.
+   POR QUE: patron tipo Stripe y GitHub. El cliente debe poder seleccionar el texto
+   completo aunque no quepa visible, pero sin que el wrap rompa la lectura. La copia
+   completa la hace el boton, asi que el texto truncado visualmente no es problema. */
+.copy-field code {
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  color: var(--ink);
+  font-weight: 800;
+  font-size: 0.92rem;
+  white-space: nowrap;
+  overflow-x: auto;
+  text-overflow: ellipsis;
+}
+
+/* QUE: boton de copiar tipo Stripe/GitHub: cuadrado, solo icono, sin texto.
+   Muestra el icono de portapapeles por defecto y un check cuando data-copied=true.
+   POR QUE: deja el codigo seleccionable a la izquierda y reduce ruido visual. El
+   cambio de icono (clipboard a check) durante 1.5s da feedback claro de exito. */
+.copy-field-button {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid #d5dfef;
+  border-radius: 6px;
+  background: #f6f8fc;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.copy-field-button:hover {
+  background: #ebf1fa;
+}
+
+.copy-field-button:focus-visible {
+  outline: 2px solid #2177f2;
+  outline-offset: 2px;
+}
+
+.copy-field-button .copy-icon {
+  grid-area: 1 / 1;
+  pointer-events: none;
+}
+
+.copy-field-button .copy-icon-check {
+  opacity: 0;
+  transform: scale(0.7);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.copy-field-button[data-copied="true"] .copy-icon-clipboard {
+  opacity: 0;
+}
+
+.copy-field-button[data-copied="true"] .copy-icon-check {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.copy-field[data-copied="true"] .copy-field-button {
+  background: #e6f6ee;
+  border-color: #b6dfc2;
+  color: #0f6b3d;
+}
+
+/* QUE: link discreto al pie del paso 4 hacia el video tutorial.
+   POR QUE: en el rediseno simplificado quitamos el sub-paso de Sideload y movimos el
+   acceso al tutorial aqui. Es opcional para el cliente experimentado. */
+.step-guide-tutorial {
+  margin: 4px 0 0;
+  text-align: center;
+  font-size: 0.82rem;
+}
+
+.step-guide-tutorial a {
+  color: var(--muted);
+  text-decoration: underline;
+  font-weight: 700;
+}
+
+.step-guide-tutorial a:hover {
+  color: var(--accent, #2177f2);
+}
+
+.swap-warning-banner {
+  padding: 10px 12px;
+  border: 1px solid #f1c976;
+  border-radius: 8px;
+  background: #fff7e6;
+  color: #6a4b15;
+  font-weight: 700;
+  font-size: 0.92rem;
+}
+
+.swap-warning-banner strong {
+  display: block;
+  font-weight: 900;
+  margin-bottom: 2px;
+}
+
+.step-guide-empty {
+  padding: 10px 12px;
+  border: 1px dashed #d5dfef;
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 0.9rem;
 }

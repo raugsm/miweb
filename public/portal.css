@@ -1,12 +1,12 @@
+@import url("./portal-styles/00-breakpoints.css");
 @import url("./portal-styles/00-tokens.css");
 @import url("./portal-styles/01-base.css");
 @import url("./portal-styles/02-shell-brand-access.css");
 @import url("./portal-styles/03-auth-forms.css");
 @import url("./portal-styles/04-app-layout.css");
 @import url("./portal-styles/05-frp-flow.css");
-@import url("./portal-styles/06-legacy-flow-compat-before-redirector.css");
-@import url("./portal-styles/07-redirector-keyframes.css");
-@import url("./portal-styles/08-legacy-flow-compat-after-redirector.css");
+@import url("./portal-styles/06-flow-grid.css");
+@import url("./portal-styles/07-voucher-preview.css");
 @import url("./portal-styles/09-verification-request-options.css");
 @import url("./portal-styles/10-orders-tracking-proofs.css");
 @import url("./portal-styles/11-modal-payment-options.css");

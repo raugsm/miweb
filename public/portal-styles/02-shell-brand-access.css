@@ -1,14 +1,25 @@
 
+/* QUE: layout principal del portal (panel marca + panel acceso/app).
+   Mobile-first: una columna apilada por defecto, dos columnas (1.15fr + 0.85fr) a partir de lg.
+   POR QUE: en celular y tablet el contenido cabe mejor apilado; recien con >=1024px de ancho
+   tiene sentido mostrar marca y formulario lado a lado. La regla previa con minmax era
+   bidireccional y dependia de un @media max-width 920 en 12-responsive.css. */
 .portal-shell {
   width: min(1180px, calc(100% - clamp(24px, 4vw, 48px)));
   margin: clamp(18px, 3vw, 32px) auto;
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(min(360px, 100%), 0.85fr);
+  grid-template-columns: 1fr;
   gap: 24px;
   align-items: start;
 }
 
-:where(.portal-shell, .brand-panel, .access-panel, .app-panel, .request-card, .orders-section, .summary-grid, .summary-grid article, .order-form, .quote-box, .orders-list, .order-card, .payment-block, .item-list) {
+@media (min-width: 1024px) {
+  .portal-shell {
+    grid-template-columns: minmax(0, 1.15fr) minmax(min(360px, 100%), 0.85fr);
+  }
+}
+
+:where(.portal-shell, .brand-panel, .access-panel, .app-panel, .request-card, .orders-section, .summary-grid, .summary-grid article, .quote-box, .orders-list, .order-card, .payment-block, .item-list) {
   min-width: 0;
 }
 

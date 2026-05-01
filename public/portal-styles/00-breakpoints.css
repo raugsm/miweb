@@ -1,0 +1,39 @@
+/* ============================================================================
+   AriadGSM Portal Cliente — Sistema de breakpoints responsive
+   ============================================================================
+   Estandar: Tailwind CSS v3+ (https://tailwindcss.com/docs/responsive-design)
+   Adoptado en 2026 como referencia mas comun en la industria.
+
+   Estrategia: Mobile-first. Las reglas base aplican a celular sin media query.
+   Cada breakpoint @media (min-width: ...) anade overrides para pantallas mas
+   grandes; nunca usamos max-width.
+
+   Breakpoints:
+     mobile (default, 0 - 639px) ............. celular en vertical
+     sm  >=  640px ............................ celular grande / phablet
+     md  >=  768px ............................ tablet vertical
+     lg  >= 1024px ............................ laptop / tablet horizontal
+     xl  >= 1280px ............................ desktop estandar
+                                                (max-width 1400px en grids)
+
+   Las custom properties debajo son SOLO referencia mental para code review;
+   CSS no permite usar var() dentro de @media, asi que los pixeles se repiten
+   literalmente en cada media query del proyecto. Si cambias un breakpoint,
+   busca y reemplaza en todo public/portal-styles/.
+============================================================================ */
+
+:root {
+  /* sm: punto donde el mobile vertical acepta layouts ligeramente mas anchos.
+     Sub-grids 2-col del flujo FRP arrancan aqui. */
+  --bp-sm: 640px;
+
+  /* md: tablet vertical. El grid principal de los 4 pasos pasa a 2x2. */
+  --bp-md: 768px;
+
+  /* lg: laptop o tablet apaisada. Grid principal a 4 columnas estrechas. */
+  --bp-lg: 1024px;
+
+  /* xl: desktop comodo. Mismo 4 columnas pero con max-width 1400px y
+     centrado para que monitores ultrawide no estiren tarjetas. */
+  --bp-xl: 1280px;
+}

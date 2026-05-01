@@ -1,0 +1,32 @@
+/* QUE: grid principal del flujo FRP (4 pasos: Precio, Solicitud, Pago, Conexion).
+   Mobile-first siguiendo breakpoints Tailwind documentados en 00-breakpoints.css:
+     - mobile (default, <640px) ........ 1 columna apilada
+     - sm (>=640px) .................... 1 columna todavia (tarjeta full ancho)
+     - md (>=768px) .................... 2 columnas (2x2)
+     - lg (>=1024px) ................... 4 columnas estrechas
+     - xl (>=1280px) ................... 4 columnas comodas, max-width 1400px centrado
+   POR QUE: el approach anterior con repeat(auto-fit, minmax(...)) era impredecible y
+   producia bugs visuales en rangos intermedios de viewport. El sistema explicito
+   mobile-first hace cada breakpoint visible y testeable. */
+.flow-steps.compact {
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 768px) {
+  .flow-steps.compact {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .flow-steps.compact {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1280px) {
+  .flow-steps.compact {
+    max-width: 1400px;
+    margin-inline: auto;
+  }
+}

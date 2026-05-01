@@ -4,7 +4,7 @@
 }
 
 .auth-form.active {
-  display: grid;
+  display: grid !important;
   gap: 16px;
 }
 

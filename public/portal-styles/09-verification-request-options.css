@@ -19,14 +19,6 @@
   font-weight: 750;
 }
 
-.order-form {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
-  gap: 16px;
-  margin-top: 18px;
-  align-items: end;
-}
-
 .request-options {
   display: grid;
   gap: 10px;

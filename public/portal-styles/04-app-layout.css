@@ -19,10 +19,21 @@
   flex-wrap: wrap;
 }
 
+/* QUE: tarjetas de resumen del cliente (estado, equipos del mes, dispositivo).
+   Mobile-first: 1 columna apilada en celular; 3 columnas en una fila desde md (>=768px).
+   POR QUE: hay exactamente 3 tarjetas; saltar a 2 columnas dejaria una huerfana en la
+   segunda fila. Pasar directo de 1 a 3 columnas en md mantiene la linea limpia desde
+   tablet en adelante. */
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+  grid-template-columns: 1fr;
   gap: 14px;
+}
+
+@media (min-width: 768px) {
+  .summary-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 .summary-grid article {
