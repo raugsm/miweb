@@ -173,11 +173,21 @@
                 <span>4</span>
                 <strong>Conexion</strong>
                 <div class="redirector-mini" aria-label="Guia visual USB Redirector">
-                  <div class="redirector-window">
-                    <div class="window-bar">USB Redirector</div>
-                    <label>Technician ID <code id="redirectorDdns">DDNS AriadGSM</code></label>
-                    <label>Additional information <code id="previewOperationCode">CL-YYYYMMDD-001-01</code></label>
-                    <button type="button" disabled>Connect</button>
+                  <div class="redirector-stage">
+                    <div class="redirector-screen redirector-welcome">
+                      <div class="usb-cover" aria-hidden="true"></div>
+                      <div>
+                        <strong>Welcome to USB Redirector</strong>
+                        <span>Technician Edition</span>
+                      </div>
+                      <button class="redirector-next" type="button" disabled>Next</button>
+                    </div>
+                    <div class="redirector-screen redirector-connect">
+                      <div class="window-bar">Connect With Technician</div>
+                      <label>Technician ID <code class="typed-value typed-ddns" id="redirectorDdns">DDNS AriadGSM</code></label>
+                      <label>Additional information <code class="typed-value typed-code" id="previewOperationCode">CL-YYYYMMDD-001-01</code></label>
+                      <button class="redirector-connect-button" type="button" disabled>Connect</button>
+                    </div>
                   </div>
                 </div>
                 <div class="connection-actions">

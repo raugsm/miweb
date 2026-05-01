@@ -119,6 +119,31 @@ function connectionGuideText(order = null) {
   ].filter(Boolean).join("\n");
 }
 
+function redirectorMiniGuideMarkup(order = null) {
+  const firstItem = order?.items?.[0] || null;
+  const code = order ? operationCode(order, firstItem) : "CL-YYYYMMDD-001-01";
+  return `
+    <div class="redirector-mini" aria-label="Guia visual USB Redirector">
+      <div class="redirector-stage">
+        <div class="redirector-screen redirector-welcome">
+          <div class="usb-cover" aria-hidden="true"></div>
+          <div>
+            <strong>Welcome to USB Redirector</strong>
+            <span>Technician Edition</span>
+          </div>
+          <button class="redirector-next" type="button" disabled>Next</button>
+        </div>
+        <div class="redirector-screen redirector-connect">
+          <div class="window-bar">Connect With Technician</div>
+          <label>Technician ID <code class="typed-value typed-ddns">DDNS AriadGSM</code></label>
+          <label>Additional information <code class="typed-value typed-code">${escapeHtml(code)}</code></label>
+          <button class="redirector-connect-button" type="button" disabled>Connect</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function copyText(text, messageNode) {
   const done = () => setMessage(messageNode, "Copiado. Ya puedes pegarlo.", "success");
   const fail = () => setMessage(messageNode, "No se pudo copiar automaticamente.", "error");
@@ -596,7 +621,8 @@ function renderOrders(orders) {
     `).join("");
     $(".connection-block", card).innerHTML = `
       <strong>Preparacion de conexion</strong>
-      <span>Technician ID = DDNS AriadGSM. Additional information = codigo de operacion por equipo.</span>
+      <span>Mira la guia: Next, DDNS, codigo y Connect.</span>
+      ${redirectorMiniGuideMarkup(order)}
       <div class="connection-codes">${connectionCodes || `<div class="connection-code-row"><span>Equipo</span><code>${escapeHtml(operationCode(order))}</code></div>`}</div>
     `;
     const fileInput = $("input[type='file']", card);
