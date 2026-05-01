@@ -1,0 +1,41 @@
+.payment-step,
+.connection-step,
+.note-step,
+.request-options,
+.express-order-form .turnstile-box,
+.express-order-form #orderSubmitButton {
+  grid-column: span 2;
+}
+
+.payment-step > div:last-child {
+  grid-template-columns: minmax(0, 0.7fr) minmax(0, 1.3fr);
+  align-items: end;
+}
+
+.payment-step > div:last-child > span,
+.payment-step .voucher-preview {
+  grid-column: 1 / -1;
+}
+
+.price-panel,
+.prep-panel {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.price-panel span,
+.prep-panel span {
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 900;
+}
+
+.price-panel strong {
+  font-size: 1.75rem;
+}
+
+.prep-panel button {
+  width: fit-content;
+  margin-top: 4px;
+}

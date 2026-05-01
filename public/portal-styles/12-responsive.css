@@ -1,0 +1,93 @@
+@media (max-width: 920px) {
+  .portal-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .brand-panel {
+    min-height: auto;
+    padding: 32px;
+  }
+
+  .access-panel {
+    margin-top: 0;
+  }
+
+  .order-form,
+  .express-order-form,
+  .flow-submit-area,
+  .summary-grid,
+  .price-prep-grid,
+  .flow-steps.compact {
+    grid-template-columns: 1fr;
+  }
+
+  .flow-submit-area .turnstile-box,
+  .flow-submit-area #orderSubmitButton {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .payment-step,
+  .connection-step,
+  .note-step,
+  .request-options,
+  .express-order-form .turnstile-box,
+  .express-order-form #orderSubmitButton {
+    grid-column: span 1;
+  }
+
+  .payment-step > div:last-child {
+    grid-template-columns: 1fr;
+  }
+
+  .wide {
+    grid-column: span 1;
+  }
+}
+
+@media (max-width: 640px) {
+  .brand-panel,
+  .access-panel,
+  .app-panel,
+  .request-card,
+  .orders-section {
+    padding: 16px;
+  }
+
+  .brand-logo {
+    margin-bottom: 32px;
+  }
+
+  .tabs {
+    grid-template-columns: 1fr;
+  }
+
+  .quote-box,
+  .verification-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .express-step {
+    grid-template-columns: 1fr;
+  }
+
+  .connection-code-row {
+    grid-template-columns: 1fr;
+  }
+
+  .payment-option-head {
+    display: grid;
+  }
+
+  .quote-box button,
+  .verification-card button,
+  .order-actions button,
+  .upload-button,
+  .copy-payment-option,
+  #refreshButton,
+  #logoutButton,
+  #orderSubmitButton {
+    width: 100%;
+  }
+}

@@ -1,0 +1,168 @@
+.auth-form,
+.hidden {
+  display: none !important;
+}
+
+.auth-form.active {
+  display: grid;
+  gap: 16px;
+}
+
+.text-link {
+  min-height: 38px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--blue);
+  font-weight: 900;
+  text-align: center;
+}
+
+.text-link:hover {
+  text-decoration: underline;
+}
+
+.field-hint,
+.form-title span {
+  display: block;
+  margin-top: -8px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.field-hint[data-type="success"] {
+  color: var(--green);
+}
+
+.field-hint[data-type="warn"] {
+  color: #9a6800;
+}
+
+.form-title {
+  display: grid;
+  gap: 4px;
+}
+
+.form-title strong {
+  color: var(--ink);
+  font-size: 1rem;
+}
+
+label {
+  display: grid;
+  gap: 8px;
+  color: #27364a;
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8fbff;
+  color: var(--ink);
+  min-height: 48px;
+  padding: 12px 14px;
+  outline: none;
+  font-weight: 700;
+}
+
+.password-field {
+  position: relative;
+  display: block;
+}
+
+.password-field input {
+  padding-right: 54px;
+}
+
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  width: 38px;
+  min-width: 38px;
+  min-height: 38px;
+  height: 38px;
+  padding: 0;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-color: transparent;
+  background: transparent;
+  color: #52637d;
+  box-shadow: none;
+}
+
+.password-toggle:hover,
+.password-toggle:focus-visible {
+  border-color: #b9d0fa;
+  background: #eef5ff;
+  color: var(--blue);
+}
+
+.password-toggle:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(47, 109, 243, 0.12);
+}
+
+.password-toggle svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.password-toggle .eye-off,
+.password-toggle[data-visible="true"] .eye-on {
+  display: none;
+}
+
+.password-toggle[data-visible="true"] .eye-off {
+  display: block;
+}
+
+textarea {
+  min-height: 96px;
+  resize: vertical;
+  font-weight: 650;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 4px rgba(47, 109, 243, 0.12);
+}
+
+.message {
+  min-height: 22px;
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.message[data-type="success"] {
+  color: var(--green);
+}
+
+.message[data-type="error"] {
+  color: var(--red);
+}
+
+.turnstile-box {
+  display: none;
+}
+
+.turnstile-box.active {
+  display: block;
+}

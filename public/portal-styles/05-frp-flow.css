@@ -1,0 +1,323 @@
+.frp-flow-card {
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: none;
+}
+
+.flow-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr));
+  gap: 10px;
+  margin-top: 16px;
+  align-items: start;
+}
+
+.flow-steps article,
+.price-panel,
+.prep-panel,
+.next-action,
+.connection-block,
+.request-options {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--soft);
+  padding: 14px;
+}
+
+.flow-steps article {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  min-width: 0;
+}
+
+.flow-steps article > span {
+  display: inline-grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 999px;
+  background: #eaf2ff;
+  color: var(--blue);
+  font-weight: 900;
+}
+
+.flow-steps strong,
+.price-panel strong,
+.prep-panel strong,
+.next-action strong,
+.connection-block strong {
+  color: var(--ink);
+  font-weight: 900;
+}
+
+.flow-steps small,
+.flow-price-lines em,
+.price-panel small,
+.prep-panel small,
+.next-action span,
+.connection-block span,
+.request-options small {
+  color: var(--muted);
+  font-weight: 750;
+  line-height: 1.4;
+}
+
+.flow-price-lines {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.flow-price-lines span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 9px;
+  border: 1px solid #dce7f7;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.flow-price-lines em {
+  font-size: 0.7rem;
+  font-style: normal;
+  text-transform: uppercase;
+}
+
+.flow-price-lines b {
+  color: var(--ink);
+  font-size: 0.95rem;
+  font-weight: 950;
+  overflow-wrap: anywhere;
+}
+
+.payment-choice {
+  display: grid;
+  gap: 6px;
+}
+
+.payment-choice select {
+  min-height: 40px;
+  border-color: #c8dcff;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  font-weight: 900;
+}
+
+.flow-price-card {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(244, 249, 255, 0.96) 100%);
+}
+
+.flow-price-card .flow-price-lines span:first-child {
+  border-color: #bfd4ff;
+  background: #f7fbff;
+}
+
+.flow-price-card small {
+  color: #45617f;
+}
+
+.payment-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 7px 10px;
+  border: 1px solid #dce7f7;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #314660;
+  font-size: 0.82rem;
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
+
+.flow-order-form {
+  display: grid;
+  gap: 12px;
+}
+
+.flow-step-card {
+  min-height: 0;
+}
+
+.flow-step-card label {
+  gap: 6px;
+  font-size: 0.82rem;
+}
+
+.flow-step-card input,
+.flow-step-card select,
+.flow-step-card textarea {
+  min-height: 44px;
+  padding: 10px 12px;
+  background: #ffffff;
+}
+
+.flow-request-card textarea {
+  min-height: 76px;
+  resize: vertical;
+}
+
+.flow-payment-card,
+.flow-connect-card {
+  grid-template-rows: auto auto auto auto 1fr;
+}
+
+.flow-mini-quote {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #dce7f7;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.flow-mini-quote div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.flow-mini-quote em {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.flow-mini-quote b {
+  color: var(--ink);
+  font-size: 1rem;
+  font-weight: 950;
+  overflow-wrap: anywhere;
+}
+
+.quote-total-lines {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+
+.quote-total-lines span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 7px 8px;
+  border: 1px solid #dce7f7;
+  border-radius: 8px;
+  background: #f8fbff;
+}
+
+.quote-total-lines em {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.quote-total-lines b {
+  color: var(--ink);
+  font-size: 0.94rem;
+  font-weight: 950;
+  overflow-wrap: anywhere;
+}
+
+.flow-mini-quote button {
+  min-height: 38px;
+  padding: 0 14px;
+  flex: 0 0 auto;
+}
+
+.flow-payment-card .voucher-preview {
+  padding: 9px 10px;
+}
+
+.flow-proof-dropzone {
+  width: 100%;
+  min-width: 0;
+}
+
+.flow-proof-dropzone.is-disabled,
+.flow-proof-dropzone[data-disabled="true"] {
+  cursor: not-allowed;
+  border-color: #cbd8ea;
+  background: #eef4fd;
+  color: #5f7290;
+  box-shadow: none;
+}
+
+.flow-proof-dropzone.is-disabled span,
+.flow-proof-dropzone[data-disabled="true"] span {
+  color: #6d7f99;
+}
+
+.flow-connect-card .redirector-mini {
+  gap: 6px;
+}
+
+.flow-connect-card .redirector-window {
+  gap: 6px;
+  padding: 10px;
+}
+
+.flow-connect-card .window-bar {
+  margin: -10px -10px 0;
+  padding: 7px 9px;
+}
+
+.flow-connect-card .redirector-window label {
+  font-size: 0.72rem;
+}
+
+.flow-connect-card .redirector-window code {
+  min-height: 30px;
+  padding: 6px 8px;
+  font-size: 0.76rem;
+}
+
+.flow-connect-card .redirector-window button {
+  min-height: 30px;
+  padding: 0 12px;
+  font-size: 0.78rem;
+}
+
+.connection-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.connection-actions button {
+  min-height: 40px;
+}
+
+.flow-submit-area {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.flow-submit-area .request-options {
+  min-width: 0;
+}
+
+.flow-submit-area .request-options {
+  align-content: start;
+}
+
+.flow-submit-area .turnstile-box {
+  grid-column: 1;
+}

@@ -1,0 +1,73 @@
+.price-prep-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.flow-steps.compact {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.express-order-form {
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  gap: 14px;
+  margin-top: 18px;
+  align-items: stretch;
+}
+
+.express-step {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--soft);
+  padding: 14px;
+  min-width: 0;
+}
+
+.express-step > div:last-child {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.step-marker {
+  display: inline-grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 999px;
+  background: #eaf2ff;
+  color: var(--blue);
+  font-weight: 900;
+}
+
+.express-step span,
+.detected-summary,
+.voucher-preview span,
+.redirector-mini small,
+.note-step {
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.express-step strong {
+  color: var(--ink);
+  font-weight: 900;
+}
+
+.price-step strong {
+  font-size: 1.75rem;
+}
+
+.request-step textarea,
+.note-step textarea {
+  resize: vertical;
+}
+
+#detectedItemsSummary {
+  display: block;
+}
