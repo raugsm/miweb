@@ -688,6 +688,57 @@ export function createPortalRoutes({
     });
   }
 
+  const portalNotifyConnectedMatch = pathname.match(/^\/api\/portal\/orders\/([^/]+)\/notify-connected$/);
+  if (req.method === "POST" && portalNotifyConnectedMatch) {
+    const context = await getCurrentCustomerContext(req);
+    if (!requireCustomer(context, res)) return;
+    const db = context.db;
+    const order = db.customerOrders.find((candidate) => candidate.id === portalNotifyConnectedMatch[1] && candidate.clientId === context.client.id);
+    if (!order) return sendJson(res, 404, { error: "Orden no encontrada." });
+    // QUE: la orden debe estar en una fase donde el cliente ya pueda fisicamente
+    // conectar su equipo via USB Redirector. Eso ocurre cuando el pago esta validado
+    // (publicStatus EN_PREPARACION) y opcionalmente cuando el job ya esta listo
+    // (LISTO_PARA_CONEXION). Antes de eso (ESPERANDO_PAGO o PAGO_EN_REVISION)
+    // todavia no hay nada que conectar; despues (EN_PROCESO o FINALIZADO) el evento
+    // ya no aporta valor.
+    const derived = publicCustomerOrder(order, db);
+    if (!["EN_PREPARACION", "LISTO_PARA_CONEXION"].includes(derived.publicStatus)) {
+      audit(db, context.user.id, "PORTAL_CUSTOMER_CONNECTED_BLOCKED", order.id, {
+        code: order.code,
+        derivedStatus: derived.publicStatus,
+      });
+      await writeDb(db);
+      return sendJson(res, 409, { error: "Solo puedes avisar de conexion cuando tu orden este en preparacion o lista para conexion." });
+    }
+    const timestamp = nowIso();
+    order.customerConnectedAt = order.customerConnectedAt || timestamp;
+    order.customerConnectedBy = context.user.id;
+    // Compat con el serializer existente: si todavia no estaba marcado el
+    // connection-ready legacy, lo seteamos para que la derivacion siga produciendo
+    // LISTO_PARA_CONEXION sin tocar deriveCustomerOrderStatus.
+    order.customerConnectionReadyAt = order.customerConnectionReadyAt || timestamp;
+    order.updatedAt = timestamp;
+    const frpOrder = db.frpOrders.find((candidate) => candidate.id === order.frpOrderId);
+    if (frpOrder) {
+      frpOrder.customerConnectedAt = frpOrder.customerConnectedAt || timestamp;
+      frpOrder.customerConnectionReadyAt = frpOrder.customerConnectionReadyAt || timestamp;
+      frpOrder.updatedAt = timestamp;
+      syncFrpOrderStatus(db, frpOrder);
+    }
+    audit(db, context.user.id, "PORTAL_CUSTOMER_CONNECTED", order.id, {
+      code: order.code,
+      frpOrderId: order.frpOrderId || "",
+      derivedStatus: derived.publicStatus,
+    });
+    await writeDb(db);
+    publishPortalOrders(db, context.client.id, "customer_connected");
+    return sendJson(res, 200, {
+      ok: true,
+      order: publicCustomerOrder(order, db),
+      customer: publicCustomerState(db, context),
+    });
+  }
+
   const portalProofMatch = pathname.match(/^\/api\/portal\/orders\/([^/]+)\/payment-proof$/);
   if (req.method === "PATCH" && portalProofMatch) {
     const context = await getCurrentCustomerContext(req);

@@ -11,6 +11,7 @@ import {
   validateRegisterName,
 } from "./auth-forms.js";
 import { $, $$, copyText, setMessage } from "./dom.js";
+import { activeOrderForFlow, notifyEquipoConectado } from "./flow-state.js";
 import { parseItems, syncDetectedItems } from "./frp.js";
 import { refreshOrdersSilently, setOrdersLiveStatus, stopOrdersLive } from "./live-orders.js";
 import { orderNeedsPaymentProof } from "./order-state.js";
@@ -150,6 +151,28 @@ export function wireEvents() {
     } catch (error) {
       setMessage(message, error.message, "error");
       resetTurnstile("order");
+    }
+  });
+
+  // Click delegado para el CTA "Equipo conectado" del paso 4.
+  // applyFlowState() reemplaza el innerHTML de .connection-actions en cada render,
+  // asi que un listener directo se perderia; delegamos al form que es estable.
+  $("#orderForm")?.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-flow-action='notify-connected']");
+    if (!button) return;
+    event.preventDefault();
+    const order = activeOrderForFlow(state.customer);
+    if (!order) return;
+    const message = $("#orderMessage");
+    button.disabled = true;
+    setMessage(message, "Avisando al equipo tecnico...");
+    try {
+      await notifyEquipoConectado(order.id);
+      setMessage(message, "Aviso enviado al equipo tecnico.", "success");
+      renderCustomer();
+    } catch (error) {
+      setMessage(message, error.message, "error");
+      button.disabled = false;
     }
   });
 

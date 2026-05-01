@@ -67,6 +67,10 @@ async function runSmoke({ baseUrl, dataDir, setupToken }) {
   assert.equal(response.status, 200);
   assert.equal(response.data.order.paymentProofs.length, 1);
 
+  // notify-connected debe rechazarse en PAGO_EN_REVISION (aun sin pago validado).
+  response = await http.request("POST", `/api/portal/orders/${encodeURIComponent(portalOrder.id)}/notify-connected`);
+  assert.equal(response.status, 409, "notify-connected debe bloquearse antes de pago validado");
+
   response = await http.request("GET", "/api/portal/orders");
   assert.equal(response.status, 200);
   assert.ok(response.data.orders.some((order) => order.id === portalOrder.id));
@@ -170,6 +174,28 @@ async function runSmoke({ baseUrl, dataDir, setupToken }) {
   });
   assert.equal(response.status, 200);
   assert.equal(response.data.job.status, "FINALIZADO");
+
+  // QUE: validar el endpoint POST /api/portal/orders/:id/notify-connected en happy path.
+  // Previo: la orden del portal sigue en PAGO_EN_REVISION porque el admin nunca aprobo
+  // su comprobante (solo aprobo el de la orden manual). Aqui localizamos la frpOrder
+  // ligada al portalOrder via session.frp.orders y aprobamos su pago, lo que hace que la
+  // derivacion publica suba a EN_PREPARACION. Recien ahi podemos ejercer notify-connected.
+  response = await http.request("GET", "/api/session");
+  assert.equal(response.status, 200);
+  const portalFrpOrder = (response.data.frp?.orders || []).find((order) => order.portalOrderId === portalOrder.id);
+  assert.ok(portalFrpOrder, "session.frp.orders debe incluir el frpOrder ligado al portalOrder");
+
+  for (const key of ["priceSent", "connectionDataSent", "authorizationConfirmed"]) {
+    response = await http.request("PATCH", `/api/frp/orders/${encodeURIComponent(portalFrpOrder.id)}/checklist`, { key, value: true });
+    assert.equal(response.status, 200);
+  }
+  response = await http.request("PATCH", `/api/frp/orders/${encodeURIComponent(portalFrpOrder.id)}/payment-review`, { action: "approve" });
+  assert.equal(response.status, 200);
+  assert.equal(response.data.order.checklist.paymentValidated, true);
+
+  response = await http.request("POST", `/api/portal/orders/${encodeURIComponent(portalOrder.id)}/notify-connected`);
+  assert.equal(response.status, 200, "notify-connected debe aceptar tras pago validado");
+  assert.ok(response.data.order.customerConnectionReadyAt, "el portal debe reflejar customerConnectionReadyAt");
 }
 
 async function startIsolatedServer() {

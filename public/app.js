@@ -1153,6 +1153,7 @@ const frpWebFilters = [
   { code: "PAGO_COMPROBANTE", label: "Pago/comprobante" },
   { code: "PREPARACION", label: "Preparacion" },
   { code: "LISTO_TECNICO", label: "Listo tecnico" },
+  { code: "CLIENTE_CONECTADO", label: "Cliente conectado" },
   { code: "EN_PROCESO", label: "En proceso" },
   { code: "REVISION_PROBLEMA", label: "Revision/problema" },
   { code: "FINALIZADO", label: "Finalizadas" },
@@ -1173,6 +1174,12 @@ function frpOrderStage(order) {
   if (order?.orderStatus === "CERRADA" || (jobs.length && jobs.every((job) => ["FINALIZADO", "CANCELADO"].includes(job.status)))) return "FINALIZADO";
   if (order?.paymentStatus === "COMPROBANTE_RECHAZADO" || jobs.some((job) => ["REQUIERE_REVISION", "ESPERANDO_CLIENTE"].includes(job.status))) return "REVISION_PROBLEMA";
   if (jobs.some((job) => job.status === "EN_PROCESO")) return "EN_PROCESO";
+  // QUE: cliente ya aviso "Equipo conectado" y todavia hay un job listo o en preparacion.
+  // POR QUE: este stage adelanta al operador la informacion que el cliente esta fisicamente
+  // enganchado al USB Redirector, asi puede procesar antes que tomar otro listo cualquiera.
+  if (order?.customerConnectedAt && jobs.some((job) => ["LISTO_PARA_TECNICO", "ESPERANDO_PREPARACION"].includes(job.status))) {
+    return "CLIENTE_CONECTADO";
+  }
   if (jobs.some((job) => job.status === "LISTO_PARA_TECNICO")) return "LISTO_TECNICO";
   if (paymentValidated || ["PAGO_VALIDADO", "EN_PREPARACION", "PARCIAL_LISTA", "LISTA_PARA_TECNICO"].includes(order?.orderStatus)) return "PREPARACION";
   if (proofCount || ["PAGO_EN_VALIDACION", "COMPROBANTE_RECIBIDO"].includes(order?.paymentStatus)) return "PAGO_COMPROBANTE";
@@ -1384,6 +1391,7 @@ function renderFrp() {
   const myActiveJobs = jobs.filter((job) => job.status === "EN_PROCESO" && job.technicianId === session.user?.id);
   const reviewJobs = jobs.filter((job) => job.status === "REQUIERE_REVISION");
   const finishedJobs = jobs.filter((job) => job.status === "FINALIZADO").slice(0, 8);
+  const clientConnectedOrders = webOrders.filter((order) => frpOrderStage(order) === "CLIENTE_CONECTADO");
   const filterHtml = `
     <div class="frp-filterbar" role="tablist" aria-label="Filtros FRP web">
       ${frpWebFilters.map((filter) => {
@@ -1408,6 +1416,10 @@ function renderFrp() {
       <header><span>Listo para tecnico</span><strong>${readyJobs.length}</strong></header>
       <button class="primary-btn full-action" type="button" data-frp-take-next>Tomar siguiente</button>
       ${readyJobs.length ? readyJobs.map((job) => renderFrpJobCard(job)).join("") : `<p class="muted-cell">No hay FRP listos.</p>`}
+    </section>
+    <section class="frp-lane">
+      <header><span>Cliente conectado, listo para procesar</span><strong>${clientConnectedOrders.length}</strong></header>
+      ${clientConnectedOrders.length ? clientConnectedOrders.map((order) => renderFrpOrder(order, { stageLabel: "Cliente conectado" })).join("") : `<p class="muted-cell">Sin clientes conectados ahora mismo.</p>`}
     </section>
     <section class="frp-lane">
       <header><span>Mi trabajo actual</span><strong>${myActiveJobs.length}</strong></header>

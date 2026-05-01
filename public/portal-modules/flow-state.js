@@ -1,3 +1,6 @@
+import { api } from "./api.js";
+import { state } from "./state.js";
+
 // QUE: deriva la fase del flujo del portal cliente en base a las ordenes existentes.
 // POR QUE: el portal no guarda un campo "step" explicito; la fase real depende del
 // estado del backend (publicStatus + paymentProofs). Centralizar la derivacion aqui
@@ -30,4 +33,17 @@ export function activeOrderForFlow(customer) {
     order.publicStatus === "ESPERANDO_PAGO"
     || order.publicStatus === "PAGO_EN_REVISION"
   )) || null;
+}
+
+// QUE: notifica al equipo tecnico que el cliente conecto su equipo y esta listo para procesar.
+// POR QUE: este es el evento que dispara la aparicion de la orden en el lane
+// "Cliente conectado, listo para procesar" del panel del operador. El backend valida que
+// la orden este en EN_PREPARACION o LISTO_PARA_CONEXION; antes de eso retorna 409.
+export async function notifyEquipoConectado(orderId) {
+  const payload = await api(`/api/portal/orders/${orderId}/notify-connected`, {
+    method: "POST",
+    body: "{}",
+  });
+  if (payload?.customer) state.customer = payload.customer;
+  return payload;
 }

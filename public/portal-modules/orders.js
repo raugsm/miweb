@@ -130,7 +130,6 @@ export function renderOrders(orders) {
     `;
     wireCopyButtonsWithin($(".connection-block", card));
     const loggedCustomer = Boolean(state.customer?.user && state.customer?.client);
-    const connectionReadyButton = $(".connection-ready", card);
     const copyOrderButton = $(".copy-order", card);
     const details = $(".order-details", card);
     const detailsToggle = $(".details-toggle", card);
@@ -138,9 +137,6 @@ export function renderOrders(orders) {
     const canPrepareConnection = (order.paymentProofs || []).length > 0
       || order.postpayStatus === "APROBADO"
       || ["PAGO_EN_REVISION", "EN_PREPARACION", "LISTO_PARA_CONEXION", "EN_PROCESO"].includes(order.publicStatus);
-    connectionReadyButton.disabled = !loggedCustomer || Boolean(order.customerConnectionReadyAt) || !canPrepareConnection;
-    connectionReadyButton.textContent = order.customerConnectionReadyAt ? "Conexion marcada" : "Estoy listo para conectar";
-    connectionReadyButton.style.display = loggedCustomer && canPrepareConnection && !order.customerConnectionReadyAt ? "" : "none";
     copyOrderButton.textContent = stage === "DONE" ? "Copiar Done" : "Copiar datos";
     const openDetails = () => {
       const isOpen = details.classList.toggle("hidden") === false;
@@ -162,26 +158,9 @@ export function renderOrders(orders) {
       setPrimaryAction(copyOrderButton);
     } else if (inCompatibilityReview || order.publicStatus === "REQUIERE_ATENCION") {
       setPrimaryAction(detailsPrimaryButton);
-    } else if (connectionReadyButton.style.display !== "none") {
-      setPrimaryAction(connectionReadyButton);
     } else {
       setPrimaryAction(detailsPrimaryButton);
     }
-    connectionReadyButton.addEventListener("click", async () => {
-      const message = $(".order-message", card);
-      setMessage(message, "Marcando conexion lista...");
-      try {
-        const payload = await api(`/api/portal/orders/${order.id}/connection-ready`, {
-          method: "PATCH",
-          body: "{}",
-        });
-        state.customer = payload.customer;
-        setMessage(message, "Conexion marcada como lista.", "success");
-        customerUpdateHandler();
-      } catch (error) {
-        setMessage(message, error.message, "error");
-      }
-    });
     copyOrderButton.addEventListener("click", () => copyText(stage === "DONE" ? orderDoneText(order) : orderCopyText(order), $(".order-message", card)));
     list.append(card);
   });
