@@ -237,7 +237,7 @@ async function verifyCustomerAndSetPenRate(dataDir, email) {
 function createHttpClient(baseUrl, jar) {
   return {
     async request(method, pathname, body) {
-      const headers = {};
+      const headers = { origin: baseUrl };
       if (body !== undefined) headers["content-type"] = "application/json";
       const cookie = jar.header();
       if (cookie) headers.cookie = cookie;

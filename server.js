@@ -114,6 +114,40 @@ const mailFrom = process.env.ARIAD_MAIL_FROM || '"AriadGSM Soporte" <soporte@ari
 const customerPortalBaseUrl = resolveCustomerPortalBaseUrl();
 const portalOrderStreams = new Map();
 
+const cloudflareTurnstileOrigin = "https://challenges.cloudflare.com";
+const turnstileEnabled = Boolean(turnstileSiteKey && turnstileSecret);
+const isProduction = process.env.NODE_ENV === "production";
+const baseCsp = [
+  "default-src 'self'",
+  `script-src 'self'${turnstileEnabled ? ` ${cloudflareTurnstileOrigin}` : ""}`,
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "font-src 'self' data:",
+  "connect-src 'self'",
+  `frame-src ${turnstileEnabled ? cloudflareTurnstileOrigin : "'none'"}`,
+  "frame-ancestors 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "object-src 'none'",
+].join("; ");
+const allowedApiHosts = new Set(["ariadgsm.com", "www.ariadgsm.com", "ops.ariadgsm.com"]);
+
+function isAllowedApiOrigin(req) {
+  const reqHost = String(req.headers.host || "").split(":")[0].toLowerCase();
+  const allowed = new Set([...allowedApiHosts, reqHost]);
+  if (!isProduction) {
+    allowed.add("localhost");
+    allowed.add("127.0.0.1");
+  }
+  const candidate = req.headers.origin || req.headers.referer;
+  if (!candidate) return false;
+  try {
+    return allowed.has(new URL(candidate).hostname.toLowerCase());
+  } catch {
+    return false;
+  }
+}
+
 function defaultServicePricingRule(service) {
   const baseRule = {
     serviceCode: service.code,
@@ -3166,6 +3200,9 @@ const handleFrpApi = createFrpRoutes({
 });
 
 async function handleApi(req, res, pathname) {
+  if (["POST", "PUT", "PATCH", "DELETE"].includes(req.method) && !isAllowedApiOrigin(req)) {
+    return sendJson(res, 403, { error: "Origen no autorizado." });
+  }
   const user = await getCurrentUser(req);
 
   if (req.method === "GET" && pathname === "/api/health") {
@@ -3329,7 +3366,7 @@ async function handleApi(req, res, pathname) {
         if (!setupTokenIsValid) {
           audit(db, existing.id, "ADMIN_DEVICE_SETUP_REQUIRED", existing.id, { deviceId: device.id });
           await writeDb(db);
-          res.setHeader("Set-Cookie", cookieHeader(deviceCookieName, deviceToken, deviceMaxAgeSeconds));
+          res.setHeader("Set-Cookie", cookieHeader(deviceCookieName, deviceToken, deviceMaxAgeSeconds, { sameSite: "Strict" }));
           return sendJson(res, 409, {
             error: "Codigo de instalacion requerido para autorizar el primer dispositivo admin.",
             code: "ADMIN_DEVICE_PIN_REQUIRED",
@@ -3344,7 +3381,7 @@ async function handleApi(req, res, pathname) {
             deviceId: device.id,
           });
           await writeDb(db);
-          res.setHeader("Set-Cookie", cookieHeader(deviceCookieName, deviceToken, deviceMaxAgeSeconds));
+          res.setHeader("Set-Cookie", cookieHeader(deviceCookieName, deviceToken, deviceMaxAgeSeconds, { sameSite: "Strict" }));
           return sendJson(res, 409, {
             error: "PIN operativo requerido para solicitar aprobacion de este dispositivo.",
             code: "ADMIN_DEVICE_PIN_REQUIRED",
@@ -3354,7 +3391,7 @@ async function handleApi(req, res, pathname) {
         upsertAdminDeviceApproval(db, existing, device, req);
         audit(db, existing.id, "ADMIN_DEVICE_APPROVAL_REQUESTED", existing.id, { deviceId: device.id });
         await writeDb(db);
-        res.setHeader("Set-Cookie", cookieHeader(deviceCookieName, deviceToken, deviceMaxAgeSeconds));
+        res.setHeader("Set-Cookie", cookieHeader(deviceCookieName, deviceToken, deviceMaxAgeSeconds, { sameSite: "Strict" }));
         return sendJson(res, 409, {
           error: "Solicitud enviada. Aprueba este dispositivo desde una PC admin ya autorizada.",
           code: "ADMIN_DEVICE_APPROVAL_REQUIRED",
@@ -3381,8 +3418,8 @@ async function handleApi(req, res, pathname) {
     await writeDb(db);
 
     res.setHeader("Set-Cookie", [
-      cookieHeader("ariad_session", token, maxAge),
-      cookieHeader(deviceCookieName, deviceToken, deviceMaxAgeSeconds),
+      cookieHeader("ariad_session", token, maxAge, { sameSite: "Strict" }),
+      cookieHeader(deviceCookieName, deviceToken, deviceMaxAgeSeconds, { sameSite: "Strict" }),
     ]);
     return sendJson(res, 200, { user: publicUser(existing) });
   }
@@ -3574,7 +3611,7 @@ async function handleApi(req, res, pathname) {
     audit(db, user.id, "OPERATOR_PIN_CHANGED", target.id, { revokedDevices });
     await writeDb(db);
     if (deviceToken) {
-      res.setHeader("Set-Cookie", cookieHeader(deviceCookieName, deviceToken, deviceMaxAgeSeconds));
+      res.setHeader("Set-Cookie", cookieHeader(deviceCookieName, deviceToken, deviceMaxAgeSeconds, { sameSite: "Strict" }));
     }
     return sendJson(res, 200, { message: "PIN operativo actualizado. Otros dispositivos admin fueron revocados." });
   }
@@ -3594,7 +3631,7 @@ async function handleApi(req, res, pathname) {
     if (target.role === "ADMIN") trustDeviceForAdmin(currentDevice.device, target.id);
     audit(db, user.id, "TRUSTED_DEVICES_REVOKED", target.id, { revokedDevices });
     await writeDb(db);
-    res.setHeader("Set-Cookie", cookieHeader(deviceCookieName, currentDevice.token, deviceMaxAgeSeconds));
+    res.setHeader("Set-Cookie", cookieHeader(deviceCookieName, currentDevice.token, deviceMaxAgeSeconds, { sameSite: "Strict" }));
     return sendJson(res, 200, { message: "Otros dispositivos y sesiones fueron revocados." });
   }
 
@@ -3624,7 +3661,7 @@ async function handleApi(req, res, pathname) {
       db.sessions = db.sessions.filter((session) => session.tokenHash !== hashToken(token));
       await writeDb(db);
     }
-    res.setHeader("Set-Cookie", "ariad_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0");
+    res.setHeader("Set-Cookie", `ariad_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${isProduction ? "; Secure" : ""}`);
     return sendNoContent(res);
   }
 
@@ -4315,7 +4352,8 @@ async function serveStatic(req, res, pathname) {
       ".png": "image/png",
       ".jpg": "image/jpeg",
     }[ext] || "application/octet-stream";
-    res.writeHead(200, { "Content-Type": type, "Cache-Control": "no-store" });
+    const cacheHeader = ext === ".html" ? "no-store" : "public, max-age=3600, must-revalidate";
+    res.writeHead(200, { "Content-Type": type, "Cache-Control": cacheHeader });
     res.end(file);
   } catch {
     const index = await fs.readFile(path.join(publicDir, portalRequest ? "portal.html" : "index.html"));
@@ -4331,6 +4369,13 @@ createServer(async (req, res) => {
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("Referrer-Policy", "same-origin");
     res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+    res.setHeader("Content-Security-Policy", baseCsp);
+    res.setHeader("X-Frame-Options", "DENY");
+    res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+    res.setHeader("Cross-Origin-Resource-Policy", "same-origin");
+    if (isProduction) {
+      res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+    }
     const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
     if (url.pathname.startsWith("/api/")) {
       await handleApi(req, res, url.pathname);

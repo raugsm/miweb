@@ -7,7 +7,7 @@ export function getCookie(req, name) {
   return null;
 }
 
-export function cookieHeader(name, value, maxAge) {
+export function cookieHeader(name, value, maxAge, { sameSite = "Lax" } = {}) {
   const secureCookie = process.env.NODE_ENV === "production" ? "; Secure" : "";
-  return `${name}=${encodeURIComponent(value)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}${secureCookie}`;
+  return `${name}=${encodeURIComponent(value)}; HttpOnly; SameSite=${sameSite}; Path=/; Max-Age=${maxAge}${secureCookie}`;
 }
