@@ -233,10 +233,13 @@
         <div class="tracking-panel"></div>
         <div class="order-alert hidden"></div>
         <div class="next-action"></div>
-        <div class="payment-block"></div>
-        <div class="item-list"></div>
-        <div class="connection-block"></div>
-        <div class="order-actions">
+        <div class="order-primary"></div>
+        <button class="details-toggle ghost" type="button" aria-expanded="false">Ver detalles</button>
+        <div class="order-details hidden">
+          <div class="payment-block"></div>
+          <div class="item-list"></div>
+          <div class="connection-block"></div>
+          <div class="order-actions">
           <label class="upload-button proof-dropzone">Subir o arrastrar comprobante
             <span>Imagen del pago</span>
             <input type="file" accept="image/*" multiple hidden />
@@ -244,6 +247,7 @@
           <button class="connection-ready ghost" type="button">Estoy listo para conectar</button>
           <button class="copy-connection ghost" type="button">Copiar guía</button>
           <button class="copy-order ghost" type="button">Copiar datos</button>
+          </div>
         </div>
         <p class="message order-message" aria-live="polite"></p>
       </article>

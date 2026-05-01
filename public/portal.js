@@ -465,6 +465,57 @@ function trackingStage(order) {
   return "RECEIVED";
 }
 
+function trackingStageLabel(order) {
+  const labels = {
+    RECEIVED: "Pedido recibido",
+    PROCESS: "En proceso",
+    DONE: "Done",
+  };
+  return labels[trackingStage(order)] || "Pedido recibido";
+}
+
+function orderSortPriority(order) {
+  const stage = trackingStage(order);
+  if (stage === "PROCESS") return 0;
+  if (stage === "RECEIVED") return 1;
+  return 2;
+}
+
+function sortOrdersForDisplay(orders) {
+  return [...orders].sort((a, b) => {
+    const priority = orderSortPriority(a) - orderSortPriority(b);
+    if (priority) return priority;
+    return new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0);
+  });
+}
+
+function compactDiscountLabel(order) {
+  const label = String(order?.discountLabel || "").trim();
+  if (!label || ["Normal", "Precio base"].includes(label)) return "";
+  return label;
+}
+
+function compactOrderMeta(order) {
+  const parts = [
+    `${order.quantity} equipo${Number(order.quantity) === 1 ? "" : "s"}`,
+    order.priceFormatted || money(order.totalPrice),
+    compactDiscountLabel(order),
+  ].filter(Boolean);
+  return parts.join(" - ");
+}
+
+function orderDoneText(order) {
+  const doneItems = (order?.items || []).filter((item) => item.ardCode || item.finalLog);
+  const lines = [
+    `${order.priceFormatted || money(order.totalPrice)} - Done`,
+    ...doneItems.map((item) => item.ardCode || operationCode(order, item)),
+    "",
+    order.serviceName || "Xiaomi FRP Express",
+    ...doneItems.map((item) => item.finalLog).filter(Boolean),
+  ];
+  return lines.filter((line, index) => line || lines[index - 1]).join("\n").trim();
+}
+
 function trackingMarkup(order) {
   const stage = trackingStage(order);
   const steps = [
@@ -504,12 +555,15 @@ function renderOrders(orders) {
     return;
   }
   const template = $("#orderTemplate");
-  orders.forEach((order) => {
+  sortOrdersForDisplay(orders).forEach((order) => {
     const card = template.content.firstElementChild.cloneNode(true);
+    const stage = trackingStage(order);
+    card.classList.toggle("is-finalized", stage === "DONE");
     $(".order-code", card).textContent = order.code;
     $(".order-service", card).textContent = order.serviceName;
-    $(".status-pill", card).textContent = statusLabel(order.publicStatus);
-    $(".order-meta", card).textContent = `${order.quantity} equipo(s) - ${order.priceFormatted || money(order.totalPrice)} - ${order.discountLabel || "Precio base"}`;
+    $(".status-pill", card).textContent = trackingStageLabel(order);
+    $(".status-pill", card).dataset.stage = stage.toLowerCase();
+    $(".order-meta", card).textContent = compactOrderMeta(order);
     const inCompatibilityReview = order.publicStatus === "REVISION_COMPATIBILIDAD";
     $(".tracking-panel", card).innerHTML = trackingMarkup(order);
     const alertText = orderAlertText(order);
@@ -550,14 +604,49 @@ function renderOrders(orders) {
     const dropzone = $(".upload-button", card);
     const connectionReadyButton = $(".connection-ready", card);
     const copyConnectionButton = $(".copy-connection", card);
+    const copyOrderButton = $(".copy-order", card);
+    const details = $(".order-details", card);
+    const detailsToggle = $(".details-toggle", card);
+    const primary = $(".order-primary", card);
     const canPrepareConnection = (order.paymentProofs || []).length > 0
       || order.postpayStatus === "APROBADO"
       || ["PAGO_EN_REVISION", "EN_PREPARACION", "LISTO_PARA_CONEXION", "EN_PROCESO"].includes(order.publicStatus);
+    const hasPaymentProof = (order.paymentProofs || []).length > 0;
     connectionReadyButton.disabled = !loggedCustomer || Boolean(order.customerConnectionReadyAt) || !canPrepareConnection;
     connectionReadyButton.textContent = order.customerConnectionReadyAt ? "Conexion marcada" : "Estoy listo para conectar";
-    dropzone.style.display = loggedCustomer && !inCompatibilityReview ? "inline-flex" : "none";
-    connectionReadyButton.style.display = loggedCustomer ? "" : "none";
-    copyConnectionButton.style.display = loggedCustomer ? "" : "none";
+    dropzone.style.display = loggedCustomer && !inCompatibilityReview && !hasPaymentProof ? "inline-flex" : "none";
+    connectionReadyButton.style.display = loggedCustomer && canPrepareConnection && !order.customerConnectionReadyAt ? "" : "none";
+    copyConnectionButton.style.display = loggedCustomer && (canPrepareConnection || stage === "DONE") ? "" : "none";
+    copyOrderButton.textContent = stage === "DONE" ? "Copiar Done" : "Copiar datos";
+    const openDetails = () => {
+      const isOpen = details.classList.toggle("hidden") === false;
+      detailsToggle.textContent = isOpen ? "Ocultar detalles" : "Ver detalles";
+      detailsToggle.setAttribute("aria-expanded", String(isOpen));
+    };
+    detailsToggle.addEventListener("click", openDetails);
+    const detailsPrimaryButton = document.createElement("button");
+    detailsPrimaryButton.type = "button";
+    detailsPrimaryButton.className = "order-primary-button";
+    detailsPrimaryButton.textContent = alertText ? "Ver indicacion" : "Ver detalles";
+    detailsPrimaryButton.addEventListener("click", openDetails);
+    const setPrimaryAction = (element) => {
+      if (!element) return;
+      element.classList.add("order-primary-button");
+      primary.append(element);
+    };
+    if (stage === "DONE") {
+      setPrimaryAction(copyOrderButton);
+    } else if (inCompatibilityReview || order.publicStatus === "REQUIERE_ATENCION") {
+      setPrimaryAction(detailsPrimaryButton);
+    } else if (dropzone.style.display !== "none") {
+      setPrimaryAction(dropzone);
+    } else if (connectionReadyButton.style.display !== "none") {
+      setPrimaryAction(connectionReadyButton);
+    } else if (copyConnectionButton.style.display !== "none") {
+      setPrimaryAction(copyConnectionButton);
+    } else {
+      setPrimaryAction(detailsPrimaryButton);
+    }
     const uploadProofFiles = async (files) => {
       const message = $(".order-message", card);
       setMessage(message, "Subiendo comprobante...");
@@ -619,7 +708,7 @@ function renderOrders(orders) {
       await uploadProofFiles(files);
     });
     copyConnectionButton.addEventListener("click", () => copyText(connectionGuideText(order), $(".order-message", card)));
-    $(".copy-order", card).addEventListener("click", () => copyText(orderCopyText(order), $(".order-message", card)));
+    copyOrderButton.addEventListener("click", () => copyText(stage === "DONE" ? orderDoneText(order) : orderCopyText(order), $(".order-message", card)));
     list.append(card);
   });
 }

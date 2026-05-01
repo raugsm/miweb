@@ -981,6 +981,8 @@ textarea:focus {
   background: #ffffff;
   border-radius: 8px;
   padding: 16px;
+  display: grid;
+  gap: 12px;
 }
 
 .order-top strong {
@@ -1003,7 +1005,6 @@ textarea:focus {
 .tracking-panel,
 .order-alert,
 .connection-block {
-  margin-top: 12px;
   line-height: 1.45;
 }
 
@@ -1055,6 +1056,18 @@ textarea:focus {
 
 .tracking-step.active {
   box-shadow: 0 0 0 3px rgba(15, 159, 110, 0.08);
+}
+
+.status-pill[data-stage="process"] {
+  border: 1px solid #bdd2fb;
+  background: #eaf2ff;
+  color: #2456c8;
+}
+
+.status-pill[data-stage="done"] {
+  border: 1px solid #b7ead6;
+  background: #edfbf5;
+  color: #0f9f6e;
 }
 
 .order-alert {
@@ -1127,11 +1140,48 @@ textarea:focus {
   font-weight: 900;
 }
 
+.order-primary {
+  display: flex;
+  align-items: stretch;
+}
+
+.order-primary:empty {
+  display: none;
+}
+
+.order-primary .order-primary-button,
+.order-primary-button {
+  width: 100%;
+  min-height: 48px;
+}
+
+.order-primary button.order-primary-button,
+.order-primary .ghost.order-primary-button {
+  border-color: transparent;
+  background: var(--blue);
+  color: #ffffff;
+  box-shadow: 0 14px 30px rgba(47, 109, 243, 0.18);
+}
+
+.details-toggle {
+  justify-self: start;
+  min-height: 42px;
+  padding-inline: 18px;
+}
+
+.order-details {
+  display: grid;
+  gap: 12px;
+}
+
+.order-card.is-finalized .next-action {
+  background: #f8fbff;
+}
+
 .order-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  margin-top: 14px;
 }
 
 .upload-button {
@@ -1241,7 +1291,6 @@ textarea:focus {
     grid-template-columns: 1fr;
   }
 
-  .tracking-steps,
   .connection-code-row {
     grid-template-columns: 1fr;
   }
