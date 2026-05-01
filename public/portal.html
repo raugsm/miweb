@@ -142,7 +142,6 @@
                   <span><em>USDT</em><b id="currentUnitPriceUsdt">-</b></span>
                   <span><em id="currentCurrencyLabel">Tu moneda</em><b id="currentUnitPrice">-</b></span>
                 </div>
-                <small id="currentPriceHint">Se calcula con el proveedor FRP activo.</small>
               </article>
 
               <article class="flow-step-card flow-request-card">
@@ -151,7 +150,6 @@
                 <label>Equipos
                   <textarea name="items" rows="3" placeholder="Ej: Redmi Note 12"></textarea>
                 </label>
-                <small id="detectedItemsSummary">1 equipo detectado para esta solicitud.</small>
               </article>
 
               <article class="flow-step-card flow-payment-card">
@@ -161,10 +159,12 @@
                 <div class="flow-mini-quote">
                   <div>
                     <em>Total estimado</em>
-                    <b id="quoteTotal">25.00 USDT</b>
-                    <small id="quoteHint">Precio base. El backend confirma el monto exacto.</small>
+                    <div class="quote-total-lines">
+                      <span><em>USDT</em><b id="quoteTotalUsdt">-</b></span>
+                      <span><em id="quoteCurrencyLabel">Tu moneda</em><b id="quoteTotalLocal">-</b></span>
+                    </div>
                   </div>
-                  <button id="copyPaymentButton" class="ghost" type="button">Copiar</button>
+                  <button id="copyPaymentButton" class="ghost" type="button">Cuentas</button>
                 </div>
                 <div class="voucher-preview" aria-label="Comprobante demo">
                   <strong>Comprobante</strong>
@@ -236,6 +236,19 @@
         </section>
       </section>
     </main>
+
+    <div id="paymentModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="paymentModalTitle">
+      <div class="modal-panel">
+        <div class="modal-head">
+          <div>
+            <p class="eyebrow">Pago</p>
+            <h3 id="paymentModalTitle">Cuentas disponibles</h3>
+          </div>
+          <button id="closePaymentModal" class="ghost icon-button" type="button" aria-label="Cerrar cuentas">×</button>
+        </div>
+        <div id="paymentOptionsList" class="payment-options-list"></div>
+      </div>
+    </div>
 
     <template id="orderTemplate">
       <article class="order-card">

@@ -99,6 +99,16 @@ function currentPayment() {
   return compatiblePaymentMethodsForCustomer().find((payment) => payment.code === paymentCode) || preferredPaymentForCustomer();
 }
 
+function paymentByCode(code) {
+  return (state.catalog?.paymentMethods || []).find((payment) => payment.code === code) || null;
+}
+
+function binancePayment() {
+  return paymentByCode("BINANCE_PAY")
+    || (state.catalog?.paymentMethods || []).find((payment) => payment.globalOption && payment.currency === "USDT")
+    || null;
+}
+
 function paymentText(payment, totalText = "") {
   if (!payment) return "";
   return [
@@ -124,6 +134,30 @@ function paymentUploadTargetOrder() {
   const candidates = sortOrdersForDisplay(orders).filter(orderNeedsPaymentProof);
   if (!candidates.length) return null;
   return candidates.find((order) => order.id === state.activePaymentOrderId) || candidates[0];
+}
+
+function activePaymentContext() {
+  const targetOrder = paymentUploadTargetOrder();
+  const quantity = syncDetectedItems();
+  const estimate = estimatePortalPrice(quantity);
+  const selectedPayment = targetOrder ? paymentByCode(targetOrder.paymentMethod) : currentPayment();
+  const totalUsdt = Number(targetOrder?.totalPrice || estimate.total || 0);
+  return { targetOrder, estimate, selectedPayment, totalUsdt };
+}
+
+function paymentOptionsForContext(context = activePaymentContext()) {
+  const selected = context.selectedPayment || currentPayment();
+  const binance = binancePayment();
+  return [selected, binance].filter(Boolean).filter((payment, index, list) => (
+    list.findIndex((candidate) => candidate.code === payment.code) === index
+  ));
+}
+
+function paymentOptionAmountText(payment, context = activePaymentContext()) {
+  if (context.targetOrder && payment.code === context.targetOrder.paymentMethod) {
+    return context.targetOrder.priceFormatted || paymentAmountText(context.totalUsdt, payment);
+  }
+  return paymentAmountText(context.totalUsdt, payment);
 }
 
 function operationCode(order, item = null) {
@@ -192,6 +226,47 @@ function copyText(text, messageNode) {
   } finally {
     helper.remove();
   }
+}
+
+function closePaymentModal() {
+  $("#paymentModal")?.classList.add("hidden");
+}
+
+function renderPaymentModal() {
+  const modal = $("#paymentModal");
+  const list = $("#paymentOptionsList");
+  if (!modal || !list) return;
+  const context = activePaymentContext();
+  const options = paymentOptionsForContext(context);
+  list.innerHTML = options.length
+    ? options.map((payment) => {
+      const amount = paymentOptionAmountText(payment, context);
+      const details = paymentText(payment, amount)
+        .split("\n")
+        .map((line) => `<span>${escapeHtml(line)}</span>`)
+        .join("");
+      return `
+        <article class="payment-option-card">
+          <div class="payment-option-head">
+            <strong>${escapeHtml(paymentOptionLabel(payment))}</strong>
+            <b>${escapeHtml(amount)}</b>
+          </div>
+          <div class="payment-option-details">${details}</div>
+          <button class="ghost copy-payment-option" type="button" data-payment="${escapeHtml(payment.code)}">Copiar esta cuenta</button>
+        </article>
+      `;
+    }).join("")
+    : "<p class=\"message\">No hay cuentas disponibles.</p>";
+
+  $$(".copy-payment-option", list).forEach((button) => {
+    button.addEventListener("click", () => {
+      const payment = paymentByCode(button.dataset.payment);
+      if (!payment) return;
+      copyText(paymentText(payment, paymentOptionAmountText(payment, context)), $("#orderMessage"));
+      closePaymentModal();
+    });
+  });
+  modal.classList.remove("hidden");
 }
 
 function setTab(tab) {
@@ -374,11 +449,6 @@ function syncDetectedItems() {
   const count = detectedItemCount();
   const quantityInput = $("#orderForm input[name='quantity']");
   if (quantityInput) quantityInput.value = String(count);
-  const summary = $("#detectedItemsSummary");
-  if (summary) {
-    const word = count === 1 ? "equipo detectado" : "equipos detectados";
-    summary.textContent = `${count} ${word}. Usa una linea por equipo para calcular el total.`;
-  }
   const preview = $("#previewOperationCode");
   if (preview) {
     preview.textContent = count === 1
@@ -411,26 +481,24 @@ function estimatePortalPrice(quantity) {
 }
 
 function updateQuote() {
-  const qty = syncDetectedItems();
-  const estimate = estimatePortalPrice(qty);
-  const payment = currentPayment();
-  const shortLabel = String(estimate.label || "Precio base")
-    .replace("Precio base. Beneficios bloqueados para este dispositivo.", "Precio base");
+  syncDetectedItems();
+  const context = activePaymentContext();
+  const estimate = context.estimate;
+  const payment = context.selectedPayment || currentPayment();
   const unitNode = $("#currentUnitPrice");
   const unitUsdtNode = $("#currentUnitPriceUsdt");
   const currencyLabel = $("#currentCurrencyLabel");
-  const priceHint = $("#currentPriceHint");
   const paymentBadge = $("#currentPaymentBadge");
   if (unitNode) unitNode.textContent = paymentAmountText(estimate.unit, payment);
   if (unitUsdtNode) unitUsdtNode.textContent = money(estimate.unit);
   if (currencyLabel) currencyLabel.textContent = `${paymentFlag(payment)} ${payment?.currency || "Tu moneda"}`;
-  if (priceHint) priceHint.textContent = `${shortLabel}.`;
   if (paymentBadge) paymentBadge.textContent = paymentOptionLabel(payment);
-  const targetOrder = paymentUploadTargetOrder();
-  $("#quoteTotal").textContent = targetOrder?.priceFormatted || paymentAmountText(estimate.total, payment);
-  $("#quoteHint").textContent = targetOrder
-    ? `Pago de ${targetOrder.code}. Sube el comprobante aquí.`
-    : `${shortLabel}. AriadGSM confirma monto exacto.`;
+  const quoteUsdt = $("#quoteTotalUsdt");
+  const quoteLocal = $("#quoteTotalLocal");
+  const quoteCurrencyLabel = $("#quoteCurrencyLabel");
+  if (quoteUsdt) quoteUsdt.textContent = money(context.totalUsdt);
+  if (quoteLocal) quoteLocal.textContent = paymentAmountText(context.totalUsdt, payment);
+  if (quoteCurrencyLabel) quoteCurrencyLabel.textContent = `${paymentFlag(payment)} ${payment?.currency || "Tu moneda"}`;
   updateFlowPaymentDropzone();
 }
 
@@ -1021,17 +1089,13 @@ function wireEvents() {
 
   $("#orderForm textarea[name='items']").addEventListener("input", updateQuote);
   $("#paymentSelect").addEventListener("change", updateQuote);
-  $("#copyPaymentButton").addEventListener("click", () => {
-    const targetOrder = paymentUploadTargetOrder();
-    if (targetOrder) {
-      copyText(
-        paymentText({ label: targetOrder.paymentLabel, details: targetOrder.paymentDetails }, targetOrder.priceFormatted || money(targetOrder.totalPrice)),
-        $("#orderMessage"),
-      );
-      return;
-    }
-    const estimate = estimatePortalPrice(syncDetectedItems());
-    copyText(paymentText(currentPayment(), paymentAmountText(estimate.total)), $("#orderMessage"));
+  $("#copyPaymentButton").addEventListener("click", () => renderPaymentModal());
+  $("#closePaymentModal")?.addEventListener("click", closePaymentModal);
+  $("#paymentModal")?.addEventListener("click", (event) => {
+    if (event.target?.id === "paymentModal") closePaymentModal();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closePaymentModal();
   });
   const flowPaymentDropzone = $("#flowPaymentDropzone");
   const flowPaymentInput = $("#flowPaymentProofInput");
