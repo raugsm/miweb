@@ -168,8 +168,12 @@
                 </div>
                 <div class="voucher-preview" aria-label="Comprobante demo">
                   <strong>Comprobante</strong>
-                  <span>Al crear la solicitud, podras arrastrar el pago en Mis ordenes.</span>
+                  <span>Crea la solicitud y luego arrastra aquí la imagen del pago.</span>
                 </div>
+                <label id="flowPaymentDropzone" class="upload-button proof-dropzone flow-proof-dropzone" data-disabled="true">Subir o arrastrar comprobante
+                  <span id="flowPaymentDropzoneHint">Disponible después de crear la solicitud</span>
+                  <input id="flowPaymentProofInput" type="file" accept="image/*" hidden />
+                </label>
               </article>
 
               <article class="flow-step-card flow-connect-card">
@@ -253,10 +257,6 @@
           <div class="item-list"></div>
           <div class="connection-block"></div>
           <div class="order-actions">
-          <label class="upload-button proof-dropzone">Subir o arrastrar comprobante
-            <span>Imagen del pago</span>
-            <input type="file" accept="image/*" multiple hidden />
-          </label>
           <button class="connection-ready ghost" type="button">Estoy listo para conectar</button>
           <button class="copy-connection ghost" type="button">Copiar guía</button>
           <button class="copy-order ghost" type="button">Copiar datos</button>

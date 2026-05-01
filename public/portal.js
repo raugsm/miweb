@@ -5,6 +5,7 @@ const state = {
   pollTimer: null,
   ordersStream: null,
   turnstileReady: null,
+  activePaymentOrderId: "",
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -98,13 +99,6 @@ function currentPayment() {
   return compatiblePaymentMethodsForCustomer().find((payment) => payment.code === paymentCode) || preferredPaymentForCustomer();
 }
 
-function paymentRateHint(payment = currentPayment()) {
-  if (!payment?.currency || payment.currency === "USDT") return "Pago en USDT. Sin conversion local.";
-  const rate = exchangeRateForPayment(payment);
-  if (!rate) return `Tasa ${payment.currency} no configurada. AriadGSM confirmara el monto.`;
-  return `Tasa: 1 USDT = ${new Intl.NumberFormat("es-PE", { maximumFractionDigits: 4 }).format(rate)} ${payment.currency}.`;
-}
-
 function paymentText(payment, totalText = "") {
   if (!payment) return "";
   return [
@@ -113,6 +107,23 @@ function paymentText(payment, totalText = "") {
     ...(payment.details || []),
     "Despues de pagar, sube captura del comprobante para validar mas rapido.",
   ].filter(Boolean).join("\n");
+}
+
+function orderHasPaymentProof(order) {
+  return (order?.paymentProofs || []).length > 0;
+}
+
+function orderNeedsPaymentProof(order) {
+  if (!order || order.publicStatus === "REVISION_COMPATIBILIDAD") return false;
+  if (order.paymentStatus === "RECHAZADO" || order.proofStatus === "RECHAZADO") return true;
+  return order.publicStatus === "ESPERANDO_PAGO" && !orderHasPaymentProof(order);
+}
+
+function paymentUploadTargetOrder() {
+  const orders = state.customer?.orders || [];
+  const candidates = sortOrdersForDisplay(orders).filter(orderNeedsPaymentProof);
+  if (!candidates.length) return null;
+  return candidates.find((order) => order.id === state.activePaymentOrderId) || candidates[0];
 }
 
 function operationCode(order, item = null) {
@@ -415,8 +426,26 @@ function updateQuote() {
   if (currencyLabel) currencyLabel.textContent = `${paymentFlag(payment)} ${payment?.currency || "Tu moneda"}`;
   if (priceHint) priceHint.textContent = `${shortLabel}.`;
   if (paymentBadge) paymentBadge.textContent = paymentOptionLabel(payment);
-  $("#quoteTotal").textContent = paymentAmountText(estimate.total, payment);
-  $("#quoteHint").textContent = `${shortLabel}. AriadGSM confirma monto exacto.`;
+  const targetOrder = paymentUploadTargetOrder();
+  $("#quoteTotal").textContent = targetOrder?.priceFormatted || paymentAmountText(estimate.total, payment);
+  $("#quoteHint").textContent = targetOrder
+    ? `Pago de ${targetOrder.code}. Sube el comprobante aquí.`
+    : `${shortLabel}. AriadGSM confirma monto exacto.`;
+  updateFlowPaymentDropzone();
+}
+
+function updateFlowPaymentDropzone() {
+  const dropzone = $("#flowPaymentDropzone");
+  const hint = $("#flowPaymentDropzoneHint");
+  if (!dropzone || !hint) return;
+  const targetOrder = paymentUploadTargetOrder();
+  const enabled = Boolean(state.customer?.user && state.customer?.client && targetOrder);
+  dropzone.dataset.disabled = enabled ? "false" : "true";
+  dropzone.classList.toggle("is-disabled", !enabled);
+  dropzone.dataset.orderId = targetOrder?.id || "";
+  hint.textContent = targetOrder
+    ? `Pago de ${targetOrder.code}`
+    : "Disponible después de crear la solicitud";
 }
 
 function customerCanRequestApprovalOptions() {
@@ -447,6 +476,7 @@ function renderCustomer() {
   if (!canRequestApproval) {
     $$("#approvalOptions input[type='checkbox']").forEach((input) => { input.checked = false; });
   }
+  updateFlowPaymentDropzone();
   renderOrders(customer.orders || []);
   startOrdersLive();
 }
@@ -471,7 +501,7 @@ function itemStatusLabel(code) {
 function customerNextAction(order) {
   if (order?.nextAction) return order.nextAction;
   if (order?.publicStatus === "REVISION_COMPATIBILIDAD") return "AriadGSM revisara compatibilidad antes de pedir pago.";
-  if (order?.publicStatus === "ESPERANDO_PAGO") return "Copia los datos de pago y sube el comprobante.";
+  if (order?.publicStatus === "ESPERANDO_PAGO") return "Completa el paso 3 para iniciar validacion.";
   if (order?.publicStatus === "PAGO_EN_REVISION") return "Prepara USB Redirector mientras validamos el pago.";
   if (order?.publicStatus === "EN_PREPARACION") return "Marca que estas listo para conectar cuando tengas PC, cable y USB Redirector abierto.";
   if (order?.publicStatus === "LISTO_PARA_CONEXION") return "Mantente disponible. El tecnico tomara el equipo.";
@@ -490,7 +520,6 @@ function orderBadges(order) {
 }
 
 function orderCopyText(order) {
-  const shouldIncludePayment = order?.publicStatus !== "REVISION_COMPATIBILIDAD";
   return [
     `Pedido ${order.code}`,
     `${order.serviceName}`,
@@ -499,8 +528,6 @@ function orderCopyText(order) {
     `Estado: ${statusLabel(order.publicStatus)}`,
     `Proxima accion: ${customerNextAction(order)}`,
     `Seguimiento: ${location.origin}/cliente?orden=${encodeURIComponent(order.code)}&codigo=${encodeURIComponent(order.accessCode || "")}`,
-    "",
-    shouldIncludePayment ? paymentText({ label: order.paymentLabel, details: order.paymentDetails }, order.priceFormatted || money(order.totalPrice)) : "",
   ].join("\n");
 }
 
@@ -620,12 +647,12 @@ function renderOrders(orders) {
       `<span>${escapeHtml(customerNextAction(order))}</span>`,
       orderBadges(order).length ? `<div class="order-badges">${orderBadges(order).map((badge) => `<em>${escapeHtml(badge)}</em>`).join("")}</div>` : "",
     ].join("");
-    $(".payment-block", card).innerHTML = inCompatibilityReview
-      ? "<div>AriadGSM revisara compatibilidad antes de pedir pago.</div>"
-      : paymentText({ label: order.paymentLabel, details: order.paymentDetails }, order.priceFormatted || money(order.totalPrice))
-        .split("\n")
-        .map((line) => `<div>${escapeHtml(line)}</div>`)
-        .join("");
+    $(".payment-block", card).innerHTML = [
+      "<strong>Pago</strong>",
+      inCompatibilityReview
+        ? "<span>En revision de compatibilidad.</span>"
+        : `<span>${escapeHtml(orderHasPaymentProof(order) ? "Comprobante recibido." : "Pendiente en paso 3.")}</span>`,
+    ].join("");
     $(".item-list", card).innerHTML = (order.items || []).map((item) => {
       const detail = [item.model, item.imei].filter(Boolean).join(" / ") || "Equipo sin detalle";
       const done = item.ardCode ? ` - ${item.ardCode}` : "";
@@ -645,9 +672,7 @@ function renderOrders(orders) {
       ${redirectorMiniGuideMarkup(order)}
       <div class="connection-codes">${connectionCodes || `<div class="connection-code-row"><span>Equipo</span><code>${escapeHtml(operationCode(order))}</code></div>`}</div>
     `;
-    const fileInput = $("input[type='file']", card);
     const loggedCustomer = Boolean(state.customer?.user && state.customer?.client);
-    const dropzone = $(".upload-button", card);
     const connectionReadyButton = $(".connection-ready", card);
     const copyConnectionButton = $(".copy-connection", card);
     const copyOrderButton = $(".copy-order", card);
@@ -657,10 +682,8 @@ function renderOrders(orders) {
     const canPrepareConnection = (order.paymentProofs || []).length > 0
       || order.postpayStatus === "APROBADO"
       || ["PAGO_EN_REVISION", "EN_PREPARACION", "LISTO_PARA_CONEXION", "EN_PROCESO"].includes(order.publicStatus);
-    const hasPaymentProof = (order.paymentProofs || []).length > 0;
     connectionReadyButton.disabled = !loggedCustomer || Boolean(order.customerConnectionReadyAt) || !canPrepareConnection;
     connectionReadyButton.textContent = order.customerConnectionReadyAt ? "Conexion marcada" : "Estoy listo para conectar";
-    dropzone.style.display = loggedCustomer && !inCompatibilityReview && !hasPaymentProof ? "inline-flex" : "none";
     connectionReadyButton.style.display = loggedCustomer && canPrepareConnection && !order.customerConnectionReadyAt ? "" : "none";
     copyConnectionButton.style.display = loggedCustomer && (canPrepareConnection || stage === "DONE") ? "" : "none";
     copyOrderButton.textContent = stage === "DONE" ? "Copiar Done" : "Copiar datos";
@@ -684,8 +707,6 @@ function renderOrders(orders) {
       setPrimaryAction(copyOrderButton);
     } else if (inCompatibilityReview || order.publicStatus === "REQUIERE_ATENCION") {
       setPrimaryAction(detailsPrimaryButton);
-    } else if (dropzone.style.display !== "none") {
-      setPrimaryAction(dropzone);
     } else if (connectionReadyButton.style.display !== "none") {
       setPrimaryAction(connectionReadyButton);
     } else if (copyConnectionButton.style.display !== "none") {
@@ -693,25 +714,6 @@ function renderOrders(orders) {
     } else {
       setPrimaryAction(detailsPrimaryButton);
     }
-    const uploadProofFiles = async (files) => {
-      const message = $(".order-message", card);
-      setMessage(message, "Subiendo comprobante...");
-      try {
-        const proofs = await filesToProofs(files);
-        const payload = await api(`/api/portal/orders/${order.id}/payment-proof`, {
-          method: "PATCH",
-          body: JSON.stringify({ paymentProofs: proofs }),
-        });
-        state.customer = payload.customer;
-        setMessage(message, "Comprobante recibido. Queda en revision.", "success");
-        renderCustomer();
-      } catch (error) {
-        setMessage(message, error.message, "error");
-      } finally {
-        fileInput.value = "";
-        dropzone.classList.remove("drag-active");
-      }
-    };
     connectionReadyButton.addEventListener("click", async () => {
       const message = $(".order-message", card);
       setMessage(message, "Marcando conexion lista...");
@@ -726,32 +728,6 @@ function renderOrders(orders) {
       } catch (error) {
         setMessage(message, error.message, "error");
       }
-    });
-    fileInput.addEventListener("change", async () => {
-      await uploadProofFiles(fileInput.files);
-    });
-    ["dragenter", "dragover"].forEach((eventName) => {
-      dropzone.addEventListener(eventName, (event) => {
-        if (!loggedCustomer) return;
-        event.preventDefault();
-        event.stopPropagation();
-        if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
-        dropzone.classList.add("drag-active");
-      });
-    });
-    ["dragleave", "dragend"].forEach((eventName) => {
-      dropzone.addEventListener(eventName, (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        dropzone.classList.remove("drag-active");
-      });
-    });
-    dropzone.addEventListener("drop", async (event) => {
-      if (!loggedCustomer) return;
-      event.preventDefault();
-      event.stopPropagation();
-      const files = event.dataTransfer?.files || [];
-      await uploadProofFiles(files);
     });
     copyConnectionButton.addEventListener("click", () => copyText(connectionGuideText(order), $(".order-message", card)));
     copyOrderButton.addEventListener("click", () => copyText(stage === "DONE" ? orderDoneText(order) : orderCopyText(order), $(".order-message", card)));
@@ -791,6 +767,35 @@ async function filesToProofs(fileList) {
   })));
 }
 
+async function uploadPaymentProofFromFlow(files) {
+  const message = $("#orderMessage");
+  const dropzone = $("#flowPaymentDropzone");
+  const input = $("#flowPaymentProofInput");
+  const order = paymentUploadTargetOrder();
+  if (!order) {
+    setMessage(message, "Primero crea una solicitud pendiente de pago.", "error");
+    if (input) input.value = "";
+    return;
+  }
+  setMessage(message, `Subiendo comprobante para ${order.code}...`);
+  try {
+    const proofs = await filesToProofs(files);
+    const payload = await api(`/api/portal/orders/${order.id}/payment-proof`, {
+      method: "PATCH",
+      body: JSON.stringify({ paymentProofs: proofs }),
+    });
+    state.customer = payload.customer;
+    setMessage(message, `Comprobante recibido para ${order.code}. Queda en revision.`, "success");
+    renderCustomer();
+  } catch (error) {
+    setMessage(message, error.message, "error");
+  } finally {
+    if (input) input.value = "";
+    dropzone?.classList.remove("drag-active");
+    updateFlowPaymentDropzone();
+  }
+}
+
 function hasDraggedFiles(event) {
   const data = event.dataTransfer;
   if (!data) return false;
@@ -819,6 +824,7 @@ async function refreshOrdersSilently() {
   if (!state.customer?.user || !state.customer?.client) return;
   const payload = await api("/api/portal/orders");
   state.customer.orders = payload.orders || [];
+  updateQuote();
   renderOrders(state.customer.orders);
 }
 
@@ -868,6 +874,7 @@ function startOrdersLive() {
     try {
       const payload = JSON.parse(event.data || "{}");
       state.customer.orders = payload.orders || [];
+      updateQuote();
       renderOrders(state.customer.orders);
       setOrdersLiveStatus("En vivo", "success");
     } catch {
@@ -992,6 +999,7 @@ function wireEvents() {
         }),
       });
       state.customer = payload.customer;
+      state.activePaymentOrderId = orderNeedsPaymentProof(payload.order) ? payload.order.id : "";
       const selectedPayment = payload.order?.paymentMethod || data.paymentMethod;
       form.reset();
       renderCatalog();
@@ -1003,7 +1011,7 @@ function wireEvents() {
       resetTurnstile("order");
       const createdMessage = payload.order?.publicStatus === "REVISION_COMPATIBILIDAD"
         ? `Solicitud ${payload.order.code} creada para revision de compatibilidad. Espera confirmacion antes de pagar.`
-        : `Solicitud ${payload.order.code} creada. Copia el pago o sube comprobante.`;
+        : `Solicitud ${payload.order.code} creada. Paso 3 listo para copiar pago y subir comprobante.`;
       setMessage(message, createdMessage, "success");
     } catch (error) {
       setMessage(message, error.message, "error");
@@ -1014,8 +1022,52 @@ function wireEvents() {
   $("#orderForm textarea[name='items']").addEventListener("input", updateQuote);
   $("#paymentSelect").addEventListener("change", updateQuote);
   $("#copyPaymentButton").addEventListener("click", () => {
+    const targetOrder = paymentUploadTargetOrder();
+    if (targetOrder) {
+      copyText(
+        paymentText({ label: targetOrder.paymentLabel, details: targetOrder.paymentDetails }, targetOrder.priceFormatted || money(targetOrder.totalPrice)),
+        $("#orderMessage"),
+      );
+      return;
+    }
     const estimate = estimatePortalPrice(syncDetectedItems());
     copyText(paymentText(currentPayment(), paymentAmountText(estimate.total)), $("#orderMessage"));
+  });
+  const flowPaymentDropzone = $("#flowPaymentDropzone");
+  const flowPaymentInput = $("#flowPaymentProofInput");
+  flowPaymentDropzone?.addEventListener("click", (event) => {
+    if (paymentUploadTargetOrder()) return;
+    event.preventDefault();
+    setMessage($("#orderMessage"), "Primero crea la solicitud. Luego sube aquí el comprobante.", "error");
+  });
+  flowPaymentInput?.addEventListener("change", async () => {
+    await uploadPaymentProofFromFlow(flowPaymentInput.files);
+  });
+  ["dragenter", "dragover"].forEach((eventName) => {
+    flowPaymentDropzone?.addEventListener(eventName, (event) => {
+      if (!hasDraggedFiles(event)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (!paymentUploadTargetOrder()) {
+        if (event.dataTransfer) event.dataTransfer.dropEffect = "none";
+        return;
+      }
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+      flowPaymentDropzone.classList.add("drag-active");
+    });
+  });
+  ["dragleave", "dragend"].forEach((eventName) => {
+    flowPaymentDropzone?.addEventListener(eventName, (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      flowPaymentDropzone.classList.remove("drag-active");
+    });
+  });
+  flowPaymentDropzone?.addEventListener("drop", async (event) => {
+    if (!hasDraggedFiles(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    await uploadPaymentProofFromFlow(event.dataTransfer?.files || []);
   });
   $("#copyConnectionGuideButton")?.addEventListener("click", () => {
     copyText(connectionGuideText(), $("#orderMessage"));
@@ -1064,7 +1116,7 @@ function applyQueryTracking() {
   const accessCode = params.get("codigo");
   if (!code || !accessCode) return;
   if (state.customer?.user && state.customer?.client) {
-    setMessage($("#orderMessage"), "Ya tienes sesion activa. Revisa el avance desde Mis ordenes.", "success");
+    setMessage($("#orderMessage"), "Ya tienes sesion activa. Revisa el avance desde Mis órdenes.", "success");
     return;
   }
   setTab("track");

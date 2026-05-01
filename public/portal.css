@@ -649,6 +649,25 @@ textarea:focus {
   padding: 9px 10px;
 }
 
+.flow-proof-dropzone {
+  width: 100%;
+  min-width: 0;
+}
+
+.flow-proof-dropzone.is-disabled,
+.flow-proof-dropzone[data-disabled="true"] {
+  cursor: not-allowed;
+  border-color: #cbd8ea;
+  background: #eef4fd;
+  color: #5f7290;
+  box-shadow: none;
+}
+
+.flow-proof-dropzone.is-disabled span,
+.flow-proof-dropzone[data-disabled="true"] span {
+  color: #6d7f99;
+}
+
 .flow-connect-card .redirector-mini {
   gap: 6px;
 }
