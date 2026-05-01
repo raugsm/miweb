@@ -5,6 +5,99 @@ import { fileURLToPath } from "node:url";
 import crypto from "node:crypto";
 import nodemailer from "nodemailer";
 import { parsePhoneNumberFromString } from "libphonenumber-js/max";
+import {
+  appVersion,
+  customerDeviceCookieName,
+  customerDeviceMaxAgeSeconds,
+  customerEmailVerificationExpiresMs,
+  customerSessionCookieName,
+  customerSessionMaxAgeSeconds,
+  customerSessionVersion,
+  deviceApprovalExpiresMs,
+  deviceCookieName,
+  deviceMaxAgeSeconds,
+  maxFinalLogImageBytes,
+  maxFinalLogImages,
+  maxPaymentProofImages,
+  maxPortalOrderRequestsPerWindow,
+  maxPortalProofRequestsPerWindow,
+  maxPortalRegisterRequestsPerWindow,
+  maxPortalVerificationEmailRequestsPerWindow,
+  maxResetRequestsPerWindow,
+  portalOrdersSseHeartbeatMs,
+  portalRateLimitWindowMs,
+  presenceWindowMs,
+  presenceWriteIntervalMs,
+  productionCustomerPortalBaseUrl,
+  resetRequestWindowMs,
+  resetTokenExpiresMs,
+  sessionMaxAgeSeconds,
+  sessionVersion,
+  trustedDeviceVersion,
+  turnstileSecret,
+  turnstileSiteKey,
+} from "./server/config/constants.js";
+import {
+  clientLinkSourceTypes,
+  clientLinkSuggestionStatuses,
+  countries,
+  countryByFlagIso,
+  customerStatuses,
+  dailyAdjustmentTypes,
+  dailyCloseStatuses,
+  exchangeRateCountries,
+  frpJobChecklistKeys,
+  frpJobStatuses,
+  frpMonthlyTiers,
+  frpOrderChecklistKeys,
+  frpOrderStatuses,
+  frpPermissionKeys,
+  frpProviderCostModes,
+  frpProviderStatuses,
+  frpQuantityTiers,
+  frpServiceCode,
+  frpWorkChannel,
+  masterClientStatuses,
+  paymentMethods,
+  portalPhoneCountryHints,
+  portalPublicServices,
+  pricingModes,
+  publicOrderStatuses,
+  roleLabels,
+  roles,
+  services,
+  ticketStatuses,
+  workChannels,
+} from "./server/config/catalog.js";
+import { limaDateStamp, limaMonthStamp, nowIso } from "./server/core/dates.js";
+import { moneyNumber, percentNumber } from "./server/core/money.js";
+import { audit } from "./server/core/audit.js";
+import { cookieHeader, getCookie } from "./server/core/cookies.js";
+import { parseJson, sendHtml, sendJson, sendNoContent, sendSseEvent } from "./server/core/http.js";
+import {
+  cleanName,
+  cleanText,
+  countryFromFlag,
+  flagIsoFromRegionalIndicators,
+  normalizeEmail,
+  normalizeForMatch,
+  normalizeWorkChannel,
+  stripCountryFlags,
+  validateOperatorPin,
+  validatePassword,
+} from "./server/core/validation.js";
+import {
+  defaultFrpPricingConfig,
+  frpCurrentPricing,
+  frpDynamicMonthlyTiers,
+  frpDynamicQuantityTiers,
+  frpPricingSnapshot,
+  frpProviderCostUsdt,
+  normalizeFrpPricingConfig,
+} from "./server/frp/pricing.js";
+import { frpEligibilityResult, summarizeFrpEligibility } from "./server/frp/eligibility.js";
+import { createFrpSerializers } from "./server/frp/serializers.js";
+import { createPortalSerializers } from "./server/portal/serializers.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, "public");
@@ -16,428 +109,8 @@ const enableSetupPasswordReset = ["true", "1", "yes"].includes(String(process.en
 const ownerRecoveryEmail = normalizeEmail(process.env.ARIAD_OWNER_RECOVERY_EMAIL || "");
 const publicBaseUrl = String(process.env.ARIAD_PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || `http://localhost:${port}`).replace(/\/+$/, "");
 const mailFrom = process.env.ARIAD_MAIL_FROM || '"AriadGSM Soporte" <soporte@ariadgsm.com>';
-const appVersion = "frp-eligibility-v1";
-const sessionVersion = 7;
-const customerSessionVersion = 1;
-const trustedDeviceVersion = 3;
-const deviceApprovalExpiresMs = 15 * 60 * 1000;
-const sessionMaxAgeSeconds = 60 * 60 * 8;
-const deviceCookieName = "ariad_device";
-const customerSessionCookieName = "ariad_customer_session";
-const customerDeviceCookieName = "ariad_customer_device";
-const deviceMaxAgeSeconds = 60 * 60 * 24 * 180;
-const customerSessionMaxAgeSeconds = 60 * 60 * 24 * 14;
-const customerDeviceMaxAgeSeconds = 60 * 60 * 24 * 180;
-const presenceWindowMs = 45 * 1000;
-const presenceWriteIntervalMs = 10 * 1000;
-const resetTokenExpiresMs = 15 * 60 * 1000;
-const resetRequestWindowMs = 15 * 60 * 1000;
-const maxResetRequestsPerWindow = 5;
-const maxJsonBodyBytes = 12 * 1024 * 1024;
-const maxFinalLogImages = 4;
-const maxPaymentProofImages = 4;
-const maxFinalLogImageBytes = 2 * 1024 * 1024;
-const portalRateLimitWindowMs = 15 * 60 * 1000;
-const maxPortalRegisterRequestsPerWindow = 5;
-const maxPortalOrderRequestsPerWindow = 12;
-const maxPortalProofRequestsPerWindow = 20;
-const maxPortalVerificationEmailRequestsPerWindow = 3;
-const customerEmailVerificationExpiresMs = 24 * 60 * 60 * 1000;
-const productionCustomerPortalBaseUrl = "https://ariadgsm.com";
 const customerPortalBaseUrl = resolveCustomerPortalBaseUrl();
-const portalOrdersSseHeartbeatMs = 25 * 1000;
-const turnstileSiteKey = process.env.ARIAD_TURNSTILE_SITE_KEY || "";
-const turnstileSecret = process.env.ARIAD_TURNSTILE_SECRET || "";
 const portalOrderStreams = new Map();
-
-const roles = new Set(["ADMIN", "COORDINADOR", "ATENCION_TECNICA"]);
-const roleLabels = {
-  ADMIN: "Administrador",
-  COORDINADOR: "Coordinador",
-  ATENCION_TECNICA: "Atencion tecnica",
-};
-const workChannels = ["WhatsApp 1", "WhatsApp 2", "WhatsApp 3"];
-const services = [
-  { code: "SOPORTE-TECNICO", name: "Soporte tecnico", defaultPrice: 0, requiresModel: false, workChannel: "WhatsApp 1" },
-  { code: "SERVICIO-MANUAL", name: "Servicio manual", defaultPrice: 0, requiresModel: false, workChannel: "WhatsApp 1" },
-  { code: "MOTOROLA", name: "Motorola", defaultPrice: 0, requiresModel: true, workChannel: "WhatsApp 2" },
-  { code: "HERRAMIENTA-VENTA", name: "Venta de herramienta", defaultPrice: 0, requiresModel: false, workChannel: "WhatsApp 2" },
-  { code: "ZTE-HERRAMIENTA-ALQUILER", name: "Alquiler herramienta ZTE", defaultPrice: 0, requiresModel: false, workChannel: "WhatsApp 2" },
-  { code: "BYPASS-MDM", name: "Bypass MDM general", defaultPrice: 0, requiresModel: true, workChannel: "WhatsApp 2" },
-  { code: "RECARGA-CREDITOS", name: "Recarga de creditos", defaultPrice: 0, requiresModel: false, workChannel: "WhatsApp 2" },
-  { code: "XIA-FRP-GOOGLE", name: "Xiaomi Cuenta Google", defaultPrice: 25, requiresModel: false, workChannel: "WhatsApp 3" },
-  { code: "XIA-MDM", name: "Xiaomi MDM", defaultPrice: 0, requiresModel: true, workChannel: "WhatsApp 3" },
-  { code: "XIA-F4", name: "Xiaomi F4", defaultPrice: 0, requiresModel: true, workChannel: "WhatsApp 3" },
-  { code: "XIA-CUENTA-MI", name: "Xiaomi Cuenta Mi", defaultPrice: 0, requiresModel: true, workChannel: "WhatsApp 3" },
-  { code: "XIA-BOOTLOOP", name: "Xiaomi Bootloop", defaultPrice: 0, requiresModel: true, workChannel: "WhatsApp 3" },
-  { code: "IREMOVAL-REGISTROS", name: "iRemoval Registros", defaultPrice: 0, requiresModel: false, workChannel: "WhatsApp 3" },
-  { code: "IPHONE-LIBERACION-RED", name: "Liberacion de red iPhone", defaultPrice: 0, requiresModel: true, workChannel: "WhatsApp 3" },
-];
-const paymentMethods = [
-  {
-    code: "MX_STP",
-    label: "Mexico - STP",
-    country: "Mexico",
-    ticketOption: true,
-    currency: "MXN",
-    amountMode: "decimal",
-    details: ["Numero de tarjeta: 7229 6906 9374 9504 08", "Institucion: STP", "Beneficiario: Javier Cruz Franco"],
-  },
-  {
-    code: "PE_YAPE_BRYAMS",
-    label: "Peru - Yape",
-    country: "Peru",
-    ticketOption: true,
-    currency: "PEN",
-    amountMode: "decimal",
-    details: ["Yape: 993 357 553 - Bryams Zuniga", "Yape: 982 380 794 - Peregrina Sha"],
-  },
-  {
-    code: "PE_YAPE_PEREGRINA",
-    label: "Peru - Yape Peregrina",
-    country: "Peru",
-    ticketOption: false,
-    currency: "PEN",
-    amountMode: "decimal",
-    details: ["Yape: 982 380 794", "Beneficiario: Peregrina Sha"],
-  },
-  {
-    code: "CO_BANCOLOMBIA_AHORROS",
-    label: "Colombia - Bancolombia Ahorros",
-    country: "Colombia",
-    ticketOption: true,
-    currency: "COP",
-    amountMode: "thousands",
-    details: ["Bancolombia Ahorros: 00100002771", "Beneficiario: Kendy Salazar"],
-  },
-  {
-    code: "CL_MERCADO_PAGO",
-    label: "Chile - Mercado Pago",
-    country: "Chile",
-    ticketOption: true,
-    currency: "CLP",
-    amountMode: "thousands",
-    details: [
-      "Mercado Pago / Cuenta Vista: 1042449240",
-      "RUT: 179040166",
-      "Beneficiario: Emanuel Ivan Alarcon Gomez",
-      "Correo: melxcore01@gmail.com",
-    ],
-  },
-  {
-    code: "BINANCE_PAY",
-    label: "Global - Binance Pay",
-    country: "Global",
-    ticketOption: true,
-    globalOption: true,
-    currency: "USDT",
-    amountMode: "decimal",
-    details: ["Binance Pay ID: 564181591", "Beneficiario: Ariadgsm"],
-  },
-  {
-    code: "PAYPAL",
-    label: "Global - PayPal (+20%)",
-    country: "Global",
-    ticketOption: false,
-    currency: "USD",
-    amountMode: "decimal",
-    details: ["Correo: corporacionGSM.69@gmail.com", "Nota: 20% adicional por comisiones y tasas de cambio"],
-  },
-];
-const ticketStatuses = [
-  { code: "TICKET_CREADO", label: "Nuevo" },
-  { code: "EN_COLA", label: "En cola" },
-  { code: "EN_PROCESO", label: "En proceso" },
-  { code: "FINALIZADO", label: "Finalizado" },
-];
-const frpServiceCode = "XIA-FRP-GOOGLE";
-const frpWorkChannel = "WhatsApp 3";
-const frpOrderStatuses = [
-  { code: "COTIZADA", label: "Cotizada" },
-  { code: "ESPERANDO_PAGO", label: "Esperando pago" },
-  { code: "PAGO_VALIDADO", label: "Pago validado" },
-  { code: "EN_PREPARACION", label: "En preparacion" },
-  { code: "PARCIAL_LISTA", label: "Parcial lista" },
-  { code: "LISTA_PARA_TECNICO", label: "Lista para tecnico" },
-  { code: "CERRADA", label: "Cerrada" },
-  { code: "CANCELADA", label: "Cancelada" },
-];
-const frpJobStatuses = [
-  { code: "ESPERANDO_PREPARACION", label: "Preparacion" },
-  { code: "LISTO_PARA_TECNICO", label: "Listo" },
-  { code: "EN_PROCESO", label: "En proceso" },
-  { code: "FINALIZADO", label: "Finalizado" },
-  { code: "REQUIERE_REVISION", label: "Revision" },
-  { code: "ESPERANDO_CLIENTE", label: "Esperando cliente" },
-  { code: "CANCELADO", label: "Cancelado" },
-];
-const frpEligibilityStates = new Set(["APTO_EXPRESS", "NO_APTO_MODO", "NO_APTO_HERRAMIENTA", "REQUIERE_REVISION"]);
-const frpEligibilityCatalog = [
-  {
-    key: "redmi-a3x",
-    publicName: "Redmi A3X",
-    aliases: ["redmi a3x", "a3x", "klein", "klen"],
-    status: "NO_APTO_MODO",
-    internalReason: "Modelo no apto para FRP Express: no entra al modo requerido para este flujo.",
-    publicMessage: "Este modelo no aplica para FRP Express. Escribenos por WhatsApp 3 para revisar otra alternativa.",
-  },
-  {
-    key: "redmi-a3",
-    publicName: "Redmi A3",
-    aliases: ["redmi a3", "a3"],
-    status: "NO_APTO_MODO",
-    internalReason: "Modelo no apto para FRP Express: no entra al modo requerido para este flujo.",
-    publicMessage: "Este modelo no aplica para FRP Express. Escribenos por WhatsApp 3 para revisar otra alternativa.",
-  },
-  {
-    key: "redmi-a2",
-    publicName: "Redmi A2",
-    aliases: ["redmi a2", "a2"],
-    status: "NO_APTO_MODO",
-    internalReason: "Modelo no apto para FRP Express: no entra al modo requerido para este flujo.",
-    publicMessage: "Este modelo no aplica para FRP Express. Escribenos por WhatsApp 3 para revisar otra alternativa.",
-  },
-  {
-    key: "redmi-a5",
-    publicName: "Redmi A5",
-    aliases: ["redmi a5", "a5", "serenity"],
-    status: "NO_APTO_MODO",
-    internalReason: "Modelo no apto para FRP Express: no entra al modo requerido para este flujo.",
-    publicMessage: "Este modelo no aplica para FRP Express. Escribenos por WhatsApp 3 para revisar otra alternativa.",
-  },
-  {
-    key: "redmi-note-12s",
-    publicName: "Redmi Note 12S",
-    aliases: ["redmi note 12s", "note 12s", "sea", "ocean"],
-    status: "REQUIERE_REVISION",
-    internalReason: "Modelo reportado como capaz de entrar en modo requerido, pero requiere confirmar proveedor/herramienta antes de cobrar.",
-    publicMessage: "Este equipo requiere revision rapida de compatibilidad antes de continuar con el pago.",
-  },
-];
-const frpOrderChecklistKeys = ["priceSent", "paymentValidated", "connectionDataSent", "authorizationConfirmed"];
-const frpJobChecklistKeys = ["clientConnected", "requiredStateConfirmed", "modelSupported"];
-const frpQuantityTiers = [
-  { minQty: 10, unitPrice: 22, label: "Volumen 10+" },
-  { minQty: 5, unitPrice: 23, label: "Volumen 5-9" },
-  { minQty: 2, unitPrice: 24, label: "Volumen 2-4" },
-  { minQty: 1, unitPrice: 25, label: "Normal" },
-];
-const frpMonthlyTiers = [
-  { minJobs: 100, unitPrice: 22, label: "Meta 100+" },
-  { minJobs: 60, unitPrice: 23, label: "Meta 60+" },
-  { minJobs: 30, unitPrice: 24, label: "Meta 30+" },
-];
-const frpProviderStatuses = new Set(["ACTIVE", "BACKUP", "OFF"]);
-const frpProviderCostModes = new Set(["FIXED_USDT", "CREDITS"]);
-const frpPermissionKeys = new Set(["frpCostManager"]);
-const portalPublicServices = [
-  {
-    code: "PORTAL-XIAOMI-FRP",
-    name: "Xiaomi FRP Express",
-    internalServiceCode: frpServiceCode,
-    workChannel: frpWorkChannel,
-    baseUnitPrice: 25,
-    currency: "USDT",
-    enabled: true,
-    maxQuantity: 50,
-    description: "Servicio remoto para Xiaomi Cuenta Google / FRP con preparacion, pago y seguimiento en linea.",
-  },
-];
-const customerStatuses = new Set(["REGISTRADO_NO_VERIFICADO", "EMAIL_VERIFICADO", "REGISTRADO", "VERIFICADO", "VIP", "EMPRESA", "BLOQUEADO"]);
-const masterClientStatuses = new Set(["ACTIVO", "PENDIENTE_VERIFICACION", "BLOQUEADO", "MERGED"]);
-const clientLinkSourceTypes = new Set(["INTERNAL_CLIENT", "PORTAL_CLIENT"]);
-const clientLinkSuggestionStatuses = new Set(["PENDING", "REJECTED", "BLOCKED", "LINKED"]);
-const publicOrderStatuses = [
-  { code: "SOLICITUD_RECIBIDA", label: "Solicitud recibida" },
-  { code: "REVISION_COMPATIBILIDAD", label: "Revision de compatibilidad" },
-  { code: "ESPERANDO_PAGO", label: "Esperando pago" },
-  { code: "PAGO_EN_REVISION", label: "Pago en revision" },
-  { code: "EN_COLA", label: "En preparacion" },
-  { code: "EN_PREPARACION", label: "En preparacion" },
-  { code: "LISTO_PARA_CONEXION", label: "Listo para conexion" },
-  { code: "EN_PROCESO", label: "En proceso" },
-  { code: "FINALIZADO", label: "Finalizado" },
-  { code: "REQUIERE_ATENCION", label: "Requiere atencion" },
-  { code: "POSTPAGO_SOLICITADO", label: "Postpago solicitado" },
-  { code: "CANCELADO", label: "Cancelado" },
-];
-const exchangeRateCountries = [
-  { key: "mexico", country: "Mexico", currency: "MXN" },
-  { key: "peru", country: "Peru", currency: "PEN" },
-  { key: "colombia", country: "Colombia", currency: "COP" },
-  { key: "chile", country: "Chile", currency: "CLP" },
-  { key: "usdt", country: "USDT", currency: "USDT" },
-];
-const dailyCloseStatuses = new Set(["ABIERTO", "CERRADO", "REABIERTO"]);
-const dailyAdjustmentTypes = new Set(["AJUSTE", "REEMBOLSO"]);
-const pricingModes = new Set(["USDT_BASE", "COMPONENTS", "MANUAL"]);
-const countries = [
-  ["republica dominicana", "Republica Dominicana"],
-  ["estados unidos", "Estados Unidos"],
-  ["el salvador", "El Salvador"],
-  ["costa rica", "Costa Rica"],
-  ["colombia", "Colombia"],
-  ["mexico", "Mexico"],
-  ["peru", "Peru"],
-  ["chile", "Chile"],
-  ["argentina", "Argentina"],
-  ["ecuador", "Ecuador"],
-  ["bolivia", "Bolivia"],
-  ["venezuela", "Venezuela"],
-  ["uruguay", "Uruguay"],
-  ["paraguay", "Paraguay"],
-  ["guatemala", "Guatemala"],
-  ["honduras", "Honduras"],
-  ["nicaragua", "Nicaragua"],
-  ["panama", "Panama"],
-  ["espana", "Espana"],
-  ["usdt", "USDT"],
-];
-const countryByFlagIso = {
-  AR: "Argentina",
-  BO: "Bolivia",
-  CL: "Chile",
-  CO: "Colombia",
-  CR: "Costa Rica",
-  DO: "Republica Dominicana",
-  EC: "Ecuador",
-  ES: "Espana",
-  GT: "Guatemala",
-  HN: "Honduras",
-  MX: "Mexico",
-  NI: "Nicaragua",
-  PA: "Panama",
-  PE: "Peru",
-  PY: "Paraguay",
-  SV: "El Salvador",
-  US: "Estados Unidos",
-  UY: "Uruguay",
-  VE: "Venezuela",
-};
-const portalPhoneCountryHints = [
-  { country: "Republica Dominicana", iso: "DO", callingPrefixes: ["1809", "1829", "1849"] },
-  { country: "Estados Unidos", iso: "US", callingPrefixes: ["1"] },
-  { country: "El Salvador", iso: "SV", callingPrefixes: ["503"] },
-  { country: "Costa Rica", iso: "CR", callingPrefixes: ["506"] },
-  { country: "Colombia", iso: "CO", callingPrefixes: ["57"] },
-  { country: "Mexico", iso: "MX", callingPrefixes: ["52"] },
-  { country: "Peru", iso: "PE", callingPrefixes: ["51"] },
-  { country: "Chile", iso: "CL", callingPrefixes: ["56"] },
-  { country: "Argentina", iso: "AR", callingPrefixes: ["54"] },
-  { country: "Ecuador", iso: "EC", callingPrefixes: ["593"] },
-  { country: "Bolivia", iso: "BO", callingPrefixes: ["591"] },
-  { country: "Venezuela", iso: "VE", callingPrefixes: ["58"] },
-  { country: "Uruguay", iso: "UY", callingPrefixes: ["598"] },
-  { country: "Paraguay", iso: "PY", callingPrefixes: ["595"] },
-  { country: "Guatemala", iso: "GT", callingPrefixes: ["502"] },
-  { country: "Honduras", iso: "HN", callingPrefixes: ["504"] },
-  { country: "Nicaragua", iso: "NI", callingPrefixes: ["505"] },
-  { country: "Panama", iso: "PA", callingPrefixes: ["507"] },
-  { country: "Espana", iso: "ES", callingPrefixes: ["34"] },
-];
-
-function moneyNumber(value) {
-  const number = Number(value);
-  if (!Number.isFinite(number) || number < 0) return 0;
-  return Math.round(number * 10000) / 10000;
-}
-
-function percentNumber(value) {
-  const number = Number(value);
-  if (!Number.isFinite(number) || number < 0) return 0;
-  return Math.round(number * 100) / 100;
-}
-
-function defaultFrpPricingConfig() {
-  return {
-    policy: {
-      minMarginUsdt: 1,
-      targetMarginUsdt: 1.5,
-      minSellPriceUsdt: 25,
-      maxWorkerCostChangePct: 30,
-      updatedAt: "",
-      updatedBy: "",
-    },
-    providers: [
-      {
-        id: "krypto",
-        name: "Krypto",
-        status: "ACTIVE",
-        costMode: "FIXED_USDT",
-        fixedCostUsdt: 3,
-        creditsPerProcess: 0,
-        creditUnitCostUsdt: 0,
-        priority: 1,
-        reason: "Base inicial",
-        updatedAt: "",
-        updatedBy: "",
-      },
-      {
-        id: "xfp",
-        name: "XFP",
-        status: "BACKUP",
-        costMode: "CREDITS",
-        fixedCostUsdt: 0,
-        creditsPerProcess: 5,
-        creditUnitCostUsdt: 0.85,
-        priority: 2,
-        reason: "Base inicial",
-        updatedAt: "",
-        updatedBy: "",
-      },
-      {
-        id: "manual",
-        name: "Manual / Otro",
-        status: "OFF",
-        costMode: "FIXED_USDT",
-        fixedCostUsdt: 0,
-        creditsPerProcess: 0,
-        creditUnitCostUsdt: 0,
-        priority: 3,
-        reason: "Reserva",
-        updatedAt: "",
-        updatedBy: "",
-      },
-    ],
-  };
-}
-
-function normalizeFrpPricingConfig(config = {}) {
-  const defaults = defaultFrpPricingConfig();
-  const inputPolicy = config && typeof config.policy === "object" ? config.policy : {};
-  const policy = {
-    minMarginUsdt: moneyNumber(inputPolicy.minMarginUsdt ?? defaults.policy.minMarginUsdt),
-    targetMarginUsdt: moneyNumber(inputPolicy.targetMarginUsdt ?? defaults.policy.targetMarginUsdt),
-    minSellPriceUsdt: moneyNumber(inputPolicy.minSellPriceUsdt ?? defaults.policy.minSellPriceUsdt),
-    maxWorkerCostChangePct: percentNumber(inputPolicy.maxWorkerCostChangePct ?? defaults.policy.maxWorkerCostChangePct),
-    updatedAt: String(inputPolicy.updatedAt || ""),
-    updatedBy: String(inputPolicy.updatedBy || ""),
-  };
-  const existingProviders = Array.isArray(config.providers) ? config.providers : [];
-  const providers = defaults.providers.map((defaultProvider) => {
-    const existing = existingProviders.find((provider) => provider.id === defaultProvider.id || provider.name === defaultProvider.name);
-    const status = frpProviderStatuses.has(String(existing?.status || "").toUpperCase())
-      ? String(existing.status).toUpperCase()
-      : defaultProvider.status;
-    const costMode = frpProviderCostModes.has(String(existing?.costMode || "").toUpperCase())
-      ? String(existing.costMode).toUpperCase()
-      : defaultProvider.costMode;
-    return {
-      ...defaultProvider,
-      name: cleanText(existing?.name || defaultProvider.name, 40),
-      status,
-      costMode,
-      fixedCostUsdt: moneyNumber(existing?.fixedCostUsdt ?? defaultProvider.fixedCostUsdt),
-      creditsPerProcess: moneyNumber(existing?.creditsPerProcess ?? defaultProvider.creditsPerProcess),
-      creditUnitCostUsdt: moneyNumber(existing?.creditUnitCostUsdt ?? defaultProvider.creditUnitCostUsdt),
-      priority: Math.max(1, Number.parseInt(existing?.priority ?? defaultProvider.priority, 10) || defaultProvider.priority),
-      reason: cleanText(existing?.reason || defaultProvider.reason || "", 160),
-      updatedAt: String(existing?.updatedAt || ""),
-      updatedBy: String(existing?.updatedBy || ""),
-    };
-  });
-  return { policy, providers };
-}
 
 function defaultServicePricingRule(service) {
   const baseRule = {
@@ -654,10 +327,6 @@ async function writeDb(db) {
   await fs.writeFile(dbPath, JSON.stringify(db, null, 2));
 }
 
-function nowIso() {
-  return new Date().toISOString();
-}
-
 function normalizeUserPermissions(permissions = {}) {
   const source = permissions && typeof permissions === "object" ? permissions : {};
   return Object.fromEntries(Array.from(frpPermissionKeys).map((key) => [key, Boolean(source[key])]));
@@ -865,231 +534,45 @@ function portalFrpPriceSuggestion(db, clientId, quantity, canUseBenefits, benefi
   return suggestion;
 }
 
-function publicCustomerClient(client) {
-  if (!client) return null;
-  return {
-    id: client.id,
-    masterClientId: client.masterClientId || "",
-    name: client.name,
-    whatsapp: client.whatsapp,
-    country: client.country,
-    status: normalizeCustomerStatus(client.status),
-    emailVerified: customerEmailIsVerified(client),
-    emailVerifiedAt: client.emailVerifiedAt || "",
-    createdAt: client.createdAt,
-    updatedAt: client.updatedAt,
-  };
-}
-
-function publicCustomerUser(user) {
-  if (!user) return null;
-  return {
-    id: user.id,
-    clientId: user.clientId,
-    name: user.name,
-    email: user.email,
-    role: user.role || "OWNER",
-    active: user.active !== false,
-    createdAt: user.createdAt,
-  };
-}
-
-function publicCustomerBenefit(benefit, canUseBenefits) {
-  if (!benefit) return null;
-  return {
-    masterClientId: benefit.masterClientId || "",
-    quantityDiscountEnabled: Boolean(benefit.quantityDiscountEnabled),
-    monthlyDiscountEnabled: Boolean(benefit.monthlyDiscountEnabled),
-    goalDiscountEnabled: Boolean(benefit.goalDiscountEnabled),
-    monthlyGoal: Number(benefit.monthlyGoal || 0),
-    vipUnitPrice: moneyNumber(benefit.vipUnitPrice || 0),
-    deviceRequired: benefit.deviceRequired !== false,
-    usableNow: Boolean(canUseBenefits),
-  };
-}
-
-function deriveCustomerOrderStatus(order, db) {
-  const frpOrder = db.frpOrders.find((candidate) => candidate.id === order.frpOrderId);
-  const items = db.customerOrderItems.filter((item) => item.orderId === order.id);
-  const jobs = items.map((item) => db.frpJobs.find((job) => job.id === item.frpJobId)).filter(Boolean);
-  if (order.publicStatus === "CANCELADO") return "CANCELADO";
-  if (order.publicStatus === "REVISION_COMPATIBILIDAD") return "REVISION_COMPATIBILIDAD";
-  if (jobs.length && jobs.every((job) => job.status === "FINALIZADO")) return "FINALIZADO";
-  if (jobs.some((job) => job.status === "REQUIERE_REVISION" || job.status === "ESPERANDO_CLIENTE")) return "REQUIERE_ATENCION";
-  if (jobs.some((job) => job.status === "EN_PROCESO")) return "EN_PROCESO";
-  if (jobs.some((job) => job.status === "LISTO_PARA_TECNICO")) return "LISTO_PARA_CONEXION";
-  if ((frpOrder?.checklist?.paymentValidated || frpOrder?.paymentStatus === "PAGO_VALIDADO") && (order.customerConnectionReadyAt || frpOrder?.customerConnectionReadyAt)) return "LISTO_PARA_CONEXION";
-  if (frpOrder?.checklist?.paymentValidated || frpOrder?.paymentStatus === "PAGO_VALIDADO") return "EN_PREPARACION";
-  if (Array.isArray(order.paymentProofs) && order.paymentProofs.length) return "PAGO_EN_REVISION";
-  if (order.postpayRequested && order.postpayStatus === "SOLICITADO") return "POSTPAGO_SOLICITADO";
-  return order.publicStatus || "ESPERANDO_PAGO";
-}
-
-function publicCustomerOrderNextAction(order, db, publicStatus = "") {
-  const frpOrder = db.frpOrders.find((candidate) => candidate.id === order.frpOrderId);
-  const items = db.customerOrderItems.filter((item) => item.orderId === order.id);
-  const jobs = items.map((item) => db.frpJobs.find((job) => job.id === item.frpJobId)).filter(Boolean);
-  const status = publicStatus || deriveCustomerOrderStatus(order, db);
-  if (status === "REVISION_COMPATIBILIDAD") return "AriadGSM revisara si el equipo aplica para FRP Express antes de pedir pago.";
-  if (status === "ESPERANDO_PAGO") return "Copia los datos de pago y sube el comprobante para iniciar la validacion.";
-  if (status === "POSTPAGO_SOLICITADO") return "Postpago solicitado. AriadGSM debe aprobarlo antes de procesar.";
-  if (status === "PAGO_EN_REVISION") {
-    return order.customerConnectionReadyAt
-      ? "Comprobante recibido. Ya indicaste que la conexion esta lista; espera validacion."
-      : "Comprobante recibido. Prepara USB Redirector mientras validamos el pago.";
-  }
-  if (status === "EN_PREPARACION") return "Pago validado. Prepara USB Redirector y marca que estas listo para conectar.";
-  if (status === "LISTO_PARA_CONEXION") return "Conexion lista. Mantente disponible para que el tecnico tome el equipo.";
-  if (status === "EN_PROCESO") return "Tecnico procesando. No desconectes el equipo hasta recibir el Done.";
-  if (status === "REQUIERE_ATENCION") {
-    const reason = jobs.find((job) => job.reviewReason)?.reviewReason || frpOrder?.reviewReason || "";
-    return reason ? `Requiere accion: ${reason}` : "Requiere accion del cliente o revision del equipo.";
-  }
-  if (status === "FINALIZADO") return "Servicio finalizado. Revisa el Done y el log de salida.";
-  if (status === "CANCELADO") return "Solicitud cancelada.";
-  return "Revisa el estado de tu solicitud.";
-}
-
-function publicCustomerOrder(order, db) {
-  const payment = paymentMethods.find((candidate) => candidate.code === order.paymentMethod);
-  const items = db.customerOrderItems.filter((item) => item.orderId === order.id);
-  const publicStatus = deriveCustomerOrderStatus(order, db);
-  const hidePaymentDetails = publicStatus === "REVISION_COMPATIBILIDAD";
-  return {
-    id: order.id,
-    code: order.code,
-    accessCode: order.accessCode,
-    serviceCode: order.serviceCode,
-    serviceName: order.serviceName,
-    quantity: order.quantity,
-    unitPrice: order.unitPrice,
-    totalPrice: order.totalPrice,
-    priceFormatted: order.priceFormatted,
-    discountLabel: order.discountLabel,
-    discountLocked: Boolean(order.discountLocked),
-    monthlyUsageAtCreation: order.monthlyUsageAtCreation || 0,
-    nextMonthlyTier: order.nextMonthlyTier || null,
-    paymentMethod: order.paymentMethod,
-    paymentLabel: hidePaymentDetails ? "" : order.paymentLabel,
-    paymentDetails: hidePaymentDetails ? [] : (Array.isArray(order.paymentDetails) ? order.paymentDetails : payment?.details || []),
-    publicStatus,
-    nextAction: publicCustomerOrderNextAction(order, db, publicStatus),
-    customerConnectionReadyAt: order.customerConnectionReadyAt || "",
-    urgentRequested: Boolean(order.urgentRequested),
-    urgentStatus: order.urgentStatus || "",
-    postpayRequested: Boolean(order.postpayRequested),
-    postpayStatus: order.postpayStatus || "",
-    paymentProofs: Array.isArray(order.paymentProofs) ? order.paymentProofs.map((proof) => ({
-      id: proof.id,
-      name: proof.name,
-      type: proof.type,
-      size: proof.size,
-      createdAt: proof.createdAt,
-    })) : [],
-    items: items.map((item) => {
-      const job = db.frpJobs.find((candidate) => candidate.id === item.frpJobId);
-      const eligibilityStatus = item.eligibilityStatus || job?.eligibilityStatus || "";
-      const eligibilityMessage = item.eligibilityPublicMessage || job?.eligibilityPublicMessage || "";
-      const publicReviewMessage = eligibilityMessage || (job?.status === "REQUIERE_REVISION" ? "Requiere revision del equipo." : "");
-      return {
-        id: item.id,
-        sequence: item.sequence,
-        model: item.model || "",
-        imei: item.imei || "",
-        status: job?.status || item.status,
-        ardCode: job?.ardCode || item.ardCode || "",
-        finalLog: job?.finalLog || "",
-        eligibilityStatus,
-        eligibilityMessage,
-        reviewReason: publicReviewMessage,
-      };
-    }),
-    createdAt: order.createdAt,
-    updatedAt: order.updatedAt,
-  };
-}
-
-function publicCustomerOrdersForClient(db, clientId) {
-  return db.customerOrders
-    .filter((order) => order.clientId === clientId)
-    .slice(0, 60)
-    .map((order) => publicCustomerOrder(order, db));
-}
-
-function publicCustomerState(db, context) {
-  const client = context?.client || null;
-  const user = context?.user || null;
-  const device = context?.device || null;
-  const benefit = client ? customerBenefitFor(db, client.id, client.masterClientId) : null;
-  const canUseBenefits = customerCanUseBenefits(context, benefit);
-  const monthlyUsage = client ? customerMonthlyUsage(db, client.id, new Date(), client.masterClientId || benefit?.masterClientId || "") : 0;
-  const nextMonthlyTier = client ? nextFrpMonthlyTier(monthlyUsage, frpCurrentPricing(db)) : null;
-  const orders = client ? publicCustomerOrdersForClient(db, client.id) : [];
-  return {
-    user: publicCustomerUser(user),
-    client: publicCustomerClient(client),
-    device: device ? {
-      id: device.id,
-      authorizedForBenefits: client ? customerDeviceIsAuthorized(device, client.id) : false,
-      createdAt: device.createdAt,
-      lastSeenAt: device.lastSeenAt,
-    } : null,
-    benefit: publicCustomerBenefit(benefit, canUseBenefits),
-    monthlyUsage,
-    nextMonthlyTier: nextMonthlyTier ? { ...nextMonthlyTier, remaining: nextMonthlyTier.minJobs - monthlyUsage } : null,
-    orders,
-  };
-}
-
-function allowedPortalPaymentMethods() {
-  return allowedTicketPaymentMethods();
-}
-
-function allowedPortalPaymentMethodsForCountry(country) {
-  const normalizedCountry = normalizeCountryInput(country);
-  const methods = allowedPortalPaymentMethods();
-  const localMethods = methods.filter((payment) => payment.country === normalizedCountry);
-  const globalMethods = methods.filter((payment) => payment.globalOption);
-  return localMethods.concat(globalMethods);
-}
-
-function defaultPortalPaymentForCountry(country) {
-  const compatible = allowedPortalPaymentMethodsForCountry(country);
-  return compatible.find((payment) => !payment.globalOption) || compatible[0] || allowedPortalPaymentMethods()[0] || null;
-}
-
-function resolvePortalPaymentForClient(paymentCode, client) {
-  const code = cleanText(paymentCode, 60);
-  const allowed = allowedPortalPaymentMethods();
-  return allowed.find((payment) => payment.code === code) || defaultPortalPaymentForCountry(client?.country);
-}
-
-function publicPortalCatalog(db = null) {
-  const pricing = db ? frpCurrentPricing(db) : null;
-  const pricingConfig = normalizePricingConfig(db?.pricingConfig || defaultPricingConfig());
-  const servicesForPortal = portalPublicServices
-    .filter((service) => service.enabled)
-    .map((service) => service.internalServiceCode === frpServiceCode && pricing?.available
-      ? { ...service, baseUnitPrice: pricing.unitPrice }
-      : service);
-  return {
-    services: servicesForPortal,
-    paymentMethods: allowedPortalPaymentMethods(),
-    countries: countries.map(([, country]) => country),
-    statuses: publicOrderStatuses,
-    quantityTiers: pricing?.available ? frpDynamicQuantityTiers(pricing) : frpQuantityTiers,
-    monthlyTiers: pricing?.available ? frpDynamicMonthlyTiers(pricing) : frpMonthlyTiers,
-    exchangeRates: pricingConfig.exchangeRates.map((rate) => ({
-      country: rate.country,
-      currency: rate.currency,
-      ratePerUsdt: rate.currency === "USDT" ? 1 : moneyNumber(rate.ratePerUsdt || 0),
-      updatedAt: rate.updatedAt || "",
-    })),
-    phoneCountries: portalPhoneCountryHints,
-    turnstileEnabled: Boolean(turnstileSecret && turnstileSiteKey),
-    turnstileSiteKey,
-  };
-}
+const {
+  publicCustomerClient,
+  publicCustomerUser,
+  publicCustomerBenefit,
+  deriveCustomerOrderStatus,
+  publicCustomerOrderNextAction,
+  publicCustomerOrder,
+  publicCustomerOrdersForClient,
+  publicCustomerState,
+  publicPortalCatalog,
+  resolvePortalPaymentForClient,
+} = createPortalSerializers({
+  allowedTicketPaymentMethods,
+  cleanText,
+  countries,
+  customerBenefitFor,
+  customerCanUseBenefits,
+  customerDeviceIsAuthorized,
+  customerEmailIsVerified,
+  customerMonthlyUsage,
+  defaultPricingConfig,
+  frpCurrentPricing,
+  frpDynamicMonthlyTiers,
+  frpDynamicQuantityTiers,
+  frpMonthlyTiers,
+  frpQuantityTiers,
+  frpServiceCode,
+  moneyNumber,
+  nextFrpMonthlyTier,
+  normalizeCountryInput,
+  normalizeCustomerStatus,
+  normalizePricingConfig,
+  paymentMethods,
+  portalPhoneCountryHints,
+  portalPublicServices,
+  publicOrderStatuses,
+  turnstileSecret,
+  turnstileSiteKey,
+});
 
 function fallbackTicketChannel(ticket, db = { users: [] }) {
   const creator = db.users.find((candidate) => candidate.id === ticket.createdBy);
@@ -1188,80 +671,6 @@ function defaultFrpJobChecklist() {
   };
 }
 
-function normalizeFrpEligibilityText(value) {
-  const spaced = normalizeForMatch(value)
-    .replace(/[^a-z0-9]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  return {
-    spaced,
-    compact: spaced.replace(/\s+/g, ""),
-    tokens: spaced ? spaced.split(" ") : [],
-  };
-}
-
-function frpAliasMatches(textIndex, alias) {
-  const aliasIndex = normalizeFrpEligibilityText(alias);
-  if (!aliasIndex.spaced) return false;
-  if (/^[a-z0-9]{7,}$/i.test(aliasIndex.compact) && textIndex.compact.includes(aliasIndex.compact)) return true;
-  const pattern = new RegExp(`(^|\\s)${aliasIndex.spaced.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(\\s|$)`);
-  return pattern.test(textIndex.spaced);
-}
-
-function frpEquipmentLooksAmbiguous(textIndex, rawText) {
-  if (!rawText) return true;
-  const generic = new Set(["xiaomi", "redmi", "poco", "mi", "equipo", "telefono", "celular", "modelo", "frp"]);
-  const usefulTokens = textIndex.tokens.filter((token) => !generic.has(token) && !/^\d{14,16}$/.test(token));
-  if (!usefulTokens.length) return true;
-  if (usefulTokens.length === 1 && usefulTokens[0].length < 3) return true;
-  return false;
-}
-
-function frpEligibilityResult(rawText) {
-  const originalText = cleanText(rawText, 180);
-  const textIndex = normalizeFrpEligibilityText(originalText);
-  if (frpEquipmentLooksAmbiguous(textIndex, originalText)) {
-    return {
-      originalText,
-      detectedMatch: "",
-      matchedAlias: "",
-      status: "REQUIERE_REVISION",
-      internalReason: "Entrada ambigua o insuficiente para validar compatibilidad FRP Express.",
-      publicMessage: "Necesitamos revisar este equipo antes de continuar con el pago.",
-    };
-  }
-  for (const entry of frpEligibilityCatalog) {
-    const matchedAlias = entry.aliases.find((alias) => frpAliasMatches(textIndex, alias));
-    if (matchedAlias) {
-      return {
-        originalText,
-        detectedMatch: entry.publicName,
-        matchedAlias,
-        status: frpEligibilityStates.has(entry.status) ? entry.status : "REQUIERE_REVISION",
-        internalReason: entry.internalReason,
-        publicMessage: entry.publicMessage,
-      };
-    }
-  }
-  return {
-    originalText,
-    detectedMatch: originalText,
-    matchedAlias: "",
-    status: "APTO_EXPRESS",
-    internalReason: "Sin coincidencia en catalogo de bloqueos; se asume apto para FRP Express.",
-    publicMessage: "Equipo apto para FRP Express.",
-  };
-}
-
-function summarizeFrpEligibility(items) {
-  const results = items.map((item) => item.eligibility || frpEligibilityResult(item.originalText || item.model || ""));
-  return {
-    results,
-    blocked: results.filter((result) => ["NO_APTO_MODO", "NO_APTO_HERRAMIENTA"].includes(result.status)),
-    review: results.filter((result) => result.status === "REQUIERE_REVISION"),
-  };
-}
-
 function normalizeChecklist(value, keys, defaults) {
   const source = value && typeof value === "object" ? value : {};
   return Object.fromEntries(keys.map((key) => [key, Boolean(Object.hasOwn(source, key) ? source[key] : defaults[key])]));
@@ -1336,94 +745,6 @@ function canManageFrpPolicy(user) {
 
 function canReviewFrpPayments(user) {
   return Boolean(user && ["ADMIN", "COORDINADOR"].includes(user.role));
-}
-
-function frpProviderCostUsdt(provider) {
-  if (!provider) return 0;
-  if (provider.costMode === "CREDITS") {
-    return moneyNumber(moneyNumber(provider.creditsPerProcess) * moneyNumber(provider.creditUnitCostUsdt));
-  }
-  return moneyNumber(provider.fixedCostUsdt);
-}
-
-function activeFrpProvider(config) {
-  return [...(config.providers || [])]
-    .filter((provider) => provider.status === "ACTIVE")
-    .sort((a, b) => Number(a.priority || 99) - Number(b.priority || 99))[0] || null;
-}
-
-function frpCurrentPricing(db) {
-  const config = normalizeFrpPricingConfig(db.pricingConfig?.frpPricing);
-  const provider = activeFrpProvider(config);
-  if (!provider) {
-    return {
-      available: false,
-      reason: "Sin proveedor FRP activo",
-      config,
-      provider: null,
-      internalCostUsdt: 0,
-      minAllowedUnitPrice: 0,
-      unitPrice: 0,
-    };
-  }
-  const internalCostUsdt = frpProviderCostUsdt(provider);
-  const minAllowedUnitPrice = moneyNumber(internalCostUsdt + config.policy.minMarginUsdt);
-  const unitPrice = moneyNumber(Math.max(
-    minAllowedUnitPrice,
-    internalCostUsdt + config.policy.targetMarginUsdt,
-    config.policy.minSellPriceUsdt,
-  ));
-  return {
-    available: unitPrice > 0,
-    reason: unitPrice > 0 ? "" : "Precio FRP no configurado",
-    config,
-    provider,
-    internalCostUsdt,
-    minAllowedUnitPrice,
-    unitPrice,
-  };
-}
-
-function frpDynamicTier(defaultTier, pricing) {
-  if (!pricing?.available) return { ...defaultTier };
-  const discount = moneyNumber(25 - Number(defaultTier.unitPrice || 25));
-  return {
-    ...defaultTier,
-    unitPrice: moneyNumber(Math.max(pricing.minAllowedUnitPrice, pricing.unitPrice - discount)),
-  };
-}
-
-function frpDynamicQuantityTiers(pricing) {
-  return frpQuantityTiers.map((tier) => frpDynamicTier(tier, pricing));
-}
-
-function frpDynamicMonthlyTiers(pricing) {
-  return frpMonthlyTiers.map((tier) => frpDynamicTier(tier, pricing));
-}
-
-function frpPricingSnapshot(pricing, suggestion = {}) {
-  const provider = pricing.provider;
-  return {
-    version: "frp-dynamic-v1",
-    providerId: provider?.id || "",
-    providerName: provider?.name || "",
-    providerStatus: provider?.status || "",
-    costMode: provider?.costMode || "",
-    fixedCostUsdt: moneyNumber(provider?.fixedCostUsdt || 0),
-    creditsPerProcess: moneyNumber(provider?.creditsPerProcess || 0),
-    creditUnitCostUsdt: moneyNumber(provider?.creditUnitCostUsdt || 0),
-    internalCostUsdt: moneyNumber(pricing.internalCostUsdt || 0),
-    minMarginUsdt: moneyNumber(pricing.config?.policy?.minMarginUsdt || 0),
-    targetMarginUsdt: moneyNumber(pricing.config?.policy?.targetMarginUsdt || 0),
-    minSellPriceUsdt: moneyNumber(pricing.config?.policy?.minSellPriceUsdt || 0),
-    minAllowedUnitPrice: moneyNumber(pricing.minAllowedUnitPrice || 0),
-    baseUnitPrice: moneyNumber(pricing.unitPrice || 0),
-    unitPrice: moneyNumber(suggestion.unitPrice ?? pricing.unitPrice),
-    quantity: Number(suggestion.quantity || 1),
-    total: moneyNumber(suggestion.total || 0),
-    discountLabel: cleanText(suggestion.label || "", 80),
-    calculatedAt: nowIso(),
-  };
 }
 
 function frpOrderIsReady(order) {
@@ -1528,74 +849,18 @@ function syncFrpOrderStatus(db, order) {
   order.orderStatus = readyOrActive === jobs.length ? "LISTA_PARA_TECNICO" : "PARCIAL_LISTA";
 }
 
-function publicFrpOrder(order, db) {
-  const creator = db.users.find((user) => user.id === order.createdBy);
-  const jobs = db.frpJobs.filter((job) => job.orderId === order.id);
-  return {
-    ...order,
-    createdByName: creator?.name || "Sistema",
-    jobs: jobs.map((job) => publicFrpJob(job, db, false)),
-    jobCounts: frpJobStatuses.reduce((acc, status) => {
-      acc[status.code] = jobs.filter((job) => job.status === status.code).length;
-      return acc;
-    }, {}),
-  };
-}
-
-function publicFrpJob(job, db, includeOrder = true) {
-  const technician = db.users.find((user) => user.id === job.technicianId);
-  const order = includeOrder ? db.frpOrders.find((candidate) => candidate.id === job.orderId) : null;
-  return {
-    ...job,
-    technicianName: technician?.name || "",
-    order: order ? {
-      id: order.id,
-      code: order.code,
-      clientName: order.clientName,
-      country: order.country,
-      unitPrice: order.unitPrice,
-      totalPrice: order.totalPrice,
-      paymentLabel: order.paymentLabel,
-    } : undefined,
-  };
-}
-
-function publicFrpState(db, user) {
-  if (!canUseFrp(user)) {
-    return { enabled: false, orders: [], jobs: [], metrics: {}, statuses: { orders: frpOrderStatuses, jobs: frpJobStatuses }, pricing: publicFrpPricingState(db, user) };
-  }
-  const orders = db.frpOrders.filter((order) => user.role === "ADMIN" || order.workChannel === frpWorkChannel);
-  const jobs = db.frpJobs.filter((job) => user.role === "ADMIN" || job.workChannel === frpWorkChannel);
-  const today = limaDateStamp();
-  const todaysJobs = jobs.filter((job) => limaDateStamp(job.createdAt) === today || limaDateStamp(job.doneAt) === today);
-  return {
-    enabled: true,
-    orders: orders.slice(0, 80).map((order) => publicFrpOrder(order, db)),
-    jobs: jobs.slice(0, 200).map((job) => publicFrpJob(job, db)),
-    metrics: {
-      ordersToday: orders.filter((order) => limaDateStamp(order.createdAt) === today).length,
-      finishedToday: todaysJobs.filter((job) => job.status === "FINALIZADO").length,
-      ready: jobs.filter((job) => job.status === "LISTO_PARA_TECNICO").length,
-      inProcess: jobs.filter((job) => job.status === "EN_PROCESO").length,
-      review: jobs.filter((job) => job.status === "REQUIERE_REVISION").length,
-      myActive: jobs.filter((job) => job.technicianId === user.id && job.status === "EN_PROCESO").length,
-    },
-    statuses: { orders: frpOrderStatuses, jobs: frpJobStatuses },
-    pricing: publicFrpPricingState(db, user),
-  };
-}
-
-function audit(db, actorId, action, targetId, detail = {}) {
-  db.audit.unshift({
-    id: crypto.randomUUID(),
-    actorId: actorId || null,
-    action,
-    targetId: targetId || null,
-    detail,
-    createdAt: nowIso(),
-  });
-  db.audit = db.audit.slice(0, 2000);
-}
+const {
+  publicFrpOrder,
+  publicFrpJob,
+  publicFrpState,
+} = createFrpSerializers({
+  canUseFrp,
+  frpJobStatuses,
+  frpOrderStatuses,
+  frpWorkChannel,
+  limaDateStamp,
+  publicFrpPricingState,
+});
 
 function normalizeDailyCloseDate(value = "") {
   const text = cleanText(value, 20);
@@ -2837,11 +2102,6 @@ function hashToken(token) {
   return crypto.createHash("sha256").update(String(token || "")).digest("hex");
 }
 
-function cookieHeader(name, value, maxAge) {
-  const secureCookie = process.env.NODE_ENV === "production" ? "; Secure" : "";
-  return `${name}=${encodeURIComponent(value)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${maxAge}${secureCookie}`;
-}
-
 function ensureDevice(db, req) {
   let token = getCookie(req, deviceCookieName);
   if (!token) token = crypto.randomBytes(32).toString("base64url");
@@ -3062,40 +2322,6 @@ async function sendCustomerVerificationEmail(customerUser, client, token) {
   });
 }
 
-function sendJson(res, status, payload) {
-  const body = JSON.stringify(payload);
-  res.writeHead(status, {
-    "Content-Type": "application/json; charset=utf-8",
-    "Content-Length": Buffer.byteLength(body),
-    "Cache-Control": "no-store",
-  });
-  res.end(body);
-}
-
-function sendHtml(res, status, html) {
-  res.writeHead(status, {
-    "Content-Type": "text/html; charset=utf-8",
-    "Content-Length": Buffer.byteLength(html),
-    "Cache-Control": "no-store",
-  });
-  res.end(html);
-}
-
-function sendNoContent(res) {
-  res.writeHead(204, { "Cache-Control": "no-store" });
-  res.end();
-}
-
-function sendSseEvent(res, event, payload, id = "") {
-  if (id) res.write(`id: ${id}\n`);
-  if (event) res.write(`event: ${event}\n`);
-  const body = JSON.stringify(payload);
-  for (const line of body.split(/\r?\n/)) {
-    res.write(`data: ${line}\n`);
-  }
-  res.write("\n");
-}
-
 function addPortalOrderStream(clientId, stream) {
   if (!portalOrderStreams.has(clientId)) portalOrderStreams.set(clientId, new Set());
   portalOrderStreams.get(clientId).add(stream);
@@ -3134,38 +2360,6 @@ function publishPortalOrders(db, clientId, reason = "orders_updated") {
 function publishPortalOrdersForFrpOrder(db, frpOrder, reason = "frp_order_updated") {
   const portalOrder = db.customerOrders.find((order) => order.id === frpOrder?.portalOrderId);
   if (portalOrder) publishPortalOrders(db, portalOrder.clientId, reason);
-}
-
-async function parseJson(req) {
-  const chunks = [];
-  let total = 0;
-  for await (const chunk of req) {
-    total += chunk.length;
-    if (total > maxJsonBodyBytes) {
-      const error = new Error("La solicitud es demasiado grande.");
-      error.status = 413;
-      throw error;
-    }
-    chunks.push(chunk);
-  }
-  const raw = Buffer.concat(chunks).toString("utf8");
-  if (!raw) return {};
-  try {
-    return JSON.parse(raw);
-  } catch {
-    const error = new Error("JSON invalido.");
-    error.status = 400;
-    throw error;
-  }
-}
-
-function getCookie(req, name) {
-  const cookies = req.headers.cookie || "";
-  for (const part of cookies.split(";")) {
-    const [key, ...value] = part.trim().split("=");
-    if (key === name) return decodeURIComponent(value.join("="));
-  }
-  return null;
 }
 
 async function getCurrentUser(req) {
@@ -3538,14 +2732,6 @@ function createFrpOrderFromPortal(db, customerClient, customerOrder, customerIte
   return order;
 }
 
-function normalizeEmail(email) {
-  return String(email || "").trim().toLowerCase();
-}
-
-function cleanName(name) {
-  return String(name || "").trim().replace(/\s+/g, " ");
-}
-
 function nameContainsCountry(value) {
   const normalized = ` ${normalizeForMatch(value)} `;
   return countries
@@ -3593,36 +2779,6 @@ function normalizePortalWhatsapp(value, selectedCountry = "") {
     detectedCountry,
     countryIso: parsed.country || "",
   };
-}
-
-function validatePassword(password) {
-  return typeof password === "string" && password.length >= 8;
-}
-
-function validateOperatorPin(pin) {
-  return /^[0-9]{4,8}$/.test(String(pin || ""));
-}
-
-function normalizeWorkChannel(value) {
-  const channel = cleanText(value, 40);
-  return workChannels.includes(channel) ? channel : "";
-}
-
-function limaDateStamp(value = new Date()) {
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Lima",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(date);
-  const get = (type) => parts.find((part) => part.type === type)?.value || "";
-  return `${get("year")}${get("month")}${get("day")}`;
-}
-
-function limaMonthStamp(value = new Date()) {
-  return limaDateStamp(value).slice(0, 6);
 }
 
 function nextTicketCode(db) {
@@ -3677,36 +2833,6 @@ function resolveCustomerPortalBaseUrl() {
   } catch {
     return fallback;
   }
-}
-
-function cleanText(value, max = 120) {
-  return String(value || "").trim().replace(/\s+/g, " ").slice(0, max);
-}
-
-function flagIsoFromRegionalIndicators(value) {
-  const chars = Array.from(String(value || ""));
-  for (let index = 0; index < chars.length - 1; index += 1) {
-    const first = chars[index].codePointAt(0);
-    const second = chars[index + 1].codePointAt(0);
-    const isFlagPair = first >= 0x1f1e6 && first <= 0x1f1ff && second >= 0x1f1e6 && second <= 0x1f1ff;
-    if (isFlagPair) {
-      return String.fromCharCode(65 + first - 0x1f1e6, 65 + second - 0x1f1e6);
-    }
-  }
-  return "";
-}
-
-function countryFromFlag(value) {
-  return countryByFlagIso[flagIsoFromRegionalIndicators(value)] || "";
-}
-
-function stripCountryFlags(value) {
-  return Array.from(String(value || ""))
-    .filter((char) => {
-      const code = char.codePointAt(0);
-      return code < 0x1f1e6 || code > 0x1f1ff;
-    })
-    .join("");
 }
 
 function normalizePhone(value) {
@@ -3786,13 +2912,6 @@ function formatPortalPaymentAmountFromUsdt(db, valueUsdt, payment) {
     return `${new Intl.NumberFormat("es-CO", { maximumFractionDigits: 0 }).format(Math.round(localAmount))} ${payment.currency}`;
   }
   return formatPaymentAmount(localAmount, { ...payment, amountMode: "" });
-}
-
-function normalizeForMatch(value) {
-  return cleanText(stripCountryFlags(value), 180)
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
 }
 
 function parseClientText(value) {
