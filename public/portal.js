@@ -61,13 +61,31 @@ function paymentAmountText(value, payment = currentPayment()) {
   return `$${amount.toFixed(2)} ${payment?.currency || "USD"}`;
 }
 
+function paymentFlag(payment = currentPayment()) {
+  const country = String(payment?.country || "");
+  const byCountry = {
+    Mexico: "🇲🇽",
+    Peru: "🇵🇪",
+    Colombia: "🇨🇴",
+    Chile: "🇨🇱",
+    Global: "🌎",
+  };
+  return byCountry[country] || "🌎";
+}
+
+function paymentOptionLabel(payment) {
+  if (!payment) return "Método de pago";
+  return `${paymentFlag(payment)} ${payment.label}`;
+}
+
 function compatiblePaymentMethodsForCustomer() {
   const methods = state.catalog?.paymentMethods || [];
   const country = state.customer?.client?.country;
   if (!country) return methods;
   const local = methods.filter((payment) => payment.country === country);
   const global = methods.filter((payment) => payment.globalOption);
-  return local.concat(global);
+  const others = methods.filter((payment) => payment.country !== country && !payment.globalOption);
+  return local.concat(global, others);
 }
 
 function preferredPaymentForCustomer() {
@@ -317,7 +335,7 @@ function renderCatalog() {
     compatiblePayments.forEach((payment) => {
       const option = document.createElement("option");
       option.value = payment.code;
-      option.textContent = payment.label;
+      option.textContent = paymentOptionLabel(payment);
       paymentSelect.append(option);
     });
     const previousOption = Array.from(paymentSelect.options).find((option) => option.value === previousValue);
@@ -391,12 +409,14 @@ function updateQuote() {
   const unitUsdtNode = $("#currentUnitPriceUsdt");
   const currencyLabel = $("#currentCurrencyLabel");
   const priceHint = $("#currentPriceHint");
+  const paymentBadge = $("#currentPaymentBadge");
   if (unitNode) unitNode.textContent = paymentAmountText(estimate.unit, payment);
   if (unitUsdtNode) unitUsdtNode.textContent = money(estimate.unit);
-  if (currencyLabel) currencyLabel.textContent = payment?.currency === "USDT" ? "USDT" : payment?.currency || "Tu moneda";
-  if (priceHint) priceHint.textContent = `${paymentRateHint(payment)} ${shortLabel}.`;
+  if (currencyLabel) currencyLabel.textContent = `${paymentFlag(payment)} ${payment?.currency || "Tu moneda"}`;
+  if (priceHint) priceHint.textContent = `${shortLabel}.`;
+  if (paymentBadge) paymentBadge.textContent = paymentOptionLabel(payment);
   $("#quoteTotal").textContent = paymentAmountText(estimate.total, payment);
-  $("#quoteHint").textContent = `${paymentRateHint(payment)} Backend confirma monto exacto.`;
+  $("#quoteHint").textContent = `${shortLabel}. AriadGSM confirma monto exacto.`;
 }
 
 function customerCanRequestApprovalOptions() {

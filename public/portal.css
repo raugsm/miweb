@@ -507,7 +507,6 @@ textarea:focus {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
-  margin-top: 6px;
 }
 
 .flow-price-lines span {
@@ -530,6 +529,48 @@ textarea:focus {
   color: var(--ink);
   font-size: 0.95rem;
   font-weight: 950;
+  overflow-wrap: anywhere;
+}
+
+.payment-choice {
+  display: grid;
+  gap: 6px;
+}
+
+.payment-choice select {
+  min-height: 40px;
+  border-color: #c8dcff;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  font-weight: 900;
+}
+
+.flow-price-card {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(244, 249, 255, 0.96) 100%);
+}
+
+.flow-price-card .flow-price-lines span:first-child {
+  border-color: #bfd4ff;
+  background: #f7fbff;
+}
+
+.flow-price-card small {
+  color: #45617f;
+}
+
+.payment-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 7px 10px;
+  border: 1px solid #dce7f7;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #314660;
+  font-size: 0.82rem;
+  font-weight: 900;
   overflow-wrap: anywhere;
 }
 

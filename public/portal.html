@@ -135,6 +135,9 @@
               <article class="flow-step-card flow-price-card">
                 <span>1</span>
                 <strong>Precio</strong>
+                <label class="payment-choice">País de pago
+                  <select name="paymentMethod" id="paymentSelect" required></select>
+                </label>
                 <div class="flow-price-lines">
                   <span><em>USDT</em><b id="currentUnitPriceUsdt">-</b></span>
                   <span><em id="currentCurrencyLabel">Tu moneda</em><b id="currentUnitPrice">-</b></span>
@@ -154,7 +157,7 @@
               <article class="flow-step-card flow-payment-card">
                 <span>3</span>
                 <strong>Pago</strong>
-                <label>Metodo de pago <select name="paymentMethod" id="paymentSelect" required></select></label>
+                <div class="payment-chip" id="currentPaymentBadge">Método de pago</div>
                 <div class="flow-mini-quote">
                   <div>
                     <em>Total estimado</em>

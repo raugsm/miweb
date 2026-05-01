@@ -1060,8 +1060,8 @@ function defaultPortalPaymentForCountry(country) {
 
 function resolvePortalPaymentForClient(paymentCode, client) {
   const code = cleanText(paymentCode, 60);
-  const compatible = allowedPortalPaymentMethodsForCountry(client?.country);
-  return compatible.find((payment) => payment.code === code) || defaultPortalPaymentForCountry(client?.country);
+  const allowed = allowedPortalPaymentMethods();
+  return allowed.find((payment) => payment.code === code) || defaultPortalPaymentForCountry(client?.country);
 }
 
 function publicPortalCatalog(db = null) {
