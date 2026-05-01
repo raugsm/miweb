@@ -5,7 +5,9 @@
   "description": "MVP interno para login, registro y roles de AriadGSM.",
   "type": "module",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test test/phase3a.contract.test.js test/phase4.smoke.test.js",
+    "test:smoke": "node --test test/phase4.smoke.test.js"
   },
   "engines": {
     "node": ">=20"
