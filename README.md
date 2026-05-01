@@ -36,7 +36,12 @@ ARIAD_SMTP_PORT=587
 ARIAD_SMTP_SECURE=false
 ARIAD_SMTP_USER=<usuario smtp>
 ARIAD_SMTP_PASS=<password o api key smtp>
+ARIAD_CUSTOMER_MODULE_URL=<URL publica del Customer Module .exe; ej. una GitHub Release>
 ```
+
+`ARIAD_CUSTOMER_MODULE_URL` alimenta el boton "Descargar Customer Module" del paso 4 del portal cliente. Si la variable esta vacia, el portal muestra "Pidelo por WhatsApp 3" en lugar del boton. El binario no se versiona en este repo: subelo como adjunto a un GitHub Release y pega esa URL en Render.
+
+`ARIAD_TECHNICIAN_SWAP_MS` (opcional, default 10000) controla la duracion en milisegundos de la ventana de bloqueo cuando se cambia de tecnico activo. Solo bajalo a valores menores (>= 100) en entornos de test.
 
 En Render, adjuntar un disco persistente en `/opt/render/project/src/storage`.
 
