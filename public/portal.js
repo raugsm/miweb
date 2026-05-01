@@ -34,12 +34,26 @@ function money(value) {
   return `${Number(value || 0).toFixed(2)} USDT`;
 }
 
-function paymentAmountText(value, payment = currentPayment()) {
+function exchangeRateForPayment(payment = currentPayment()) {
+  if (!payment?.currency || payment.currency === "USDT") return 1;
+  const rate = (state.catalog?.exchangeRates || []).find((candidate) => candidate.currency === payment.currency);
+  return Number(rate?.ratePerUsdt || 0);
+}
+
+function paymentCurrencyAmount(value, payment = currentPayment()) {
   const amount = Number(value || 0);
+  if (!Number.isFinite(amount)) return 0;
+  if (!payment || payment.currency === "USDT") return amount;
+  const rate = exchangeRateForPayment(payment);
+  return rate > 0 ? amount * rate : null;
+}
+
+function paymentAmountText(value, payment = currentPayment()) {
+  const amount = paymentCurrencyAmount(value, payment);
+  if (amount === null) return `Tasa pendiente ${payment?.currency || ""}`.trim();
   if (!Number.isFinite(amount)) return "";
   if (payment?.amountMode === "thousands") {
-    const normalizedAmount = amount > 0 && amount < 1000 ? Math.round(amount * 1000) : Math.round(amount);
-    return `${new Intl.NumberFormat("es-CO", { maximumFractionDigits: 0 }).format(normalizedAmount)} ${payment.currency}`;
+    return `${new Intl.NumberFormat("es-CO", { maximumFractionDigits: 0 }).format(Math.round(amount))} ${payment.currency}`;
   }
   if (payment?.currency === "PEN") return `S/ ${amount.toFixed(2)}`;
   if (payment?.currency === "USDT") return `${amount.toFixed(2)} USDT`;
@@ -66,6 +80,13 @@ function currentPayment() {
   return compatiblePaymentMethodsForCustomer().find((payment) => payment.code === paymentCode) || preferredPaymentForCustomer();
 }
 
+function paymentRateHint(payment = currentPayment()) {
+  if (!payment?.currency || payment.currency === "USDT") return "Pago en USDT. Sin conversion local.";
+  const rate = exchangeRateForPayment(payment);
+  if (!rate) return `Tasa ${payment.currency} no configurada. AriadGSM confirmara el monto.`;
+  return `Tasa: 1 USDT = ${new Intl.NumberFormat("es-PE", { maximumFractionDigits: 4 }).format(rate)} ${payment.currency}.`;
+}
+
 function paymentText(payment, totalText = "") {
   if (!payment) return "";
   return [
@@ -76,15 +97,23 @@ function paymentText(payment, totalText = "") {
   ].filter(Boolean).join("\n");
 }
 
+function operationCode(order, item = null) {
+  const base = order?.code || "CL-YYYYMMDD-001";
+  const sequence = Number(item?.sequence || 1);
+  return `${base}-${String(sequence).padStart(2, "0")}`;
+}
+
 function connectionGuideText(order = null) {
+  const firstItem = order?.items?.[0] || null;
+  const ticketCode = order ? operationCode(order, firstItem) : "CL-YYYYMMDD-001-01";
   return [
-    "AriadGSM - Preparacion Xiaomi FRP Express",
+    "AriadGSM - Conexion Xiaomi FRP Express",
     order?.code ? `Pedido: ${order.code}` : "",
     "",
-    "1. Ten tu PC encendida y con internet estable.",
-    "2. Conecta el Xiaomi por cable USB directo a la PC.",
-    "3. Abre USB Redirector y espera indicaciones de AriadGSM.",
-    "4. No desconectes el equipo mientras el tecnico este procesando.",
+    "1. Abre USB Redirector Technician Edition.",
+    "2. En Technician ID escribe la DDNS indicada por AriadGSM.",
+    `3. En Additional information escribe: ${ticketCode}`,
+    "4. Pulsa Connect y no desconectes el equipo mientras el tecnico procesa.",
     "",
     "Cuando estes listo, marca 'Estoy listo para conectar' en el portal.",
   ].filter(Boolean).join("\n");
@@ -278,6 +307,33 @@ function renderCatalog() {
   renderTurnstileWidgets().catch((error) => setMessage($("#authMessage"), error.message, "error"));
 }
 
+function itemLinesFromText(text) {
+  return String(text || "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+}
+
+function detectedItemCount() {
+  const lines = itemLinesFromText($("#orderForm textarea[name='items']")?.value || "");
+  return Math.max(1, Math.min(50, lines.length || 1));
+}
+
+function syncDetectedItems() {
+  const count = detectedItemCount();
+  const quantityInput = $("#orderForm input[name='quantity']");
+  if (quantityInput) quantityInput.value = String(count);
+  const summary = $("#detectedItemsSummary");
+  if (summary) {
+    const word = count === 1 ? "equipo detectado" : "equipos detectados";
+    summary.textContent = `${count} ${word}. Usa una linea por equipo para calcular el total.`;
+  }
+  const preview = $("#previewOperationCode");
+  if (preview) {
+    preview.textContent = count === 1
+      ? "CL-YYYYMMDD-001-01"
+      : `CL-YYYYMMDD-001-01 ... -${String(count).padStart(2, "0")}`;
+  }
+  return count;
+}
+
 function estimatePortalPrice(quantity) {
   const qty = Math.max(1, Math.min(50, Number.parseInt(quantity, 10) || 1));
   const service = state.catalog?.services?.[0];
@@ -301,14 +357,28 @@ function estimatePortalPrice(quantity) {
 }
 
 function updateQuote() {
-  const qty = $("#orderForm input[name='quantity']")?.value || 1;
+  const qty = syncDetectedItems();
   const estimate = estimatePortalPrice(qty);
+  const payment = currentPayment();
+  const shortLabel = String(estimate.label || "Precio base")
+    .replace("Precio base. Beneficios bloqueados para este dispositivo.", "Precio base");
   const unitNode = $("#currentUnitPrice");
+  const unitUsdtNode = $("#currentUnitPriceUsdt");
+  const currencyLabel = $("#currentCurrencyLabel");
   const priceHint = $("#currentPriceHint");
-  if (unitNode) unitNode.textContent = paymentAmountText(estimate.unit);
-  if (priceHint) priceHint.textContent = `${estimate.label}. El total cambia segun cantidad y metodo de pago.`;
-  $("#quoteTotal").textContent = paymentAmountText(estimate.total);
-  $("#quoteHint").textContent = `${estimate.label}. El backend confirma el monto exacto.`;
+  if (unitNode) unitNode.textContent = paymentAmountText(estimate.unit, payment);
+  if (unitUsdtNode) unitUsdtNode.textContent = money(estimate.unit);
+  if (currencyLabel) currencyLabel.textContent = payment?.currency === "USDT" ? "USDT" : payment?.currency || "Tu moneda";
+  if (priceHint) priceHint.textContent = `${paymentRateHint(payment)} ${shortLabel}.`;
+  $("#quoteTotal").textContent = paymentAmountText(estimate.total, payment);
+  $("#quoteHint").textContent = `${paymentRateHint(payment)} Backend confirma monto exacto.`;
+}
+
+function customerCanRequestApprovalOptions() {
+  const status = normalizeForMatch(state.customer?.client?.status || "");
+  const markedClient = ["vip", "empresa"].includes(status);
+  const benefit = state.customer?.benefit;
+  return Boolean(markedClient || (benefit?.usableNow && Number(benefit?.vipUnitPrice || 0) > 0));
 }
 
 function renderCustomer() {
@@ -327,6 +397,11 @@ function renderCustomer() {
   $("#verificationCard").classList.toggle("hidden", customer.client.emailVerified);
   $("#orderSubmitButton").disabled = !customer.client.emailVerified;
   $("#copyPaymentButton").disabled = !customer.client.emailVerified;
+  const canRequestApproval = customerCanRequestApprovalOptions();
+  $("#approvalOptions")?.classList.toggle("hidden", !canRequestApproval);
+  if (!canRequestApproval) {
+    $$("#approvalOptions input[type='checkbox']").forEach((input) => { input.checked = false; });
+  }
   renderOrders(customer.orders || []);
   startOrdersLive();
 }
@@ -384,6 +459,40 @@ function orderCopyText(order) {
   ].join("\n");
 }
 
+function trackingStage(order) {
+  if (order?.publicStatus === "FINALIZADO") return "DONE";
+  if (order?.publicStatus === "EN_PROCESO" || (order?.items || []).some((item) => item.status === "EN_PROCESO")) return "PROCESS";
+  return "RECEIVED";
+}
+
+function trackingMarkup(order) {
+  const stage = trackingStage(order);
+  const steps = [
+    { code: "RECEIVED", label: "Pedido recibido" },
+    { code: "PROCESS", label: "En proceso" },
+    { code: "DONE", label: "Done" },
+  ];
+  const activeIndex = steps.findIndex((step) => step.code === stage);
+  return `
+    <strong>Seguimiento</strong>
+    <div class="tracking-steps" aria-label="Estado principal del pedido">
+      ${steps.map((step, index) => `
+        <span class="tracking-step ${index < activeIndex ? "done" : ""} ${index === activeIndex ? "active" : ""}">
+          ${escapeHtml(step.label)}
+        </span>
+      `).join("")}
+    </div>
+  `;
+}
+
+function orderAlertText(order) {
+  if (order?.publicStatus === "REVISION_COMPATIBILIDAD") return "Modelo en revision: AriadGSM confirmara si aplica FRP Express antes de pedir pago.";
+  if (order?.publicStatus === "REQUIERE_ATENCION") return order.nextAction || "Se requiere atencion: revisa la indicacion de AriadGSM.";
+  if ((order?.items || []).some((item) => item.status === "REQUIERE_REVISION")) return "Hay un equipo en revision. Revisa el detalle antes de continuar.";
+  if (order?.paymentStatus === "RECHAZADO" || order?.proofStatus === "RECHAZADO") return "Comprobante rechazado. Sube una imagen valida del pago.";
+  return "";
+}
+
 function renderOrders(orders) {
   const list = $("#ordersList");
   list.innerHTML = "";
@@ -402,6 +511,11 @@ function renderOrders(orders) {
     $(".status-pill", card).textContent = statusLabel(order.publicStatus);
     $(".order-meta", card).textContent = `${order.quantity} equipo(s) - ${order.priceFormatted || money(order.totalPrice)} - ${order.discountLabel || "Precio base"}`;
     const inCompatibilityReview = order.publicStatus === "REVISION_COMPATIBILIDAD";
+    $(".tracking-panel", card).innerHTML = trackingMarkup(order);
+    const alertText = orderAlertText(order);
+    const alertNode = $(".order-alert", card);
+    alertNode.classList.toggle("hidden", !alertText);
+    alertNode.textContent = alertText;
     $(".next-action", card).innerHTML = [
       `<strong>Proxima accion</strong>`,
       `<span>${escapeHtml(customerNextAction(order))}</span>`,
@@ -420,9 +534,16 @@ function renderOrders(orders) {
       const reason = message ? `<br><small class="danger-text">${escapeHtml(message)}</small>` : "";
       return `<div class="item-row">#${item.sequence} ${escapeHtml(detail)}<br><small>${escapeHtml(itemStatusLabel(item.status))}${escapeHtml(done)}</small>${reason}</div>`;
     }).join("");
+    const connectionCodes = (order.items || []).map((item) => `
+      <div class="connection-code-row">
+        <span>#${item.sequence} ${escapeHtml(item.model || item.raw || "Equipo")}</span>
+        <code>${escapeHtml(operationCode(order, item))}</code>
+      </div>
+    `).join("");
     $(".connection-block", card).innerHTML = `
       <strong>Preparacion de conexion</strong>
-      <span>Ten PC, cable USB directo y USB Redirector abierto. Marca listo cuando ya puedas atender al tecnico.</span>
+      <span>Technician ID = DDNS AriadGSM. Additional information = codigo de operacion por equipo.</span>
+      <div class="connection-codes">${connectionCodes || `<div class="connection-code-row"><span>Equipo</span><code>${escapeHtml(operationCode(order))}</code></div>`}</div>
     `;
     const fileInput = $("input[type='file']", card);
     const loggedCustomer = Boolean(state.customer?.user && state.customer?.client);
@@ -512,7 +633,7 @@ function escapeHtml(value) {
 }
 
 function parseItems(text, quantity) {
-  const lines = String(text || "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const lines = itemLinesFromText(text);
   return Array.from({ length: quantity }, (_, index) => {
     const line = lines[index] || "";
     const imei = (line.match(/\b\d{14,16}\b/) || [])[0] || "";
@@ -720,6 +841,7 @@ function wireEvents() {
     const message = $("#orderMessage");
     setMessage(message, "");
     try {
+      syncDetectedItems();
       const data = Object.fromEntries(new FormData(form));
       const quantity = Math.max(1, Math.min(50, Number.parseInt(data.quantity, 10) || 1));
       const payload = await api("/api/portal/orders/frp", {
@@ -754,10 +876,10 @@ function wireEvents() {
     }
   });
 
-  $("#orderForm input[name='quantity']").addEventListener("input", updateQuote);
+  $("#orderForm textarea[name='items']").addEventListener("input", updateQuote);
   $("#paymentSelect").addEventListener("change", updateQuote);
   $("#copyPaymentButton").addEventListener("click", () => {
-    const estimate = estimatePortalPrice($("#orderForm input[name='quantity']").value);
+    const estimate = estimatePortalPrice(syncDetectedItems());
     copyText(paymentText(currentPayment(), paymentAmountText(estimate.total)), $("#orderMessage"));
   });
   $("#copyConnectionGuideButton")?.addEventListener("click", () => {

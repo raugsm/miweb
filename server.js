@@ -1066,6 +1066,7 @@ function resolvePortalPaymentForClient(paymentCode, client) {
 
 function publicPortalCatalog(db = null) {
   const pricing = db ? frpCurrentPricing(db) : null;
+  const pricingConfig = normalizePricingConfig(db?.pricingConfig || defaultPricingConfig());
   const servicesForPortal = portalPublicServices
     .filter((service) => service.enabled)
     .map((service) => service.internalServiceCode === frpServiceCode && pricing?.available
@@ -1078,6 +1079,12 @@ function publicPortalCatalog(db = null) {
     statuses: publicOrderStatuses,
     quantityTiers: pricing?.available ? frpDynamicQuantityTiers(pricing) : frpQuantityTiers,
     monthlyTiers: pricing?.available ? frpDynamicMonthlyTiers(pricing) : frpMonthlyTiers,
+    exchangeRates: pricingConfig.exchangeRates.map((rate) => ({
+      country: rate.country,
+      currency: rate.currency,
+      ratePerUsdt: rate.currency === "USDT" ? 1 : moneyNumber(rate.ratePerUsdt || 0),
+      updatedAt: rate.updatedAt || "",
+    })),
     phoneCountries: portalPhoneCountryHints,
     turnstileEnabled: Boolean(turnstileSecret && turnstileSiteKey),
     turnstileSiteKey,
@@ -3769,6 +3776,18 @@ function formatPaymentAmount(value, payment) {
   return `$${amount.toFixed(2)} ${payment?.currency || "USD"}`;
 }
 
+function formatPortalPaymentAmountFromUsdt(db, valueUsdt, payment) {
+  const amountUsdt = moneyNumber(valueUsdt);
+  if (!payment || payment.currency === "USDT") return formatPaymentAmount(amountUsdt, payment);
+  const exchange = exchangeRateForCurrency(db, payment.currency);
+  if (!exchange.ratePerUsdt) return `Monto pendiente ${payment.currency}`;
+  const localAmount = moneyNumber(amountUsdt * exchange.ratePerUsdt);
+  if (payment.amountMode === "thousands") {
+    return `${new Intl.NumberFormat("es-CO", { maximumFractionDigits: 0 }).format(Math.round(localAmount))} ${payment.currency}`;
+  }
+  return formatPaymentAmount(localAmount, { ...payment, amountMode: "" });
+}
+
 function normalizeForMatch(value) {
   return cleanText(stripCountryFlags(value), 180)
     .normalize("NFD")
@@ -4276,12 +4295,24 @@ async function handleApi(req, res, pathname) {
     const payment = resolvePortalPaymentForClient(requestedPaymentCode, context.client);
     if (!service) return sendJson(res, 503, { error: "Xiaomi FRP no esta disponible en el portal." });
     if (!payment) return sendJson(res, 400, { error: "Metodo de pago invalido para tu pais." });
-    const urgentRequested = Boolean(input.urgentRequested);
-    const postpayRequested = Boolean(input.postpayRequested);
-    const postpayEligible = ["VIP", "EMPRESA", "VERIFICADO"].includes(normalizeCustomerStatus(context.client.status));
     reconcilePortalClientLink(db, context.client, context.user.id);
     const benefit = customerBenefitFor(db, context.client.id, context.client.masterClientId || "");
     const canUseBenefits = customerCanUseBenefits(context, benefit);
+    const customerStatus = normalizeCustomerStatus(context.client.status);
+    const approvalOptionsEligible = canUseBenefits && (
+      ["VIP", "EMPRESA"].includes(customerStatus)
+      || Number(benefit.vipUnitPrice || 0) > 0
+    );
+    const urgentRequested = approvalOptionsEligible && Boolean(input.urgentRequested);
+    const postpayRequested = approvalOptionsEligible && Boolean(input.postpayRequested);
+    if ((input.urgentRequested || input.postpayRequested) && !approvalOptionsEligible) {
+      audit(db, context.user.id, "PORTAL_APPROVAL_OPTIONS_BLOCKED", context.client.id, {
+        status: customerStatus,
+        canUseBenefits,
+        requestedUrgent: Boolean(input.urgentRequested),
+        requestedPostpay: Boolean(input.postpayRequested),
+      });
+    }
     const suggestion = portalFrpPriceSuggestion(db, context.client.id, quantity, canUseBenefits, benefit, context.client.masterClientId || benefit.masterClientId || "");
     if (!suggestion.available) {
       audit(db, context.user.id, "PORTAL_FRP_ORDER_BLOCKED_PRICING_UNAVAILABLE", context.client.id, {
@@ -4383,7 +4414,7 @@ async function handleApi(req, res, pathname) {
       unitPrice: suggestion.unitPrice,
       totalPrice: suggestion.total,
       pricingSnapshot: suggestion.pricingSnapshot,
-      priceFormatted: formatPaymentAmount(suggestion.total, payment),
+      priceFormatted: formatPortalPaymentAmountFromUsdt(db, suggestion.total, payment),
       discountLabel: suggestion.label,
       discountLocked: suggestion.discountLocked,
       monthlyUsageAtCreation: suggestion.monthlyUsage,
@@ -4396,7 +4427,7 @@ async function handleApi(req, res, pathname) {
       urgentRequested,
       urgentStatus: urgentRequested ? "SOLICITADO" : "",
       postpayRequested,
-      postpayStatus: postpayRequested ? (postpayEligible ? "SOLICITADO" : "NO_ELEGIBLE") : "",
+      postpayStatus: postpayRequested ? "SOLICITADO" : "",
       publicStatus: initialPublicStatus,
       compatibilityReviewRequired,
       createdAt: nowIso(),

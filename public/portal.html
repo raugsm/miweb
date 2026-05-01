@@ -129,69 +129,79 @@
             </div>
             <span class="channel-pill">WhatsApp 3</span>
           </div>
-          <div class="flow-steps" aria-label="Etapas Xiaomi FRP Express">
-            <article><span>1</span><strong>Precio</strong><small>Revisa el monto actual por equipo.</small></article>
-            <article><span>2</span><strong>Solicitud</strong><small>Registra uno o varios equipos.</small></article>
-            <article><span>3</span><strong>Pago</strong><small>Copia datos y sube comprobante.</small></article>
-            <article><span>4</span><strong>Conexión</strong><small>Prepara USB Redirector y espera turno.</small></article>
-            <article><span>5</span><strong>Done</strong><small>Recibe resultado y log final.</small></article>
-          </div>
-        </section>
+          <form id="orderForm" class="flow-order-form">
+            <input name="quantity" type="hidden" value="1" />
+            <div class="flow-steps compact" aria-label="Etapas Xiaomi FRP Express">
+              <article class="flow-step-card flow-price-card">
+                <span>1</span>
+                <strong>Precio</strong>
+                <div class="flow-price-lines">
+                  <span><em>USDT</em><b id="currentUnitPriceUsdt">-</b></span>
+                  <span><em id="currentCurrencyLabel">Tu moneda</em><b id="currentUnitPrice">-</b></span>
+                </div>
+                <small id="currentPriceHint">Se calcula con el proveedor FRP activo.</small>
+              </article>
 
-        <section class="request-card">
-          <div class="section-head">
-            <div>
-              <p class="eyebrow">Nuevo pedido</p>
-              <h2>Xiaomi FRP Express</h2>
+              <article class="flow-step-card flow-request-card">
+                <span>2</span>
+                <strong>Solicitud</strong>
+                <label>Equipos
+                  <textarea name="items" rows="3" placeholder="Ej: Redmi Note 12"></textarea>
+                </label>
+                <small id="detectedItemsSummary">1 equipo detectado para esta solicitud.</small>
+              </article>
+
+              <article class="flow-step-card flow-payment-card">
+                <span>3</span>
+                <strong>Pago</strong>
+                <label>Metodo de pago <select name="paymentMethod" id="paymentSelect" required></select></label>
+                <div class="flow-mini-quote">
+                  <div>
+                    <em>Total estimado</em>
+                    <b id="quoteTotal">25.00 USDT</b>
+                    <small id="quoteHint">Precio base. El backend confirma el monto exacto.</small>
+                  </div>
+                  <button id="copyPaymentButton" class="ghost" type="button">Copiar</button>
+                </div>
+                <div class="voucher-preview" aria-label="Comprobante demo">
+                  <strong>Comprobante</strong>
+                  <span>Al crear la solicitud, podras arrastrar el pago en Mis ordenes.</span>
+                </div>
+              </article>
+
+              <article class="flow-step-card flow-connect-card">
+                <span>4</span>
+                <strong>Conexion</strong>
+                <div class="redirector-mini" aria-label="Guia visual USB Redirector">
+                  <div class="redirector-window">
+                    <div class="window-bar">USB Redirector</div>
+                    <label>Technician ID <code id="redirectorDdns">DDNS AriadGSM</code></label>
+                    <label>Additional information <code id="previewOperationCode">CL-YYYYMMDD-001-01</code></label>
+                    <button type="button" disabled>Connect</button>
+                  </div>
+                </div>
+                <div class="connection-actions">
+                  <button id="copyConnectionGuideButton" class="ghost" type="button">Copiar guia</button>
+                  <button id="orderSubmitButton" type="submit">Crear solicitud</button>
+                </div>
+              </article>
             </div>
-            <span class="channel-pill">WhatsApp 3</span>
-          </div>
 
-          <div class="price-prep-grid">
-            <article class="price-panel">
-              <span>Precio actual por equipo</span>
-              <strong id="currentUnitPrice">-</strong>
-              <small id="currentPriceHint">Se calcula con el proveedor FRP activo.</small>
-            </article>
-            <article class="prep-panel">
-              <span>Preparación USB Redirector</span>
-              <strong>Ten PC, cable y USB Redirector abierto.</strong>
-              <small>No desconectes el equipo cuando el técnico esté procesando.</small>
-              <button id="copyConnectionGuideButton" class="ghost" type="button">Copiar guía</button>
-            </article>
-          </div>
-
-          <form id="orderForm" class="order-form">
-            <label>Cantidad de equipos <input name="quantity" type="number" min="1" max="50" value="1" required /></label>
-            <label>Metodo de pago <select name="paymentMethod" id="paymentSelect" required></select></label>
-            <label class="wide">Equipos
-              <textarea name="items" rows="5" placeholder="Un equipo por linea. Ej: Redmi Note 12"></textarea>
-            </label>
-            <label class="wide">Nota para preparacion
-              <textarea name="note" rows="3" placeholder="Detalles de conexion, horario o aclaraciones"></textarea>
-            </label>
-            <div class="quote-box wide">
-              <div>
-                <span>Total estimado</span>
-                <strong id="quoteTotal">25.00 USDT</strong>
-                <small id="quoteHint">Precio base. El backend confirma el monto exacto.</small>
-              </div>
-              <button id="copyPaymentButton" class="ghost" type="button">Copiar pago</button>
+            <div class="flow-submit-area">
+              <details class="request-options hidden" id="approvalOptions">
+                <summary>Opciones sujetas a aprobacion</summary>
+                <label class="inline-option">
+                  <input name="urgentRequested" type="checkbox" />
+                  Solicitar atencion urgente
+                </label>
+                <label class="inline-option">
+                  <input name="postpayRequested" type="checkbox" />
+                  Solicitar postpago
+                </label>
+                <small>Estas opciones no saltan validacion. AriadGSM decide si aplican.</small>
+              </details>
+              <div class="turnstile-box" data-turnstile-widget="order"></div>
             </div>
-            <details class="request-options wide">
-              <summary>Opciones sujetas a aprobación</summary>
-              <label class="inline-option">
-                <input name="urgentRequested" type="checkbox" />
-                Solicitar atención urgente
-              </label>
-              <label class="inline-option">
-                <input name="postpayRequested" type="checkbox" />
-                Solicitar postpago
-              </label>
-              <small>Estas opciones no saltan validación. AriadGSM decide si aplican.</small>
-            </details>
-            <div class="turnstile-box wide" data-turnstile-widget="order"></div>
-            <button id="orderSubmitButton" type="submit">Crear solicitud</button>
           </form>
           <p id="orderMessage" class="message" aria-live="polite"></p>
         </section>
@@ -220,6 +230,8 @@
           <span class="status-pill"></span>
         </div>
         <div class="order-meta"></div>
+        <div class="tracking-panel"></div>
+        <div class="order-alert hidden"></div>
         <div class="next-action"></div>
         <div class="payment-block"></div>
         <div class="item-list"></div>
