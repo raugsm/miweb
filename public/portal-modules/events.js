@@ -132,7 +132,10 @@ export function wireEvents() {
       state.customer = payload.customer;
       state.activePaymentOrderId = orderNeedsPaymentProof(payload.order) ? payload.order.id : "";
       const selectedPayment = payload.order?.paymentMethod || data.paymentMethod;
-      form.reset();
+      // No reseteamos el form aqui: applyFlowState() en renderCustomer detecta la
+      // transicion non-draft -> draft (cuando la orden cierre) y limpia entonces.
+      // Mientras la orden este viva, los pasos 1-3 quedan congelados visualmente
+      // pero conservan los valores ingresados.
       renderCatalog();
       if (paymentSelectedInDropdown(selectedPayment)) {
         $("#paymentSelect").value = selectedPayment;
@@ -142,7 +145,7 @@ export function wireEvents() {
       resetTurnstile("order");
       const createdMessage = payload.order?.publicStatus === "REVISION_COMPATIBILIDAD"
         ? `Solicitud ${payload.order.code} creada para revision de compatibilidad. Espera confirmacion antes de pagar.`
-        : `Solicitud ${payload.order.code} creada. Paso 3 listo para copiar pago y subir comprobante.`;
+        : `Solicitud ${payload.order.code} creada. Sube tu comprobante para continuar.`;
       setMessage(message, createdMessage, "success");
     } catch (error) {
       setMessage(message, error.message, "error");

@@ -507,3 +507,74 @@
   color: var(--muted);
   font-size: 0.9rem;
 }
+
+/* QUE: bloqueo visual de las tarjetas de pasos 1-3 una vez que existe una orden activa.
+   POR QUE: cuando el cliente ya creo solicitud y esta esperando comprobante o conectado,
+   los datos de pasos 1-3 quedan inmutables. Bloquemos la interaccion sin esconder el
+   contenido para que el cliente pueda revisarlos. Excepciones: input[type=file] y los
+   botones quedan clickeables porque el dropzone del paso 3 sigue activo y "Cuentas"
+   tambien debe poder reusarse. */
+.step-locked {
+  opacity: 0.85;
+  cursor: not-allowed;
+}
+
+.step-locked strong::after {
+  content: " 🔒";
+  margin-left: 6px;
+  font-size: 0.9em;
+  filter: grayscale(0.3);
+}
+
+.step-locked input:not([type="file"]),
+.step-locked select,
+.step-locked textarea {
+  pointer-events: none;
+  background: #f6f8fc;
+}
+
+/* QUE: aviso preventivo arriba del dropzone, solo visible en awaiting_proof.
+   POR QUE: el cliente debe revisar pasos 1-3 antes de subir; despues no podra editarlos. */
+.flow-proof-warning {
+  margin: 0 0 8px;
+  padding: 10px 12px;
+  border: 1px solid #f1c976;
+  border-radius: 8px;
+  background: #fff7e6;
+  color: #6a4b15;
+  font-size: 0.86rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+/* QUE: estados del CTA del paso 4 cuando el flujo no esta en draft.
+   POR QUE: el boton Crear solicitud se reemplaza por un mensaje de espera (awaiting_proof)
+   o por un boton Equipo conectado (connected). Estilos discretos pero diferenciados. */
+.flow-cta-waiting {
+  display: grid;
+  place-items: center;
+  min-height: 40px;
+  padding: 10px 12px;
+  border: 1px solid #d5dfef;
+  border-radius: 8px;
+  background: #f6f8fc;
+  color: var(--muted);
+  font-weight: 800;
+  font-size: 0.92rem;
+  text-align: center;
+}
+
+.flow-cta-connected {
+  min-height: 40px;
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 8px;
+  background: #0f9f6e;
+  color: #ffffff;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.flow-cta-connected:hover {
+  filter: brightness(1.05);
+}

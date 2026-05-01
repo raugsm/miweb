@@ -12,6 +12,7 @@ import {
 } from "./payments.js";
 import { stepGuideMarkup } from "./connection.js";
 import { startTechnicianPolling, stopTechnicianPolling, wireCopyButtonsWithin } from "./technician.js";
+import { deriveFlowState } from "./flow-state.js";
 import { state } from "./state.js";
 
 export function renderStaticStepGuide() {
@@ -200,13 +201,13 @@ export function renderCustomer() {
   $("#monthlyUsage").textContent = String(customer.monthlyUsage || 0);
   $("#deviceStatus").textContent = customer.device?.authorizedForBenefits ? "Autorizado" : "Sin beneficios";
   $("#verificationCard").classList.toggle("hidden", customer.client.emailVerified);
-  $("#orderSubmitButton").disabled = !customer.client.emailVerified;
   $("#copyPaymentButton").disabled = !customer.client.emailVerified;
   const canRequestApproval = customerCanRequestApprovalOptions();
   $("#approvalOptions")?.classList.toggle("hidden", !canRequestApproval);
   if (!canRequestApproval) {
     $$("#approvalOptions input[type='checkbox']").forEach((input) => { input.checked = false; });
   }
+  applyFlowState(customer);
   updateFlowPaymentDropzone();
   renderOrders(customer.orders || []);
   startOrdersLive();
@@ -215,4 +216,52 @@ export function renderCustomer() {
     renderStaticStepGuide();
     renderOrders(state.customer?.orders || []);
   });
+}
+
+// QUE: aplica el flujo (CTA paso 4, lock 1-3, aviso preventivo, transition reset) en cada
+// renderCustomer. Centraliza aqui la reaccion a deriveFlowState para que un solo
+// punto del codigo decida que ve el cliente segun la fase.
+function applyFlowState(customer) {
+  const flowState = deriveFlowState(customer);
+  const previous = state.lastFlowState || "draft";
+
+  // Transition non-draft a draft: orden cerrada o cancelada; ahora podemos limpiar el form.
+  if (previous !== "draft" && flowState === "draft") {
+    document.querySelector("#orderForm")?.reset();
+  }
+  state.lastFlowState = flowState;
+
+  renderFlowCta(flowState, customer);
+  applyStepLocks(flowState);
+  toggleProofWarning(flowState);
+}
+
+function renderFlowCta(flowState, customer) {
+  const cta = document.querySelector("#orderForm .connection-actions");
+  if (!cta) return;
+  if (flowState === "awaiting_proof") {
+    cta.innerHTML = '<div class="flow-cta-waiting" role="status">⏳ Esperando tu comprobante para continuar</div>';
+    return;
+  }
+  if (flowState === "connected") {
+    cta.innerHTML = '<button id="orderSubmitButton" class="flow-cta-connected" type="button" data-flow-action="notify-connected">Equipo conectado</button>';
+    return;
+  }
+  // draft
+  cta.innerHTML = '<button id="orderSubmitButton" type="submit">Crear solicitud</button>';
+  const submit = $("#orderSubmitButton");
+  if (submit) submit.disabled = !customer.client.emailVerified;
+}
+
+function applyStepLocks(flowState) {
+  const lock = flowState !== "draft";
+  [".flow-price-card", ".flow-request-card", ".flow-payment-card"].forEach((selector) => {
+    document.querySelector(selector)?.classList.toggle("step-locked", lock);
+  });
+}
+
+function toggleProofWarning(flowState) {
+  const warning = document.querySelector("#flowProofWarning");
+  if (!warning) return;
+  warning.classList.toggle("hidden", flowState !== "awaiting_proof");
 }
