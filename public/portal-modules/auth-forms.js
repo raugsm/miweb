@@ -10,7 +10,21 @@ import {
   updateFlowPaymentDropzone,
   updateQuote,
 } from "./payments.js";
+import { stepGuideMarkup } from "./connection.js";
+import { startTechnicianPolling, stopTechnicianPolling, wireCopyButtonsWithin } from "./technician.js";
 import { state } from "./state.js";
+
+export function renderStaticStepGuide() {
+  const container = document.querySelector("#stepGuide");
+  if (!container) return;
+  container.innerHTML = stepGuideMarkup({
+    order: null,
+    technicianState: state.activeTechnician,
+    customerName: state.customer?.client?.name || "",
+    customerModuleUrl: state.catalog?.customerModuleUrl || state.customerModuleUrl || "",
+  });
+  wireCopyButtonsWithin(container);
+}
 
 export function setTab(tab) {
   state.activeTab = tab;
@@ -177,6 +191,8 @@ export function renderCustomer() {
   $("#appPanel").classList.toggle("hidden", !logged);
   if (!logged) {
     stopOrdersLive();
+    stopTechnicianPolling();
+    renderStaticStepGuide();
     return;
   }
   $("#clientTitle").textContent = `${customer.client.name}`;
@@ -194,4 +210,9 @@ export function renderCustomer() {
   updateFlowPaymentDropzone();
   renderOrders(customer.orders || []);
   startOrdersLive();
+  renderStaticStepGuide();
+  startTechnicianPolling(() => {
+    renderStaticStepGuide();
+    renderOrders(state.customer?.orders || []);
+  });
 }

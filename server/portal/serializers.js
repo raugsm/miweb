@@ -25,6 +25,7 @@ export function createPortalSerializers({
   publicOrderStatuses,
   turnstileSecret,
   turnstileSiteKey,
+  customerModuleUrl,
 }) {
   function publicCustomerClient(client) {
     if (!client) return null;
@@ -249,6 +250,7 @@ export function createPortalSerializers({
       phoneCountries: portalPhoneCountryHints,
       turnstileEnabled: Boolean(turnstileSecret && turnstileSiteKey),
       turnstileSiteKey,
+      customerModuleUrl: customerModuleUrl || "",
     };
   }
 

@@ -1,5 +1,6 @@
 import { api } from "./api.js";
-import { connectionGuideText, operationCode, redirectorMiniGuideMarkup } from "./connection.js";
+import { operationCode, stepGuideMarkup } from "./connection.js";
+import { wireCopyButtonsWithin } from "./technician.js";
 import { $, copyText, escapeHtml, setMessage } from "./dom.js";
 import { money } from "./format.js";
 import {
@@ -118,13 +119,18 @@ export function renderOrders(orders) {
     `).join("");
     $(".connection-block", card).innerHTML = `
       <strong>Preparacion de conexion</strong>
-      <span>Mira la guia: Next, DDNS, codigo y Connect.</span>
-      ${redirectorMiniGuideMarkup(order)}
+      <span>Sigue los 4 pasos: descarga, sideload, copia datos, conecta.</span>
+      ${stepGuideMarkup({
+        order,
+        technicianState: state.activeTechnician,
+        customerName: state.customer?.client?.name || "",
+        customerModuleUrl: state.catalog?.customerModuleUrl || state.customerModuleUrl || "",
+      })}
       <div class="connection-codes">${connectionCodes || `<div class="connection-code-row"><span>Equipo</span><code>${escapeHtml(operationCode(order))}</code></div>`}</div>
     `;
+    wireCopyButtonsWithin($(".connection-block", card));
     const loggedCustomer = Boolean(state.customer?.user && state.customer?.client);
     const connectionReadyButton = $(".connection-ready", card);
-    const copyConnectionButton = $(".copy-connection", card);
     const copyOrderButton = $(".copy-order", card);
     const details = $(".order-details", card);
     const detailsToggle = $(".details-toggle", card);
@@ -135,7 +141,6 @@ export function renderOrders(orders) {
     connectionReadyButton.disabled = !loggedCustomer || Boolean(order.customerConnectionReadyAt) || !canPrepareConnection;
     connectionReadyButton.textContent = order.customerConnectionReadyAt ? "Conexion marcada" : "Estoy listo para conectar";
     connectionReadyButton.style.display = loggedCustomer && canPrepareConnection && !order.customerConnectionReadyAt ? "" : "none";
-    copyConnectionButton.style.display = loggedCustomer && (canPrepareConnection || stage === "DONE") ? "" : "none";
     copyOrderButton.textContent = stage === "DONE" ? "Copiar Done" : "Copiar datos";
     const openDetails = () => {
       const isOpen = details.classList.toggle("hidden") === false;
@@ -159,8 +164,6 @@ export function renderOrders(orders) {
       setPrimaryAction(detailsPrimaryButton);
     } else if (connectionReadyButton.style.display !== "none") {
       setPrimaryAction(connectionReadyButton);
-    } else if (copyConnectionButton.style.display !== "none") {
-      setPrimaryAction(copyConnectionButton);
     } else {
       setPrimaryAction(detailsPrimaryButton);
     }
@@ -179,7 +182,6 @@ export function renderOrders(orders) {
         setMessage(message, error.message, "error");
       }
     });
-    copyConnectionButton.addEventListener("click", () => copyText(connectionGuideText(order), $(".order-message", card)));
     copyOrderButton.addEventListener("click", () => copyText(stage === "DONE" ? orderDoneText(order) : orderCopyText(order), $(".order-message", card)));
     list.append(card);
   });

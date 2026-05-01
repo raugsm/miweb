@@ -29,3 +29,6 @@ export const productionCustomerPortalBaseUrl = "https://ariadgsm.com";
 export const portalOrdersSseHeartbeatMs = 25 * 1000;
 export const turnstileSiteKey = process.env.ARIAD_TURNSTILE_SITE_KEY || "";
 export const turnstileSecret = process.env.ARIAD_TURNSTILE_SECRET || "";
+export const customerModuleUrl = process.env.ARIAD_CUSTOMER_MODULE_URL || "";
+const parsedSwapMs = Number(process.env.ARIAD_TECHNICIAN_SWAP_MS);
+export const technicianSwapMs = Number.isFinite(parsedSwapMs) && parsedSwapMs >= 100 ? parsedSwapMs : 10_000;

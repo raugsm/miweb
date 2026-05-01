@@ -36,6 +36,8 @@ import {
   trustedDeviceVersion,
   turnstileSecret,
   turnstileSiteKey,
+  customerModuleUrl,
+  technicianSwapMs,
 } from "./server/config/constants.js";
 import {
   clientLinkSourceTypes,
@@ -100,6 +102,13 @@ import { createFrpSerializers } from "./server/frp/serializers.js";
 import { createFrpRoutes } from "./server/frp/frp-routes.js";
 import { createPortalSerializers } from "./server/portal/serializers.js";
 import { createPortalRoutes } from "./server/portal/portal-routes.js";
+import {
+  applySwitch as applyTechnicianSwitch,
+  eligibleTechnicians,
+  operatorTechnicianStatus,
+  publicActiveTechnician,
+  resolveActiveTechnician,
+} from "./server/operator/technician.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, "public");
@@ -259,6 +268,7 @@ async function ensureDb() {
       passwordResetTokens: [],
       passwordResetRequests: [],
       pricingConfig: defaultPricingConfig(),
+      activeTechnician: null,
     }, null, 2));
   }
 }
@@ -298,6 +308,7 @@ async function readDb() {
   db.frpCounters ||= {};
   db.passwordResetTokens ||= [];
   db.passwordResetRequests ||= [];
+  if (!Object.prototype.hasOwnProperty.call(db, "activeTechnician")) db.activeTechnician = null;
   const normalizedPricingConfig = normalizePricingConfig(db.pricingConfig);
   let changed = false;
   const now = Date.now();
@@ -334,6 +345,11 @@ async function readDb() {
     changed = true;
   }
   if (normalizeDailyAccountingRecords(db)) {
+    changed = true;
+  }
+  const technicianResolution = resolveActiveTechnician(db, Date.now(), technicianSwapMs);
+  if (technicianResolution.changed) {
+    db.activeTechnician = technicianResolution.state;
     changed = true;
   }
   for (const user of db.users) {
@@ -378,6 +394,7 @@ function publicUser(user) {
     workChannel: user.workChannel || "",
     permissions: normalizeUserPermissions(user.permissions),
     operatorPinSet: Boolean(user.operatorPinHash),
+    technicianRedirectorId: String(user.technicianRedirectorId || ""),
     active: user.active,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
@@ -608,6 +625,7 @@ const {
   publicOrderStatuses,
   turnstileSecret,
   turnstileSiteKey,
+  customerModuleUrl,
 });
 
 function fallbackTicketChannel(ticket, db = { users: [] }) {
@@ -3129,6 +3147,8 @@ const handlePortalApi = createPortalRoutes({
   publicCustomerState,
   publicPortalCatalog,
   publishPortalOrders,
+  publicActiveTechnician,
+  customerModuleUrl,
   readDb,
   reconcilePortalClientLink,
   removePortalOrderStream,
@@ -4209,10 +4229,52 @@ async function handleApi(req, res, pathname) {
       }
       target.permissions = nextPermissions;
     }
+    if (Object.hasOwn(input, "technicianRedirectorId")) {
+      target.technicianRedirectorId = String(input.technicianRedirectorId || "").trim().slice(0, 64);
+    }
     target.updatedAt = nowIso();
     audit(db, user.id, "USER_UPDATED", target.id, { before: previous, after: publicUser(target) });
     await writeDb(db);
     return sendJson(res, 200, { user: publicUser(target) });
+  }
+
+  if (req.method === "GET" && pathname === "/api/operator/technician/status") {
+    if (!requireUser(user, res)) return;
+    const db = await readDb();
+    const status = operatorTechnicianStatus(db, db.activeTechnician, Date.now());
+    return sendJson(res, 200, { technician: status });
+  }
+
+  if (req.method === "POST" && pathname === "/api/operator/technician/switch") {
+    if (!requireUser(user, res)) return;
+    const input = await parseJson(req);
+    const db = await readDb();
+    const now = Date.now();
+    const result = applyTechnicianSwitch(db, {
+      actor: { id: user.id, role: user.role },
+      targetUserId: String(input.targetUserId || ""),
+      durationMinutes: input.durationMinutes,
+      now,
+      swapMs: technicianSwapMs,
+    });
+    if (!result.ok) {
+      audit(db, user.id, "TECHNICIAN_SWITCH_DENIED", String(input.targetUserId || ""), { reason: result.error });
+      await writeDb(db);
+      return sendJson(res, result.status, { error: result.error });
+    }
+    db.activeTechnician = result.state;
+    audit(db, user.id, "TECHNICIAN_SWITCH_INITIATED", result.target.userId, {
+      previousUserId: result.previousUserId,
+      targetUserId: result.target.userId,
+      targetName: result.target.name,
+      targetRedirectorId: result.target.redirectorId,
+      durationMinutes: Number.isFinite(Number(input.durationMinutes)) ? Number(input.durationMinutes) : null,
+      swapEndsAt: new Date(result.state.swapEndsAt).toISOString(),
+      autoRevertAt: result.state.autoRevertAt ? new Date(result.state.autoRevertAt).toISOString() : null,
+    });
+    await writeDb(db);
+    const status = operatorTechnicianStatus(db, db.activeTechnician, now);
+    return sendJson(res, 200, { technician: status });
   }
 
   return sendJson(res, 404, { error: "Ruta no encontrada." });

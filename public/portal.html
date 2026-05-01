@@ -166,10 +166,6 @@
                   </div>
                   <button id="copyPaymentButton" class="ghost" type="button">Cuentas</button>
                 </div>
-                <div class="voucher-preview" aria-label="Comprobante demo">
-                  <strong>Comprobante</strong>
-                  <span>Crea la solicitud y luego arrastra aquí la imagen del pago.</span>
-                </div>
                 <label id="flowPaymentDropzone" class="upload-button proof-dropzone flow-proof-dropzone" data-disabled="true">Subir o arrastrar comprobante
                   <span id="flowPaymentDropzoneHint">Disponible después de crear la solicitud</span>
                   <input id="flowPaymentProofInput" type="file" accept="image/*" hidden />
@@ -179,26 +175,10 @@
               <article class="flow-step-card flow-connect-card">
                 <span>4</span>
                 <strong>Conexion</strong>
-                <div class="redirector-mini" aria-label="Guia visual USB Redirector">
-                  <div class="redirector-stage">
-                    <div class="redirector-screen redirector-welcome">
-                      <div class="usb-cover" aria-hidden="true"></div>
-                      <div>
-                        <strong>Welcome to USB Redirector</strong>
-                        <span>Technician Edition</span>
-                      </div>
-                      <button class="redirector-next" type="button" disabled>Next</button>
-                    </div>
-                    <div class="redirector-screen redirector-connect">
-                      <div class="window-bar">Connect With Technician</div>
-                      <label>Technician ID <code class="typed-value typed-ddns" id="redirectorDdns">DDNS AriadGSM</code></label>
-                      <label>Additional information <code class="typed-value typed-code" id="previewOperationCode">CL-YYYYMMDD-001-01</code></label>
-                      <button class="redirector-connect-button" type="button" disabled>Connect</button>
-                    </div>
-                  </div>
+                <div id="stepGuide" class="step-guide" data-step-guide-root="true" aria-label="Guia paso a paso de conexion">
+                  <div class="step-guide-empty">Cargando datos del tecnico activo...</div>
                 </div>
                 <div class="connection-actions">
-                  <button id="copyConnectionGuideButton" class="ghost" type="button">Copiar guia</button>
                   <button id="orderSubmitButton" type="submit">Crear solicitud</button>
                 </div>
               </article>
@@ -271,7 +251,6 @@
           <div class="connection-block"></div>
           <div class="order-actions">
           <button class="connection-ready ghost" type="button">Estoy listo para conectar</button>
-          <button class="copy-connection ghost" type="button">Copiar guía</button>
           <button class="copy-order ghost" type="button">Copiar datos</button>
           </div>
         </div>

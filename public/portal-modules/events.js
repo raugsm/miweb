@@ -10,7 +10,6 @@ import {
   updatePhoneCountryFromInput,
   validateRegisterName,
 } from "./auth-forms.js";
-import { connectionGuideText } from "./connection.js";
 import { $, $$, copyText, setMessage } from "./dom.js";
 import { parseItems, syncDetectedItems } from "./frp.js";
 import { refreshOrdersSilently, setOrdersLiveStatus, stopOrdersLive } from "./live-orders.js";
@@ -196,9 +195,6 @@ export function wireEvents() {
     event.preventDefault();
     event.stopPropagation();
     await uploadPaymentProofFromFlow(event.dataTransfer?.files || [], renderCustomer);
-  });
-  $("#copyConnectionGuideButton")?.addEventListener("click", () => {
-    copyText(connectionGuideText(), $("#orderMessage"));
   });
   $("#refreshButton").addEventListener("click", async () => {
     await refreshOrdersSilently();

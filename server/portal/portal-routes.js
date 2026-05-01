@@ -46,6 +46,8 @@ export function createPortalRoutes({
   publicCustomerState,
   publicPortalCatalog,
   publishPortalOrders,
+  publicActiveTechnician,
+  customerModuleUrl,
   readDb,
   reconcilePortalClientLink,
   removePortalOrderStream,
@@ -67,6 +69,11 @@ export function createPortalRoutes({
   if (req.method === "GET" && pathname === "/api/portal/catalog") {
     const db = await readDb();
     return sendJson(res, 200, { catalog: publicPortalCatalog(db) });
+  }
+
+  if (req.method === "GET" && pathname === "/api/portal/active-technician") {
+    const db = await readDb();
+    return sendJson(res, 200, { technician: publicActiveTechnician(db.activeTechnician, Date.now()) });
   }
 
   if (req.method === "GET" && pathname === "/api/portal/session") {

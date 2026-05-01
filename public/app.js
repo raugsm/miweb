@@ -450,6 +450,7 @@ function renderLayout() {
   dashboardView.classList.toggle("hidden", !loggedIn);
   if (!loggedIn) {
     stopPresenceRefresh();
+    stopTechnicianWidgetPolling();
     return;
   }
 
@@ -475,6 +476,7 @@ function renderLayout() {
   renderFrp();
   renderTicketBoard();
   renderTickets();
+  startTechnicianWidgetPolling();
 }
 
 function renderCatalog() {
@@ -499,7 +501,7 @@ function renderCatalog() {
 
 function renderUsers() {
   if (session.user?.role !== "ADMIN") {
-    usersTable.innerHTML = `<tr><td colspan="8" class="muted-cell">Solo el administrador puede ver y modificar usuarios.</td></tr>`;
+    usersTable.innerHTML = `<tr><td colspan="9" class="muted-cell">Solo el administrador puede ver y modificar usuarios.</td></tr>`;
     return;
   }
 
@@ -534,6 +536,9 @@ function renderUsers() {
             </label>
           </td>
           <td><span class="table-subtext">${user.operatorPinSet ? "Configurado" : "Pendiente"}</span></td>
+          <td>
+            <input type="text" class="table-input" data-user-technician-redirector="${user.id}" value="${escapeHtml(user.technicianRedirectorId || "")}" placeholder="ej. 1000 9983 5478" maxlength="64" />
+          </td>
           <td>
             <label class="inline-check">
               <input type="checkbox" data-user-active="${user.id}" ${user.active ? "checked" : ""} ${isSelfUser ? "disabled" : ""} />
@@ -2495,6 +2500,7 @@ adminOperationalChannel?.addEventListener("change", () => {
   renderClients();
   renderTicketBoard();
   renderTickets();
+  startTechnicianWidgetPolling();
 });
 
 ticketChannelFilter.addEventListener("click", (event) => {
@@ -2506,6 +2512,7 @@ ticketChannelFilter.addEventListener("click", (event) => {
   renderClients();
   renderTicketBoard();
   renderTickets();
+  startTechnicianWidgetPolling();
 });
 
 usersTable.addEventListener("click", async (event) => {
@@ -2516,11 +2523,12 @@ usersTable.addEventListener("click", async (event) => {
   const active = usersTable.querySelector(`[data-user-active="${userId}"]`).checked;
   const workChannel = usersTable.querySelector(`[data-user-channel="${userId}"]`).value;
   const frpCostManager = Boolean(usersTable.querySelector(`[data-user-frp-cost-manager="${userId}"]`)?.checked);
+  const technicianRedirectorId = String(usersTable.querySelector(`[data-user-technician-redirector="${userId}"]`)?.value || "").trim();
   button.disabled = true;
   try {
     await api(`/api/users/${userId}`, {
       method: "PATCH",
-      body: JSON.stringify({ role, active, workChannel, permissions: { frpCostManager } }),
+      body: JSON.stringify({ role, active, workChannel, permissions: { frpCostManager }, technicianRedirectorId }),
     });
     await refreshSession();
   } finally {
@@ -3082,6 +3090,168 @@ ticketBoard.addEventListener("drop", async (event) => {
     ticketMessage.dataset.type = "error";
   }
 });
+
+const technicianWidget = document.querySelector("#technician-widget");
+const technicianWidgetName = document.querySelector("#technician-widget-name");
+const technicianWidgetId = document.querySelector("#technician-widget-id");
+const technicianWidgetRevert = document.querySelector("#technician-widget-revert");
+const technicianModal = document.querySelector("#technician-switch-modal");
+const technicianModalMode = document.querySelector("#technician-modal-mode");
+const technicianModalList = document.querySelector("#technician-modal-list");
+const technicianModalMessage = document.querySelector("#technician-modal-message");
+
+let technicianRefreshTimer = null;
+let technicianRevertCountdown = null;
+let technicianStatusCache = null;
+
+function userIsEligibleTechnician() {
+  return Boolean(String(session?.user?.technicianRedirectorId || "").trim());
+}
+
+function userCanViewTechnicianWidget() {
+  if (!session?.user) return false;
+  if (session.user.role === "ADMIN") return true;
+  return userIsEligibleTechnician();
+}
+
+function clearTechnicianRevertCountdown() {
+  if (technicianRevertCountdown) {
+    clearInterval(technicianRevertCountdown);
+    technicianRevertCountdown = null;
+  }
+}
+
+function paintTechnicianWidget(status) {
+  technicianStatusCache = status;
+  if (!userCanViewTechnicianWidget() || !status?.active) {
+    technicianWidget.classList.add("hidden");
+    return;
+  }
+  technicianWidget.classList.remove("hidden");
+  technicianWidgetName.textContent = status.active.name || "-";
+  technicianWidgetId.textContent = status.active.redirectorId || "-";
+  clearTechnicianRevertCountdown();
+  if (status.autoRevert?.toName && status.autoRevert.secondsLeft > 0) {
+    const tick = () => {
+      const remaining = Math.max(0, technicianStatusCache?.autoRevert?.secondsLeft ?? 0) - 1;
+      if (technicianStatusCache?.autoRevert) technicianStatusCache.autoRevert.secondsLeft = remaining;
+      const minutes = Math.max(0, Math.ceil(remaining / 60));
+      technicianWidgetRevert.textContent = `Vuelve a ${technicianStatusCache?.autoRevert?.toName || "titular"} en ${minutes} min`;
+      technicianWidgetRevert.classList.remove("hidden");
+      if (remaining <= 0) {
+        clearTechnicianRevertCountdown();
+        refreshTechnicianWidget();
+      }
+    };
+    tick();
+    technicianRevertCountdown = setInterval(tick, 1000);
+  } else {
+    technicianWidgetRevert.classList.add("hidden");
+    technicianWidgetRevert.textContent = "";
+  }
+}
+
+async function refreshTechnicianWidget() {
+  if (!session?.user) {
+    technicianWidget.classList.add("hidden");
+    return;
+  }
+  try {
+    const payload = await api("/api/operator/technician/status");
+    paintTechnicianWidget(payload.technician);
+  } catch {
+    // sin permisos o sin red, ocultar silencioso
+    technicianWidget.classList.add("hidden");
+  }
+}
+
+function startTechnicianWidgetPolling() {
+  if (technicianRefreshTimer) clearInterval(technicianRefreshTimer);
+  technicianRefreshTimer = setInterval(refreshTechnicianWidget, 30_000);
+  refreshTechnicianWidget();
+}
+
+function stopTechnicianWidgetPolling() {
+  if (technicianRefreshTimer) {
+    clearInterval(technicianRefreshTimer);
+    technicianRefreshTimer = null;
+  }
+  clearTechnicianRevertCountdown();
+}
+
+function openTechnicianSwitchModal({ temporary }) {
+  if (!technicianStatusCache) return;
+  const eligible = (technicianStatusCache.eligible || []).filter((candidate) => candidate.userId !== technicianStatusCache.active?.userId);
+  if (!eligible.length) {
+    technicianModalMessage.textContent = "No hay otro tecnico elegible.";
+    technicianModalMessage.dataset.type = "error";
+    technicianModal.classList.remove("hidden");
+    return;
+  }
+  technicianModalMode.textContent = temporary ? "Pausa de 30 minutos (auto-revert)" : "Cambio permanente";
+  technicianModalMessage.textContent = "";
+  technicianModalMessage.dataset.type = "";
+  technicianModalList.innerHTML = eligible
+    .map((candidate) => `
+      <li>
+        <div>
+          <strong>${escapeHtml(candidate.name || candidate.email || "Tecnico")}</strong>
+          <code>${escapeHtml(candidate.redirectorId)}</code>
+        </div>
+        <button type="button" class="primary-btn" data-technician-target="${escapeHtml(candidate.userId)}" data-technician-mode="${temporary ? "temporary" : "permanent"}">Elegir</button>
+      </li>
+    `)
+    .join("");
+  technicianModal.classList.remove("hidden");
+}
+
+function closeTechnicianSwitchModal() {
+  technicianModal.classList.add("hidden");
+  technicianModalMessage.textContent = "";
+  technicianModalList.innerHTML = "";
+}
+
+async function submitTechnicianSwitch(targetUserId, durationMinutes) {
+  technicianModalMessage.textContent = "Enviando...";
+  technicianModalMessage.dataset.type = "";
+  try {
+    const payload = await api("/api/operator/technician/switch", {
+      method: "POST",
+      body: JSON.stringify({ targetUserId, durationMinutes: durationMinutes ?? null }),
+    });
+    paintTechnicianWidget(payload.technician);
+    closeTechnicianSwitchModal();
+  } catch (error) {
+    technicianModalMessage.textContent = error.message;
+    technicianModalMessage.dataset.type = "error";
+  }
+}
+
+if (technicianWidget) {
+  technicianWidget.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-technician-action]");
+    if (!button) return;
+    refreshTechnicianWidget().then(() => {
+      openTechnicianSwitchModal({ temporary: button.dataset.technicianAction === "pause" });
+    });
+  });
+}
+
+if (technicianModal) {
+  technicianModal.addEventListener("click", async (event) => {
+    if (event.target.closest("[data-technician-modal-close]") || event.target === technicianModal) {
+      closeTechnicianSwitchModal();
+      return;
+    }
+    const choose = event.target.closest("[data-technician-target]");
+    if (!choose) return;
+    choose.disabled = true;
+    const targetUserId = choose.dataset.technicianTarget;
+    const durationMinutes = choose.dataset.technicianMode === "temporary" ? 30 : null;
+    await submitTechnicianSwitch(targetUserId, durationMinutes);
+    choose.disabled = false;
+  });
+}
 
 async function bootApplication() {
   clearRememberedLogin();

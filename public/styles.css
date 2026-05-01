@@ -1369,3 +1369,139 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
     width: 100%;
   }
 }
+
+/* Technician widget (operador app) */
+.technician-widget {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 12px;
+  border: 1px solid #d5dfef;
+  border-radius: 10px;
+  background: #f6f8fc;
+  font-size: 0.86rem;
+}
+
+.technician-widget.hidden {
+  display: none;
+}
+
+.technician-widget-info {
+  display: grid;
+  grid-template-columns: auto auto auto auto;
+  gap: 4px 10px;
+  align-items: center;
+}
+
+.technician-widget-label {
+  color: #6b7280;
+  font-weight: 700;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.technician-widget-info strong {
+  color: #101827;
+  font-weight: 900;
+}
+
+.technician-widget-info code {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  font-weight: 800;
+  color: #2177f2;
+}
+
+.technician-widget-revert {
+  color: #b65b00;
+  font-weight: 700;
+  font-size: 0.8rem;
+}
+
+.technician-widget-revert.hidden {
+  display: none;
+}
+
+.technician-widget-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.technician-modal {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(16, 24, 39, 0.45);
+  z-index: 200;
+}
+
+.technician-modal.hidden {
+  display: none;
+}
+
+.technician-modal-card {
+  width: min(440px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  padding: 20px;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 24px 70px rgba(16, 24, 39, 0.18);
+}
+
+.technician-modal-card header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.technician-modal-card h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.technician-modal-mode {
+  color: #6b7280;
+  margin: 0 0 12px;
+  font-size: 0.88rem;
+}
+
+.technician-modal-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.technician-modal-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border: 1px solid #d5dfef;
+  border-radius: 8px;
+  background: #fbfdff;
+}
+
+.technician-modal-list strong {
+  display: block;
+  color: #101827;
+  font-weight: 900;
+}
+
+.technician-modal-list code {
+  display: block;
+  margin-top: 2px;
+  color: #2177f2;
+  font-weight: 800;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  font-size: 0.85rem;
+}
+
+.technician-modal-list button[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

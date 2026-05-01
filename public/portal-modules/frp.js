@@ -15,12 +15,6 @@ export function syncDetectedItems() {
   const count = detectedItemCount();
   const quantityInput = $("#orderForm input[name='quantity']");
   if (quantityInput) quantityInput.value = String(count);
-  const preview = $("#previewOperationCode");
-  if (preview) {
-    preview.textContent = count === 1
-      ? "CL-YYYYMMDD-001-01"
-      : `CL-YYYYMMDD-001-01 ... -${String(count).padStart(2, "0")}`;
-  }
   return count;
 }
 

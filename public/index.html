@@ -127,6 +127,18 @@
                 Vista operativa
                 <select id="admin-operational-channel"></select>
               </label>
+              <div id="technician-widget" class="technician-widget hidden">
+                <div class="technician-widget-info">
+                  <span class="technician-widget-label">Tecnico activo</span>
+                  <strong id="technician-widget-name">-</strong>
+                  <code id="technician-widget-id">-</code>
+                  <span id="technician-widget-revert" class="technician-widget-revert hidden"></span>
+                </div>
+                <div class="technician-widget-actions">
+                  <button type="button" class="mini-btn" data-technician-action="pause">Pausar 30 min</button>
+                  <button type="button" class="mini-btn" data-technician-action="permanent">Cambiar permanentemente</button>
+                </div>
+              </div>
               <div id="role-badge" class="role-badge"></div>
             </div>
           </header>
@@ -385,6 +397,7 @@
                     <th>Rol</th>
                     <th>FRP costos</th>
                     <th>PIN</th>
+                    <th>Technician ID</th>
                     <th>Estado</th>
                     <th>Accion</th>
                   </tr>
@@ -627,6 +640,17 @@
       </div>
     </main>
 
+    <div id="technician-switch-modal" class="technician-modal hidden" role="dialog" aria-modal="true" aria-labelledby="technician-modal-title">
+      <div class="technician-modal-card">
+        <header>
+          <h3 id="technician-modal-title">Cambiar tecnico activo</h3>
+          <button type="button" class="ghost" data-technician-modal-close="true" aria-label="Cerrar">&times;</button>
+        </header>
+        <p class="technician-modal-mode" id="technician-modal-mode">-</p>
+        <ul id="technician-modal-list" class="technician-modal-list"></ul>
+        <p id="technician-modal-message" class="message" aria-live="polite"></p>
+      </div>
+    </div>
     <script src="/app.js" type="module"></script>
   </body>
 </html>

@@ -6,4 +6,7 @@ export const state = {
   ordersStream: null,
   turnstileReady: null,
   activePaymentOrderId: "",
+  activeTechnician: null,
+  technicianPollTimer: null,
+  customerModuleUrl: "",
 };
