@@ -448,21 +448,13 @@ export function createPortalRoutes({
     reconcilePortalClientLink(db, context.client, context.user.id);
     const benefit = customerBenefitFor(db, context.client.id, context.client.masterClientId || "");
     const canUseBenefits = customerCanUseBenefits(context, benefit);
-    const customerStatus = normalizeCustomerStatus(context.client.status);
-    const approvalOptionsEligible = canUseBenefits && (
-      ["VIP", "EMPRESA"].includes(customerStatus)
-      || Number(benefit.vipUnitMargin ?? benefit.vipUnitPrice ?? 0) > 0
-    );
-    const urgentRequested = approvalOptionsEligible && Boolean(input.urgentRequested);
-    const postpayRequested = approvalOptionsEligible && Boolean(input.postpayRequested);
-    if ((input.urgentRequested || input.postpayRequested) && !approvalOptionsEligible) {
-      audit(db, context.user.id, "PORTAL_APPROVAL_OPTIONS_BLOCKED", context.client.id, {
-        status: customerStatus,
-        canUseBenefits,
-        requestedUrgent: Boolean(input.urgentRequested),
-        requestedPostpay: Boolean(input.postpayRequested),
-      });
-    }
+    // PR-2a-final.2: "Opciones sujetas a aprobacion" eliminadas — ya no son
+    // alimentadas por la UI del portal. Mantenemos los campos a false en el
+    // schema de orden para no romper consumidores que los lean. El postpago
+    // VIP queda controlado puramente por status=VIP del cliente (FINAL §3),
+    // no por checkbox del cliente.
+    const urgentRequested = false;
+    const postpayRequested = false;
     const suggestion = portalFrpPriceSuggestion(db, context.client.id, quantity, canUseBenefits, benefit, context.client.masterClientId || benefit.masterClientId || "");
     if (!suggestion.available) {
       audit(db, context.user.id, "PORTAL_FRP_ORDER_BLOCKED_PRICING_UNAVAILABLE", context.client.id, {

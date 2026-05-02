@@ -285,6 +285,20 @@
   color: #6d7f99;
 }
 
+/* PR-2a-final.3: info-tip sutil sobre el lock de 15 min — antes del dropzone.
+   Comunica de forma proactiva al cliente que pagar pronto = precio asegurado
+   por 15 min, sin ser intrusivo. */
+.flow-lock-info-tip {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #eff6ff;
+  border-left: 2px solid #60a5fa;
+  color: #1e3a8a;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 /* Banner azul info: reemplaza al dropzone cuando publicStatus = PAGO_EN_REVISION.
    No es notificacion toast — es estado visible del paso 3. */
 .flow-proof-status-banner {

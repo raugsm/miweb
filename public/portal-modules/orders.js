@@ -178,18 +178,33 @@ export function trackingMarkup(order) {
   `;
 }
 
+// PR-2a-final: Mis Ordenes solo muestra ordenes en TRABAJO ACTIVO segun
+// FINAL §8. Pre-conexion (revision/rechazo/esperando-conexion) se muestra
+// inline en pasos 3/4 — no en este listado. Estados visibles:
+//   - LISTO_PARA_CONEXION: cliente apreto "Equipo conectado", esperando tecnico
+//   - EN_PROCESO: tecnico tomo, procesando
+//   - FINALIZADO: completado, cliente puede descargar comprobante
+//   - REQUIERE_ATENCION: hubo problema durante procesamiento, cliente debe ver
+const VISIBLE_IN_MY_ORDERS = new Set([
+  "LISTO_PARA_CONEXION",
+  "EN_PROCESO",
+  "FINALIZADO",
+  "REQUIERE_ATENCION",
+]);
+
 export function renderOrders(orders) {
   const list = $("#ordersList");
   list.innerHTML = "";
-  if (!orders.length) {
+  const visible = (orders || []).filter((order) => VISIBLE_IN_MY_ORDERS.has(order.publicStatus));
+  if (!visible.length) {
     const empty = document.createElement("p");
     empty.className = "message";
-    empty.textContent = "Todavia no tienes ordenes.";
+    empty.textContent = "Todavia no tienes ordenes en proceso.";
     list.append(empty);
     return;
   }
   const template = $("#orderTemplate");
-  sortOrdersForDisplay(orders).forEach((order) => {
+  sortOrdersForDisplay(visible).forEach((order) => {
     const card = template.content.firstElementChild.cloneNode(true);
     const stage = trackingStage(order);
     const displayState = ordersDisplayState(order);

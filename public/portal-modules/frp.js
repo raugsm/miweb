@@ -1,5 +1,5 @@
 import { $ } from "./dom.js";
-import { normalizeForMatch } from "./format.js";
+// PR-2a-final.2: normalizeForMatch removido junto con customerCanRequestApprovalOptions.
 import { state } from "./state.js";
 
 export function itemLinesFromText(text) {
@@ -56,12 +56,10 @@ export function estimatePortalPrice(quantity) {
   };
 }
 
-export function customerCanRequestApprovalOptions() {
-  const status = normalizeForMatch(state.customer?.client?.status || "");
-  const markedClient = ["vip", "empresa"].includes(status);
-  const benefit = state.customer?.benefit;
-  return Boolean(markedClient || (benefit?.usableNow && Number(benefit?.vipUnitMargin ?? benefit?.vipUnitPrice ?? 0) > 0));
-}
+// PR-2a-final.2: customerCanRequestApprovalOptions REMOVIDO — la UI de
+// "Opciones sujetas a aprobacion" se elimino del portal. El postpago VIP
+// queda manejado puramente por client.status="VIP" + benefit.vipUnitMargin
+// (ver server.js#portalFrpPriceSuggestion).
 
 export function parseItems(text, quantity) {
   const lines = itemLinesFromText(text);

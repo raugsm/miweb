@@ -1,5 +1,5 @@
 import { $, $$, setMessage } from "./dom.js";
-import { customerCanRequestApprovalOptions } from "./frp.js";
+// PR-2a-final.2: customerCanRequestApprovalOptions removido — UI eliminada.
 import { normalizeForMatch } from "./format.js";
 import { startOrdersLive, stopOrdersLive } from "./live-orders.js";
 import { renderOrders } from "./orders.js";
@@ -210,11 +210,6 @@ export function renderCustomer() {
     debtBanner.hidden = debt <= 0;
     const amountNode = $("#vipDebtAmount");
     if (amountNode) amountNode.textContent = debt.toFixed(2);
-  }
-  const canRequestApproval = customerCanRequestApprovalOptions();
-  $("#approvalOptions")?.classList.toggle("hidden", !canRequestApproval);
-  if (!canRequestApproval) {
-    $$("#approvalOptions input[type='checkbox']").forEach((input) => { input.checked = false; });
   }
   applyFlowState(customer);
   updateFlowPaymentDropzone();

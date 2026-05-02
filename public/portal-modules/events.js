@@ -54,8 +54,6 @@ async function submitOrderWithProofs(files) {
         paymentMethod: data.paymentMethod,
         items: parseItems(data.items, quantity),
         note: data.note,
-        urgentRequested: data.urgentRequested === "on",
-        postpayRequested: data.postpayRequested === "on",
         turnstileToken: turnstileToken("order"),
         paymentProofs: proofs,
       }),

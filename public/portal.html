@@ -176,6 +176,9 @@
                 <p id="flowProofWarning" class="flow-proof-warning hidden">
                   Revisa los datos de los pasos 1, 2 y 3 antes de subir. Una vez subido el comprobante no podrás editarlos.
                 </p>
+                <p class="flow-lock-info-tip">
+                  💡 El precio mostrado se asegura por 15 minutos después de aprobado tu pago. Recomendamos procesar todos tus equipos en una sola sesión.
+                </p>
                 <div id="flowProofRejectionBanner" class="flow-proof-rejection-banner" role="alert" hidden>
                   <strong>Tu pago fue rechazado.</strong>
                   <span data-flow-rejection-reason></span>
@@ -204,18 +207,6 @@
             </div>
 
             <div class="flow-submit-area">
-              <details class="request-options hidden" id="approvalOptions">
-                <summary>Opciones sujetas a aprobacion</summary>
-                <label class="inline-option">
-                  <input name="urgentRequested" type="checkbox" />
-                  Solicitar atencion urgente
-                </label>
-                <label class="inline-option">
-                  <input name="postpayRequested" type="checkbox" />
-                  Solicitar postpago
-                </label>
-                <small>Estas opciones no saltan validacion. AriadGSM decide si aplican.</small>
-              </details>
               <div class="turnstile-box" data-turnstile-widget="order"></div>
             </div>
           </form>
