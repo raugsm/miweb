@@ -1,6 +1,7 @@
 import { createServer } from "node:http";
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { computeOrderHash, renderOrderComprobantePdf, renderOrderVerifyHtml } from "./server/comprobante/pdf.js";
 import { fileURLToPath } from "node:url";
 import crypto from "node:crypto";
 import nodemailer from "nodemailer";
@@ -3275,6 +3276,7 @@ const handlePortalApi = createPortalRoutes({
   publicActiveTechnician,
   customerModuleUrl,
   readDb,
+  renderOrderComprobantePdf,
   reconcilePortalClientLink,
   removePortalOrderStream,
   requireCustomer,
@@ -4603,6 +4605,27 @@ async function serveStatic(req, res, pathname) {
       return res.end("Not found");
     }
     return sendHtml(res, 200, ownerRecoveryPage());
+  }
+
+  // PR-2a-final.bundle2 item 4C — pagina publica de verificacion del
+  // comprobante PDF. /v/:orderCode renderiza HTML con el monto, código,
+  // estado y SHA-256 actual de la orden. Quien escanee el QR del PDF
+  // verifica que el hash coincida con el del documento.
+  const verifyMatch = pathname.match(/^\/v\/([^/]+)$/);
+  if (verifyMatch) {
+    const code = decodeURIComponent(verifyMatch[1]);
+    const db = await readDb();
+    const order = db.customerOrders.find((candidate) => candidate.code === code);
+    const items = order ? db.customerOrderItems.filter((item) => item.orderId === order.id).map((item) => {
+      const job = db.frpJobs.find((candidate) => candidate.id === item.frpJobId);
+      return {
+        sequence: item.sequence,
+        ardCode: job?.ardCode || item.ardCode || "",
+        doneAt: job?.doneAt || "",
+      };
+    }) : [];
+    const hash = order ? computeOrderHash(order, items) : "";
+    return sendHtml(res, order ? 200 : 404, renderOrderVerifyHtml({ order, items, hash }));
   }
 
   if (requestShouldRedirectToCustomerPortal(req, pathname)) {

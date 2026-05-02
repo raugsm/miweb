@@ -50,6 +50,7 @@ export function createPortalRoutes({
   publicActiveTechnician,
   customerModuleUrl,
   readDb,
+  renderOrderComprobantePdf,
   reconcilePortalClientLink,
   removePortalOrderStream,
   requireCustomer,
@@ -806,6 +807,45 @@ export function createPortalRoutes({
       order: publicCustomerOrder(order, db),
       customer: publicCustomerState(db, context),
     });
+  }
+
+  // PR-2a-final.bundle2 item 4C — descarga del PDF del comprobante. Auth via
+  // sesion del cliente o accessCode en query string (mismo patron que track).
+  // Solo cuando publicStatus = FINALIZADO — antes no hay servicio que certificar.
+  const portalComprobanteMatch = pathname.match(/^\/api\/portal\/orders\/([^/]+)\/comprobante\.pdf$/);
+  if (req.method === "GET" && portalComprobanteMatch) {
+    const context = await getCurrentCustomerContext(req);
+    const db = context.db;
+    const codeOrId = cleanText(decodeURIComponent(portalComprobanteMatch[1]), 80);
+    const accessCode = cleanText(new URL(req.url || "/", `http://${req.headers.host || "localhost"}`).searchParams.get("accessCode") || "", 80);
+    const order = db.customerOrders.find((candidate) => candidate.id === codeOrId || candidate.code === codeOrId);
+    if (!order) return sendJson(res, 404, { error: "Orden no encontrada." });
+    const ownsOrder = context.user && context.client && order.clientId === context.client.id;
+    const hasAccessCode = accessCode && order.accessCode === accessCode;
+    if (!ownsOrder && !hasAccessCode) return sendJson(res, 403, { error: "Acceso no autorizado al comprobante." });
+    if (order.publicStatus !== "FINALIZADO") {
+      return sendJson(res, 409, { error: "El comprobante PDF se habilita cuando la orden esté finalizada." });
+    }
+    const items = db.customerOrderItems.filter((item) => item.orderId === order.id).map((item) => {
+      const job = db.frpJobs.find((candidate) => candidate.id === item.frpJobId);
+      return {
+        sequence: item.sequence,
+        model: item.model,
+        ardCode: job?.ardCode || item.ardCode || "",
+        doneAt: job?.doneAt || "",
+      };
+    });
+    const baseUrl = `http://${req.headers.host || "localhost"}`;
+    const { buffer } = await renderOrderComprobantePdf({ order, items, baseUrl });
+    res.writeHead(200, {
+      "Content-Type": "application/pdf",
+      "Content-Length": String(buffer.length),
+      "Content-Disposition": `inline; filename="AriadGSM-${order.code}.pdf"`,
+      "Cache-Control": "no-store",
+    });
+    audit(db, context.user?.id || "", "PORTAL_COMPROBANTE_PDF_GENERATED", order.id, { code: order.code });
+    await writeDb(db);
+    return res.end(buffer);
   }
 
   const portalProofMatch = pathname.match(/^\/api\/portal\/orders\/([^/]+)\/payment-proof$/);
