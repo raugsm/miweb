@@ -231,26 +231,26 @@ function applyFlowState(customer) {
   }
   state.lastFlowState = flowState;
 
-  renderFlowCta(flowState, customer);
+  renderFlowCta(flowState);
   applyStepLocks(flowState);
   toggleProofWarning(flowState);
+  applyStep4Visibility(customer);
 }
 
-function renderFlowCta(flowState, customer) {
+// QUE: pinta el CTA del paso 4 (boton "Equipo conectado") cuando el cliente entra
+// al paso 4 con orden en preparacion/lista. En estados previos no hay CTA — el
+// dropzone del paso 3 es la unica accion pendiente, y el paso 4 mismo esta oculto
+// (ver applyStep4Visibility).
+// POR QUE: FINAL §15 elimina el boton "Crear solicitud" — la orden se crea al
+// subir comprobante. La verificacion de email vive en el dropzone (paso 3).
+function renderFlowCta(flowState) {
   const cta = document.querySelector("#orderForm .connection-actions");
   if (!cta) return;
-  if (flowState === "awaiting_proof") {
-    cta.innerHTML = '<div class="flow-cta-waiting" role="status">⏳ Esperando tu comprobante para continuar</div>';
-    return;
-  }
   if (flowState === "connected") {
     cta.innerHTML = '<button id="orderSubmitButton" class="flow-cta-connected" type="button" data-flow-action="notify-connected">Equipo conectado</button>';
     return;
   }
-  // draft
-  cta.innerHTML = '<button id="orderSubmitButton" type="submit">Crear solicitud</button>';
-  const submit = $("#orderSubmitButton");
-  if (submit) submit.disabled = !customer.client.emailVerified;
+  cta.innerHTML = "";
 }
 
 function applyStepLocks(flowState) {
@@ -264,4 +264,18 @@ function toggleProofWarning(flowState) {
   const warning = document.querySelector("#flowProofWarning");
   if (!warning) return;
   warning.classList.toggle("hidden", flowState !== "awaiting_proof");
+}
+
+// QUE: muestra el paso 4 (Conexion) solo cuando el pago fue VALIDADO por un
+// operador, no apenas se subio el comprobante.
+// POR QUE: FINAL §7 / bug 3 del PR-0 — antes el paso 4 estaba siempre visible con
+// datos pre-llenados antes de pagar. Lo correcto es ocultarlo hasta EN_PREPARACION
+// (operador aprobo) y hasta que la orden quede dentro de la ventana de conexion.
+function applyStep4Visibility(customer) {
+  const article = document.querySelector(".flow-connect-card");
+  if (!article) return;
+  const validatedOrder = (customer?.orders || []).find((order) => (
+    ["EN_PREPARACION", "LISTO_PARA_CONEXION", "EN_PROCESO"].includes(order.publicStatus)
+  ));
+  article.hidden = !validatedOrder;
 }

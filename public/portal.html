@@ -170,20 +170,18 @@
                   Revisa los datos de los pasos 1, 2 y 3 antes de subir. Una vez subido el comprobante no podrás editarlos.
                 </p>
                 <label id="flowPaymentDropzone" class="upload-button proof-dropzone flow-proof-dropzone" data-disabled="true">Subir o arrastrar comprobante
-                  <span id="flowPaymentDropzoneHint">Disponible después de crear la solicitud</span>
-                  <input id="flowPaymentProofInput" type="file" accept="image/*" hidden />
+                  <span id="flowPaymentDropzoneHint">Sube tu comprobante (foto o PDF)</span>
+                  <input id="flowPaymentProofInput" type="file" accept="image/*,application/pdf" hidden />
                 </label>
               </article>
 
-              <article class="flow-step-card flow-connect-card">
+              <article class="flow-step-card flow-connect-card" hidden>
                 <span>4</span>
                 <strong>Conexion</strong>
                 <div id="stepGuide" class="step-guide" data-step-guide-root="true" aria-label="Guia paso a paso de conexion">
                   <div class="step-guide-empty">Cargando datos del tecnico activo...</div>
                 </div>
-                <div class="connection-actions">
-                  <button id="orderSubmitButton" type="submit">Crear solicitud</button>
-                </div>
+                <div class="connection-actions"></div>
               </article>
             </div>
 

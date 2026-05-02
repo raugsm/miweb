@@ -520,7 +520,45 @@ export function createPortalRoutes({
       });
     }
     const compatibilityReviewRequired = eligibilitySummary.review.length > 0;
-    const initialPublicStatus = compatibilityReviewRequired ? "REVISION_COMPATIBILIDAD" : "ESPERANDO_PAGO";
+    // QUE: el cliente puede adjuntar comprobantes en el mismo POST que crea la orden.
+    // POR QUE: FINAL §15 elimina el boton "Crear solicitud" y manda crear la orden al
+    // subir comprobante en paso 3. Validamos aqui para que la creacion + carga sean
+    // atomicas (un solo writeDb) en lugar de partirlo en dos requests con rollback.
+    const inputProofs = sanitizePaymentProofImages(input.paymentProofs || []);
+    if (inputProofs.length && compatibilityReviewRequired) {
+      audit(db, context.user.id, "PORTAL_ORDER_PROOF_BLOCKED_COMPATIBILITY_REVIEW", context.client.id, {
+        quantity,
+        proofCount: inputProofs.length,
+      });
+      await writeDb(db);
+      return sendJson(res, 409, { error: "AriadGSM debe confirmar compatibilidad antes de recibir pago. Vuelve a enviar la solicitud sin comprobante." });
+    }
+    if (inputProofs.length) {
+      const proofRateOk = enforcePortalRateLimit(db, req, "portal_payment_proof", context.client.id, maxPortalProofRequestsPerWindow);
+      if (!proofRateOk) {
+        audit(db, context.user.id, "PORTAL_PAYMENT_PROOF_RATE_LIMITED", context.client.id, { ipHash: hashToken(clientIp(req)) });
+        await writeDb(db);
+        return sendJson(res, 429, { error: "Demasiados comprobantes enviados. Intenta mas tarde." });
+      }
+      const duplicateHash = new Set();
+      for (const candidateOrder of db.customerOrders) {
+        for (const proof of candidateOrder.paymentProofs || []) duplicateHash.add(proof.hash);
+      }
+      for (const otherFrpOrder of db.frpOrders) {
+        for (const proof of otherFrpOrder.paymentProofs || []) duplicateHash.add(proof.hash);
+      }
+      for (const ticket of db.tickets) {
+        for (const proof of ticket.paymentProofs || []) duplicateHash.add(proof.hash);
+      }
+      if (inputProofs.some((proof) => duplicateHash.has(proof.hash))) {
+        audit(db, context.user.id, "PORTAL_PAYMENT_PROOF_DUPLICATE_BLOCKED", context.client.id, { quantity });
+        await writeDb(db);
+        return sendJson(res, 409, { error: "Ese comprobante ya fue cargado antes." });
+      }
+    }
+    const initialPublicStatus = compatibilityReviewRequired
+      ? "REVISION_COMPATIBILIDAD"
+      : (inputProofs.length ? "PAGO_EN_REVISION" : "ESPERANDO_PAGO");
     const orderCode = nextCustomerOrderCode(db);
     const request = {
       id: requestId,
@@ -560,7 +598,7 @@ export function createPortalRoutes({
       paymentMethod: payment.code,
       paymentLabel: payment.label,
       paymentDetails: payment.details,
-      paymentProofs: [],
+      paymentProofs: inputProofs.slice(),
       customerConnectionReadyAt: "",
       urgentRequested,
       urgentStatus: urgentRequested ? "SOLICITADO" : "",
@@ -573,6 +611,15 @@ export function createPortalRoutes({
       note: cleanText(input.note, 500),
     };
     createFrpOrderFromPortal(db, context.client, order, items);
+    if (inputProofs.length) {
+      const linkedFrpOrder = db.frpOrders.find((candidate) => candidate.id === order.frpOrderId);
+      if (linkedFrpOrder) {
+        linkedFrpOrder.paymentProofs = inputProofs.slice();
+        linkedFrpOrder.paymentStatus = "PAGO_EN_VALIDACION";
+        linkedFrpOrder.updatedAt = nowIso();
+        syncFrpOrderStatus(db, linkedFrpOrder);
+      }
+    }
     db.customerRequests.unshift(request);
     db.customerOrders.unshift(order);
     db.customerOrderItems.unshift(...items);
@@ -617,8 +664,16 @@ export function createPortalRoutes({
         status: order.postpayStatus,
       });
     }
+    if (inputProofs.length) {
+      audit(db, context.user.id, "PORTAL_PAYMENT_PROOF_UPLOADED", order.id, {
+        code: order.code,
+        proofCount: inputProofs.length,
+        frpOrderId: order.frpOrderId || "",
+        via: "order_create",
+      });
+    }
     await writeDb(db);
-    publishPortalOrders(db, context.client.id, "order_created");
+    publishPortalOrders(db, context.client.id, inputProofs.length ? "order_created_with_proof" : "order_created");
     return sendJson(res, 201, {
       order: publicCustomerOrder(order, db),
       customer: publicCustomerState(db, context),

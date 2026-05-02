@@ -186,14 +186,34 @@ export function updateFlowPaymentDropzone() {
   const dropzone = $("#flowPaymentDropzone");
   const hint = $("#flowPaymentDropzoneHint");
   if (!dropzone || !hint) return;
+  // QUE: el dropzone se habilita cuando el cliente esta autenticado y verificado, Y
+  // (a) tiene orden esperando comprobante (PATCH al endpoint existente), o
+  // (b) no tiene ninguna orden in-flight (POST crea orden + adjunta comprobante).
+  // POR QUE: FINAL §15 elimina "Crear solicitud" — la orden se crea al subir
+  // comprobante. Pero si hay una orden ya en revision/preparacion no queremos que
+  // el cliente cree una segunda orden duplicada por accidente.
   const targetOrder = paymentUploadTargetOrder();
-  const enabled = Boolean(state.customer?.user && state.customer?.client && targetOrder);
+  const customer = state.customer;
+  const authenticated = Boolean(customer?.user && customer?.client);
+  const emailVerified = Boolean(customer?.client?.emailVerified);
+  const hasInFlightOrder = (customer?.orders || []).some((order) => (
+    ["PAGO_EN_REVISION", "EN_PREPARACION", "LISTO_PARA_CONEXION", "EN_PROCESO", "REVISION_COMPATIBILIDAD"].includes(order.publicStatus)
+  ));
+  const enabled = authenticated && emailVerified && (Boolean(targetOrder) || !hasInFlightOrder);
   dropzone.dataset.disabled = enabled ? "false" : "true";
   dropzone.classList.toggle("is-disabled", !enabled);
   dropzone.dataset.orderId = targetOrder?.id || "";
-  hint.textContent = targetOrder
-    ? `Pago de ${targetOrder.code}`
-    : "Disponible después de crear la solicitud";
+  if (!authenticated) {
+    hint.textContent = "Inicia sesion para subir tu comprobante";
+  } else if (!emailVerified) {
+    hint.textContent = "Verifica tu correo para subir tu comprobante";
+  } else if (targetOrder) {
+    hint.textContent = `Pago de ${targetOrder.code}`;
+  } else if (hasInFlightOrder) {
+    hint.textContent = "Tu solicitud esta en revision. Te avisaremos aqui.";
+  } else {
+    hint.textContent = "Sube tu comprobante (foto o PDF)";
+  }
 }
 
 export function paymentSelectedInDropdown(paymentCode) {

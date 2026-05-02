@@ -22,9 +22,63 @@ import {
   renderPaymentModal,
   updateQuote,
 } from "./payments.js";
-import { hasDraggedFiles, uploadPaymentProofFromFlow, wireGlobalFileDropGuard } from "./proofs.js";
+import { filesToProofs, hasDraggedFiles, uploadPaymentProofFromFlow, wireGlobalFileDropGuard } from "./proofs.js";
 import { renderTrackedOrder } from "./deep-links.js";
 import { state } from "./state.js";
+
+// QUE: crea la orden y adjunta el comprobante en una sola request al endpoint
+// existente /api/portal/orders/frp con `paymentProofs` en el body. El backend
+// hace ambas operaciones atomicas (un solo readDb -> writeDb).
+// POR QUE: FINAL §15 — el cliente sube el comprobante y la orden se crea sola.
+// Antes habia un boton "Crear solicitud" que primero creaba la orden y despues el
+// dropzone se habilitaba para PATCH. Ese flujo se elimina.
+async function submitOrderWithProofs(files) {
+  const form = $("#orderForm");
+  const message = $("#orderMessage");
+  setMessage(message, "");
+  let proofs;
+  try {
+    proofs = await filesToProofs(files);
+  } catch (error) {
+    setMessage(message, error.message, "error");
+    return;
+  }
+  try {
+    syncDetectedItems();
+    const data = Object.fromEntries(new FormData(form));
+    const quantity = Math.max(1, Math.min(50, Number.parseInt(data.quantity, 10) || 1));
+    const payload = await api("/api/portal/orders/frp", {
+      method: "POST",
+      body: JSON.stringify({
+        quantity,
+        paymentMethod: data.paymentMethod,
+        items: parseItems(data.items, quantity),
+        note: data.note,
+        urgentRequested: data.urgentRequested === "on",
+        postpayRequested: data.postpayRequested === "on",
+        turnstileToken: turnstileToken("order"),
+        paymentProofs: proofs,
+      }),
+    });
+    state.customer = payload.customer;
+    state.activePaymentOrderId = orderNeedsPaymentProof(payload.order) ? payload.order.id : "";
+    const selectedPayment = payload.order?.paymentMethod || data.paymentMethod;
+    renderCatalog();
+    if (paymentSelectedInDropdown(selectedPayment)) {
+      $("#paymentSelect").value = selectedPayment;
+    }
+    updateQuote();
+    renderCustomer();
+    resetTurnstile("order");
+    const createdMessage = payload.order?.publicStatus === "REVISION_COMPATIBILIDAD"
+      ? `Solicitud ${payload.order.code} creada para revision de compatibilidad. Espera confirmacion antes de pagar.`
+      : `Comprobante recibido para ${payload.order.code}. Queda en revision.`;
+    setMessage(message, createdMessage, "success");
+  } catch (error) {
+    setMessage(message, error.message, "error");
+    resetTurnstile("order");
+  }
+}
 
 function wirePasswordToggles() {
   $$("[data-password-toggle]").forEach((button) => {
@@ -109,49 +163,11 @@ export function wireEvents() {
     }
   });
 
-  $("#orderForm").addEventListener("submit", async (event) => {
+  // QUE: el form ya no tiene boton submit (FINAL §15). Bloqueamos submits implicitos
+  // por Enter para evitar reload accidental de la pagina si el cliente aprieta Enter
+  // dentro de un input.
+  $("#orderForm").addEventListener("submit", (event) => {
     event.preventDefault();
-    const form = event.currentTarget;
-    const message = $("#orderMessage");
-    setMessage(message, "");
-    try {
-      syncDetectedItems();
-      const data = Object.fromEntries(new FormData(form));
-      const quantity = Math.max(1, Math.min(50, Number.parseInt(data.quantity, 10) || 1));
-      const payload = await api("/api/portal/orders/frp", {
-        method: "POST",
-        body: JSON.stringify({
-          quantity,
-          paymentMethod: data.paymentMethod,
-          items: parseItems(data.items, quantity),
-          note: data.note,
-          urgentRequested: data.urgentRequested === "on",
-          postpayRequested: data.postpayRequested === "on",
-          turnstileToken: turnstileToken("order"),
-        }),
-      });
-      state.customer = payload.customer;
-      state.activePaymentOrderId = orderNeedsPaymentProof(payload.order) ? payload.order.id : "";
-      const selectedPayment = payload.order?.paymentMethod || data.paymentMethod;
-      // No reseteamos el form aqui: applyFlowState() en renderCustomer detecta la
-      // transicion non-draft -> draft (cuando la orden cierre) y limpia entonces.
-      // Mientras la orden este viva, los pasos 1-3 quedan congelados visualmente
-      // pero conservan los valores ingresados.
-      renderCatalog();
-      if (paymentSelectedInDropdown(selectedPayment)) {
-        $("#paymentSelect").value = selectedPayment;
-      }
-      updateQuote();
-      renderCustomer();
-      resetTurnstile("order");
-      const createdMessage = payload.order?.publicStatus === "REVISION_COMPATIBILIDAD"
-        ? `Solicitud ${payload.order.code} creada para revision de compatibilidad. Espera confirmacion antes de pagar.`
-        : `Solicitud ${payload.order.code} creada. Sube tu comprobante para continuar.`;
-      setMessage(message, createdMessage, "success");
-    } catch (error) {
-      setMessage(message, error.message, "error");
-      resetTurnstile("order");
-    }
   });
 
   // Click delegado para el CTA "Equipo conectado" del paso 4.
@@ -188,20 +204,41 @@ export function wireEvents() {
   });
   const flowPaymentDropzone = $("#flowPaymentDropzone");
   const flowPaymentInput = $("#flowPaymentProofInput");
+
+  // QUE: cuando el cliente sube un comprobante sin orden activa, creamos la orden +
+  // adjuntamos el comprobante en un solo POST. Si ya hay orden esperando pago, solo
+  // adjuntamos al endpoint PATCH existente.
+  // POR QUE: FINAL §15 — la orden se crea automaticamente al subir comprobante en
+  // paso 3. La decision endpoint vs flag esta documentada en el commit message.
+  const handleProofFiles = async (files) => {
+    const fileList = Array.from(files || []);
+    if (!fileList.length) return;
+    if (paymentUploadTargetOrder()) {
+      await uploadPaymentProofFromFlow(fileList, renderCustomer);
+      return;
+    }
+    await submitOrderWithProofs(fileList);
+  };
+
   flowPaymentDropzone?.addEventListener("click", (event) => {
-    if (paymentUploadTargetOrder()) return;
-    event.preventDefault();
-    setMessage($("#orderMessage"), "Primero crea la solicitud. Luego sube aquí el comprobante.", "error");
+    // Si el dropzone esta deshabilitado, su hint interno ya explica el motivo
+    // (auth, verificacion, orden en revision). Solo bloqueamos el file picker.
+    if (flowPaymentDropzone.dataset.disabled === "true") event.preventDefault();
   });
   flowPaymentInput?.addEventListener("change", async () => {
-    await uploadPaymentProofFromFlow(flowPaymentInput.files, renderCustomer);
+    const files = flowPaymentInput.files;
+    try {
+      await handleProofFiles(files);
+    } finally {
+      if (flowPaymentInput) flowPaymentInput.value = "";
+    }
   });
   ["dragenter", "dragover"].forEach((eventName) => {
     flowPaymentDropzone?.addEventListener(eventName, (event) => {
       if (!hasDraggedFiles(event)) return;
       event.preventDefault();
       event.stopPropagation();
-      if (!paymentUploadTargetOrder()) {
+      if (flowPaymentDropzone.dataset.disabled === "true") {
         if (event.dataTransfer) event.dataTransfer.dropEffect = "none";
         return;
       }
@@ -220,7 +257,9 @@ export function wireEvents() {
     if (!hasDraggedFiles(event)) return;
     event.preventDefault();
     event.stopPropagation();
-    await uploadPaymentProofFromFlow(event.dataTransfer?.files || [], renderCustomer);
+    flowPaymentDropzone.classList.remove("drag-active");
+    if (flowPaymentDropzone.dataset.disabled === "true") return;
+    await handleProofFiles(event.dataTransfer?.files || []);
   });
   $("#refreshButton").addEventListener("click", async () => {
     await refreshOrdersSilently();
