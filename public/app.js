@@ -1280,11 +1280,16 @@ function renderFrpPricingBox() {
         </div>
       </header>
       <ul class="frp-pending-list">
-        ${pendingList.map((p) => `
+        ${pendingList.map((p) => {
+          // Signed delta: el deltaPct persistido es absoluto (Math.abs en
+          // classifyCostChange usado para clasificar nivel). Aqui derivamos el
+          // signo de previousCost/nextCost para que el operador vea direccion.
+          const direction = Number(p.nextCost) < Number(p.previousCost) ? "-" : "+";
+          return `
           <li class="frp-pending-item" data-pending-id="${escapeHtml(p.id)}">
             <div class="frp-pending-info">
               <strong>${escapeHtml(p.providerName)}</strong>
-              <span>${Number(p.previousCost).toFixed(2)} → <b>${Number(p.nextCost).toFixed(2)}</b> USDT (Δ ${Number(p.deltaPct).toFixed(1)}% sobre baseline ${Number(p.baselineAvg).toFixed(2)})</span>
+              <span>${Number(p.previousCost).toFixed(2)} → <b>${Number(p.nextCost).toFixed(2)}</b> USDT (Δ ${direction}${Number(p.deltaPct).toFixed(1)}% sobre baseline ${Number(p.baselineAvg).toFixed(2)})</span>
               <span class="frp-pending-meta">Solicitado por ${escapeHtml(p.requestedBy.slice(0, 8))}… · ${escapeHtml(formatDate(p.requestedAt))}</span>
               <span class="frp-pending-reason">"${escapeHtml(p.requestedReason)}"</span>
             </div>
@@ -1293,7 +1298,8 @@ function renderFrpPricingBox() {
               <button class="mini-btn danger-mini" type="button" data-pending-action="reject" data-pending-id="${escapeHtml(p.id)}">Rechazar</button>
             </div>
           </li>
-        `).join("")}
+          `;
+        }).join("")}
       </ul>
     </section>
   ` : "";
