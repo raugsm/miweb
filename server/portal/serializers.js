@@ -20,6 +20,7 @@ export function createPortalSerializers({
   normalizeCustomerStatus,
   normalizePricingConfig,
   paymentMethods,
+  portalFrpPriceSuggestion,
   portalPhoneCountryHints,
   portalPublicServices,
   publicOrderStatuses,
@@ -131,6 +132,23 @@ export function createPortalSerializers({
     const paymentRejectedReason = publicStatus === "PAGO_RECHAZADO"
       ? cleanText(frpOrderForReason?.paymentRejectedReason || "", 160)
       : "";
+    // QUE: precio que costaria esta orden HOY (con pricing config actual y benefits
+    // del cliente). PR-2a.3 lo usa frontend para detectar lock < current → mostrar
+    // 3-opciones cuando el operador suba precios despues del lock.
+    const lockedUnit = moneyNumber(order.priceLocked || 0);
+    const currentSuggestion = lockedUnit > 0 && order.publicStatus !== "CANCELADO" && order.publicStatus !== "FINALIZADO"
+      ? (() => {
+          try {
+            const benefit = customerBenefitFor(db, order.clientId, order.masterClientId || "");
+            return portalFrpPriceSuggestion(db, order.clientId, order.quantity, true, benefit, order.masterClientId || "");
+          } catch {
+            return null;
+          }
+        })()
+      : null;
+    const currentUnitPrice = currentSuggestion?.available
+      ? moneyNumber(currentSuggestion.unitPrice)
+      : moneyNumber(order.unitPrice || 0);
     return {
       id: order.id,
       code: order.code,
@@ -161,6 +179,9 @@ export function createPortalSerializers({
       priceDecisionAction: order.priceDecisionAction || "",
       priceDecisionAt: order.priceDecisionAt || "",
       priceDecisionWaitUntil: order.priceDecisionWaitUntil || "",
+      // PR-2a.3: precio que costaria esta orden HOY. Frontend compara contra
+      // priceLocked para detectar si subio y mostrar UI inline 3-opciones.
+      currentUnitPrice,
       urgentRequested: Boolean(order.urgentRequested),
       urgentStatus: order.urgentStatus || "",
       postpayRequested: Boolean(order.postpayRequested),

@@ -59,18 +59,40 @@ export function trackingStage(order) {
   return "RECEIVED";
 }
 
-// QUE: estado de presentacion en Mis Ordenes para los 3 estados nuevos del PR-0.6.
+// QUE: estado de presentacion en Mis Ordenes para los 3 estados nuevos del PR-0.6
+// + el estado "price_decision_required" del PR-2a.3 (precio subio post-lock).
 // Cuando devuelve un valor distinto de "", orders.js renderiza pill + banner +
 // primary button especificos. Cuando devuelve "", cae al rendering generico
 // (tracking stage tradicional para estados 4-6, que se rediseñan en PR-5 Layout D).
-// POR QUE: hasta PR-0.5 los estados 1-3 se mostraban como "Pedido recibido"
-// generico, sin diferenciar revision / rechazo / esperando conexion.
+// POR QUE: hasta PR-0.5 los estados se mostraban como "Pedido recibido" generico,
+// sin diferenciar revision / rechazo / esperando conexion / precio subio.
+//
+// price_decision_required tiene PRIORIDAD sobre los otros estados activos porque
+// requiere accion explicita del cliente (FINAL §2 parte 5 — 3 opciones).
 export function ordersDisplayState(order) {
   if (!order) return "";
+  if (orderRequiresPriceDecision(order)) return "price_decision_required";
   if (order.publicStatus === "PAGO_EN_REVISION") return "payment_review";
   if (order.publicStatus === "PAGO_RECHAZADO") return "payment_rejected";
   if (order.publicStatus === "EN_PREPARACION" && !order.customerConnectedAt) return "awaiting_connection";
   return "";
+}
+
+// QUE: indica que el precio actual subio sobre el anclado y el cliente todavia
+// no decidio que hacer.
+// POR QUE: PR-2a.3 — el operador puede actualizar pricing config en cualquier
+// momento. Si despues del lock la orden costaria mas, el cliente debe elegir
+// entre 3 opciones. Si ya decidio (priceDecisionAction set), no se vuelve a
+// preguntar — la decision se respeta hasta que la orden cierre o cambie.
+export function orderRequiresPriceDecision(order) {
+  if (!order) return false;
+  if (order.priceDecisionAction) return false;
+  const locked = Number(order.priceLocked || 0);
+  const current = Number(order.currentUnitPrice || 0);
+  if (locked <= 0 || current <= 0) return false;
+  if (current <= locked) return false;
+  // No tiene sentido pedir decision en orden cancelada o finalizada.
+  return !["CANCELADO", "FINALIZADO"].includes(order.publicStatus);
 }
 
 export function trackingStageLabel(order) {

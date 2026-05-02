@@ -36,6 +36,7 @@ export function createFrpRoutes({
   publicFrpPricingState,
   publicFrpState,
   publishPortalOrdersForFrpOrder,
+  publishPortalOrdersForAll,
   readDb,
   requireAdminWithAudit,
   requireFrpAccess,
@@ -78,6 +79,7 @@ export function createFrpRoutes({
       to: db.pricingConfig.frpPricing.policy,
     });
     await writeDb(db);
+    publishPortalOrdersForAll(db, "pricing_policy_updated");
     return sendJson(res, 200, { pricing: publicFrpPricingState(db, user), frp: publicFrpState(db, user) });
   }
 
@@ -142,6 +144,7 @@ export function createFrpRoutes({
       approvedByPolicy: user.role !== "ADMIN",
     });
     await writeDb(db);
+    publishPortalOrdersForAll(db, "pricing_provider_updated");
     return sendJson(res, 200, { pricing: publicFrpPricingState(db, user), frp: publicFrpState(db, user) });
   }
 

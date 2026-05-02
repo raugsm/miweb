@@ -180,6 +180,23 @@
   color: #1e3a8a;
 }
 
+/* PR-2a.3 — pill cuando precio subio post-lock y cliente debe decidir. */
+.status-pill[data-stage="price_decision_required"] {
+  border: 1px solid #fdba74;
+  background: #ffedd5;
+  color: #9a3412;
+}
+
+.status-pill[data-stage="price_decision_required"]::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: #ea580c;
+  animation: orderPillPulse 1.6s ease-in-out infinite;
+}
+
 @keyframes orderPillPulse {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.55; transform: scale(0.85); }
@@ -238,6 +255,61 @@
 .order-state-banner.is-connect-prompt em {
   font-style: normal;
   font-weight: 700;
+}
+
+/* PR-2a.3 — banner naranja con 3 opciones cuando precio subio post-lock. */
+.order-state-banner.is-price-up {
+  flex-direction: column;
+  background: #ffedd5;
+  border-left: 3px solid #ea580c;
+  color: #7c2d12;
+  gap: 8px;
+}
+
+.order-state-banner.is-price-up b {
+  font-weight: 700;
+}
+
+.price-decision-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.price-decision-buttons button {
+  font-size: 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid #fdba74;
+  background: #fff;
+  color: #7c2d12;
+  cursor: pointer;
+}
+
+.price-decision-buttons button:hover {
+  background: #ffedd5;
+}
+
+.price-decision-buttons button.danger {
+  border-color: #fca5a5;
+  color: #7f1d1d;
+}
+
+.price-decision-buttons button.danger:hover {
+  background: #fee2e2;
+}
+
+.price-decision-buttons button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.price-decision-help {
+  margin: 0;
+  font-size: 11px;
+  color: #9a3412;
+  font-style: italic;
 }
 
 .order-state-pulse {

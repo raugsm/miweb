@@ -33,16 +33,39 @@ export function notifyCustomerUpdated() {
   customerUpdateHandler();
 }
 
-// QUE: pinta los banners contextuales segun el estado de presentacion (PR-0.6).
+// QUE: pinta los banners contextuales segun el estado de presentacion (PR-0.6 + PR-2a.3).
 // POR QUE: estados 1-3 piden banners visuales especificos dentro de la card de orden.
 // El existing .order-alert (amarillo generico) no es suficiente para distinguir
-// "validando" (azul info) vs "rechazado" (rojo) vs "esperando conexion" (verde+azul).
+// "validando" (azul info) vs "rechazado" (rojo) vs "esperando conexion" (verde+azul)
+// vs "precio subio" (naranja con 3 botones).
 function renderOrderStateBanners(card, order, displayState) {
   const banners = card.querySelector(".order-state-banners");
   if (!banners) return;
   banners.innerHTML = "";
   if (!displayState) {
     banners.hidden = true;
+    return;
+  }
+  if (displayState === "price_decision_required") {
+    const locked = Number(order.priceLocked || 0).toFixed(2);
+    const current = Number(order.currentUnitPrice || 0).toFixed(2);
+    const delta = (Number(order.currentUnitPrice || 0) - Number(order.priceLocked || 0)).toFixed(2);
+    banners.innerHTML = `
+      <div class="order-state-banner is-price-up" role="alert" data-order-id="${escapeHtml(order.id)}">
+        <strong>El precio del Xiaomi FRP subió.</strong>
+        <span>Tu precio anclado: <b>${escapeHtml(locked)} USDT</b> · ahora: <b>${escapeHtml(current)} USDT</b> (+${escapeHtml(delta)} USDT por unidad).</span>
+        <span>¿Qué querés hacer?</span>
+        <div class="price-decision-buttons">
+          <button type="button" class="ghost" data-price-action="second_proof" data-order-id="${escapeHtml(order.id)}">Subir 2do comprobante por la diferencia</button>
+          <button type="button" class="ghost" data-price-action="wait" data-order-id="${escapeHtml(order.id)}">Esperar 1 hora a que baje</button>
+          <button type="button" class="ghost danger" data-price-action="cancel" data-order-id="${escapeHtml(order.id)}">Cancelar y pedir reembolso</button>
+        </div>
+        <p class="price-decision-help">Reembolso manual vía ${escapeHtml(order.paymentLabel || "el método elegido")}, usualmente menos de 1 hora en horario activo.</p>
+      </div>
+    `;
+    banners.hidden = false;
+    // El order-alert generico amarillo no aplica aqui — esta accion crítica pisa.
+    card.querySelector(".order-alert")?.classList.add("hidden");
     return;
   }
   if (displayState === "payment_review") {
@@ -175,7 +198,10 @@ export function renderOrders(orders) {
     $(".order-code", card).textContent = order.code;
     $(".order-service", card).textContent = order.serviceName;
     const statusPill = $(".status-pill", card);
-    if (displayState === "payment_review") {
+    if (displayState === "price_decision_required") {
+      statusPill.textContent = "Decidí: precio subió";
+      statusPill.dataset.stage = "price_decision_required";
+    } else if (displayState === "payment_review") {
       statusPill.textContent = "Pago en revisión";
       statusPill.dataset.stage = "payment_review";
     } else if (displayState === "payment_rejected") {
@@ -196,6 +222,39 @@ export function renderOrders(orders) {
     alertNode.classList.toggle("hidden", !alertText);
     alertNode.textContent = alertText;
     renderOrderStateBanners(card, order, displayState);
+    if (displayState === "price_decision_required") {
+      card.querySelectorAll("[data-price-action]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const action = btn.dataset.priceAction;
+          const cardMessage = card.querySelector(".order-message");
+          if (action === "cancel" && !window.confirm("¿Cancelar la orden? El reembolso es manual y se procesa usualmente en menos de 1 hora en horario activo.")) {
+            return;
+          }
+          card.querySelectorAll("[data-price-action]").forEach((b) => { b.disabled = true; });
+          setMessage(cardMessage, "Registrando tu decisión...");
+          try {
+            const payload = await api(`/api/portal/orders/${order.id}/price-decision`, {
+              method: "POST",
+              body: JSON.stringify({ action }),
+            });
+            if (payload?.customer) state.customer = payload.customer;
+            customerUpdateHandler();
+            if (action === "second_proof") {
+              const dropzone = document.querySelector("#flowPaymentDropzone");
+              if (dropzone) {
+                dropzone.scrollIntoView({ behavior: "smooth", block: "center" });
+                setTimeout(() => {
+                  if (dropzone.dataset.disabled !== "true") dropzone.click();
+                }, 350);
+              }
+            }
+          } catch (error) {
+            setMessage(cardMessage, error.message, "error");
+            card.querySelectorAll("[data-price-action]").forEach((b) => { b.disabled = false; });
+          }
+        });
+      });
+    }
     $(".next-action", card).innerHTML = [
       `<strong>Proxima accion</strong>`,
       `<span>${escapeHtml(customerNextAction(order))}</span>`,
@@ -257,7 +316,9 @@ export function renderOrders(orders) {
       element.classList.add("order-primary-button");
       primary.append(element);
     };
-    if (displayState === "payment_rejected") {
+    if (displayState === "price_decision_required") {
+      // Las 3 acciones viven en el banner naranja. Sin primary button extra.
+    } else if (displayState === "payment_rejected") {
       setPrimaryAction(makeUploadProofButton());
     } else if (displayState === "awaiting_connection") {
       setPrimaryAction(makeGoToStep4Button());

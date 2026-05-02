@@ -620,6 +620,7 @@ const {
   normalizeCustomerStatus,
   normalizePricingConfig,
   paymentMethods,
+  portalFrpPriceSuggestion,
   portalPhoneCountryHints,
   portalPublicServices,
   publicOrderStatuses,
@@ -2416,6 +2417,19 @@ function publishPortalOrdersForFrpOrder(db, frpOrder, reason = "frp_order_update
   if (portalOrder) publishPortalOrders(db, portalOrder.clientId, reason);
 }
 
+// QUE: re-publica el listado de ordenes a TODOS los clientes con stream activo.
+// PR-2a.3 lo usa cuando el operador cambia pricing config — cada cliente conectado
+// recibe sus ordenes con currentUnitPrice recalculado para detectar price-up
+// post-lock.
+// POR QUE: el snapshot de pricing es global, pero cada cliente tiene sus propios
+// benefits (VIP, monthly, volumen) y ordenes con su propio priceLocked. Recomputar
+// y enviar por cliente es mas simple que un evento "pricing" abstracto.
+function publishPortalOrdersForAll(db, reason = "pricing_config_updated") {
+  for (const clientId of [...portalOrderStreams.keys()]) {
+    publishPortalOrders(db, clientId, reason);
+  }
+}
+
 async function getCurrentUser(req) {
   const token = getCookie(req, "ariad_session");
   if (!token) return null;
@@ -3205,6 +3219,7 @@ const handleFrpApi = createFrpRoutes({
   publicFrpPricingState,
   publicFrpState,
   publishPortalOrdersForFrpOrder,
+  publishPortalOrdersForAll,
   readDb,
   requireAdminWithAudit,
   requireFrpAccess,
