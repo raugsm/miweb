@@ -2402,6 +2402,25 @@ frpClient?.addEventListener("blur", () => {
 frpQuantity?.addEventListener("input", syncFrpSuggestion);
 frpUnitPrice?.addEventListener("input", syncFrpSuggestion);
 frpPayment?.addEventListener("change", syncFrpSuggestion);
+// QUE: feedback inline al guardar (texto del boton + clase). PR-2a-fix BUG 2.
+// POR QUE: antes el unico feedback estaba en #frp-message lejos del boton de
+// pricing (off-screen). El cliente apretaba "Guardar" sin ver si funciono.
+function showButtonFeedback(button, kind, text, durationMs = 1800) {
+  if (!button) return;
+  const original = button.dataset.originalText || button.textContent;
+  if (!button.dataset.originalText) button.dataset.originalText = original;
+  button.classList.remove("is-success", "is-error");
+  button.classList.add(kind === "success" ? "is-success" : kind === "error" ? "is-error" : "is-saving");
+  button.textContent = text;
+  if (kind !== "saving") {
+    setTimeout(() => {
+      button.classList.remove("is-success", "is-error");
+      button.textContent = button.dataset.originalText || original;
+      button.disabled = false;
+    }, durationMs);
+  }
+}
+
 frpPricingBox?.addEventListener("submit", async (event) => {
   const form = event.target.closest("[data-frp-policy-form]");
   if (!form) return;
@@ -2410,6 +2429,7 @@ frpPricingBox?.addEventListener("submit", async (event) => {
   const button = form.querySelector("button[type='submit']");
   button.disabled = true;
   frpMessage.textContent = "";
+  showButtonFeedback(button, "saving", "Guardando...");
   try {
     const payload = await api("/api/frp/pricing/policy", {
       method: "PATCH",
@@ -2421,14 +2441,14 @@ frpPricingBox?.addEventListener("submit", async (event) => {
       }),
     });
     session.frp = payload.frp;
-    renderFrp();
+    showButtonFeedback(button, "success", "✓ Politica guardada", 1500);
     frpMessage.textContent = "Politica FRP actualizada.";
     frpMessage.dataset.type = "success";
+    setTimeout(() => renderFrp(), 1600);
   } catch (error) {
+    showButtonFeedback(button, "error", `✗ ${error.message.slice(0, 60)}`, 3500);
     frpMessage.textContent = error.message;
     frpMessage.dataset.type = "error";
-  } finally {
-    button.disabled = false;
   }
 });
 
@@ -2437,8 +2457,24 @@ frpPricingBox?.addEventListener("click", async (event) => {
   if (!button) return;
   const providerId = button.dataset.saveFrpProvider;
   const valueOf = (selector) => frpPricingBox.querySelector(`[${selector}="${providerId}"]`)?.value || "";
+  const reasonInput = frpPricingBox.querySelector(`[data-frp-provider-reason="${providerId}"]`);
+  const reason = (reasonInput?.value || "").trim();
+  // PR-2a-fix BUG 2: validacion client-side. El backend ya devolvia 400 con motivo
+  // obligatorio, pero el feedback estaba lejos del boton. Bloqueamos antes de
+  // round-trippear y marcamos el input rojo.
+  if (!reason) {
+    if (reasonInput) {
+      reasonInput.classList.add("is-invalid");
+      reasonInput.focus();
+      const onInput = () => { reasonInput.classList.remove("is-invalid"); reasonInput.removeEventListener("input", onInput); };
+      reasonInput.addEventListener("input", onInput);
+    }
+    showButtonFeedback(button, "error", "✗ Motivo obligatorio", 2500);
+    return;
+  }
   button.disabled = true;
   frpMessage.textContent = "";
+  showButtonFeedback(button, "saving", "Guardando...");
   try {
     const payload = await api(`/api/frp/pricing/providers/${encodeURIComponent(providerId)}`, {
       method: "PATCH",
@@ -2448,18 +2484,18 @@ frpPricingBox?.addEventListener("click", async (event) => {
         fixedCostUsdt: valueOf("data-frp-provider-fixed"),
         creditsPerProcess: valueOf("data-frp-provider-credits"),
         creditUnitCostUsdt: valueOf("data-frp-provider-credit-cost"),
-        reason: valueOf("data-frp-provider-reason"),
+        reason,
       }),
     });
     session.frp = payload.frp;
-    renderFrp();
-    frpMessage.textContent = "Proveedor FRP actualizado.";
+    showButtonFeedback(button, "success", "✓ Guardado", 1500);
+    frpMessage.textContent = `Proveedor FRP actualizado.`;
     frpMessage.dataset.type = "success";
+    setTimeout(() => renderFrp(), 1600);
   } catch (error) {
+    showButtonFeedback(button, "error", `✗ ${error.message.slice(0, 60)}`, 3500);
     frpMessage.textContent = error.message;
     frpMessage.dataset.type = "error";
-  } finally {
-    button.disabled = false;
   }
 });
 ticketService.addEventListener("change", () => {

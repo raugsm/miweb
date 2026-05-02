@@ -18,13 +18,20 @@ export function syncDetectedItems() {
   return count;
 }
 
+// QUE: estimacion del cliente. Devuelve `base` (precio nominal por unidad,
+// constante FINAL §4 — paso 1 siempre lo muestra), `unit` (precio efectivo
+// con tier por volumen / monthly / VIP aplicado, usado en total) y `total`
+// (= unit * qty).
+// POR QUE: paso 1 es "precio en vivo del momento por unidad sin descuento".
+// El descuento por volumen se aplica al total del paso 2/3, no al unitario
+// del paso 1. Antes paso 1 mostraba `unit` y caia con cantidades altas.
 export function estimatePortalPrice(quantity) {
   const qty = Math.max(1, Math.min(50, Number.parseInt(quantity, 10) || 1));
   const service = state.catalog?.services?.[0];
   const base = Number(service?.baseUnitPrice || 25);
   const benefit = state.customer?.benefit;
   if (!benefit?.usableNow) {
-    return { unit: base, total: base * qty, label: "Precio base. Beneficios bloqueados para este dispositivo." };
+    return { unit: base, base, total: base * qty, label: "Precio base. Beneficios bloqueados para este dispositivo." };
   }
   const quantityTier = (state.catalog?.quantityTiers || [])
     .filter((tier) => qty >= Number(tier.minQty || 0))
@@ -37,7 +44,12 @@ export function estimatePortalPrice(quantity) {
   const selected = [quantityTier, monthlyTier, vipTier]
     .filter(Boolean)
     .sort((a, b) => Number(a.unitPrice) - Number(b.unitPrice))[0] || { unitPrice: base, label: "Precio base" };
-  return { unit: Number(selected.unitPrice || base), total: Number(selected.unitPrice || base) * qty, label: selected.label || "Precio base" };
+  return {
+    unit: Number(selected.unitPrice || base),
+    base,
+    total: Number(selected.unitPrice || base) * qty,
+    label: selected.label || "Precio base",
+  };
 }
 
 export function customerCanRequestApprovalOptions() {

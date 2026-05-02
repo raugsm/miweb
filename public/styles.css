@@ -262,6 +262,11 @@ input:focus, select:focus {
   color: var(--danger);
   background: #fff7f7;
 }
+/* PR-2a-fix BUG 2 — feedback inline en botones de pricing FRP. */
+.mini-btn.is-saving { background: #e6f0ff; color: #1d4ed8; border-color: #93c5fd; }
+.mini-btn.is-success { background: #dcfce7; color: #14532d; border-color: #86efac; }
+.mini-btn.is-error { background: #fee2e2; color: #7f1d1d; border-color: #fca5a5; }
+.table-input.is-invalid, input.is-invalid { border-color: #ef4444 !important; background: #fef2f2; }
 .ghost-btn {
   width: 100%;
   border-color: #d5dfed;

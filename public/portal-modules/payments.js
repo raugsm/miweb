@@ -169,8 +169,15 @@ export function updateQuote() {
   const unitUsdtNode = $("#currentUnitPriceUsdt");
   const currencyLabel = $("#currentCurrencyLabel");
   const paymentBadge = $("#currentPaymentBadge");
-  if (unitNode) unitNode.textContent = paymentAmountText(estimate.unit, payment);
-  if (unitUsdtNode) unitUsdtNode.textContent = money(estimate.unit);
+  // QUE: paso 1 muestra precio BASE por unidad (constante FINAL §4), no el
+  // precio efectivo con tier de volumen aplicado. El total ya descontado vive
+  // en paso 3 (#quoteTotalUsdt / #quoteTotalLocal).
+  // POR QUE: PR-2a-fix. Antes el paso 1 caia de 25 a 24.6 al subir cantidad,
+  // confundiendo al cliente. FINAL §4 spec: precio del paso 1 es "el precio
+  // en vivo del momento por unidad", sin volume discount.
+  const baseUnit = Number(estimate.base ?? estimate.unit ?? 0);
+  if (unitNode) unitNode.textContent = paymentAmountText(baseUnit, payment);
+  if (unitUsdtNode) unitUsdtNode.textContent = money(baseUnit);
   if (currencyLabel) currencyLabel.textContent = `${paymentFlag(payment)} ${payment?.currency || "Tu moneda"}`;
   if (paymentBadge) paymentBadge.textContent = paymentOptionLabel(payment);
   const quoteUsdt = $("#quoteTotalUsdt");
