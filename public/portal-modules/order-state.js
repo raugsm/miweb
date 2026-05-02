@@ -59,22 +59,15 @@ export function trackingStage(order) {
   return "RECEIVED";
 }
 
-// QUE: estado de presentacion en Mis Ordenes para los 3 estados nuevos del PR-0.6
-// + el estado "price_decision_required" del PR-2a.3 (precio subio post-lock).
-// Cuando devuelve un valor distinto de "", orders.js renderiza pill + banner +
-// primary button especificos. Cuando devuelve "", cae al rendering generico
-// (tracking stage tradicional para estados 4-6, que se rediseñan en PR-5 Layout D).
-// POR QUE: hasta PR-0.5 los estados se mostraban como "Pedido recibido" generico,
-// sin diferenciar revision / rechazo / esperando conexion / precio subio.
-//
-// price_decision_required tiene PRIORIDAD sobre los otros estados activos porque
-// requiere accion explicita del cliente (FINAL §2 parte 5 — 3 opciones).
+// PR-2a-final.bundle2 item 4 — limpieza de estados pre-conexion. Mis Ordenes
+// solo muestra ordenes post-"Equipo conectado" (FINAL §8 actualizado), asi
+// que payment_review / payment_rejected / awaiting_connection ya no se
+// renderizan en el listado — viven inline en pasos 3/4. Solo
+// price_decision_required permanece (puede aparecer post-conexion si el
+// lock vence con costo subido durante procesamiento).
 export function ordersDisplayState(order) {
   if (!order) return "";
   if (orderRequiresPriceDecision(order)) return "price_decision_required";
-  if (order.publicStatus === "PAGO_EN_REVISION") return "payment_review";
-  if (order.publicStatus === "PAGO_RECHAZADO") return "payment_rejected";
-  if (order.publicStatus === "EN_PREPARACION" && !order.customerConnectedAt) return "awaiting_connection";
   return "";
 }
 

@@ -321,29 +321,24 @@
 
     <template id="orderTemplate">
       <article class="order-card">
-        <div class="order-top">
+        <div class="order-card-head">
           <div>
             <strong class="order-code"></strong>
-            <span class="order-service"></span>
+            <span class="order-meta"></span>
           </div>
           <span class="status-pill"></span>
         </div>
-        <div class="order-meta"></div>
         <div class="order-lock" hidden></div>
-        <div class="tracking-panel"></div>
-        <div class="order-alert hidden"></div>
+        <div class="order-progress" hidden></div>
         <div class="order-state-banners" hidden></div>
-        <div class="next-action"></div>
-        <div class="order-primary"></div>
-        <button class="details-toggle ghost" type="button" aria-expanded="false">Ver detalles</button>
-        <div class="order-details hidden">
-          <div class="payment-block"></div>
-          <div class="item-list"></div>
-          <div class="connection-block"></div>
-          <div class="order-actions">
-          <button class="copy-order ghost" type="button">Copiar datos</button>
-          </div>
+        <div class="order-card-actions">
+          <a class="order-primary-button" data-order-action="comprobante" href="#" target="_blank" rel="noopener">📄 Comprobante (PDF)</a>
+          <a class="order-secondary-button" data-order-action="help" href="#" target="_blank" rel="noopener">💬 Ayuda</a>
         </div>
+        <details class="order-activity-log">
+          <summary>Registro de actividad</summary>
+          <ul class="order-activity-timeline"></ul>
+        </details>
         <p class="message order-message" aria-live="polite"></p>
       </article>
     </template>

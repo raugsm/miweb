@@ -135,6 +135,64 @@ export function createPortalSerializers({
     return "Revisa el estado de tu solicitud.";
   }
 
+  // PR-2a-final.bundle2 item 4 — activity log timestamped para Mis Ordenes.
+  // Permite al cliente ver una linea de tiempo de eventos de la orden y sirve
+  // como evidencia anti-disputa (Latam ~1.7% chargeback, 75% friendly fraud
+  // segun research del usuario). Los eventos disparados por el cliente quedan
+  // marcados con actor="customer" — frontend les agrega "(vos)" al renderizar.
+  function buildOrderActivityLog(order, db) {
+    const events = [];
+    const frpOrder = db.frpOrders.find((candidate) => candidate.id === order.frpOrderId);
+    if (frpOrder?.paymentReviewedAt) {
+      events.push({
+        at: frpOrder.paymentReviewedAt,
+        label: "Pago confirmado por técnico",
+        actor: "tech",
+      });
+    }
+    if (order.customerConnectedAt) {
+      events.push({
+        at: order.customerConnectedAt,
+        label: "Equipo conectado",
+        actor: "customer",
+      });
+    }
+    const items = db.customerOrderItems.filter((item) => item.orderId === order.id);
+    for (const item of items) {
+      const job = db.frpJobs.find((candidate) => candidate.id === item.frpJobId);
+      if (!job) continue;
+      if (job.takenAt && job.status !== "ESPERANDO_PREPARACION") {
+        events.push({
+          at: job.takenAt,
+          label: `Equipo ${item.sequence} tomado por técnico`,
+          actor: "tech",
+        });
+      }
+      if (job.doneAt && job.status === "FINALIZADO") {
+        let suffix = "";
+        if (job.takenAt) {
+          const minutes = Math.max(1, Math.round((Date.parse(job.doneAt) - Date.parse(job.takenAt)) / 60000));
+          if (Number.isFinite(minutes)) suffix = ` · ${minutes} min`;
+        }
+        events.push({
+          at: job.doneAt,
+          label: `Equipo ${item.sequence} procesado${suffix}`,
+          actor: "tech",
+        });
+      } else if (job.status === "EN_PROCESO") {
+        events.push({
+          at: job.takenAt || job.updatedAt || job.createdAt || "",
+          label: `Equipo ${item.sequence} procesando ahora`,
+          actor: "tech",
+          inProgress: true,
+        });
+      }
+    }
+    return events
+      .filter((event) => event.at)
+      .sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+  }
+
   function publicCustomerOrder(order, db) {
     const payment = paymentMethods.find((candidate) => candidate.code === order.paymentMethod);
     const items = db.customerOrderItems.filter((item) => item.orderId === order.id);
@@ -187,6 +245,10 @@ export function createPortalSerializers({
       // lo usa para timer "¿Listo para conectar?" (2 min post-aprobacion sin
       // customerConnectedAt → banner azul con CTAs).
       paymentReviewedAt: frpOrderForReason?.paymentReviewedAt || "",
+      // PR-2a-final.bundle2 item 4: registro de actividad para Mis Ordenes.
+      // Eventos timestampeados con actor (tech | customer) — frontend marca
+      // los del cliente con "(vos)" al renderizar.
+      activityLog: buildOrderActivityLog(order, db),
       // PR-2a-final.1: lock 15 min con renovacion. Setea cuando operador
       // aprueba el pago. Si vence con costo favorable/igual, server renueva
       // silencioso. Si vence con costo subido, frontend muestra 3 opciones.

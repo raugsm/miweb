@@ -322,6 +322,157 @@
   animation: orderPillPulse 1.6s ease-in-out infinite;
 }
 
+/* PR-2a-final.bundle2 item 4 — Mis Ordenes card compacta + activity log. */
+.order-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.order-card-head > div { display: flex; flex-direction: column; gap: 2px; }
+.order-card-head .order-code { font-size: 14px; }
+.order-card-head .order-meta { font-size: 12px; color: #475569; }
+
+/* Pills de estado nuevos (post-conexion). */
+.status-pill[data-stage="ready"] {
+  border: 1px solid #c7d2fe; background: #e0e7ff; color: #3730a3;
+}
+.status-pill[data-stage="warn"] {
+  border: 1px solid #fdba74; background: #ffedd5; color: #9a3412;
+}
+
+/* Progress bar — procesados / total + barra. */
+.order-progress { display: flex; flex-direction: column; gap: 4px; margin: 6px 0; }
+.order-progress[hidden] { display: none; }
+.order-progress-line { display: flex; justify-content: space-between; font-size: 12px; color: #475569; }
+.order-progress-line b { color: #0f1629; font-weight: 700; }
+.order-progress-pct { font-weight: 700; color: #0f9f6e; }
+.order-progress-bar { height: 6px; background: #e5e7eb; border-radius: 3px; overflow: hidden; }
+.order-progress-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #10b981, #059669);
+  transition: width var(--motion-fast, 0.2s);
+}
+
+/* Botones acción card. */
+.order-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0;
+}
+.order-primary-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #fff !important;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  border: 0;
+  cursor: pointer;
+}
+.order-primary-button:hover { filter: brightness(1.08); }
+.order-primary-button.is-disabled,
+.order-primary-button[aria-disabled="true"] {
+  background: #cbd5e1;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+.order-secondary-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid #d4dae5;
+  background: #fff;
+  color: #1d4ed8 !important;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.order-secondary-button:hover { background: #eef4fd; }
+
+/* Activity log colapsable. */
+.order-activity-log {
+  margin-top: 4px;
+  border-top: 1px solid #e5e7eb;
+  padding-top: 8px;
+}
+.order-activity-log summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  color: #475569;
+  list-style: none;
+  padding: 4px 0;
+}
+.order-activity-log summary::-webkit-details-marker { display: none; }
+.order-activity-log summary::before {
+  content: "▶";
+  display: inline-block;
+  margin-right: 6px;
+  font-size: 9px;
+  transition: transform var(--motion-fast, 0.2s);
+}
+.order-activity-log[open] summary::before { transform: rotate(90deg); }
+.order-activity-timeline {
+  list-style: none;
+  padding: 0 0 0 14px;
+  margin: 6px 0 0;
+  border-left: 2px solid #e5e7eb;
+}
+.order-activity-event {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 0 6px 8px;
+  position: relative;
+  font-size: 12px;
+}
+.order-activity-event::before {
+  content: "";
+  position: absolute;
+  left: -7px;
+  top: 10px;
+  width: 8px;
+  height: 8px;
+  background: #1d4ed8;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 0 0 1px #e5e7eb;
+}
+.order-activity-event.is-in-progress::before {
+  background: #f59e0b;
+  animation: orderPillPulse 1.6s ease-in-out infinite;
+}
+.order-activity-time { font-size: 11px; color: #6b7280; font-weight: 600; }
+.order-activity-label { color: #1e293b; font-weight: 500; }
+.order-activity-self {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 700;
+}
+.order-activity-empty {
+  list-style: none;
+  padding: 6px 0;
+  color: #94a3b8;
+  font-style: italic;
+  font-size: 12px;
+}
+
 /* PR-2a.7+ — indicador "precio anclado" en cards de Mis Ordenes. Verde sutil
    comunica seguridad ("tu precio está asegurado contra cambios futuros").
    Reemplazable en PR-5 Layout D. */
