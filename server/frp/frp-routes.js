@@ -826,6 +826,62 @@ export function createFrpRoutes({
     return sendJson(res, 200, { job: publicFrpJob(job, db), frp: publicFrpState(db, user) });
   }
 
+  // QUE: cancelar un job en proceso. Spec operador-frp-express.md §3.2, §3.3,
+  // §5.1 + AC #25, #26.
+  // POR QUE: la spec define dos escenarios:
+  //   - timeout 30 min: tecnico aprieta "Cancelar job" desde el banner amarillo
+  //     porque no pudo finalizar. Libera el job para que otro tecnico intente.
+  //     Reason 'timeout' o 'manual' → status vuelve a LISTO_PARA_TECNICO.
+  //   - payment_reverted: admin revirtio aprobacion de pago mientras job estaba
+  //     EN_PROCESO. La orden ya no es valida — cancelacion definitiva. Reason
+  //     'payment_reverted' → status CANCELADO (terminal).
+  // El handler de "admin revierte pago" (no implementado aun) deberia llamar
+  // este endpoint con reason 'payment_reverted'. Por ahora el endpoint esta
+  // disponible para los otros dos flows (timeout/manual desde banner UI).
+  const frpJobCancelMatch = pathname.match(/^\/api\/frp\/jobs\/([^/]+)\/cancel$/);
+  if (req.method === "PATCH" && frpJobCancelMatch) {
+    if (!requireUser(user, res)) return;
+    const input = await parseJson(req);
+    const db = await readDb();
+    if (!(await requireFrpAccess(user, res, db, "FRP_JOB_CANCEL_DENIED", frpJobCancelMatch[1]))) return;
+    const job = db.frpJobs.find((candidate) => candidate.id === frpJobCancelMatch[1]);
+    const order = db.frpOrders.find((candidate) => candidate.id === job?.orderId);
+    if (!job || !order) return sendJson(res, 404, { error: "Trabajo FRP no encontrado." });
+    if (job.technicianId && job.technicianId !== user.id && user.role !== "ADMIN") {
+      return sendJson(res, 403, { error: "Este trabajo lo tomo otro tecnico." });
+    }
+    if (job.status !== "EN_PROCESO" && user.role !== "ADMIN") {
+      return sendJson(res, 400, { error: "Solo puedes cancelar un trabajo en proceso." });
+    }
+    const reason = String(input.reason || "").trim();
+    const allowedReasons = ["timeout", "payment_reverted", "manual"];
+    if (!allowedReasons.includes(reason)) {
+      return sendJson(res, 400, { error: "Razon de cancelacion no valida." });
+    }
+    const note = cleanText(input.note, 200);
+    // payment_reverted es terminal (la orden murio). Los demas reasons liberan
+    // el job a la cola para que otro tecnico intente.
+    const nextStatus = reason === "payment_reverted" ? "CANCELADO" : "LISTO_PARA_TECNICO";
+    job.status = nextStatus;
+    job.technicianId = "";
+    job.takenAt = "";
+    job.canceledAt = nowIso();
+    job.cancelReason = reason;
+    if (note) job.cancelNote = note;
+    job.updatedAt = job.canceledAt;
+    syncFrpOrderStatus(db, order);
+    audit(db, user.id, "FRP_JOB_CANCELED", job.id, {
+      code: job.code,
+      order: order.code,
+      reason,
+      note: note || "",
+      nextStatus,
+    });
+    await writeDb(db);
+    publishPortalOrdersForFrpOrder(db, order, "frp_job_canceled");
+    return sendJson(res, 200, { job: publicFrpJob(job, db), frp: publicFrpState(db, user) });
+  }
+
   const frpJobReviewMatch = pathname.match(/^\/api\/frp\/jobs\/([^/]+)\/review$/);
   if (req.method === "PATCH" && frpJobReviewMatch) {
     if (!requireUser(user, res)) return;
