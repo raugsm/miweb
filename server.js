@@ -89,6 +89,8 @@ import {
   validatePassword,
 } from "./server/core/validation.js";
 import {
+  classifyCostChange,
+  computeProviderBaseline,
   defaultFrpPricingConfig,
   frpCurrentPricing,
   frpDynamicMonthlyTiers,
@@ -265,6 +267,8 @@ async function ensureDb() {
       frpOrders: [],
       frpJobs: [],
       frpCounters: {},
+      frpProviderCostHistory: [],
+      frpPendingCostChanges: [],
       passwordResetTokens: [],
       passwordResetRequests: [],
       pricingConfig: defaultPricingConfig(),
@@ -306,6 +310,8 @@ async function readDb() {
   db.frpOrders ||= [];
   db.frpJobs ||= [];
   db.frpCounters ||= {};
+  db.frpProviderCostHistory ||= [];
+  db.frpPendingCostChanges ||= [];
   db.passwordResetTokens ||= [];
   db.passwordResetRequests ||= [];
   if (!Object.prototype.hasOwnProperty.call(db, "activeTechnician")) db.activeTechnician = null;
@@ -3280,6 +3286,8 @@ const handleFrpApi = createFrpRoutes({
   publicFrpState,
   publishPortalOrdersForFrpOrder,
   publishPortalOrdersForAll,
+  classifyCostChange,
+  computeProviderBaseline,
   readDb,
   requireAdminWithAudit,
   requireFrpAccess,

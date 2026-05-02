@@ -4,7 +4,7 @@ import test from "node:test";
 import { frpServiceCode, frpWorkChannel, portalPublicServices } from "../server/config/catalog.js";
 import { limaDateStamp, limaMonthStamp } from "../server/core/dates.js";
 import { sendSseEvent } from "../server/core/http.js";
-import { defaultFrpPricingConfig, frpCurrentPricing, frpDynamicQuantityTiers } from "../server/frp/pricing.js";
+import { classifyCostChange, computeProviderBaseline, defaultFrpPricingConfig, frpCurrentPricing, frpDynamicQuantityTiers } from "../server/frp/pricing.js";
 import { frpEligibilityResult, summarizeFrpEligibility } from "../server/frp/eligibility.js";
 
 test("portal Xiaomi FRP keeps its internal service and WhatsApp 3 mapping", () => {
@@ -16,33 +16,75 @@ test("portal Xiaomi FRP keeps its internal service and WhatsApp 3 mapping", () =
   assert.equal(portalFrp.workChannel, frpWorkChannel);
 });
 
-test("default FRP pricing still resolves the public 25 USDT unit price", () => {
+test("default FRP pricing resolves to internalCost + targetMargin (no static floor — PR-2a.6)", () => {
+  // Defaults: krypto cost 23.5 + targetMargin 1.5 = unitPrice 25 USDT.
+  // Sin minSell ni minMargin clamp (FINAL §4 precio en vivo puro).
   const db = { pricingConfig: { frpPricing: defaultFrpPricingConfig() } };
   const pricing = frpCurrentPricing(db);
 
   assert.equal(pricing.available, true);
   assert.equal(pricing.provider.id, "krypto");
-  assert.equal(pricing.internalCostUsdt, 3);
+  assert.equal(pricing.internalCostUsdt, 23.5);
   assert.equal(pricing.unitPrice, 25);
 });
 
 test("FRP volume tiers compute unitPrice as internalCost + tier margin (FINAL §3)", () => {
-  // Costo realista (~23.5 USDT) — coincide con la curva 24.6/24.7/24.8/24.9/25.
-  const config = defaultFrpPricingConfig();
-  config.providers[0].fixedCostUsdt = 23.5;
-  const db = { pricingConfig: { frpPricing: config } };
+  const db = { pricingConfig: { frpPricing: defaultFrpPricingConfig() } };
   const pricing = frpCurrentPricing(db);
 
-  assert.equal(pricing.internalCostUsdt, 23.5);
-  assert.equal(pricing.minAllowedUnitPrice, 24.5); // cost + minMargin (1.0) = piso VIP
   // Tiers ordenados de mayor minQty a menor, margenes 1.1/1.2/1.3/1.4/1.5:
   assert.deepEqual(
     frpDynamicQuantityTiers(pricing).map((tier) => tier.unitPrice),
     [24.6, 24.7, 24.8, 24.9, 25],
   );
-  // Piso 1.1 USDT siempre 0.1 por encima del piso VIP (1.0). FINAL §3.
-  const minTier = Math.min(...frpDynamicQuantityTiers(pricing).map((t) => t.unitPrice));
-  assert.ok(minTier > pricing.minAllowedUnitPrice, "piso volumen debe quedar > VIP floor");
+});
+
+test("classifyCostChange enforces 5-level validation (PR-2a.6)", () => {
+  const baseline = { providerId: "krypto", avg: 20, min: 18, max: 22, sampleCount: 5, bootstrap: false };
+  // Nivel 5: rango absoluto.
+  assert.equal(classifyCostChange(0.5, baseline).level, 5);
+  assert.equal(classifyCostChange(150, baseline).level, 5);
+  // Nivel 4: >=50% delta.
+  assert.equal(classifyCostChange(31, baseline).level, 4); // +55%
+  assert.equal(classifyCostChange(9, baseline).level, 4);  // -55%
+  // Nivel 3: 30-50%.
+  assert.equal(classifyCostChange(28, baseline).level, 3); // +40%
+  // Nivel 2: 15-30%.
+  assert.equal(classifyCostChange(24, baseline).level, 2); // +20%
+  // Nivel 1: <15%.
+  assert.equal(classifyCostChange(21, baseline).level, 1); // +5%
+  // Bootstrap: nivel 1 con flag baseline_pending.
+  const bootstrap = { providerId: "x", avg: 0, min: 0, max: 0, sampleCount: 0, bootstrap: true };
+  const c = classifyCostChange(50, bootstrap);
+  assert.equal(c.level, 1);
+  assert.equal(c.reason, "baseline_pending");
+  // Pero nivel 5 SIEMPRE primero, incluso en bootstrap.
+  assert.equal(classifyCostChange(150, bootstrap).level, 5);
+});
+
+test("computeProviderBaseline returns bootstrap when sample insufficient", () => {
+  const now = Date.now();
+  const recentEntry = (offsetMs, cost) => ({
+    providerId: "krypto",
+    costUsdt: cost,
+    recordedAt: new Date(now - offsetMs).toISOString(),
+  });
+  // 2 entradas recientes → bootstrap.
+  const hist1 = [recentEntry(60_000, 23.5), recentEntry(120_000, 24)];
+  const b1 = computeProviderBaseline(hist1, "krypto", 7);
+  assert.equal(b1.bootstrap, true);
+  assert.equal(b1.sampleCount, 2);
+  // 4 entradas en ventana → no bootstrap.
+  const hist2 = [
+    recentEntry(60_000, 23.5),
+    recentEntry(120_000, 24),
+    recentEntry(3_600_000, 23),
+    recentEntry(7_200_000, 22.5),
+  ];
+  const b2 = computeProviderBaseline(hist2, "krypto", 7);
+  assert.equal(b2.bootstrap, false);
+  assert.equal(b2.sampleCount, 4);
+  assert.equal(b2.avg, Number(((23.5 + 24 + 23 + 22.5) / 4).toFixed(4)));
 });
 
 test("VIP price = internalCost + vipUnitMargin and varies with provider cost (FINAL §3)", () => {

@@ -6,9 +6,13 @@ import { cleanText } from "../core/validation.js";
 export function defaultFrpPricingConfig() {
   return {
     policy: {
-      minMarginUsdt: 1,
+      // PR-2a.6: minMarginUsdt y minSellPriceUsdt ELIMINADOS — contradicen filosofia
+      // "precio en vivo" (FINAL §4). La proteccion contra error humano vive en el
+      // sistema dinamico de validacion (5 niveles + histórico 7d) en frp-routes.
+      // Se conservan a 0 por compat de schema (algunas DBs viejas pueden tenerlos).
+      minMarginUsdt: 0,
       targetMarginUsdt: 1.5,
-      minSellPriceUsdt: 25,
+      minSellPriceUsdt: 0,
       maxWorkerCostChangePct: 30,
       updatedAt: "",
       updatedBy: "",
@@ -19,7 +23,9 @@ export function defaultFrpPricingConfig() {
         name: "Krypto",
         status: "ACTIVE",
         costMode: "FIXED_USDT",
-        fixedCostUsdt: 3,
+        // PR-2a.6: default realista (FINAL §3 — costo cerca del precio
+        // de venta; el operador ajusta dia a dia desde el panel).
+        fixedCostUsdt: 23.5,
         creditsPerProcess: 0,
         creditUnitCostUsdt: 0,
         priority: 1,
@@ -122,50 +128,112 @@ export function frpCurrentPricing(db) {
       unitPrice: 0,
     };
   }
+  // PR-2a.6: pricing 100% dinamico. unitPrice = costo + targetMargin. Sin floors
+  // estaticos (ni minSell ni minMargin). FINAL §4. La proteccion contra error
+  // humano vive en la validacion del PATCH /pricing/providers (frp-routes.js).
   const internalCostUsdt = frpProviderCostUsdt(provider);
-  const minAllowedUnitPrice = moneyNumber(internalCostUsdt + config.policy.minMarginUsdt);
-  const unitPrice = moneyNumber(Math.max(
-    minAllowedUnitPrice,
-    internalCostUsdt + config.policy.targetMarginUsdt,
-    config.policy.minSellPriceUsdt,
-  ));
+  const targetMargin = moneyNumber(config.policy.targetMarginUsdt);
+  const unitPrice = moneyNumber(internalCostUsdt + targetMargin);
+  // minAllowedUnitPrice se mantiene por compat con consumidores que lo leen,
+  // pero ya no opera como clamp en frpDynamicTier. Vale exactamente unitPrice
+  // (= cost + targetMargin) ya que es el "piso" semantico del precio normal.
   return {
     available: unitPrice > 0,
     reason: unitPrice > 0 ? "" : "Precio FRP no configurado",
     config,
     provider,
     internalCostUsdt,
-    minAllowedUnitPrice,
+    minAllowedUnitPrice: unitPrice,
     unitPrice,
   };
 }
 
-// QUE: calcula el unitPrice efectivo de un tier dado el contexto pricing actual.
-// Soporta dos modelos:
-//   1. Tier con `marginUsdt` (frpQuantityTiers post PR-2a.1, FINAL §3): unit =
-//      max(piso, internalCost + margin). Tier 1 usa minSellPriceUsdt como piso
-//      (precio nominal 25 USDT); tiers de volumen usan minAllowedUnitPrice
-//      (= internalCost + minMarginUsdt = piso VIP).
+// QUE: calcula el unitPrice efectivo de un tier (post PR-2a.6 — sin floors
+// estaticos). Soporta dos modelos:
+//   1. Tier con `marginUsdt` (frpQuantityTiers, FINAL §3): unit = cost + margin.
+//      Sin clamp. La validacion de rangos sanos del costo vive en el sistema
+//      de validacion dinamica de cambios (frp-routes 5-niveles).
 //   2. Tier con `unitPrice` (frpMonthlyTiers, sin migrar — fallback legacy):
 //      computa descuento contra el precio nominal y aplica.
 export function frpDynamicTier(defaultTier, pricing) {
   if (!pricing?.available) return { ...defaultTier };
-  const minAllowed = moneyNumber(pricing.minAllowedUnitPrice);
-  const minSell = moneyNumber(pricing.config?.policy?.minSellPriceUsdt || 0);
   const internalCost = moneyNumber(pricing.internalCostUsdt || 0);
   if (defaultTier.marginUsdt !== undefined) {
     const margin = moneyNumber(defaultTier.marginUsdt);
-    const isBaseTier = Number(defaultTier.minQty || 1) <= 1;
-    const floor = isBaseTier ? Math.max(minSell, minAllowed) : minAllowed;
     return {
       ...defaultTier,
-      unitPrice: moneyNumber(Math.max(floor, internalCost + margin)),
+      unitPrice: moneyNumber(internalCost + margin),
     };
   }
+  // Legacy unitPrice-based (frpMonthlyTiers). Mantenemos el modelo previo: el
+  // descuento es la diferencia respecto al precio nominal 25, aplicada sobre el
+  // pricing.unitPrice actual. No tiene sentido perfecto sin floors, pero queda
+  // como compat hasta que se migre o reemplace.
   const discount = moneyNumber(25 - Number(defaultTier.unitPrice || 25));
   return {
     ...defaultTier,
-    unitPrice: moneyNumber(Math.max(minAllowed, pricing.unitPrice - discount)),
+    unitPrice: moneyNumber(Math.max(0, pricing.unitPrice - discount)),
+  };
+}
+
+// PR-2a.6: helpers de proteccion contra error humano via histórico.
+
+// QUE: clasifica un cambio de costo en 5 niveles segun el delta vs baseline.
+// Niveles:
+//   1: <15% — guarda directo, audit log.
+//   2: 15-30% — confirmacion del operador.
+//   3: 30-50% — confirmacion + motivo >= 15 chars + notif a admin.
+//   4: >50% — bloqueado, requiere aprobacion de admin.
+//   5: newCost < 1 OR > 100 USDT — rechazo absoluto (rangos no realistas).
+// Si el provider esta en bootstrap (history < 3 entradas Y la primer entrada
+// tiene < 7 dias), trata el cambio como nivel 1 con flag baseline_pending.
+// El nivel 5 se evalua SIEMPRE primero (incluso en bootstrap).
+export function classifyCostChange(newCost, baseline) {
+  const cost = Number(newCost) || 0;
+  if (cost < 1 || cost > 100) {
+    return { level: 5, deltaPct: 0, reason: "absolute_range_violation", baseline };
+  }
+  if (!baseline || baseline.bootstrap) {
+    return { level: 1, deltaPct: 0, reason: "baseline_pending", baseline };
+  }
+  const avg = Number(baseline.avg) || 0;
+  if (avg <= 0) return { level: 1, deltaPct: 0, reason: "no_baseline", baseline };
+  const deltaPct = Math.abs((cost - avg) / avg) * 100;
+  let level = 1;
+  if (deltaPct >= 50) level = 4;
+  else if (deltaPct >= 30) level = 3;
+  else if (deltaPct >= 15) level = 2;
+  return { level, deltaPct: Number(deltaPct.toFixed(2)), reason: "computed", baseline };
+}
+
+// QUE: calcula avg/min/max del costo del proveedor en los ultimos N dias.
+// Si hay menos de 3 entradas o la mas vieja tiene menos de N dias de antiguedad,
+// devuelve bootstrap=true para que la validacion sea lenient.
+export function computeProviderBaseline(history, providerId, days = 7) {
+  const now = Date.now();
+  const windowMs = days * 24 * 60 * 60 * 1000;
+  const entries = (history || [])
+    .filter((entry) => entry.providerId === providerId)
+    .filter((entry) => {
+      const ts = Date.parse(entry.recordedAt || "");
+      return Number.isFinite(ts) && (now - ts) <= windowMs;
+    });
+  if (!entries.length) {
+    return { providerId, avg: 0, min: 0, max: 0, sampleCount: 0, bootstrap: true };
+  }
+  const totalEntries = (history || []).filter((e) => e.providerId === providerId);
+  const oldestTs = Math.min(...totalEntries.map((e) => Date.parse(e.recordedAt || "")).filter(Number.isFinite));
+  const oldestAgeMs = Number.isFinite(oldestTs) ? now - oldestTs : 0;
+  const bootstrap = totalEntries.length < 3 && oldestAgeMs < windowMs;
+  const costs = entries.map((e) => Number(e.costUsdt) || 0);
+  const avg = costs.reduce((sum, c) => sum + c, 0) / costs.length;
+  return {
+    providerId,
+    avg: Number(avg.toFixed(4)),
+    min: Math.min(...costs),
+    max: Math.max(...costs),
+    sampleCount: entries.length,
+    bootstrap,
   };
 }
 

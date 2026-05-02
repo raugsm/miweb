@@ -37,6 +37,8 @@ export function createFrpRoutes({
   publicFrpState,
   publishPortalOrdersForFrpOrder,
   publishPortalOrdersForAll,
+  classifyCostChange,
+  computeProviderBaseline,
   readDb,
   requireAdminWithAudit,
   requireFrpAccess,
@@ -92,7 +94,7 @@ export function createFrpRoutes({
     db.pricingConfig = normalizePricingConfig(db.pricingConfig);
     const provider = db.pricingConfig.frpPricing.providers.find((candidate) => candidate.id === frpProviderMatch[1]);
     if (!provider) return sendJson(res, 404, { error: "Proveedor FRP no encontrado." });
-    const reason = cleanText(input.reason, 160);
+    const reason = cleanText(input.reason, 200);
     if (!reason) return sendJson(res, 400, { error: "Motivo obligatorio para cambiar costo/proveedor FRP." });
     const previous = structuredClone(provider);
     const nextStatus = frpProviderStatuses.has(String(input.status || "").toUpperCase()) ? String(input.status).toUpperCase() : provider.status;
@@ -110,42 +112,218 @@ export function createFrpRoutes({
       updatedBy: user.id,
     };
     const nextCost = frpProviderCostUsdt(nextProvider);
+    const previousCost = frpProviderCostUsdt(provider);
     if (nextProvider.status !== "OFF" && nextCost <= 0) {
       audit(db, user.id, "FRP_PROVIDER_UPDATE_BLOCKED", provider.id, { reason: "invalid_cost", input: { status: nextProvider.status, costMode: nextProvider.costMode } });
       await writeDb(db);
       return sendJson(res, 400, { error: "Costo FRP obligatorio para proveedor activo o respaldo." });
     }
-    if (user.role !== "ADMIN") {
-      const previousCost = frpProviderCostUsdt(provider);
-      const limit = db.pricingConfig.frpPricing.policy.maxWorkerCostChangePct;
-      const deltaPct = previousCost > 0 ? Math.abs(nextCost - previousCost) / previousCost * 100 : 100;
-      if (deltaPct > limit) {
-        audit(db, user.id, "FRP_PROVIDER_UPDATE_BLOCKED", provider.id, {
-          reason: "worker_change_limit",
-          previousCost,
-          nextCost,
-          deltaPct: percentNumber(deltaPct),
-          limit,
+    // PR-2a.6: validacion dinamica de cambio de costo en 5 niveles.
+    // Solo aplica cuando hay un cambio EFECTIVO de costo (no solo status/priority).
+    const costChanged = Math.abs(nextCost - previousCost) > 0.0001;
+    let classification = { level: 1, deltaPct: 0, reason: "no_cost_change", baseline: null };
+    if (costChanged) {
+      const baseline = computeProviderBaseline(db.frpProviderCostHistory, provider.id, 7);
+      classification = classifyCostChange(nextCost, baseline);
+      // Nivel 5: rango absoluto. Rechazo inmediato.
+      if (classification.level === 5) {
+        audit(db, user.id, "FRP_PROVIDER_UPDATE_REJECTED_L5", provider.id, {
+          previousCost, nextCost, deltaPct: classification.deltaPct, reason: "absolute_range",
         });
         await writeDb(db);
-        return sendJson(res, 403, { error: `Cambio mayor a ${limit}%. Pide aprobacion de administrador.` });
+        return sendJson(res, 400, {
+          error: `Valor fuera de rango realista (${nextCost.toFixed(2)} USDT). Verificá lo escrito — debe estar entre 1 y 100 USDT.`,
+          level: 5,
+        });
+      }
+      // Nivel 2: requiere confirmacion explicita.
+      if (classification.level === 2 && !input.confirmed) {
+        return sendJson(res, 412, {
+          requiresConfirmation: true,
+          level: 2,
+          message: `Cambio mediano de ${classification.deltaPct.toFixed(1)}% sobre el promedio 7d (${baseline.avg.toFixed(2)} USDT). Confirmá: ${provider.name} ${previousCost.toFixed(2)} → ${nextCost.toFixed(2)} USDT.`,
+          baseline,
+          previousCost, nextCost, deltaPct: classification.deltaPct,
+        });
+      }
+      // Nivel 3: requiere confirmacion + motivo >= 15 chars.
+      if (classification.level === 3) {
+        if (!input.confirmed) {
+          return sendJson(res, 412, {
+            requiresConfirmation: true,
+            level: 3,
+            message: `Cambio importante de ${classification.deltaPct.toFixed(1)}% sobre el promedio 7d. Necesita motivo detallado (≥15 caracteres) y confirmación.`,
+            baseline,
+            previousCost, nextCost, deltaPct: classification.deltaPct,
+          });
+        }
+        if (reason.length < 15) {
+          return sendJson(res, 400, {
+            error: `Cambio nivel 3 requiere motivo detallado (≥15 caracteres, actuales: ${reason.length}).`,
+            level: 3,
+          });
+        }
+      }
+      // Nivel 4: bloqueo. Crea pendingChange y queda esperando aprobacion admin.
+      if (classification.level === 4) {
+        const adminUserId = (db.users.find((u) => u.role === "ADMIN") || {}).id;
+        const pendingChange = {
+          id: crypto.randomUUID(),
+          providerId: provider.id,
+          providerName: provider.name,
+          previousCost,
+          nextCost,
+          nextProvider: { ...nextProvider }, // snapshot completo para aplicar al aprobar
+          deltaPct: classification.deltaPct,
+          baselineAvg: classification.baseline.avg,
+          requestedBy: user.id,
+          requestedReason: reason,
+          requestedAt: nowIso(),
+          status: "PENDING",
+          notifyAdminId: adminUserId || "",
+        };
+        db.frpPendingCostChanges.unshift(pendingChange);
+        audit(db, user.id, "FRP_PROVIDER_UPDATE_PENDING_L4", provider.id, {
+          pendingId: pendingChange.id, previousCost, nextCost, deltaPct: classification.deltaPct,
+        });
+        await writeDb(db);
+        return sendJson(res, 202, {
+          level: 4,
+          pendingChange: { id: pendingChange.id, deltaPct: classification.deltaPct, requiresAdminApproval: true },
+          message: `Cambio drastico (${classification.deltaPct.toFixed(1)}%). Queda PENDIENTE de aprobacion de admin. ID: ${pendingChange.id}.`,
+        });
       }
     }
+    // Nivel 1, 2-confirmado, 3-confirmado: aplica cambio.
     Object.assign(provider, nextProvider);
     if (provider.status === "ACTIVE") {
       for (const other of db.pricingConfig.frpPricing.providers) {
         if (other.id !== provider.id && other.status === "ACTIVE") other.status = "BACKUP";
       }
     }
+    if (costChanged) {
+      db.frpProviderCostHistory.unshift({
+        id: crypto.randomUUID(),
+        providerId: provider.id,
+        costUsdt: nextCost,
+        recordedAt: nowIso(),
+        recordedBy: user.id,
+        reason,
+        level: classification.level,
+        deltaPct: classification.deltaPct,
+      });
+      // Cap a las ultimas 500 entradas total para evitar crecimiento infinito.
+      if (db.frpProviderCostHistory.length > 500) {
+        db.frpProviderCostHistory.length = 500;
+      }
+    }
     audit(db, user.id, "FRP_PROVIDER_UPDATED", provider.id, {
       from: previous,
       to: provider,
-      approved: true,
-      approvedByPolicy: user.role !== "ADMIN",
+      level: classification.level,
+      deltaPct: classification.deltaPct,
+      baselineNote: classification.reason,
     });
     await writeDb(db);
     publishPortalOrdersForAll(db, "pricing_provider_updated");
-    return sendJson(res, 200, { pricing: publicFrpPricingState(db, user), frp: publicFrpState(db, user) });
+    return sendJson(res, 200, {
+      pricing: publicFrpPricingState(db, user),
+      frp: publicFrpState(db, user),
+      level: classification.level,
+      deltaPct: classification.deltaPct,
+    });
+  }
+
+  // PR-2a.6: GET pending cost changes (solo admin ve la cola).
+  if (req.method === "GET" && pathname === "/api/frp/pricing/pending-changes") {
+    if (!requireUser(user, res)) return;
+    const db = await readDb();
+    if (user.role !== "ADMIN") return sendJson(res, 403, { error: "Solo admin puede ver cola de cambios pendientes." });
+    const pending = (db.frpPendingCostChanges || [])
+      .filter((c) => c.status === "PENDING")
+      .map((c) => ({
+        id: c.id,
+        providerId: c.providerId,
+        providerName: c.providerName,
+        previousCost: c.previousCost,
+        nextCost: c.nextCost,
+        deltaPct: c.deltaPct,
+        baselineAvg: c.baselineAvg,
+        requestedBy: c.requestedBy,
+        requestedReason: c.requestedReason,
+        requestedAt: c.requestedAt,
+      }));
+    return sendJson(res, 200, { pendingChanges: pending });
+  }
+
+  // PR-2a.6: aprobar/rechazar cambio pendiente nivel 4 (solo admin).
+  const pendingChangeMatch = pathname.match(/^\/api\/frp\/pricing\/pending-changes\/([^/]+)\/(approve|reject)$/);
+  if (req.method === "POST" && pendingChangeMatch) {
+    if (!requireUser(user, res)) return;
+    const db = await readDb();
+    if (user.role !== "ADMIN") return sendJson(res, 403, { error: "Solo admin puede aprobar/rechazar cambios drásticos." });
+    const input = await parseJson(req);
+    const action = pendingChangeMatch[2];
+    const pendingId = pendingChangeMatch[1];
+    const pending = (db.frpPendingCostChanges || []).find((c) => c.id === pendingId);
+    if (!pending) return sendJson(res, 404, { error: "Cambio pendiente no encontrado." });
+    if (pending.status !== "PENDING") return sendJson(res, 409, { error: "Este cambio ya fue procesado." });
+    const decisionReason = cleanText(input.reason, 200);
+    if (!decisionReason) return sendJson(res, 400, { error: "Motivo de decisión obligatorio." });
+    pending.approvedBy = user.id;
+    pending.approvedAt = nowIso();
+    pending.approvedReason = decisionReason;
+    if (action === "approve") {
+      pending.status = "APPROVED";
+      const provider = db.pricingConfig.frpPricing.providers.find((p) => p.id === pending.providerId);
+      if (!provider) {
+        pending.status = "REJECTED";
+        pending.approvedReason = `(auto-rejected) provider no longer exists: ${decisionReason}`;
+        await writeDb(db);
+        return sendJson(res, 404, { error: "El proveedor ya no existe." });
+      }
+      // Aplica el snapshot guardado.
+      Object.assign(provider, pending.nextProvider, { updatedAt: pending.approvedAt, updatedBy: pending.requestedBy });
+      if (provider.status === "ACTIVE") {
+        for (const other of db.pricingConfig.frpPricing.providers) {
+          if (other.id !== provider.id && other.status === "ACTIVE") other.status = "BACKUP";
+        }
+      }
+      db.frpProviderCostHistory.unshift({
+        id: crypto.randomUUID(),
+        providerId: provider.id,
+        costUsdt: pending.nextCost,
+        recordedAt: pending.approvedAt,
+        recordedBy: pending.requestedBy,
+        reason: pending.requestedReason,
+        level: 4,
+        deltaPct: pending.deltaPct,
+        approvedBy: user.id,
+      });
+      if (db.frpProviderCostHistory.length > 500) db.frpProviderCostHistory.length = 500;
+      audit(db, user.id, "FRP_PENDING_CHANGE_APPROVED", pending.id, {
+        providerId: pending.providerId,
+        previousCost: pending.previousCost,
+        nextCost: pending.nextCost,
+        deltaPct: pending.deltaPct,
+      });
+      await writeDb(db);
+      publishPortalOrdersForAll(db, "pricing_provider_updated");
+      return sendJson(res, 200, {
+        pricing: publicFrpPricingState(db, user),
+        frp: publicFrpState(db, user),
+        approved: true,
+      });
+    }
+    pending.status = "REJECTED";
+    audit(db, user.id, "FRP_PENDING_CHANGE_REJECTED", pending.id, {
+      providerId: pending.providerId,
+      previousCost: pending.previousCost,
+      nextCost: pending.nextCost,
+      deltaPct: pending.deltaPct,
+    });
+    await writeDb(db);
+    return sendJson(res, 200, { rejected: true });
   }
 
   if (req.method === "POST" && pathname === "/api/frp/orders") {

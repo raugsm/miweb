@@ -1210,13 +1210,15 @@ function renderFrpPricingBox() {
     </div>
   `;
 
+  // PR-2a.6: removidos "Margen minimo" y "Precio minimo" — contradicen filosofia
+  // precio en vivo (FINAL §4). La proteccion contra error humano vive en el
+  // sistema dinamico de validacion 5-niveles del PATCH /pricing/providers.
   const policyHtml = canManageFrpPolicy() && pricing.policy ? `
     <form class="frp-policy-form" data-frp-policy-form>
-      <label>Margen minimo<input type="number" min="0" step="0.01" value="${escapeHtml(pricing.policy.minMarginUsdt)}" data-frp-policy="minMarginUsdt" /></label>
-      <label>Ganancia objetivo<input type="number" min="0" step="0.01" value="${escapeHtml(pricing.policy.targetMarginUsdt)}" data-frp-policy="targetMarginUsdt" /></label>
-      <label>Precio minimo<input type="number" min="0" step="0.01" value="${escapeHtml(pricing.policy.minSellPriceUsdt)}" data-frp-policy="minSellPriceUsdt" /></label>
+      <label>Ganancia objetivo (USDT/unidad)<input type="number" min="0" step="0.01" value="${escapeHtml(pricing.policy.targetMarginUsdt)}" data-frp-policy="targetMarginUsdt" /></label>
       <label>Limite delegado %<input type="number" min="0" step="1" value="${escapeHtml(pricing.policy.maxWorkerCostChangePct)}" data-frp-policy="maxWorkerCostChangePct" /></label>
       <button class="mini-btn" type="submit">Guardar politica</button>
+      <small class="hint">Precio en vivo = costo proveedor + ganancia objetivo. Sin floors estaticos. Cambios drasticos protegidos por validacion dinamica (5 niveles).</small>
     </form>
   ` : "";
 
@@ -1264,6 +1266,37 @@ function renderFrpPricingBox() {
     </div>
   ` : `<p class="pricing-note"><strong>Precio FRP automatico</strong><span>Solo el administrador o WhatsApp 3 autorizado puede cambiar proveedor y costos.</span></p>`;
 
+  // PR-2a.6: cola de cambios pendientes (nivel 4) — solo admin la ve y aprueba.
+  const pendingList = session.pendingCostChanges || [];
+  const pendingHtml = isAdmin() ? `
+    <section class="frp-pending-panel" data-frp-pending-section>
+      <header>
+        <div>
+          <p class="eyebrow">Cambios drásticos pendientes (nivel 4)</p>
+          <h4>${pendingList.length} pendiente${pendingList.length === 1 ? "" : "s"} de aprobación</h4>
+        </div>
+      </header>
+      ${pendingList.length === 0 ? `<p class="muted-cell">Sin cambios pendientes.</p>` : `
+        <ul class="frp-pending-list">
+          ${pendingList.map((p) => `
+            <li class="frp-pending-item" data-pending-id="${escapeHtml(p.id)}">
+              <div class="frp-pending-info">
+                <strong>${escapeHtml(p.providerName)}</strong>
+                <span>${Number(p.previousCost).toFixed(2)} → <b>${Number(p.nextCost).toFixed(2)}</b> USDT (Δ ${Number(p.deltaPct).toFixed(1)}% sobre baseline ${Number(p.baselineAvg).toFixed(2)})</span>
+                <span class="frp-pending-meta">Solicitado por ${escapeHtml(p.requestedBy.slice(0, 8))}… · ${escapeHtml(formatDate(p.requestedAt))}</span>
+                <span class="frp-pending-reason">"${escapeHtml(p.requestedReason)}"</span>
+              </div>
+              <div class="frp-pending-actions">
+                <button class="mini-btn" type="button" data-pending-action="approve" data-pending-id="${escapeHtml(p.id)}">Aprobar</button>
+                <button class="mini-btn danger-mini" type="button" data-pending-action="reject" data-pending-id="${escapeHtml(p.id)}">Rechazar</button>
+              </div>
+            </li>
+          `).join("")}
+        </ul>
+      `}
+    </section>
+  ` : "";
+
   frpPricingBox.innerHTML = `
     <section class="frp-pricing-panel">
       <header>
@@ -1275,9 +1308,50 @@ function renderFrpPricingBox() {
       ${summaryHtml}
       ${policyHtml}
       ${providersHtml}
+      ${pendingHtml}
     </section>
   `;
 }
+
+// PR-2a.6: refrescar cola de cambios pendientes (admin only).
+async function refreshPendingCostChanges() {
+  if (!isAdmin()) return;
+  try {
+    const payload = await api("/api/frp/pricing/pending-changes");
+    session.pendingCostChanges = payload.pendingChanges || [];
+  } catch {
+    session.pendingCostChanges = [];
+  }
+}
+
+// Click delegado para aprobar/rechazar cambios pendientes.
+frpPricingBox?.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-pending-action]");
+  if (!button) return;
+  const action = button.dataset.pendingAction;
+  const pendingId = button.dataset.pendingId;
+  const decisionReason = window.prompt(
+    action === "approve"
+      ? "Motivo de aprobación (lo verá el operador que solicitó):"
+      : "Motivo de rechazo (lo verá el operador que solicitó):"
+  );
+  if (!decisionReason || !decisionReason.trim()) return;
+  button.disabled = true;
+  try {
+    await api(`/api/frp/pricing/pending-changes/${encodeURIComponent(pendingId)}/${action}`, {
+      method: "POST",
+      body: JSON.stringify({ reason: decisionReason.trim() }),
+    });
+    await refreshPendingCostChanges();
+    await refreshSession();
+    frpMessage.textContent = action === "approve" ? "Cambio aprobado y aplicado." : "Cambio rechazado.";
+    frpMessage.dataset.type = "success";
+  } catch (error) {
+    frpMessage.textContent = error.message || "No se pudo procesar la decisión.";
+    frpMessage.dataset.type = "error";
+    button.disabled = false;
+  }
+});
 
 function frpStatusLabel(status, type = "jobs") {
   const list = session.frp?.statuses?.[type] || [];
@@ -2345,6 +2419,7 @@ function activatePasswordResetFromUrl() {
 
 async function refreshSession() {
   session = await api("/api/session");
+  await refreshPendingCostChanges();
   renderLayout();
 }
 
@@ -2572,12 +2647,15 @@ frpPricingBox?.addEventListener("submit", async (event) => {
   frpMessage.textContent = "";
   showButtonFeedback(button, "saving", "Guardando...");
   try {
+    // PR-2a.6: solo se manda targetMargin y maxWorkerCostChangePct. Los campos
+    // legacy (minMarginUsdt, minSellPriceUsdt) los ponemos a 0 explicitamente
+    // para limpiar persisted leftovers de versiones anteriores.
     const payload = await api("/api/frp/pricing/policy", {
       method: "PATCH",
       body: JSON.stringify({
-        minMarginUsdt: valueOf("minMarginUsdt"),
+        minMarginUsdt: 0,
+        minSellPriceUsdt: 0,
         targetMarginUsdt: valueOf("targetMarginUsdt"),
-        minSellPriceUsdt: valueOf("minSellPriceUsdt"),
         maxWorkerCostChangePct: valueOf("maxWorkerCostChangePct"),
       }),
     });
@@ -2593,16 +2671,10 @@ frpPricingBox?.addEventListener("submit", async (event) => {
   }
 });
 
-frpPricingBox?.addEventListener("click", async (event) => {
-  const button = event.target.closest("[data-save-frp-provider]");
-  if (!button) return;
-  const providerId = button.dataset.saveFrpProvider;
+async function saveFrpProvider(button, providerId, options = {}) {
   const valueOf = (selector) => frpPricingBox.querySelector(`[${selector}="${providerId}"]`)?.value || "";
   const reasonInput = frpPricingBox.querySelector(`[data-frp-provider-reason="${providerId}"]`);
   const reason = (reasonInput?.value || "").trim();
-  // PR-2a-fix BUG 2: validacion client-side. El backend ya devolvia 400 con motivo
-  // obligatorio, pero el feedback estaba lejos del boton. Bloqueamos antes de
-  // round-trippear y marcamos el input rojo.
   if (!reason) {
     if (reasonInput) {
       reasonInput.classList.add("is-invalid");
@@ -2615,7 +2687,7 @@ frpPricingBox?.addEventListener("click", async (event) => {
   }
   button.disabled = true;
   frpMessage.textContent = "";
-  showButtonFeedback(button, "saving", "Guardando...");
+  showButtonFeedback(button, "saving", options.confirmed ? "Aplicando..." : "Guardando...");
   try {
     const payload = await api(`/api/frp/pricing/providers/${encodeURIComponent(providerId)}`, {
       method: "PATCH",
@@ -2626,18 +2698,50 @@ frpPricingBox?.addEventListener("click", async (event) => {
         creditsPerProcess: valueOf("data-frp-provider-credits"),
         creditUnitCostUsdt: valueOf("data-frp-provider-credit-cost"),
         reason,
+        confirmed: Boolean(options.confirmed),
       }),
     });
+    // Nivel 4 — backend devolvio 202 con pendingChange. La api() helper lo trata
+    // como respuesta exitosa porque 202.ok === true.
+    if (payload?.level === 4 && payload?.pendingChange) {
+      showButtonFeedback(button, "saving", "Pendiente · admin", 4500);
+      frpMessage.textContent = payload.message || "Cambio drástico — pendiente de aprobación de admin.";
+      frpMessage.dataset.type = "warn";
+      // Refrescar para que la cola de pendientes muestre el nuevo item.
+      setTimeout(() => { refreshSession(); }, 1800);
+      return;
+    }
     session.frp = payload.frp;
-    showButtonFeedback(button, "success", "✓ Guardado", 1500);
-    frpMessage.textContent = `Proveedor FRP actualizado.`;
+    const levelLabel = payload?.level && payload.level > 1 ? ` (nivel ${payload.level})` : "";
+    showButtonFeedback(button, "success", `✓ Guardado${levelLabel}`, 1500);
+    frpMessage.textContent = `Proveedor FRP actualizado${payload?.deltaPct ? ` (Δ ${payload.deltaPct.toFixed(1)}%)` : ""}.`;
     frpMessage.dataset.type = "success";
     setTimeout(() => renderFrp(), 1600);
   } catch (error) {
-    showButtonFeedback(button, "error", `✗ ${error.message.slice(0, 60)}`, 3500);
-    frpMessage.textContent = error.message;
+    // PR-2a.6: 412 = requiere confirmacion (nivel 2 o 3). No es un fallo,
+    // es parte del flow. Pedimos confirm() y reintentamos con confirmed:true.
+    if (error.requiresConfirmation && (error.level === 2 || error.level === 3)) {
+      const proceed = window.confirm(
+        `${error.message}\n\n` +
+        (error.level === 3 ? "Nivel 3: motivo necesita ≥15 caracteres y se notificará al admin.\n\n" : "") +
+        "¿Confirmar el cambio?"
+      );
+      if (proceed) {
+        return saveFrpProvider(button, providerId, { confirmed: true });
+      }
+      showButtonFeedback(button, "error", "Cambio cancelado", 1800);
+      return;
+    }
+    showButtonFeedback(button, "error", `✗ ${(error.message || "Error").slice(0, 60)}`, 3500);
+    frpMessage.textContent = error.message || "No se pudo guardar.";
     frpMessage.dataset.type = "error";
   }
+}
+
+frpPricingBox?.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-save-frp-provider]");
+  if (!button) return;
+  await saveFrpProvider(button, button.dataset.saveFrpProvider);
 });
 ticketService.addEventListener("change", () => {
   ticketPrice.value = selectedService()?.defaultPrice || 0;
