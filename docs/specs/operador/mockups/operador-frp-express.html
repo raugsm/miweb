@@ -27,6 +27,9 @@
       --danger-bg: #FCEBEB;
       --danger-border: #F09595;
       --danger-text: #501313;
+      --vip-bg: #FAEEDA;
+      --vip-border: #EF9F27;
+      --vip-text: #633806;
       --radius-sm: 6px;
       --radius-md: 8px;
       --radius-lg: 12px;
@@ -90,6 +93,11 @@
       border-radius: 50%;
       background: var(--success-dot);
       display: inline-block;
+      animation: pulse 1.4s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%      { opacity: 0.4; transform: scale(0.85); }
     }
 
     .panel-body {
@@ -117,6 +125,36 @@
       color: var(--primary);
       font-weight: 500;
       cursor: pointer;
+    }
+
+    .vip-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 11px;
+      border: 0.5px solid var(--border-medium);
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      background: var(--bg-card);
+      cursor: pointer;
+      transition: all 150ms;
+    }
+    .vip-toggle:hover { background: var(--bg-secondary); }
+    .vip-toggle.active {
+      background: var(--vip-bg);
+      border-color: var(--vip-border);
+      color: var(--vip-text);
+    }
+    .vip-toggle-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--border-medium);
+    }
+    .vip-toggle.active .vip-toggle-dot {
+      background: var(--vip-border);
     }
 
     .work-current {
@@ -216,23 +254,6 @@
       font-family: inherit;
     }
     .btn-secondary:hover { background: var(--bg-secondary); }
-    .btn-take-next {
-      padding: 12px 24px;
-      background: var(--primary);
-      color: white;
-      border: none;
-      border-radius: var(--radius-md);
-      font-size: 14px;
-      font-weight: 500;
-      cursor: pointer;
-      font-family: inherit;
-    }
-    .btn-take-next:hover { background: #0C447C; }
-    .btn-take-next:disabled {
-      background: var(--bg-secondary);
-      color: var(--text-tertiary);
-      cursor: not-allowed;
-    }
 
     .queue-list {
       display: flex;
@@ -246,6 +267,23 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      position: relative;
+    }
+    .queue-card.vip {
+      border-color: var(--vip-border);
+      background: #FFFCF5;
+    }
+    .queue-card-vip-badge {
+      position: absolute;
+      top: 8px;
+      right: 100px;
+      background: var(--vip-bg);
+      color: var(--vip-text);
+      font-size: 10px;
+      font-weight: 500;
+      padding: 2px 8px;
+      border-radius: 999px;
+      letter-spacing: 0.4px;
     }
     .queue-card-meta {
       font-size: 11px;
@@ -346,6 +384,23 @@
       font-size: 11px;
       color: var(--text-tertiary);
     }
+    .finalized-row-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .technician-mark {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--bg-secondary);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
 
     @media (max-width: 768px) {
       body { padding: 16px 8px; }
@@ -360,6 +415,12 @@
         gap: 8px;
       }
       .queue-card-right { width: 100%; justify-content: space-between; }
+      .queue-card-vip-badge { position: static; margin-bottom: 4px; }
+      .section-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+      }
     }
   </style>
 </head>
@@ -418,10 +479,15 @@
       <div class="section">
         <div class="section-header">
           <div class="section-label">COLA · 3 LISTOS</div>
+          <button type="button" class="vip-toggle" onclick="this.classList.toggle('active')">
+            <span class="vip-toggle-dot"></span>
+            Solo VIP
+          </button>
         </div>
         <div class="queue-list">
 
-          <div class="queue-card">
+          <div class="queue-card vip">
+            <div class="queue-card-vip-badge">VIP</div>
             <div>
               <div class="queue-card-meta">ORD-20260502-009 · 1 equipo</div>
               <div class="queue-card-name">Pedro López · Xiaomi Cuenta Google</div>
@@ -506,28 +572,40 @@
               <span class="finalized-row-id">ORD-007-1</span>
               <span>RAUL GSM · ARD012-AL</span>
             </div>
-            <span class="finalized-row-time">14:32</span>
+            <div class="finalized-row-right">
+              <span class="finalized-row-time">14:32</span>
+              <span class="technician-mark" title="Finalizado por Jack">J</span>
+            </div>
           </div>
           <div class="finalized-row">
             <div class="finalized-row-info">
               <span class="finalized-row-id">ORD-007-2</span>
               <span>RAUL GSM · ARD013-AM</span>
             </div>
-            <span class="finalized-row-time">14:18</span>
+            <div class="finalized-row-right">
+              <span class="finalized-row-time">14:18</span>
+              <span class="technician-mark" title="Finalizado por Jack">J</span>
+            </div>
           </div>
           <div class="finalized-row">
             <div class="finalized-row-info">
               <span class="finalized-row-id">ORD-006-1</span>
               <span>RAUL GSM · ARD011-AK</span>
             </div>
-            <span class="finalized-row-time">13:55</span>
+            <div class="finalized-row-right">
+              <span class="finalized-row-time">13:55</span>
+              <span class="technician-mark" title="Finalizado por Angelo">A</span>
+            </div>
           </div>
           <div class="finalized-row">
             <div class="finalized-row-info">
               <span class="finalized-row-id">ORD-006-2</span>
               <span>RAUL GSM · ARD010-AJ</span>
             </div>
-            <span class="finalized-row-time">13:41</span>
+            <div class="finalized-row-right">
+              <span class="finalized-row-time">13:41</span>
+              <span class="technician-mark" title="Finalizado por Angelo">A</span>
+            </div>
           </div>
         </div>
       </div>

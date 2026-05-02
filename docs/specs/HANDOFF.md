@@ -2,7 +2,7 @@
 
 **Para Claudes futuros que retomen este trabajo.** Si abrís un chat nuevo, leé este archivo primero, después abrí los otros archivos en `docs/specs/`. Después de eso, ya sabés todo lo necesario para continuar.
 
-**Última actualización:** 2 de mayo 2026 · sesión 5
+**Última actualización:** 2 de mayo 2026 · sesión 6
 
 ---
 
@@ -16,6 +16,8 @@ Servicio remoto de FRP/Cuenta Google para Xiaomi en Latam. Procesa ~130 órdenes
 **Producto:** monorepo Node.js que sirve dos frontends según host:
 - `ariadgsm.com` → portal cliente (4 pasos para que el técnico mande su pedido)
 - `ops.ariadgsm.com` → panel operador (donde Jack/Angelo procesan los pedidos)
+
+**Característica clave del bypass:** dura 5-10 segundos físicos. La interfaz del operador acompaña el antes y después del bypass, no el durante. Esto significa que decisiones como "cancelar de raíz" son seguras — no hay equipos físicamente conectados durante minutos.
 
 ---
 
@@ -45,7 +47,6 @@ Servicio remoto de FRP/Cuenta Google para Xiaomi en Latam. Procesa ~130 órdenes
 
 ### Lo que NO existe
 
-- **Tools/billeteras de herramientas técnicas** (Unlock Tool, Chimera, EFT, dongles): no hay modelo, no hay UI. Es 100% nuevo. **No empezar sin spec validada.**
 - Tests E2E completos
 - TypeScript (todo es JS puro)
 - i18n (todo en español hardcoded)
@@ -81,7 +82,10 @@ Una sesión = un archivo entregado. No mezclar specs en una sola sesión.
 ### 5. Persistencia obligatoria
 Cada sesión termina con archivos en `/mnt/user-data/outputs/` que Bryam sube al repo. Si no hay archivo persistido, la sesión no sirvió.
 
-### 6. Tono con Bryam
+### 6. Cómo subir archivos al repo
+Bryam descarga los archivos a `C:\Users\Bryams\Desktop\AriadGsm\files1\`. Cada sesión debe terminar con un prompt para Claude Code que mueva los archivos al repo, los renombre si hace falta (ej. quitar "-mockup" de los HTMLs), haga commit local (sin push), y reporte si hubo problemas.
+
+### 7. Tono con Bryam
 - No es programador, aprende haciendo
 - Prefiere respuestas cortas y mockups visuales
 - Pide fuentes externas cuando duda — eso es chequeo, no desconfianza
@@ -115,24 +119,29 @@ Cada sesión termina con archivos en `/mnt/user-data/outputs/` que Bryam sube al
 - Activity log con eventos del cliente marcados con "(vos)"
 - Botón "Comprobante (PDF)" disabled hasta `FINALIZADO`
 
-### Operador
-- 16 piezas total: 4 vistas + 4 modales + 4 acciones rápidas + 4 admin/config
-- Cierre día/turno: Jack y Angelo pueden todo; cada uno cierra su turno; Bryam consolida
-- Bryam admin único para aprobaciones VIP y cambios de costo `>50%`
+### Operador (decisiones del FRP Express, sesión 6)
+- **Switch técnico con job en curso:** el job se queda con quien lo tomó. Angelo lo ve en lectura si no es el activo.
+- **Tomar específico:** botón "Tomar" en cada card de la cola (no solo "Tomar siguiente"). Requiere endpoint nuevo `POST /api/frp/jobs/:id/take`.
+- **Pago revertido con job en curso:** cancelación de raíz. El bypass dura 5-10s, no hay riesgo físico.
+- **Timeout 30 min:** banner amarillo en card actual con [Sigo trabajando] / [Cancelar job]. No hay autocancelación.
+- **Finalizados hoy:** muestra de ambos técnicos con identificador visual (J/A).
+- **Reportar problema:** texto libre + opciones predefinidas. Modal en spec separada.
+- **Filtro VIP en cola:** toggle simple, client-side, persiste en sessionStorage.
+- **Beep al entrar nuevo job:** solo si técnico no tiene job tomado y tab está visible. Toggle ON por default.
 
-### Mockups cliente (de sesiones anteriores)
+### Mockups cliente (sesiones 1-5)
 - **Paso 1:** layout 3+2 de pills (CO/MX/CL arriba, PE/USDT abajo). Card oscura "ESTIMADO · EN VIVO" con dot pulsante.
 - **Paso 2:** stepper -/n/+ con label "Equipos a desbloquear". Total en card oscura con breakdown integrado. Insignia verde "98% modelos soportados". Validación modelo opcional (no gate).
 - **Paso 3:** card "TOTAL A PAGAR" oscura. Header método con icono. Cards de cuentas con botón Copiar. Lock 15 min azul. Banner amarillo "Revisá pasos 1 y 2". Dropzone dasheada.
 - **Paso 4:** SIN banner "pago aprobado". Mini-Redirector NO inline, va en bottom sheet por botón "¿Dónde pego estos datos?". Datos con badges 1° azul / 2° verde matcheando los campos del Redirector.
 
-### Operador FRP Express (de esta sesión)
+### Operador FRP Express (sesión 6)
 - Vista única vertical priorizada por urgencia
 - Header con técnico activo (Jack o Angelo)
 - "Tu trabajo actual" arriba como hero
-- Cola con cards horizontales + tiempo de conexión + botón Tomar
+- Cola con cards horizontales + tiempo de conexión + botón Tomar + filtro VIP
 - "Pagos por revisar" + "Atención" en grid 2 columnas
-- "Finalizados hoy" como tabla compacta sin acciones
+- "Finalizados hoy" como tabla compacta sin acciones, mostrando ambos técnicos
 - Sin "Copiar Done" (eliminado por innecesario)
 - Un técnico procesa un job por vez
 
@@ -164,38 +173,50 @@ Cada sesión termina con archivos en `/mnt/user-data/outputs/` que Bryam sube al
 ## Archivos en el repo
 
 ### `docs/specs/`
-- **`PLAN.md`** — plan estratégico de 7 specs en 3 fases (después del audit). Tiene Apéndices A (decisiones tomadas) y B (método de trabajo). Versión actual: v1.1.
+- **`PLAN.md`** — plan estratégico de 7 specs en 3 fases (después del audit). Versión actual: v1.1.
 - **`HANDOFF.md`** — este archivo. Bridge entre sesiones.
+- **`audit-template.md`** — template para auditar el repo con Claude Code.
 
 ### `docs/specs/cliente/`
-- **`paso-1-precio.md`** — spec completo del paso 1 (8 piezas). 26 acceptance criteria, 8 open questions.
+- **`paso-1-precio.md`** — spec completo del paso 1 (8 piezas). 26 acceptance criteria, 8 open questions sin responder aún.
 - **`mockups/paso-1-precio.html`** — mockup HTML standalone responsive del paso 1.
 
 ### `docs/specs/operador/`
-- **`operador-frp-express.md`** — spec completo del panel FRP Express (8 piezas). 26 acceptance criteria, 8 open questions.
-- **`mockups/operador-frp-express.html`** — mockup HTML standalone del panel.
+- **`operador-frp-express.md`** — spec completo del panel FRP Express v1.1 (8 piezas). 38 acceptance criteria, 0 open questions (todas resueltas en v1.1).
+- **`mockups/operador-frp-express.html`** — mockup HTML standalone v1.1 con filtro VIP.
 
 ### `docs/`
 - **`ariadgsm-decisiones-FINAL-2026-05-02.md`** — doc histórico de decisiones de producto (16 secciones). Source of truth ANTES de las specs nuevas. Las specs nuevas tienen precedencia sobre este doc en caso de conflicto.
 
-### `docs/specs/audit-template.md`
-- Template para auditar el repo con Claude Code. Ya se ejecutó una vez (resultado en chat sesión 5). Reutilizable si hay cambios grandes en código.
+---
+
+## Endpoints nuevos pendientes de agregar al backend
+
+De la spec del operador FRP Express v1.1:
+
+- **`POST /api/frp/jobs/:id/take`** — toma un job específico (no solo el siguiente). Devuelve 409 si ya fue tomado por otro.
+- **`PATCH /api/frp/jobs/:id/cancel`** — verificar si existe; si no, agregar. Body: `{ reason: 'timeout' | 'payment_reverted' | 'manual', note?: string }`.
 
 ---
 
 ## Pendientes y próximos pasos
 
-### Próximas specs a escribir (orden sugerido)
+### Próximas specs a escribir (orden sugerido del Plan v1.1)
 
-1. **Tools/billeteras** — modelo nuevo, alto valor, pendiente respuestas de 4 preguntas (auto/manual descuento, etc.)
+1. **Tools/billeteras** — Bryam aclaró que el flujo de pricing NO se toca, solo se construye admin de billeteras. Pendiente respuestas de:
+   - ¿Tools = providers FRP existentes o capa nueva?
+   - ¿Extender modelo o crear nuevo?
+   - Descuento auto o manual al finalizar
+   - Bloquear take si balance 0
 2. **VIP/postpago UI cliente** — backend ya está
 3. **Notificaciones in-portal (PR-2c)** — toast wrapper
 4. **Anti-fraude 4 capas (PR-2b)**
 5. **Bundle 3 cleanup + 16 bugs + Perú dup**
 6. **Multi-orden enforcement backend**
-7. **Modularización server.js + app.js** (deuda técnica, opcional)
+7. **Modal de "Reportar problema"** (referenciado por la spec del operador FRP Express)
+8. **Modularización server.js + app.js** (deuda técnica, opcional)
 
-### Decisiones macro pendientes
+### Decisiones macro pendientes (del PLAN.md)
 
 - Cadencia de sesiones por semana
 - API de FX cuál (sugerencia: CoinGecko)
@@ -203,10 +224,6 @@ Cada sesión termina con archivos en `/mnt/user-data/outputs/` que Bryam sube al
 - Cost unitario fijo o por país
 - Persistencia entre sesiones de cliente
 - Tooltip USDT (red TRC20)
-
-### Open questions específicas por spec
-
-Cada archivo `.md` tiene su sección "Open questions" con preguntas concretas. Antes de implementar cualquiera, Bryam tiene que responder esas.
 
 ### Bugs en vuelo (paralelo a specs)
 
@@ -225,7 +242,8 @@ Si sos un Claude que abre un chat nuevo:
 5. **Antes de escribir, abrí las "Open questions" de la spec previa y verificá si Bryam ya las respondió.**
 6. **Antes de proponer cosas nuevas, revisá la sección "Decisiones de producto firmes" arriba.** Si querés contradecir alguna, decíselo explícitamente y pedí confirmación.
 7. Una sesión = un archivo entregado. No empezar dos cosas a la vez.
-8. Al final de la sesión, actualizá este HANDOFF si hay decisiones nuevas.
+8. **Cada sesión termina con un prompt para Claude Code** que mueva los archivos generados al repo. Bryam los descarga a `C:\Users\Bryams\Desktop\AriadGsm\files1\`, vos le pasás el prompt para que Claude Code los suba.
+9. Al final de la sesión, **actualizá este HANDOFF** si hay decisiones nuevas o si una spec cambió de versión.
 
 ### Ejemplo de prompt de arranque que Bryam puede usar
 
@@ -236,7 +254,8 @@ Si sos un Claude que abre un chat nuevo:
 ## Sesiones previas (resumen mínimo)
 
 - **Sesión 1-4:** mockups visuales de los 4 pasos cliente (paso 1, 2, 3, 4 con tutorial Redirector). Iteramos hasta cerrar diseño visual. Mockups validados pero no persistidos como archivo en sesiones 1-3.
-- **Sesión 5 (esta):** definimos el método (8 piezas por spec). Escribimos spec completa de paso 1 cliente como piloto. Plan estratégico v1.1. Audit del repo con Claude Code (revelado que 80% ya está implementado, plan rebajado de 15 a 7 specs reales). Spec del operador FRP Express (esta).
+- **Sesión 5:** definimos el método (8 piezas por spec). Escribimos spec completa de paso 1 cliente como piloto. Plan estratégico v1.1. Audit del repo con Claude Code (revelado que 80% ya está implementado, plan rebajado de 15 a 7 specs reales). Spec inicial del operador FRP Express v1.0 (con 8 Open Questions).
+- **Sesión 6 (esta):** Bryam respondió las 8 Open Questions del operador FRP Express. Spec actualizada a v1.1 (38 acceptance criteria, 0 open questions). Mockup actualizado con filtro VIP y columna de técnico en finalizados. Bryam aclaró que el bypass real dura 5-10 segundos, lo que justifica decisiones de "cancelar de raíz" y "timeout 30 min con banner". HANDOFF a v1.1.
 
 ---
 
