@@ -14,6 +14,7 @@ export function createPortalRoutes({
   customerDeviceMaxAgeSeconds,
   customerDeviceIsAuthorized,
   customerEmailIsVerified,
+  customerPendingDebt,
   customerSessionCookieName,
   customerSessionMaxAgeSeconds,
   customerSessionVersion,
@@ -414,6 +415,17 @@ export function createPortalRoutes({
       audit(db, context.user.id, "PORTAL_ORDER_BLOCKED_EMAIL_UNVERIFIED", context.client.id, { service: "PORTAL-XIAOMI-FRP" });
       await writeDb(db);
       return sendJson(res, 403, { error: "Verifica tu correo antes de crear solicitudes." });
+    }
+    // QUE: bloqueo PR-2a.4 / FINAL §3 — VIP con deuda del cierre anterior no puede
+    // crear nuevas ordenes hasta que el operador valide su pago (que limpia debt).
+    const pendingDebt = customerPendingDebt(db, context.client.id);
+    if (pendingDebt > 0) {
+      audit(db, context.user.id, "PORTAL_ORDER_BLOCKED_VIP_DEBT", context.client.id, { pendingDebtUsdt: pendingDebt });
+      await writeDb(db);
+      return sendJson(res, 403, {
+        error: `Tienes una deuda pendiente de ${pendingDebt.toFixed(2)} USDT del dia anterior. Pagala para continuar con nuevas solicitudes.`,
+        pendingDebtUsdt: pendingDebt,
+      });
     }
     const rateOk = enforcePortalRateLimit(db, req, "portal_order_frp", context.client.id, maxPortalOrderRequestsPerWindow);
     const turnstile = await validateTurnstileIfConfigured(req, input, "portal_order_frp");

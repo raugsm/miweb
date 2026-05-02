@@ -7,6 +7,7 @@ export function createPortalSerializers({
   customerDeviceIsAuthorized,
   customerEmailIsVerified,
   customerMonthlyUsage,
+  customerPendingDebt,
   defaultPricingConfig,
   frpCurrentPricing,
   frpDynamicMonthlyTiers,
@@ -232,6 +233,11 @@ export function createPortalSerializers({
     const monthlyUsage = client ? customerMonthlyUsage(db, client.id, new Date(), client.masterClientId || benefit?.masterClientId || "") : 0;
     const nextMonthlyTier = client ? nextFrpMonthlyTier(monthlyUsage, frpCurrentPricing(db)) : null;
     const orders = client ? publicCustomerOrdersForClient(db, client.id) : [];
+    // PR-2a.4: deuda VIP pendiente del cierre anterior. Frontend muestra banner
+    // y el endpoint POST /api/portal/orders/frp bloquea con 403 mientras > 0.
+    const pendingDebtUsdt = client && typeof customerPendingDebt === "function"
+      ? moneyNumber(customerPendingDebt(db, client.id))
+      : 0;
     return {
       user: publicCustomerUser(user),
       client: publicCustomerClient(client),
@@ -245,6 +251,7 @@ export function createPortalSerializers({
       monthlyUsage,
       nextMonthlyTier: nextMonthlyTier ? { ...nextMonthlyTier, remaining: nextMonthlyTier.minJobs - monthlyUsage } : null,
       orders,
+      pendingDebtUsdt,
     };
   }
 

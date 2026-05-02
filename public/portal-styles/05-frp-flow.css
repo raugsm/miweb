@@ -347,6 +347,36 @@
   font-size: 13px;
 }
 
+/* PR-2a.4 — banner VIP debt pendiente. Inline informativo, no toast.
+   PR-2c lo va a wrappear con toast critico flotante. */
+.vip-debt-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: #fee2e2;
+  border-left: 3px solid #b91c1c;
+  color: #7f1d1d;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.vip-debt-banner[hidden] {
+  display: none;
+}
+
+.vip-debt-banner strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 14px;
+}
+
+.vip-debt-banner b {
+  font-weight: 700;
+}
+
 .connection-actions {
   display: grid;
   grid-template-columns: 1fr;

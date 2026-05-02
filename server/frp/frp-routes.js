@@ -342,6 +342,15 @@ export function createFrpRoutes({
       order.paymentReviewedBy = user.id;
       order.paymentReviewedAt = nowIso();
       order.paymentProofs = proofs.map((proof) => ({ ...proof, reviewStatus: "VALIDADO", reviewedBy: user.id, reviewedAt: order.paymentReviewedAt }));
+      // PR-2a.4: si la orden cliente ligada tenia deuda VIP marcada del cierre,
+      // limpiarla al validar el pago — esto desbloquea al cliente para crear
+      // nuevas ordenes.
+      const portalOrder = db.customerOrders.find((candidate) => candidate.id === order.portalOrderId);
+      if (portalOrder?.debtAmount && !portalOrder.debtClearedAt) {
+        portalOrder.debtClearedAt = order.paymentReviewedAt;
+        portalOrder.debtClearedBy = user.id;
+        portalOrder.updatedAt = order.paymentReviewedAt;
+      }
     } else if (action === "reject") {
       order.paymentStatus = "COMPROBANTE_RECHAZADO";
       order.checklist.paymentValidated = false;

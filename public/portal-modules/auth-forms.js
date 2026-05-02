@@ -202,6 +202,15 @@ export function renderCustomer() {
   $("#deviceStatus").textContent = customer.device?.authorizedForBenefits ? "Autorizado" : "Sin beneficios";
   $("#verificationCard").classList.toggle("hidden", customer.client.emailVerified);
   $("#copyPaymentButton").disabled = !customer.client.emailVerified;
+  // PR-2a.4: banner deuda VIP pendiente del cierre anterior. Bloquea creacion
+  // de nuevas ordenes desde el backend (POST /api/portal/orders/frp → 403).
+  const debtBanner = $("#vipDebtBanner");
+  const debt = Number(customer.pendingDebtUsdt || 0);
+  if (debtBanner) {
+    debtBanner.hidden = debt <= 0;
+    const amountNode = $("#vipDebtAmount");
+    if (amountNode) amountNode.textContent = debt.toFixed(2);
+  }
   const canRequestApproval = customerCanRequestApprovalOptions();
   $("#approvalOptions")?.classList.toggle("hidden", !canRequestApproval);
   if (!canRequestApproval) {

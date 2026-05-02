@@ -528,6 +528,17 @@ function customerCanUseBenefits(context, benefit) {
   return true;
 }
 
+// QUE: total USDT de deuda pendiente del cliente (PR-2a.4).
+// POR QUE: FINAL §3 — VIP postpago, cierre dia marca debt, dia siguiente bloquea
+// crear nueva orden hasta limpiar. La deuda se limpia cuando frp-payment-review
+// "approve" valida el pago de esta orden (frp-routes.js hook).
+function customerPendingDebt(db, clientId) {
+  if (!clientId) return 0;
+  return (db.customerOrders || [])
+    .filter((order) => order.clientId === clientId && Number(order.debtAmount || 0) > 0 && !order.debtClearedAt)
+    .reduce((sum, order) => sum + Number(order.debtAmount || 0), 0);
+}
+
 function portalFrpPriceSuggestion(db, clientId, quantity, canUseBenefits, benefit, masterClientId = "") {
   const safeQuantity = Math.max(1, Math.min(50, Number.parseInt(quantity, 10) || 1));
   const pricing = frpCurrentPricing(db);
@@ -607,6 +618,7 @@ const {
   customerDeviceIsAuthorized,
   customerEmailIsVerified,
   customerMonthlyUsage,
+  customerPendingDebt,
   defaultPricingConfig,
   frpCurrentPricing,
   frpDynamicMonthlyTiers,
@@ -1332,7 +1344,32 @@ function closeDailyReport(db, dateStamp, user, notes = "") {
   db.dailyCloseLines = (db.dailyCloseLines || []).filter((line) => line.dateStamp !== report.dateStamp);
   const lines = dailyCloseLinesFromReport(report).map((line) => ({ ...line, dailyCloseId: close.id }));
   db.dailyCloseLines.push(...lines);
-  audit(db, user.id, "DAILY_CLOSE_CLOSED", close.id, { dateStamp: report.dateStamp, lineCount: lines.length, totals: report.totals });
+  // QUE: PR-2a.4 — al cerrar dia, marcar como deuda las ordenes VIP del dia que
+  // NO tienen pago validado. FINAL §3 — VIP es postpago, paga al cierre operativo.
+  // El bloqueo del dia siguiente (createOrder verifica) se basa en estos campos.
+  const debtMarkedOrderIds = [];
+  for (const customerOrder of db.customerOrders || []) {
+    if (limaDateStamp(customerOrder.createdAt) !== report.dateStamp) continue;
+    if (customerOrder.debtAmount && !customerOrder.debtClearedAt) continue; // ya marcado
+    if (customerOrder.debtClearedAt) continue; // pagado ya
+    const client = db.customerClients.find((candidate) => candidate.id === customerOrder.clientId);
+    if (!client || normalizeCustomerStatus(client.status) !== "VIP") continue;
+    const frpOrder = db.frpOrders.find((candidate) => candidate.id === customerOrder.frpOrderId);
+    const isPaid = frpOrder?.checklist?.paymentValidated || frpOrder?.paymentStatus === "PAGO_VALIDADO";
+    if (isPaid) continue;
+    customerOrder.debtAmount = moneyNumber(customerOrder.totalPrice || 0);
+    customerOrder.debtFromCloseId = close.id;
+    customerOrder.debtMarkedAt = close.closedAt;
+    customerOrder.debtClearedAt = "";
+    customerOrder.updatedAt = close.closedAt;
+    debtMarkedOrderIds.push(customerOrder.id);
+  }
+  audit(db, user.id, "DAILY_CLOSE_CLOSED", close.id, {
+    dateStamp: report.dateStamp,
+    lineCount: lines.length,
+    totals: report.totals,
+    vipDebtsMarked: debtMarkedOrderIds.length,
+  });
   return buildDailyCloseReport(db, report.dateStamp);
 }
 
@@ -3129,6 +3166,7 @@ const handlePortalApi = createPortalRoutes({
   customerDeviceMaxAgeSeconds,
   customerDeviceIsAuthorized,
   customerEmailIsVerified,
+  customerPendingDebt,
   customerSessionCookieName,
   customerSessionMaxAgeSeconds,
   customerSessionVersion,
