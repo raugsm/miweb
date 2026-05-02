@@ -218,7 +218,7 @@ export function renderPaymentModal() {
 }
 
 export function updateQuote() {
-  syncDetectedItems();
+  const quantity = syncDetectedItems();
   const context = activePaymentContext();
   const estimate = context.estimate;
   const payment = context.selectedPayment || currentPayment();
@@ -235,6 +235,20 @@ export function updateQuote() {
   if (unitNode) unitNode.textContent = paymentAmountText(baseUnit, payment);
   if (unitUsdtNode) unitUsdtNode.textContent = money(baseUnit);
   if (paymentBadge) paymentBadge.textContent = paymentOptionLabel(payment);
+
+  // QUE: paso 2 muestra el precio EFECTIVO por unidad (con tier de volumen)
+  // y el total tambien con tier aplicado.
+  // POR QUE: BUG 9-10. #flowQuantityUnitPrice y #flowQuantityTotal estaban en
+  // el HTML pero ningun lugar los hidrataba — quedaban como "-" siempre. Spec
+  // FINAL §5: stepper muestra precio c/u y total recalculado en vivo.
+  const effectiveUnit = Number(estimate.unit ?? estimate.base ?? 0);
+  const quantityCount = $("#flowQuantityCount");
+  const quantityUnitPrice = $("#flowQuantityUnitPrice");
+  const quantityTotal = $("#flowQuantityTotal");
+  if (quantityCount) quantityCount.textContent = String(quantity);
+  if (quantityUnitPrice) quantityUnitPrice.textContent = paymentAmountText(effectiveUnit, payment);
+  if (quantityTotal) quantityTotal.textContent = paymentAmountText(context.totalUsdt, payment);
+
   const quoteUsdt = $("#quoteTotalUsdt");
   const quoteLocal = $("#quoteTotalLocal");
   const quoteCurrencyLabel = $("#quoteCurrencyLabel");

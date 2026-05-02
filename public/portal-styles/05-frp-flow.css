@@ -397,15 +397,25 @@
 .flow-tether-icon { flex-shrink: 0; display: inline-block; }
 
 /* PR-2a-final.fase2 — Paso 2 al spec FINAL §5. Reemplaza textarea por
-   stepper + buscador inverso + insignia "98% modelos soportados". */
+   stepper + buscador inverso + insignia "98% modelos soportados".
+   PR-2a-final.bundle2-bugs: flex-wrap en head + nowrap en titulo para evitar
+   particion vertical de "Solicitud" y solapamiento con la insignia 98% en
+   cards angostas. */
 .flow-request-head {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  gap: 8px;
+  gap: 6px 8px;
   margin-bottom: 8px;
 }
-.flow-request-head > div { display: inline-flex; align-items: center; gap: 8px; }
+.flow-request-head-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.flow-request-head-title strong { white-space: nowrap; }
 .flow-coverage-badge {
   display: inline-flex;
   align-items: center;
