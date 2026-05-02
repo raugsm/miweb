@@ -1266,9 +1266,12 @@ function renderFrpPricingBox() {
     </div>
   ` : `<p class="pricing-note"><strong>Precio FRP automatico</strong><span>Solo el administrador o WhatsApp 3 autorizado puede cambiar proveedor y costos.</span></p>`;
 
-  // PR-2a.6: cola de cambios pendientes (nivel 4) — solo admin la ve y aprueba.
+  // PR-2a.6 + ajuste 1: cola de cambios pendientes solo se renderiza cuando
+  // el usuario es ADMIN Y hay al menos un pendiente. Para Jack/Angelo (no admin)
+  // siempre oculto. Para admin sin pendientes, tambien oculto — evita ruido
+  // visual en el panel cuando no hay nada que aprobar.
   const pendingList = session.pendingCostChanges || [];
-  const pendingHtml = isAdmin() ? `
+  const pendingHtml = isAdmin() && pendingList.length > 0 ? `
     <section class="frp-pending-panel" data-frp-pending-section>
       <header>
         <div>
@@ -1276,24 +1279,22 @@ function renderFrpPricingBox() {
           <h4>${pendingList.length} pendiente${pendingList.length === 1 ? "" : "s"} de aprobación</h4>
         </div>
       </header>
-      ${pendingList.length === 0 ? `<p class="muted-cell">Sin cambios pendientes.</p>` : `
-        <ul class="frp-pending-list">
-          ${pendingList.map((p) => `
-            <li class="frp-pending-item" data-pending-id="${escapeHtml(p.id)}">
-              <div class="frp-pending-info">
-                <strong>${escapeHtml(p.providerName)}</strong>
-                <span>${Number(p.previousCost).toFixed(2)} → <b>${Number(p.nextCost).toFixed(2)}</b> USDT (Δ ${Number(p.deltaPct).toFixed(1)}% sobre baseline ${Number(p.baselineAvg).toFixed(2)})</span>
-                <span class="frp-pending-meta">Solicitado por ${escapeHtml(p.requestedBy.slice(0, 8))}… · ${escapeHtml(formatDate(p.requestedAt))}</span>
-                <span class="frp-pending-reason">"${escapeHtml(p.requestedReason)}"</span>
-              </div>
-              <div class="frp-pending-actions">
-                <button class="mini-btn" type="button" data-pending-action="approve" data-pending-id="${escapeHtml(p.id)}">Aprobar</button>
-                <button class="mini-btn danger-mini" type="button" data-pending-action="reject" data-pending-id="${escapeHtml(p.id)}">Rechazar</button>
-              </div>
-            </li>
-          `).join("")}
-        </ul>
-      `}
+      <ul class="frp-pending-list">
+        ${pendingList.map((p) => `
+          <li class="frp-pending-item" data-pending-id="${escapeHtml(p.id)}">
+            <div class="frp-pending-info">
+              <strong>${escapeHtml(p.providerName)}</strong>
+              <span>${Number(p.previousCost).toFixed(2)} → <b>${Number(p.nextCost).toFixed(2)}</b> USDT (Δ ${Number(p.deltaPct).toFixed(1)}% sobre baseline ${Number(p.baselineAvg).toFixed(2)})</span>
+              <span class="frp-pending-meta">Solicitado por ${escapeHtml(p.requestedBy.slice(0, 8))}… · ${escapeHtml(formatDate(p.requestedAt))}</span>
+              <span class="frp-pending-reason">"${escapeHtml(p.requestedReason)}"</span>
+            </div>
+            <div class="frp-pending-actions">
+              <button class="mini-btn" type="button" data-pending-action="approve" data-pending-id="${escapeHtml(p.id)}">Aprobar</button>
+              <button class="mini-btn danger-mini" type="button" data-pending-action="reject" data-pending-id="${escapeHtml(p.id)}">Rechazar</button>
+            </div>
+          </li>
+        `).join("")}
+      </ul>
     </section>
   ` : "";
 
@@ -2712,7 +2713,9 @@ async function saveFrpProvider(button, providerId, options = {}) {
       return;
     }
     session.frp = payload.frp;
-    const levelLabel = payload?.level && payload.level > 1 ? ` (nivel ${payload.level})` : "";
+    // Ajuste post-test: mostrar nivel siempre (incluido nivel 1) para que el
+    // operador tenga confirmacion visual consistente entre niveles.
+    const levelLabel = payload?.level ? ` (nivel ${payload.level})` : "";
     showButtonFeedback(button, "success", `✓ Guardado${levelLabel}`, 1500);
     frpMessage.textContent = `Proveedor FRP actualizado${payload?.deltaPct ? ` (Δ ${payload.deltaPct.toFixed(1)}%)` : ""}.`;
     frpMessage.dataset.type = "success";

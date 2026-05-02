@@ -165,7 +165,16 @@ export function createFrpRoutes({
         }
       }
       // Nivel 4: bloqueo. Crea pendingChange y queda esperando aprobacion admin.
+      // Ajuste post-test: requiere motivo MAS detallado que nivel 3 (25 chars vs 15)
+      // — un cambio mas drastico necesita mas contexto para que el admin pueda
+      // aprobarlo informado. Protege a Bryam de aprobar "test" sin saber por que.
       if (classification.level === 4) {
+        if (reason.length < 25) {
+          return sendJson(res, 400, {
+            error: `Cambio nivel 4 requiere motivo detallado (≥25 caracteres, actuales: ${reason.length}). Bryam necesita contexto suficiente para aprobar.`,
+            level: 4,
+          });
+        }
         const adminUserId = (db.users.find((u) => u.role === "ADMIN") || {}).id;
         const pendingChange = {
           id: crypto.randomUUID(),
