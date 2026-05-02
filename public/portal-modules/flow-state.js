@@ -17,6 +17,7 @@ export function deriveFlowState(customer) {
   const active = orders.find((order) => (
     order.publicStatus === "ESPERANDO_PAGO"
     || order.publicStatus === "PAGO_EN_REVISION"
+    || order.publicStatus === "PAGO_RECHAZADO"
   ));
   if (!active) return "draft";
 

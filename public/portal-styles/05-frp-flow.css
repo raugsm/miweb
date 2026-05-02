@@ -285,6 +285,68 @@
   color: #6d7f99;
 }
 
+/* Banner azul info: reemplaza al dropzone cuando publicStatus = PAGO_EN_REVISION.
+   No es notificacion toast — es estado visible del paso 3. */
+.flow-proof-status-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #E6F1FB;
+  border-left: 3px solid #1D4ED8;
+  color: #1E3A8A;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.flow-proof-status-banner[hidden] {
+  display: none;
+}
+
+.flow-proof-status-banner strong {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 2px;
+}
+
+.flow-proof-status-pulse {
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  margin-top: 4px;
+  border-radius: 50%;
+  background: #1D4ED8;
+  animation: flowProofPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes flowProofPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.55; transform: scale(0.85); }
+}
+
+/* Banner rojo: aparece arriba del dropzone cuando publicStatus = PAGO_RECHAZADO. */
+.flow-proof-rejection-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #FEE2E2;
+  border-left: 3px solid #B91C1C;
+  color: #7F1D1D;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.flow-proof-rejection-banner[hidden] {
+  display: none;
+}
+
+.flow-proof-rejection-banner strong {
+  font-size: 13px;
+}
+
 .connection-actions {
   display: grid;
   grid-template-columns: 1fr;

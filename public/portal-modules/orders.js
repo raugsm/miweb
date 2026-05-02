@@ -10,6 +10,7 @@ import {
   orderAlertText,
   orderBadges,
   orderHasPaymentProof,
+  ordersDisplayState,
   sortOrdersForDisplay,
   statusLabel,
   trackingStage,
@@ -21,6 +22,93 @@ let customerUpdateHandler = () => {};
 
 export function configureOrderRenderer({ onCustomerUpdate } = {}) {
   customerUpdateHandler = typeof onCustomerUpdate === "function" ? onCustomerUpdate : () => {};
+}
+
+// QUE: punto de entrada para que otros modulos (live-orders SSE) gatillen el
+// re-render completo del cliente sin importar auth-forms directamente.
+// POR QUE: renderCustomer corre applyFlowState + updateFlowPaymentDropzone +
+// applyStep4Visibility — necesario para que la transicion approve/reject del
+// operador propague al paso 4 / paso 3 banner / locks.
+export function notifyCustomerUpdated() {
+  customerUpdateHandler();
+}
+
+// QUE: pinta los banners contextuales segun el estado de presentacion (PR-0.6).
+// POR QUE: estados 1-3 piden banners visuales especificos dentro de la card de orden.
+// El existing .order-alert (amarillo generico) no es suficiente para distinguir
+// "validando" (azul info) vs "rechazado" (rojo) vs "esperando conexion" (verde+azul).
+function renderOrderStateBanners(card, order, displayState) {
+  const banners = card.querySelector(".order-state-banners");
+  if (!banners) return;
+  banners.innerHTML = "";
+  if (!displayState) {
+    banners.hidden = true;
+    return;
+  }
+  if (displayState === "payment_review") {
+    banners.innerHTML = `
+      <div class="order-state-banner is-review" role="status">
+        <span class="order-state-pulse" aria-hidden="true"></span>
+        <div>
+          <strong>Validando comprobante.</strong>
+          <span>Te avisaremos en cuanto el técnico apruebe el pago.</span>
+        </div>
+      </div>
+    `;
+  } else if (displayState === "payment_rejected") {
+    const reason = String(order.paymentRejectedReason || "").trim() || "Comprobante rechazado.";
+    banners.innerHTML = `
+      <div class="order-state-banner is-rejected" role="alert">
+        <strong>Tu pago fue rechazado.</strong>
+        <span>Motivo: ${escapeHtml(reason)} Subí un nuevo comprobante.</span>
+      </div>
+    `;
+    // El order-alert generico amarillo dice lo mismo en otro tono — lo silenciamos
+    // para evitar repetir el mensaje en dos cajas distintas.
+    card.querySelector(".order-alert")?.classList.add("hidden");
+  } else if (displayState === "awaiting_connection") {
+    banners.innerHTML = `
+      <div class="order-state-banner is-confirmed" role="status">
+        <strong>Pago confirmado por nuestro técnico.</strong>
+      </div>
+      <div class="order-state-banner is-connect-prompt" role="status">
+        <strong>Conectá tu equipo para continuar.</strong>
+        <span>Andá al paso 4, descargá el Redirector y apretá <em>Equipo conectado</em>.</span>
+      </div>
+    `;
+  }
+  banners.hidden = false;
+}
+
+function makeUploadProofButton() {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "order-primary-button";
+  btn.textContent = "Subir nuevo comprobante";
+  btn.addEventListener("click", () => {
+    const dropzone = document.querySelector("#flowPaymentDropzone");
+    if (!dropzone) return;
+    dropzone.scrollIntoView({ behavior: "smooth", block: "center" });
+    // Disparamos el file picker tras el scroll para que el cliente pueda elegir
+    // archivo sin un segundo tap.
+    setTimeout(() => {
+      if (dropzone.dataset.disabled !== "true") dropzone.click();
+    }, 350);
+  });
+  return btn;
+}
+
+function makeGoToStep4Button() {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "order-primary-button";
+  btn.textContent = "Ir al paso 4";
+  btn.addEventListener("click", () => {
+    const step4 = document.querySelector(".flow-connect-card");
+    if (!step4 || step4.hidden) return;
+    step4.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+  return btn;
 }
 
 export function orderCopyText(order) {
@@ -81,11 +169,25 @@ export function renderOrders(orders) {
   sortOrdersForDisplay(orders).forEach((order) => {
     const card = template.content.firstElementChild.cloneNode(true);
     const stage = trackingStage(order);
+    const displayState = ordersDisplayState(order);
     card.classList.toggle("is-finalized", stage === "DONE");
+    if (displayState) card.dataset.displayState = displayState;
     $(".order-code", card).textContent = order.code;
     $(".order-service", card).textContent = order.serviceName;
-    $(".status-pill", card).textContent = trackingStageLabel(order);
-    $(".status-pill", card).dataset.stage = stage.toLowerCase();
+    const statusPill = $(".status-pill", card);
+    if (displayState === "payment_review") {
+      statusPill.textContent = "Pago en revisión";
+      statusPill.dataset.stage = "payment_review";
+    } else if (displayState === "payment_rejected") {
+      statusPill.textContent = "Pago rechazado";
+      statusPill.dataset.stage = "payment_rejected";
+    } else if (displayState === "awaiting_connection") {
+      statusPill.textContent = "Esperando conexión";
+      statusPill.dataset.stage = "awaiting_connection";
+    } else {
+      statusPill.textContent = trackingStageLabel(order);
+      statusPill.dataset.stage = stage.toLowerCase();
+    }
     $(".order-meta", card).textContent = compactOrderMeta(order);
     const inCompatibilityReview = order.publicStatus === "REVISION_COMPATIBILIDAD";
     $(".tracking-panel", card).innerHTML = trackingMarkup(order);
@@ -93,6 +195,7 @@ export function renderOrders(orders) {
     const alertNode = $(".order-alert", card);
     alertNode.classList.toggle("hidden", !alertText);
     alertNode.textContent = alertText;
+    renderOrderStateBanners(card, order, displayState);
     $(".next-action", card).innerHTML = [
       `<strong>Proxima accion</strong>`,
       `<span>${escapeHtml(customerNextAction(order))}</span>`,
@@ -154,7 +257,11 @@ export function renderOrders(orders) {
       element.classList.add("order-primary-button");
       primary.append(element);
     };
-    if (stage === "DONE") {
+    if (displayState === "payment_rejected") {
+      setPrimaryAction(makeUploadProofButton());
+    } else if (displayState === "awaiting_connection") {
+      setPrimaryAction(makeGoToStep4Button());
+    } else if (stage === "DONE") {
       setPrimaryAction(copyOrderButton);
     } else if (inCompatibilityReview || order.publicStatus === "REQUIERE_ATENCION") {
       setPrimaryAction(detailsPrimaryButton);

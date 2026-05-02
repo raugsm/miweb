@@ -82,6 +82,12 @@ export function createPortalSerializers({
     if (jobs.some((job) => job.status === "LISTO_PARA_TECNICO")) return "LISTO_PARA_CONEXION";
     if ((frpOrder?.checklist?.paymentValidated || frpOrder?.paymentStatus === "PAGO_VALIDADO") && (order.customerConnectionReadyAt || frpOrder?.customerConnectionReadyAt)) return "LISTO_PARA_CONEXION";
     if (frpOrder?.checklist?.paymentValidated || frpOrder?.paymentStatus === "PAGO_VALIDADO") return "EN_PREPARACION";
+    // QUE: rechazo de comprobante por el operador antes que "proofs presentes".
+    // POR QUE: si dejamos PAGO_EN_REVISION para el caso rechazado, el cliente no se
+    // entera del rechazo y no puede re-subir. PAGO_RECHAZADO es una decision del
+    // operador (frpOrder.paymentStatus = COMPROBANTE_RECHAZADO) que pisa el estado
+    // implicito por presencia de proofs.
+    if (frpOrder?.paymentStatus === "COMPROBANTE_RECHAZADO") return "PAGO_RECHAZADO";
     if (Array.isArray(order.paymentProofs) && order.paymentProofs.length) return "PAGO_EN_REVISION";
     if (order.postpayRequested && order.postpayStatus === "SOLICITADO") return "POSTPAGO_SOLICITADO";
     return order.publicStatus || "ESPERANDO_PAGO";
@@ -100,6 +106,10 @@ export function createPortalSerializers({
         ? "Comprobante recibido. Ya indicaste que la conexion esta lista; espera validacion."
         : "Comprobante recibido. Prepara USB Redirector mientras validamos el pago.";
     }
+    if (status === "PAGO_RECHAZADO") {
+      const reason = cleanText(frpOrder?.paymentRejectedReason || "", 160) || "Comprobante rechazado.";
+      return `Pago rechazado: ${reason} Sube un nuevo comprobante.`;
+    }
     if (status === "EN_PREPARACION") return "Pago validado. Prepara USB Redirector y marca que estas listo para conectar.";
     if (status === "LISTO_PARA_CONEXION") return "Conexion lista. Mantente disponible para que el tecnico tome el equipo.";
     if (status === "EN_PROCESO") return "Tecnico procesando. No desconectes el equipo hasta recibir el Done.";
@@ -117,6 +127,10 @@ export function createPortalSerializers({
     const items = db.customerOrderItems.filter((item) => item.orderId === order.id);
     const publicStatus = deriveCustomerOrderStatus(order, db);
     const hidePaymentDetails = publicStatus === "REVISION_COMPATIBILIDAD";
+    const frpOrderForReason = db.frpOrders.find((candidate) => candidate.id === order.frpOrderId);
+    const paymentRejectedReason = publicStatus === "PAGO_RECHAZADO"
+      ? cleanText(frpOrderForReason?.paymentRejectedReason || "", 160)
+      : "";
     return {
       id: order.id,
       code: order.code,
@@ -135,8 +149,10 @@ export function createPortalSerializers({
       paymentLabel: hidePaymentDetails ? "" : order.paymentLabel,
       paymentDetails: hidePaymentDetails ? [] : (Array.isArray(order.paymentDetails) ? order.paymentDetails : payment?.details || []),
       publicStatus,
+      paymentRejectedReason,
       nextAction: publicCustomerOrderNextAction(order, db, publicStatus),
       customerConnectionReadyAt: order.customerConnectionReadyAt || "",
+      customerConnectedAt: order.customerConnectedAt || "",
       urgentRequested: Boolean(order.urgentRequested),
       urgentStatus: order.urgentStatus || "",
       postpayRequested: Boolean(order.postpayRequested),

@@ -169,10 +169,21 @@
                 <p id="flowProofWarning" class="flow-proof-warning hidden">
                   Revisa los datos de los pasos 1, 2 y 3 antes de subir. Una vez subido el comprobante no podrás editarlos.
                 </p>
+                <div id="flowProofRejectionBanner" class="flow-proof-rejection-banner" role="alert" hidden>
+                  <strong>Tu pago fue rechazado.</strong>
+                  <span data-flow-rejection-reason></span>
+                </div>
                 <label id="flowPaymentDropzone" class="upload-button proof-dropzone flow-proof-dropzone" data-disabled="true">Subir o arrastrar comprobante
                   <span id="flowPaymentDropzoneHint">Sube tu comprobante (foto o PDF)</span>
                   <input id="flowPaymentProofInput" type="file" accept="image/*,application/pdf" hidden />
                 </label>
+                <div id="flowProofStatusBanner" class="flow-proof-status-banner" role="status" hidden>
+                  <span class="flow-proof-status-pulse" aria-hidden="true"></span>
+                  <div>
+                    <strong>Comprobante recibido.</strong>
+                    <span>Lo estamos validando en breve. No cierres el portal.</span>
+                  </div>
+                </div>
               </article>
 
               <article class="flow-step-card flow-connect-card" hidden>
@@ -243,6 +254,7 @@
         <div class="order-meta"></div>
         <div class="tracking-panel"></div>
         <div class="order-alert hidden"></div>
+        <div class="order-state-banners" hidden></div>
         <div class="next-action"></div>
         <div class="order-primary"></div>
         <button class="details-toggle ghost" type="button" aria-expanded="false">Ver detalles</button>

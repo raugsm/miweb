@@ -1,6 +1,6 @@
 import { api } from "./api.js";
 import { $ } from "./dom.js";
-import { renderOrders } from "./orders.js";
+import { notifyCustomerUpdated, renderOrders } from "./orders.js";
 import { updateQuote } from "./payments.js";
 import { state } from "./state.js";
 
@@ -17,6 +17,10 @@ export async function refreshOrdersSilently() {
   state.customer.orders = payload.orders || [];
   updateQuote();
   renderOrders(state.customer.orders);
+  // QUE: re-corre applyFlowState (paso 4 visibility, locks, CTA) ademas del
+  // listado. POR QUE: SSE pushea cambios de orden sin pasar por renderCustomer,
+  // y necesitamos que el approve/reject del operador propague al flow del cliente.
+  notifyCustomerUpdated();
 }
 
 export function startFallbackPolling() {
@@ -59,6 +63,7 @@ export function startOrdersLive() {
       state.customer.orders = payload.orders || [];
       updateQuote();
       renderOrders(state.customer.orders);
+      notifyCustomerUpdated();
       setOrdersLiveStatus("En vivo", "success");
     } catch {
       setOrdersLiveStatus("Revisar conexion", "warn");

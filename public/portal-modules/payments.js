@@ -185,20 +185,39 @@ export function updateQuote() {
 export function updateFlowPaymentDropzone() {
   const dropzone = $("#flowPaymentDropzone");
   const hint = $("#flowPaymentDropzoneHint");
+  const statusBanner = $("#flowProofStatusBanner");
+  const rejectionBanner = $("#flowProofRejectionBanner");
   if (!dropzone || !hint) return;
-  // QUE: el dropzone se habilita cuando el cliente esta autenticado y verificado, Y
-  // (a) tiene orden esperando comprobante (PATCH al endpoint existente), o
-  // (b) no tiene ninguna orden in-flight (POST crea orden + adjunta comprobante).
-  // POR QUE: FINAL §15 elimina "Crear solicitud" — la orden se crea al subir
-  // comprobante. Pero si hay una orden ya en revision/preparacion no queremos que
-  // el cliente cree una segunda orden duplicada por accidente.
-  const targetOrder = paymentUploadTargetOrder();
+  // QUE: paso 3 visual segun estado de la orden activa:
+  //  - PAGO_EN_REVISION: dropzone OCULTO, banner azul "Comprobante recibido..." VISIBLE.
+  //  - PAGO_RECHAZADO:   dropzone VISIBLE habilitado, banner rojo con motivo arriba.
+  //  - ESPERANDO_PAGO o sin orden: dropzone VISIBLE habilitado o disabled segun auth+verif.
+  //  - Otros (in-flight): dropzone visible-pero-disabled. step-locked CSS lo grisea igual.
+  // POR QUE: ajuste post PR-0.5 — el banner azul no es notificacion, es estado del paso
+  // (reemplaza al dropzone mientras esta en revision). El banner rojo es feedback de
+  // rechazo + invitacion a re-subir, no notificacion tampoco.
   const customer = state.customer;
+  const orders = customer?.orders || [];
+  const orderInReview = orders.find((order) => order.publicStatus === "PAGO_EN_REVISION") || null;
+  const orderRejected = orders.find((order) => order.publicStatus === "PAGO_RECHAZADO") || null;
+  const targetOrder = paymentUploadTargetOrder();
   const authenticated = Boolean(customer?.user && customer?.client);
   const emailVerified = Boolean(customer?.client?.emailVerified);
-  const hasInFlightOrder = (customer?.orders || []).some((order) => (
+  const hasInFlightOrder = orders.some((order) => (
     ["PAGO_EN_REVISION", "EN_PREPARACION", "LISTO_PARA_CONEXION", "EN_PROCESO", "REVISION_COMPATIBILIDAD"].includes(order.publicStatus)
   ));
+
+  if (statusBanner) statusBanner.hidden = !orderInReview;
+  if (rejectionBanner) {
+    rejectionBanner.hidden = !orderRejected;
+    if (orderRejected) {
+      const reasonNode = rejectionBanner.querySelector("[data-flow-rejection-reason]");
+      const reason = String(orderRejected.paymentRejectedReason || "").trim() || "Comprobante rechazado.";
+      if (reasonNode) reasonNode.textContent = `Motivo: ${reason} Subí un nuevo comprobante.`;
+    }
+  }
+  dropzone.hidden = Boolean(orderInReview);
+
   const enabled = authenticated && emailVerified && (Boolean(targetOrder) || !hasInFlightOrder);
   dropzone.dataset.disabled = enabled ? "false" : "true";
   dropzone.classList.toggle("is-disabled", !enabled);
@@ -207,10 +226,12 @@ export function updateFlowPaymentDropzone() {
     hint.textContent = "Inicia sesion para subir tu comprobante";
   } else if (!emailVerified) {
     hint.textContent = "Verifica tu correo para subir tu comprobante";
+  } else if (orderRejected) {
+    hint.textContent = `Subir nuevo comprobante para ${orderRejected.code}`;
   } else if (targetOrder) {
     hint.textContent = `Pago de ${targetOrder.code}`;
   } else if (hasInFlightOrder) {
-    hint.textContent = "Tu solicitud esta en revision. Te avisaremos aqui.";
+    hint.textContent = "Tu solicitud esta avanzando. No subas otro comprobante.";
   } else {
     hint.textContent = "Sube tu comprobante (foto o PDF)";
   }
