@@ -285,17 +285,25 @@
   color: #6d7f99;
 }
 
-/* PR-2a-final.fase3 — Paso 1 al spec FINAL §4. 5 pills horizontales con
-   flags SVG inline + indicador "Estimado en vivo" con dot pulsante +
-   jerarquía monto principal grande / USDT pequeño con logo Tether. */
+/* PR-2a-final.bundle2-bugs — Paso 1 al spec FINAL §4. Pills 3+2 forzado por
+   grid de 3 columnas, monto principal grande (28px), conversion + logo Tether
+   sin overflow hidden, head con nowrap en titulo y permitiendo wrap del pill
+   "Estimado en vivo" en cards angostas. */
 .flow-price-head {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  gap: 8px;
+  gap: 6px 8px;
   margin-bottom: 10px;
 }
-.flow-price-head > div { display: inline-flex; align-items: center; gap: 8px; }
+.flow-price-head-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.flow-price-head-title strong { white-space: nowrap; }
 .flow-live-pill {
   display: inline-flex;
   align-items: center;
@@ -312,22 +320,30 @@
   background: #10b981;
   animation: liveRing 1.8s ease-in-out infinite;
   box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.55);
+  flex-shrink: 0;
 }
 @keyframes liveRing {
   0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.55); }
   50% { box-shadow: 0 0 0 7px rgba(16, 185, 129, 0); }
 }
+/* QUE: layout 3+2 (o 3+N) para pills de pago. FINAL §4 pide 5 pills
+   horizontales con nombres completos pero la card es ~220px. Con 5 pills
+   queda 3 arriba + 2 abajo (izquierda alineada). Si hay 6+ metodos quedan 3
+   por fila — sin romper layout.
+   POR QUE: antes era flex-wrap natural y el wrap quedaba 2+2+1 (ultima pill
+   sola). Grid con 3 cols fuerza distribucion 3 por fila desde la primera. */
 .flow-payment-pills {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
   margin-bottom: 10px;
 }
 .flow-payment-pill {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  padding: 6px 12px;
+  padding: 6px 8px;
   border-radius: 999px;
   border: 1px solid #d4dae5;
   background: #fff;
@@ -335,6 +351,7 @@
   font-weight: 700;
   color: #4b5563;
   cursor: pointer;
+  min-width: 0;
 }
 .flow-payment-pill:hover { border-color: #93c5fd; }
 .flow-payment-pill.is-selected {
@@ -342,31 +359,30 @@
   background: #E6F1FB;
   color: #1D4ED8;
 }
+.flow-payment-pill-flag { flex-shrink: 0; display: inline-flex; }
 .flow-payment-pill-flag svg { display: block; border-radius: 2px; }
-.flow-payment-pill-label { white-space: nowrap; }
-/* PR-2a-final.bundle2 BUG 2 fix — paso 1 montos. Antes flex row con gap, en
-   cards angostas (cuatro pasos en una fila por container query) el texto
-   "$489 MXN" se rompia caracter-por-caracter ("MX/MX/N"). Fix: stack vertical
-   per FINAL §4 (principal arriba, conversion abajo) + nowrap + overflow
-   hidden para no desbordar la card. */
+.flow-payment-pill-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .flow-price-amount {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 2px;
   margin-bottom: 4px;
-  min-width: 0; /* permite shrink dentro de la card */
+  min-width: 0;
 }
 .flow-price-amount > b {
-  font-size: 22px;
+  font-size: 28px;
   font-weight: 800;
   color: #0f1629;
   white-space: nowrap;
   max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
   line-height: 1.1;
 }
+/* QUE: la conversion ("≈ 24.50 USDT" + logo Tether) se mantiene en linea con
+   nowrap pero permite que la card crezca si es necesario. Sin overflow:hidden
+   el logo Tether queda visible siempre — antes el ellipsis lo recortaba.
+   POR QUE: BUG 5 — el logo Tether iba al final del span y el overflow:hidden
+   aplicado para evitar desbordamiento lo cortaba en cards angostas. */
 .flow-price-conversion {
   display: inline-flex;
   align-items: center;
@@ -375,11 +391,10 @@
   color: #6b7280;
   white-space: nowrap;
   max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
+.flow-price-conversion > span { white-space: nowrap; min-width: 0; }
 .flow-price-conversion b { color: #0f1629; font-weight: 700; }
-.flow-tether-icon { vertical-align: -2px; flex-shrink: 0; }
+.flow-tether-icon { flex-shrink: 0; display: inline-block; }
 
 /* PR-2a-final.fase2 — Paso 2 al spec FINAL §5. Reemplaza textarea por
    stepper + buscador inverso + insignia "98% modelos soportados". */

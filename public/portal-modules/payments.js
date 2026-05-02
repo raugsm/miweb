@@ -224,7 +224,6 @@ export function updateQuote() {
   const payment = context.selectedPayment || currentPayment();
   const unitNode = $("#currentUnitPrice");
   const unitUsdtNode = $("#currentUnitPriceUsdt");
-  const currencyLabel = $("#currentCurrencyLabel");
   const paymentBadge = $("#currentPaymentBadge");
   // QUE: paso 1 muestra precio BASE por unidad (constante FINAL §4), no el
   // precio efectivo con tier de volumen aplicado. El total ya descontado vive
@@ -235,7 +234,6 @@ export function updateQuote() {
   const baseUnit = Number(estimate.base ?? estimate.unit ?? 0);
   if (unitNode) unitNode.textContent = paymentAmountText(baseUnit, payment);
   if (unitUsdtNode) unitUsdtNode.textContent = money(baseUnit);
-  if (currencyLabel) currencyLabel.textContent = `${paymentFlag(payment)} ${payment?.currency || "Tu moneda"}`;
   if (paymentBadge) paymentBadge.textContent = paymentOptionLabel(payment);
   const quoteUsdt = $("#quoteTotalUsdt");
   const quoteLocal = $("#quoteTotalLocal");
