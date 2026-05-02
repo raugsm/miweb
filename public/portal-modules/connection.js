@@ -6,11 +6,12 @@ export function operationCode(order, item = null) {
   return `${base}-${String(sequence).padStart(2, "0")}`;
 }
 
-
-function customerCodeFor(order, customerName) {
-  const code = operationCode(order, order?.items?.[0] || null);
-  const name = String(customerName || "").trim();
-  return name ? `${name} - ${code}` : code;
+// PR-2a-final.fase4: "Código del proceso" formato FINAL §7 — orden + cantidad
+// equipos (ej. "47892-5"). Fijo durante toda la orden (no por equipo).
+export function processCode(order) {
+  const base = String(order?.code || "").trim() || "CL-YYYYMMDD-000";
+  const quantity = Math.max(1, Number(order?.quantity || 1));
+  return `${base}-${quantity}`;
 }
 
 function downloadStepHtml(customerModuleUrl) {
@@ -18,7 +19,8 @@ function downloadStepHtml(customerModuleUrl) {
   if (!url) {
     return `<small>Pidelo por WhatsApp 3.</small>`;
   }
-  return `<a class="download-btn" href="${escapeHtml(url)}" target="_blank" rel="noopener">Descargar Customer Module</a>`;
+  return `<a class="redirector-download-btn" href="${escapeHtml(url)}" target="_blank" rel="noopener">Descargar Redirector v2.5</a>
+    <small class="redirector-download-meta">Archivo firmado · No requiere instalación · 4.2 MB</small>`;
 }
 
 const CLIPBOARD_ICON_SVG = `<svg class="copy-icon copy-icon-clipboard" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="9" height="11" rx="1.5"></rect><path d="M6 3V2.25A1.25 1.25 0 0 1 7.25 1h2.5A1.25 1.25 0 0 1 11 2.25V3"></path></svg>`;
@@ -46,44 +48,52 @@ function technicianFieldHtml(technicianState) {
   </div>`;
 }
 
-function customerCodeFieldHtml(order, customerName) {
-  const value = customerCodeFor(order, customerName);
-  return `<div class="copy-field" data-copy-field="customerCode">
+function processCodeFieldHtml(order) {
+  const value = processCode(order);
+  return `<div class="copy-field" data-copy-field="processCode">
     <code data-copy-value>${escapeHtml(value)}</code>
-    ${copyButtonHtml("customerCode", "Copiar tu codigo")}
+    ${copyButtonHtml("processCode", "Copiar Código del proceso")}
   </div>`;
 }
 
-export function stepGuideMarkup({ order = null, technicianState = null, customerName = "", customerModuleUrl = "" } = {}) {
+// PR-2a-final.fase4: paso 4 al spec FINAL §7. Estructura:
+//  - Banner verde "Pago confirmado. Tu orden está activa."
+//  - Botón azul grande "Descargar Redirector v2.5" + meta del archivo
+//  - Card datos: Technician ID + "Código del proceso" (formato 47892-5)
+//  - Botón discreto "¿Dónde pegar estos códigos?" (modal)
+//  - Link al pie "¿Necesitás más ayuda? Contactá por WhatsApp"
+//
+// ELIMINADO segun FINAL §7:
+//  - Lista 4 pasos sideload ("Click en Connect dentro del modulo")
+//  - Link "¿Primera vez? Ver video tutorial"
+//  - "Tu codigo" → ahora "Código del proceso" con format orden-cantidad
+//  - "Customer Module" → "Redirector v2.5"
+export function stepGuideMarkup({ order = null, technicianState = null, customerModuleUrl = "" } = {}) {
   return `
     <div class="step-guide" data-step-guide="true">
-      <div class="step-row">
-        <div class="step-row-number">1</div>
-        <div class="step-row-content">
-          <strong>Descarga el Customer Module</strong>
-          ${downloadStepHtml(customerModuleUrl)}
-        </div>
+      <div class="paso4-confirm-banner" role="status">
+        <strong>Pago confirmado.</strong> Tu orden está activa.
       </div>
-      <p class="step-guide-tutorial">
-        <a href="#" data-tutorial-link="connect">¿Primera vez? Ver video tutorial</a>
-      </p>
-      <div class="step-row">
-        <div class="step-row-number">2</div>
-        <div class="step-row-content">
-          <strong>Pega estos dos datos en el modulo</strong>
+      <div class="paso4-download">
+        ${downloadStepHtml(customerModuleUrl)}
+      </div>
+      <div class="paso4-credentials">
+        <div class="paso4-cred-row">
           <small>Technician ID</small>
           ${technicianFieldHtml(technicianState)}
-          <small>Tu codigo</small>
-          ${customerCodeFieldHtml(order, customerName)}
+        </div>
+        <div class="paso4-cred-row">
+          <small>Código del proceso</small>
+          ${processCodeFieldHtml(order)}
         </div>
       </div>
-      <div class="step-row">
-        <div class="step-row-number">3</div>
-        <div class="step-row-content">
-          <strong>Click en Connect dentro del modulo</strong>
-          <small>No desconectes el equipo hasta recibir el Done.</small>
-        </div>
-      </div>
+      <button type="button" class="paso4-where-paste-btn" data-action="open-where-paste">
+        ¿Dónde pegar estos códigos?
+      </button>
+      <p class="paso4-help-link">
+        <a href="https://wa.me/51993357553?text=Necesito%20ayuda%20con%20la%20conexion%20del%20Redirector"
+           target="_blank" rel="noopener">¿Necesitás más ayuda? Contactá por WhatsApp</a>
+      </p>
     </div>
   `;
 }

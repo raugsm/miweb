@@ -270,6 +270,43 @@
       </div>
     </div>
 
+    <dialog id="wherePasteDialog" class="where-paste-dialog">
+      <div class="where-paste-mock">
+        <div class="where-paste-mock-header">USB Redirector Technician Edition - Customer Module</div>
+        <div class="where-paste-mock-body">
+          <div class="where-paste-mock-title">Connect With Technician</div>
+          <div class="where-paste-mock-field">
+            <label>Technician ID:</label>
+            <div class="where-paste-mock-input"></div>
+            <span class="where-paste-arrow where-paste-arrow-blue">1° dato</span>
+          </div>
+          <div class="where-paste-mock-field">
+            <label>Additional information (e.g. your name, e-mail or order number):</label>
+            <div class="where-paste-mock-input"></div>
+            <span class="where-paste-arrow where-paste-arrow-green">2° dato</span>
+          </div>
+          <p class="where-paste-mock-info">ⓘ This information will help the technician identify you as a customer</p>
+          <div class="where-paste-mock-footer">
+            <span>Version: 2.5.0.3540</span>
+            <button type="button" class="where-paste-mock-btn where-paste-mock-connect">Connect</button>
+            <button type="button" class="where-paste-mock-btn where-paste-mock-cancel">Cancel</button>
+          </div>
+        </div>
+      </div>
+      <ol class="where-paste-steps">
+        <li>Pegá el <strong>Technician ID</strong> en el primer campo (azul).</li>
+        <li>Pegá el <strong>Código del proceso</strong> en el segundo campo (verde).</li>
+        <li>Apretá <strong>Connect</strong> y volvé al portal.</li>
+      </ol>
+      <p class="where-paste-placeholder-note">
+        💡 Imagen real del Redirector queda pendiente — el usuario la sube en sesión próxima.
+        Esta es una recreación SVG aproximada para testing.
+      </p>
+      <div class="dialog-actions">
+        <button type="button" class="primary-btn" data-where-paste-action="close">Listo, cerrar</button>
+      </div>
+    </dialog>
+
     <template id="orderTemplate">
       <article class="order-card">
         <div class="order-top">

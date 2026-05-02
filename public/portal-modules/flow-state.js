@@ -1,38 +1,56 @@
 import { api } from "./api.js";
 import { state } from "./state.js";
 
-// QUE: deriva la fase del flujo del portal cliente en base a las ordenes existentes.
-// POR QUE: el portal no guarda un campo "step" explicito; la fase real depende del
-// estado del backend (publicStatus + paymentProofs). Centralizar la derivacion aqui
-// evita que cada componente re-implemente la regla y diverja.
+// PR-2a-final.fase4 — fix BUG B + nueva taxonomia de flowState.
 //
-// Tres fases posibles:
-//   draft           No hay orden activa. El cliente puede crear solicitud nueva.
-//   awaiting_proof  Hay orden ESPERANDO_PAGO sin comprobante. Esperando upload.
-//   connected       Hay orden con comprobante subido o status posterior. Pasos 1-3
-//                   quedan congelados; paso 4 muestra CTA "Equipo conectado".
+// Antes la lista "active" solo incluia ESPERANDO_PAGO/PAGO_EN_REVISION/
+// PAGO_RECHAZADO, asi que post-aprobacion (EN_PREPARACION) la orden caia
+// fuera del filtro y deriveFlowState devolvia "draft" → renderFlowCta no
+// pintaba el boton "Equipo conectado". REGRESIÓN del PR-2a-final.1.
+//
+// Ahora la taxonomia distingue cada fase para que cada componente sepa
+// que pintar:
+//   draft               No hay orden activa.
+//   awaiting_proof      ESPERANDO_PAGO sin proofs (legacy — apenas ocurre).
+//   in_review           PAGO_EN_REVISION (banner azul en paso 3).
+//   rejected            PAGO_RECHAZADO (banner rojo + dropzone en paso 3).
+//   awaiting_connection EN_PREPARACION sin customerConnectedAt → paso 4 +
+//                        boton "Equipo conectado".
+//   connected           LISTO_PARA_CONEXION+ — orden ya conectada/en proceso.
+
+const ACTIVE_STATES = new Set([
+  "ESPERANDO_PAGO",
+  "PAGO_EN_REVISION",
+  "PAGO_RECHAZADO",
+  "EN_PREPARACION",
+  "LISTO_PARA_CONEXION",
+  "EN_PROCESO",
+  "REQUIERE_ATENCION",
+]);
 
 export function deriveFlowState(customer) {
   const orders = customer?.orders || [];
-  const active = orders.find((order) => (
-    order.publicStatus === "ESPERANDO_PAGO"
-    || order.publicStatus === "PAGO_EN_REVISION"
-    || order.publicStatus === "PAGO_RECHAZADO"
-  ));
+  const active = orders.find((order) => ACTIVE_STATES.has(order.publicStatus));
   if (!active) return "draft";
 
+  if (active.publicStatus === "PAGO_RECHAZADO") return "rejected";
+
   const hasProofs = (active.paymentProofs || []).length > 0;
-  if (active.publicStatus === "ESPERANDO_PAGO" && !hasProofs) {
-    return "awaiting_proof";
+  if (active.publicStatus === "ESPERANDO_PAGO" && !hasProofs) return "awaiting_proof";
+  if (active.publicStatus === "PAGO_EN_REVISION") return "in_review";
+  if (active.publicStatus === "EN_PREPARACION" && !active.customerConnectedAt) {
+    return "awaiting_connection";
   }
   return "connected";
 }
 
+// QUE: orden actual sobre la que el cliente puede actuar con "Equipo conectado".
+// El backend solo acepta el evento cuando publicStatus ∈ {EN_PREPARACION,
+// LISTO_PARA_CONEXION} (portal-routes.js:705) — buscamos esa orden aqui.
 export function activeOrderForFlow(customer) {
   const orders = customer?.orders || [];
   return orders.find((order) => (
-    order.publicStatus === "ESPERANDO_PAGO"
-    || order.publicStatus === "PAGO_EN_REVISION"
+    order.publicStatus === "EN_PREPARACION" || order.publicStatus === "LISTO_PARA_CONEXION"
   )) || null;
 }
 

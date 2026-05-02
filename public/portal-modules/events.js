@@ -228,6 +228,19 @@ export function wireEvents() {
     setSelectedPayment(pill.dataset.paymentPill);
     updateQuote();
   });
+  // PR-2a-final.fase4: modal "¿Dónde pegar?" — abrir desde paso 4.
+  $("#orderForm")?.addEventListener("click", (event) => {
+    const btn = event.target.closest("[data-action='open-where-paste']");
+    if (!btn) return;
+    event.preventDefault();
+    document.querySelector("#wherePasteDialog")?.showModal();
+  });
+  document.querySelector("#wherePasteDialog")?.addEventListener("click", (event) => {
+    if (event.target.closest("[data-where-paste-action='close']")) {
+      event.preventDefault();
+      document.querySelector("#wherePasteDialog")?.close();
+    }
+  });
   $("#copyPaymentButton").addEventListener("click", () => renderPaymentModal());
   $("#closePaymentModal")?.addEventListener("click", closePaymentModal);
   $("#paymentModal")?.addEventListener("click", (event) => {

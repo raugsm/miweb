@@ -459,6 +459,163 @@
   background: #fee2e2; border-left: 2px solid #b91c1c; color: #7f1d1d;
 }
 
+/* PR-2a-final.fase4 — Paso 4 al spec FINAL §7. Banner verde + Redirector
+   download + Technician ID + Código del proceso + boton "¿Dónde pegar?". */
+.paso4-confirm-banner {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #ecfdf5;
+  border-left: 3px solid #10b981;
+  color: #065f46;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+.paso4-download {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+.redirector-download-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #fff;
+  font-weight: 800;
+  font-size: 14px;
+  text-decoration: none;
+  box-shadow: 0 8px 22px rgba(29, 78, 216, 0.28);
+}
+.redirector-download-btn:hover { filter: brightness(1.05); }
+.redirector-download-meta {
+  text-align: center;
+  font-size: 11px;
+  color: #6b7280;
+}
+.paso4-credentials { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+.paso4-cred-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+.paso4-cred-row > small {
+  font-size: 11px;
+  font-weight: 700;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.paso4-where-paste-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 14px;
+  border: 1px dashed #93c5fd;
+  background: #fff;
+  border-radius: 8px;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-bottom: 12px;
+}
+.paso4-where-paste-btn:hover { background: #eef4fd; }
+.paso4-help-link { margin: 0; text-align: center; font-size: 11px; }
+.paso4-help-link a { color: #1d4ed8; text-decoration: none; }
+.paso4-help-link a:hover { text-decoration: underline; }
+
+/* Modal "¿Dónde pegar?" — recreación aproximada SVG hasta que el usuario
+   suba el screenshot real del Redirector v2.5.0.3540. */
+.where-paste-dialog {
+  border: 0;
+  border-radius: 14px;
+  padding: 20px;
+  width: min(520px, 92vw);
+  background: var(--surface, #fff);
+  color: var(--text, #0f1629);
+  box-shadow: 0 30px 80px rgba(15, 23, 42, 0.3);
+}
+.where-paste-dialog::backdrop { background: rgba(15, 23, 42, 0.45); }
+.where-paste-mock {
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-family: "Segoe UI", Tahoma, sans-serif;
+  font-size: 12px;
+  margin-bottom: 12px;
+  background: #f1f5f9;
+}
+.where-paste-mock-header {
+  background: #1e293b;
+  color: #fff;
+  padding: 6px 10px;
+  font-weight: 600;
+  border-radius: 6px 6px 0 0;
+}
+.where-paste-mock-body { padding: 12px; background: #fff; border-radius: 0 0 6px 6px; }
+.where-paste-mock-title { font-weight: 700; margin-bottom: 8px; color: #166534; }
+.where-paste-mock-field { position: relative; margin-bottom: 12px; }
+.where-paste-mock-field label { display: block; font-size: 11px; color: #475569; margin-bottom: 2px; }
+.where-paste-mock-input { height: 22px; border: 1px solid #94a3b8; background: #f8fafc; border-radius: 2px; }
+.where-paste-arrow {
+  position: absolute;
+  right: -56px;
+  top: 16px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+}
+.where-paste-arrow-blue { background: #1d4ed8; }
+.where-paste-arrow-green { background: #059669; }
+.where-paste-arrow::before {
+  content: "";
+  position: absolute;
+  left: -6px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 6px solid transparent;
+  border-right-color: inherit;
+}
+.where-paste-arrow-blue::before { border-right-color: #1d4ed8; }
+.where-paste-arrow-green::before { border-right-color: #059669; }
+.where-paste-mock-info { font-size: 11px; color: #475569; margin: 6px 0 8px; }
+.where-paste-mock-footer { display: flex; align-items: center; gap: 8px; font-size: 11px; }
+.where-paste-mock-footer > span { flex: 1; color: #94a3b8; }
+.where-paste-mock-btn {
+  padding: 4px 10px;
+  border: 1px solid #94a3b8;
+  background: #e2e8f0;
+  border-radius: 3px;
+  font-size: 11px;
+  cursor: default;
+}
+.where-paste-steps {
+  margin: 0 0 8px 18px;
+  padding: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #1e293b;
+}
+.where-paste-placeholder-note {
+  margin: 8px 0 12px;
+  padding: 8px 10px;
+  background: #fef9c3;
+  border-radius: 6px;
+  font-size: 11px;
+  color: #78350f;
+  font-style: italic;
+}
+
 /* PR-2a-final.3: info-tip sutil sobre el lock de 15 min — antes del dropzone.
    Comunica de forma proactiva al cliente que pagar pronto = precio asegurado
    por 15 min, sin ser intrusivo. */

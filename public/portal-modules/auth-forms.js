@@ -233,7 +233,11 @@ function applyFlowState(customer) {
 function renderFlowCta(flowState) {
   const cta = document.querySelector("#orderForm .connection-actions");
   if (!cta) return;
-  if (flowState === "connected") {
+  // PR-2a-final.fase4 / fix BUG B: el boton "Equipo conectado" aparece SOLO
+  // cuando flowState === "awaiting_connection" (orden en EN_PREPARACION sin
+  // customerConnectedAt). Antes se pintaba en "connected" generico, pero la
+  // taxonomia anterior no diferenciaba pre/post-aprobacion.
+  if (flowState === "awaiting_connection") {
     cta.innerHTML = '<button id="orderSubmitButton" class="flow-cta-connected" type="button" data-flow-action="notify-connected">Equipo conectado</button>';
     return;
   }
