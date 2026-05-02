@@ -3346,11 +3346,31 @@ async function handleApi(req, res, pathname) {
     const db = await readDb();
     const setupRequired = db.users.length === 0 && Boolean(setupToken);
     if (!user) return sendJson(res, 200, { user: null, setupRequired });
+    // PR-2a.5: lista de clientes registrados via portal con info VIP. Lookup
+    // de benefit DIRECTO (sin customerBenefitFor que crearia rows en cada
+    // session GET y mutaria el DB en operaciones de lectura).
+    const portalCustomers = db.customerClients.slice(0, 200).map((client) => {
+      const status = normalizeCustomerStatus(client.status);
+      const benefit = (db.customerBenefits || []).find((b) => b.clientId === client.id && b.active !== false);
+      return {
+        id: client.id,
+        name: client.name,
+        whatsapp: client.whatsapp || "",
+        country: client.country || "",
+        primaryEmail: client.primaryEmail || "",
+        status,
+        isVip: status === "VIP",
+        vipUnitPrice: Number(benefit?.vipUnitPrice || 0),
+        masterClientId: client.masterClientId || "",
+        createdAt: client.createdAt,
+      };
+    });
     return sendJson(res, 200, {
       user: publicUser(user),
       setupRequired,
       users: user.role === "ADMIN" ? db.users.map(publicUser) : [],
       clients: db.clients.slice(0, 300).map((client) => publicClient(client, db)),
+      portalCustomers,
       audit: user.role === "ADMIN" ? db.audit.slice(0, 50) : [],
       tickets: db.tickets.slice(0, 120).map((ticket) => publicTicket(ticket, db)),
       presence: publicPresence(db),
@@ -3361,6 +3381,61 @@ async function handleApi(req, res, pathname) {
       roles: user.role === "ADMIN" ? Array.from(roles).map((role) => ({ value: role, label: roleLabels[role] })) : [],
       catalog: { services: catalogServicesForUser(user), paymentMethods, workChannels, ticketStatuses, countries: countries.map(([, country]) => country) },
       frp: publicFrpState(db, user),
+    });
+  }
+
+  // PR-2a.5: toggle VIP en cliente del portal (Bryam/Jack/Angelo segun FINAL §3).
+  // Marca/desmarca client.status entre VIP y emailVerificado, ajusta benefit.vipUnitPrice,
+  // audita y publica SSE para que el cliente vea el cambio en vivo (pricing recompute).
+  const portalVipMatch = pathname.match(/^\/api\/admin\/customer-clients\/([^/]+)\/vip$/);
+  if (req.method === "POST" && portalVipMatch) {
+    if (!requireUser(user, res)) return;
+    const db = await readDb();
+    const input = await parseJson(req);
+    const clientId = portalVipMatch[1];
+    const client = db.customerClients.find((candidate) => candidate.id === clientId);
+    if (!client) return sendJson(res, 404, { error: "Cliente del portal no encontrado." });
+    const action = cleanText(input.action, 30);
+    const reason = cleanText(input.reason, 200);
+    if (!reason) return sendJson(res, 400, { error: "Motivo obligatorio." });
+    if (!["mark_vip", "unmark_vip"].includes(action)) return sendJson(res, 400, { error: "Action invalida (mark_vip | unmark_vip)." });
+    const previousStatus = client.status;
+    const benefit = customerBenefitFor(db, client.id, client.masterClientId || "");
+    const previousVipPrice = Number(benefit.vipUnitPrice || 0);
+    if (action === "mark_vip") {
+      const vipUnitPrice = moneyNumber(input.vipUnitPrice ?? 1.0);
+      if (vipUnitPrice <= 0) return sendJson(res, 400, { error: "vipUnitPrice debe ser mayor a 0." });
+      client.status = "VIP";
+      benefit.vipUnitPrice = vipUnitPrice;
+      benefit.active = true;
+      benefit.updatedAt = nowIso();
+      benefit.updatedBy = user.id;
+    } else {
+      client.status = client.emailVerifiedAt ? "EMAIL_VERIFICADO" : "REGISTRADO_NO_VERIFICADO";
+      benefit.vipUnitPrice = 0;
+      benefit.updatedAt = nowIso();
+      benefit.updatedBy = user.id;
+    }
+    client.updatedAt = nowIso();
+    audit(db, user.id, action === "mark_vip" ? "PORTAL_CLIENT_VIP_MARKED" : "PORTAL_CLIENT_VIP_UNMARKED", client.id, {
+      name: client.name,
+      previousStatus,
+      newStatus: client.status,
+      previousVipPrice,
+      newVipPrice: benefit.vipUnitPrice,
+      reason,
+    });
+    await writeDb(db);
+    publishPortalOrders(db, client.id, "vip_status_changed");
+    return sendJson(res, 200, {
+      ok: true,
+      client: {
+        id: client.id,
+        name: client.name,
+        status: normalizeCustomerStatus(client.status),
+        isVip: normalizeCustomerStatus(client.status) === "VIP",
+        vipUnitPrice: Number(benefit.vipUnitPrice || 0),
+      },
     });
   }
 

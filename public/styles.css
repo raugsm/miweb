@@ -266,7 +266,75 @@ input:focus, select:focus {
 .mini-btn.is-saving { background: #e6f0ff; color: #1d4ed8; border-color: #93c5fd; }
 .mini-btn.is-success { background: #dcfce7; color: #14532d; border-color: #86efac; }
 .mini-btn.is-error { background: #fee2e2; color: #7f1d1d; border-color: #fca5a5; }
+.primary-btn.is-saving { opacity: 0.85; }
+.primary-btn.is-success { background: linear-gradient(135deg, #10b981, #059669); }
+.primary-btn.is-error { background: linear-gradient(135deg, #ef4444, #b91c1c); }
 .table-input.is-invalid, input.is-invalid { border-color: #ef4444 !important; background: #fef2f2; }
+
+/* PR-2a.5 — sección portal customers + VIP badge + dialog. */
+.portal-customers-section { margin-top: 24px; }
+.vip-badge {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 6px;
+  font-size: 14px;
+  color: #ca8a04;
+  background: #fef9c3;
+  border: 1px solid #fde047;
+  border-radius: 6px;
+  line-height: 1.4;
+}
+.status-pill.vip-pill {
+  background: #fef9c3;
+  border-color: #fde047;
+  color: #854d0e;
+  font-weight: 800;
+}
+.vip-dialog {
+  border: 0;
+  border-radius: 14px;
+  padding: 0;
+  width: min(420px, 92vw);
+  max-width: 92vw;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 30px 80px rgba(15, 23, 42, 0.3);
+}
+.vip-dialog::backdrop { background: rgba(15, 23, 42, 0.45); }
+.vip-dialog-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px 22px;
+}
+.vip-dialog-form header h3 { margin: 0; font-size: 18px; }
+.vip-dialog-client { margin: 0; font-weight: 700; font-size: 14px; }
+.vip-dialog-status { margin: 0; font-size: 13px; color: var(--muted, #6b7280); }
+.vip-dialog-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.vip-dialog-form label input {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line, #d4dae5);
+  font-size: 14px;
+}
+.vip-dialog-form .hint {
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--muted, #6b7280);
+}
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+.dialog-actions button { min-height: 38px; padding: 0 14px; }
 .ghost-btn {
   width: 100%;
   border-color: #d5dfed;

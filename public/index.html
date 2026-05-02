@@ -353,6 +353,54 @@
               </table>
             </div>
 
+            <div id="portal-customers-section" class="portal-customers-section">
+              <div class="section-heading compact-heading">
+                <div>
+                  <p class="eyebrow">Portal de clientes</p>
+                  <h3>Clientes registrados via portal</h3>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Nombre</th>
+                      <th>Email</th>
+                      <th>Pais</th>
+                      <th>Estado</th>
+                      <th>Precio VIP</th>
+                      <th>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody id="portal-customers-table"></tbody>
+                </table>
+              </div>
+              <p id="portal-customers-message" class="message" aria-live="polite"></p>
+            </div>
+
+            <dialog id="vipDialog" class="vip-dialog">
+              <form id="vipForm" method="dialog" class="vip-dialog-form">
+                <header>
+                  <h3 id="vipDialogTitle">Marcar VIP</h3>
+                </header>
+                <p id="vipDialogClient" class="vip-dialog-client">-</p>
+                <p id="vipDialogStatus" class="vip-dialog-status">Estado actual: -</p>
+                <label data-vip-price-row>
+                  Precio VIP (USDT/unidad)
+                  <input type="number" name="vipUnitPrice" min="0" step="0.01" value="1.0" />
+                  <small class="hint">FINAL §3: piso VIP 1.0, descuento volumen NUNCA puede igualar.</small>
+                </label>
+                <label>
+                  Motivo (obligatorio)
+                  <input type="text" name="reason" required maxlength="200" placeholder="Ej: cliente activo desde marzo 2026" />
+                </label>
+                <div class="dialog-actions">
+                  <button type="button" class="secondary-btn" data-vip-action="cancel">Cancelar</button>
+                  <button type="submit" class="primary-btn" data-vip-action="confirm">Guardar</button>
+                </div>
+              </form>
+            </dialog>
+
             <div id="client-master-section" class="client-master-section hidden">
               <div class="section-heading compact-heading">
                 <div>

@@ -471,6 +471,7 @@ function renderLayout() {
   renderAudit();
   renderCatalog();
   renderClients();
+  renderPortalCustomers();
   renderPricing();
   renderDailyClose();
   renderFrp();
@@ -581,6 +582,140 @@ function renderClients() {
     .join("");
   renderClientMasters();
 }
+
+// PR-2a.5 — UI minima para marcar VIP. Lista a los clientes registrados via
+// portal y permite togglear status VIP + setear vipUnitPrice. Backend validacion
+// + audit en POST /api/admin/customer-clients/:id/vip. FINAL §3: cualquier
+// operador (Bryam/Jack/Angelo) puede marcar/desmarcar.
+function renderPortalCustomers() {
+  const tbody = document.querySelector("#portal-customers-table");
+  if (!tbody) return;
+  const customers = session.portalCustomers || [];
+  if (!customers.length) {
+    tbody.innerHTML = `<tr><td colspan="6" class="muted-cell">No hay clientes registrados via portal todavia.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = customers.map((c) => {
+    const vipBadge = c.isVip ? `<span class="vip-badge" title="Cliente VIP">★</span>` : "";
+    const statusCell = c.isVip
+      ? `<span class="status-pill vip-pill">VIP</span>`
+      : `<span class="status-pill">${escapeHtml(c.status || "Regular")}</span>`;
+    const priceCell = c.isVip && c.vipUnitPrice > 0
+      ? `${Number(c.vipUnitPrice).toFixed(2)} USDT`
+      : "-";
+    const actionLabel = c.isVip ? "Quitar VIP" : "Marcar VIP";
+    const actionMode = c.isVip ? "unmark" : "mark";
+    return `
+      <tr>
+        <td><strong>${escapeHtml(c.name)}</strong> ${vipBadge}<span class="table-subtext">${escapeHtml(c.whatsapp || "")}</span></td>
+        <td>${escapeHtml(c.primaryEmail || "-")}</td>
+        <td>${escapeHtml(c.country || "-")}</td>
+        <td>${statusCell}</td>
+        <td>${priceCell}</td>
+        <td class="action-cell"><button class="mini-btn" type="button" data-portal-vip-action="${actionMode}" data-client-id="${escapeHtml(c.id)}">${actionLabel}</button></td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function openVipDialog(customer, action) {
+  const dialog = document.querySelector("#vipDialog");
+  const form = dialog?.querySelector("#vipForm");
+  if (!dialog || !form) return;
+  form.reset();
+  dialog.querySelector("#vipDialogTitle").textContent = action === "mark" ? "Marcar VIP" : "Quitar VIP";
+  dialog.querySelector("#vipDialogClient").textContent = `${customer.name}${customer.primaryEmail ? " · " + customer.primaryEmail : ""}${customer.whatsapp ? " · " + customer.whatsapp : ""}`;
+  dialog.querySelector("#vipDialogStatus").textContent = `Estado actual: ${customer.isVip ? "VIP" : (customer.status || "Regular")}`;
+  const priceRow = dialog.querySelector("[data-vip-price-row]");
+  if (priceRow) priceRow.style.display = action === "mark" ? "" : "none";
+  if (action === "mark") {
+    const priceInput = form.querySelector("[name='vipUnitPrice']");
+    priceInput.value = customer.vipUnitPrice > 0 ? customer.vipUnitPrice : "1.0";
+  }
+  dialog.dataset.action = action;
+  dialog.dataset.clientId = customer.id;
+  const submitBtn = form.querySelector("[data-vip-action='confirm']");
+  if (submitBtn) {
+    submitBtn.textContent = "Guardar";
+    submitBtn.classList.remove("is-success", "is-error", "is-saving");
+    submitBtn.disabled = false;
+    delete submitBtn.dataset.originalText;
+  }
+  dialog.showModal();
+  setTimeout(() => form.querySelector("[name='reason']")?.focus(), 30);
+}
+
+document.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-portal-vip-action]");
+  if (!button) return;
+  const clientId = button.dataset.clientId;
+  const action = button.dataset.portalVipAction;
+  const customer = (session.portalCustomers || []).find((c) => c.id === clientId);
+  if (!customer) return;
+  openVipDialog(customer, action);
+});
+
+document.querySelector("#vipDialog")?.addEventListener("click", (event) => {
+  const cancelBtn = event.target.closest("[data-vip-action='cancel']");
+  if (!cancelBtn) return;
+  event.preventDefault();
+  document.querySelector("#vipDialog")?.close();
+});
+
+document.querySelector("#vipForm")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const dialog = document.querySelector("#vipDialog");
+  const submitBtn = form.querySelector("[data-vip-action='confirm']");
+  const action = dialog.dataset.action;
+  const clientId = dialog.dataset.clientId;
+  const reasonInput = form.querySelector("[name='reason']");
+  const reason = (reasonInput?.value || "").trim();
+  if (!reason) {
+    reasonInput?.classList.add("is-invalid");
+    reasonInput?.focus();
+    showButtonFeedback(submitBtn, "error", "✗ Motivo obligatorio", 2200);
+    const onInput = () => { reasonInput?.classList.remove("is-invalid"); reasonInput?.removeEventListener("input", onInput); };
+    reasonInput?.addEventListener("input", onInput);
+    return;
+  }
+  const vipUnitPriceInput = form.querySelector("[name='vipUnitPrice']");
+  const vipUnitPrice = Number(vipUnitPriceInput?.value || 0);
+  if (action === "mark" && (!vipUnitPrice || vipUnitPrice <= 0)) {
+    vipUnitPriceInput?.classList.add("is-invalid");
+    showButtonFeedback(submitBtn, "error", "✗ Precio VIP requerido", 2200);
+    return;
+  }
+  showButtonFeedback(submitBtn, "saving", "Guardando...");
+  submitBtn.disabled = true;
+  const portalMessage = document.querySelector("#portal-customers-message");
+  if (portalMessage) portalMessage.textContent = "";
+  try {
+    await api(`/api/admin/customer-clients/${encodeURIComponent(clientId)}/vip`, {
+      method: "POST",
+      body: JSON.stringify({
+        action: action === "mark" ? "mark_vip" : "unmark_vip",
+        vipUnitPrice,
+        reason,
+      }),
+    });
+    showButtonFeedback(submitBtn, "success", action === "mark" ? "✓ Marcado VIP" : "✓ Quitado VIP", 1300);
+    if (portalMessage) {
+      portalMessage.textContent = action === "mark" ? "Cliente marcado como VIP." : "Cliente quitado de VIP.";
+      portalMessage.dataset.type = "success";
+    }
+    setTimeout(async () => {
+      dialog.close();
+      await refreshSession();
+    }, 1400);
+  } catch (error) {
+    showButtonFeedback(submitBtn, "error", `✗ ${error.message.slice(0, 60)}`, 3500);
+    if (portalMessage) {
+      portalMessage.textContent = error.message;
+      portalMessage.dataset.type = "error";
+    }
+  }
+});
 
 function clientSourceLabel(sourceType) {
   if (sourceType === "PORTAL_CLIENT") return "Portal Cliente";
