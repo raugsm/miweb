@@ -322,6 +322,28 @@
   animation: orderPillPulse 1.6s ease-in-out infinite;
 }
 
+/* PR-2a.7+ — indicador "precio anclado" en cards de Mis Ordenes. Verde sutil
+   comunica seguridad ("tu precio está asegurado contra cambios futuros").
+   Reemplazable en PR-5 Layout D. */
+.order-lock {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #ecfdf5;
+  border-left: 2px solid #10b981;
+  color: #065f46;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.order-lock[hidden] {
+  display: none;
+}
+
 .order-alert {
   border-color: #f6d58b;
   background: #fff8ea;

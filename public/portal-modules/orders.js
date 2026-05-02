@@ -215,6 +215,24 @@ export function renderOrders(orders) {
       statusPill.dataset.stage = stage.toLowerCase();
     }
     $(".order-meta", card).textContent = compactOrderMeta(order);
+    // PR-2a.7+: indicador visual de price lock. Util en testing PR-2a.2/2a.3
+    // y en produccion comunica al cliente que su precio esta asegurado contra
+    // cambios futuros del operador. Cuando llegue PR-5 Layout D se reintegra
+    // al diseño final.
+    const lockNode = $(".order-lock", card);
+    if (lockNode) {
+      const lockedAmount = Number(order.priceLocked || 0);
+      if (lockedAmount > 0 && order.priceLockedAt) {
+        const lockedAt = new Date(order.priceLockedAt);
+        const dateStr = lockedAt.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit" });
+        const timeStr = lockedAt.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
+        lockNode.textContent = `🔒 Precio anclado: ${lockedAmount.toFixed(2)} USDT · ${dateStr} ${timeStr}`;
+        lockNode.hidden = false;
+      } else {
+        lockNode.textContent = "";
+        lockNode.hidden = true;
+      }
+    }
     const inCompatibilityReview = order.publicStatus === "REVISION_COMPATIBILIDAD";
     $(".tracking-panel", card).innerHTML = trackingMarkup(order);
     const alertText = orderAlertText(order);
