@@ -386,9 +386,9 @@
                 <p id="vipDialogClient" class="vip-dialog-client">-</p>
                 <p id="vipDialogStatus" class="vip-dialog-status">Estado actual: -</p>
                 <label data-vip-price-row>
-                  Precio VIP (USDT/unidad)
-                  <input type="number" name="vipUnitPrice" min="0" step="0.01" value="1.0" />
-                  <small class="hint">FINAL §3: piso VIP 1.0, descuento volumen NUNCA puede igualar.</small>
+                  Margen VIP (USDT/unidad)
+                  <input type="number" name="vipUnitMargin" min="0.5" max="1.0" step="0.01" value="1.0" />
+                  <small class="hint">Margen del VIP por unidad sobre el costo del proveedor. Default: 1.0 USDT. Rango: 0.5 a 1.0. El precio final del VIP varía con el costo del proveedor: precio_final = costo_proveedor + este margen.</small>
                 </label>
                 <label>
                   Motivo (obligatorio)

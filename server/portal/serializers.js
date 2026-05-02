@@ -58,15 +58,25 @@ export function createPortalSerializers({
     };
   }
 
-  function publicCustomerBenefit(benefit, canUseBenefits) {
+  function publicCustomerBenefit(benefit, canUseBenefits, pricing = null) {
     if (!benefit) return null;
+    // PR-2a.5-fix: VIP usa margen sobre costo proveedor, no precio total.
+    // Frontend recibe el margen (vipUnitMargin) y el precio efectivo computado
+    // (vipEffectiveUnitPrice = costo + margen) para mostrar y comparar tiers
+    // sin tener que calcular costo en cliente.
+    const vipUnitMargin = moneyNumber(benefit.vipUnitMargin ?? benefit.vipUnitPrice ?? 0);
+    const internalCost = pricing?.available ? moneyNumber(pricing.internalCostUsdt) : 0;
+    const vipEffectiveUnitPrice = vipUnitMargin > 0 && internalCost > 0
+      ? moneyNumber(internalCost + vipUnitMargin)
+      : 0;
     return {
       masterClientId: benefit.masterClientId || "",
       quantityDiscountEnabled: Boolean(benefit.quantityDiscountEnabled),
       monthlyDiscountEnabled: Boolean(benefit.monthlyDiscountEnabled),
       goalDiscountEnabled: Boolean(benefit.goalDiscountEnabled),
       monthlyGoal: Number(benefit.monthlyGoal || 0),
-      vipUnitPrice: moneyNumber(benefit.vipUnitPrice || 0),
+      vipUnitMargin,
+      vipEffectiveUnitPrice,
       deviceRequired: benefit.deviceRequired !== false,
       usableNow: Boolean(canUseBenefits),
     };
@@ -230,6 +240,7 @@ export function createPortalSerializers({
     const device = context?.device || null;
     const benefit = client ? customerBenefitFor(db, client.id, client.masterClientId) : null;
     const canUseBenefits = customerCanUseBenefits(context, benefit);
+    const pricingForBenefit = client ? frpCurrentPricing(db) : null;
     const monthlyUsage = client ? customerMonthlyUsage(db, client.id, new Date(), client.masterClientId || benefit?.masterClientId || "") : 0;
     const nextMonthlyTier = client ? nextFrpMonthlyTier(monthlyUsage, frpCurrentPricing(db)) : null;
     const orders = client ? publicCustomerOrdersForClient(db, client.id) : [];
@@ -247,7 +258,7 @@ export function createPortalSerializers({
         createdAt: device.createdAt,
         lastSeenAt: device.lastSeenAt,
       } : null,
-      benefit: publicCustomerBenefit(benefit, canUseBenefits),
+      benefit: publicCustomerBenefit(benefit, canUseBenefits, pricingForBenefit),
       monthlyUsage,
       nextMonthlyTier: nextMonthlyTier ? { ...nextMonthlyTier, remaining: nextMonthlyTier.minJobs - monthlyUsage } : null,
       orders,

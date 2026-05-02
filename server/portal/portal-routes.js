@@ -451,7 +451,7 @@ export function createPortalRoutes({
     const customerStatus = normalizeCustomerStatus(context.client.status);
     const approvalOptionsEligible = canUseBenefits && (
       ["VIP", "EMPRESA"].includes(customerStatus)
-      || Number(benefit.vipUnitPrice || 0) > 0
+      || Number(benefit.vipUnitMargin ?? benefit.vipUnitPrice ?? 0) > 0
     );
     const urgentRequested = approvalOptionsEligible && Boolean(input.urgentRequested);
     const postpayRequested = approvalOptionsEligible && Boolean(input.postpayRequested);

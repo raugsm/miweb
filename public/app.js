@@ -583,8 +583,9 @@ function renderClients() {
   renderClientMasters();
 }
 
-// PR-2a.5 — UI minima para marcar VIP. Lista a los clientes registrados via
-// portal y permite togglear status VIP + setear vipUnitPrice. Backend validacion
+// PR-2a.5 + PR-2a.5-fix — UI minima para marcar VIP. Lista a los clientes
+// registrados via portal y permite togglear status VIP + setear vipUnitMargin
+// (margen sobre costo proveedor, NO precio total — FINAL §3). Backend validacion
 // + audit en POST /api/admin/customer-clients/:id/vip. FINAL §3: cualquier
 // operador (Bryam/Jack/Angelo) puede marcar/desmarcar.
 function renderPortalCustomers() {
@@ -600,8 +601,10 @@ function renderPortalCustomers() {
     const statusCell = c.isVip
       ? `<span class="status-pill vip-pill">VIP</span>`
       : `<span class="status-pill">${escapeHtml(c.status || "Regular")}</span>`;
-    const priceCell = c.isVip && c.vipUnitPrice > 0
-      ? `${Number(c.vipUnitPrice).toFixed(2)} USDT`
+    const margin = Number(c.vipUnitMargin || 0);
+    const effective = Number(c.vipEffectiveUnitPrice || 0);
+    const priceCell = c.isVip && margin > 0
+      ? `<strong>${effective.toFixed(2)} USDT</strong><span class="table-subtext">margen ${margin.toFixed(2)} + costo</span>`
       : "-";
     const actionLabel = c.isVip ? "Quitar VIP" : "Marcar VIP";
     const actionMode = c.isVip ? "unmark" : "mark";
@@ -629,8 +632,8 @@ function openVipDialog(customer, action) {
   const priceRow = dialog.querySelector("[data-vip-price-row]");
   if (priceRow) priceRow.style.display = action === "mark" ? "" : "none";
   if (action === "mark") {
-    const priceInput = form.querySelector("[name='vipUnitPrice']");
-    priceInput.value = customer.vipUnitPrice > 0 ? customer.vipUnitPrice : "1.0";
+    const marginInput = form.querySelector("[name='vipUnitMargin']");
+    if (marginInput) marginInput.value = customer.vipUnitMargin > 0 ? customer.vipUnitMargin : "1.0";
   }
   dialog.dataset.action = action;
   dialog.dataset.clientId = customer.id;
@@ -679,11 +682,14 @@ document.querySelector("#vipForm")?.addEventListener("submit", async (event) => 
     reasonInput?.addEventListener("input", onInput);
     return;
   }
-  const vipUnitPriceInput = form.querySelector("[name='vipUnitPrice']");
-  const vipUnitPrice = Number(vipUnitPriceInput?.value || 0);
-  if (action === "mark" && (!vipUnitPrice || vipUnitPrice <= 0)) {
-    vipUnitPriceInput?.classList.add("is-invalid");
-    showButtonFeedback(submitBtn, "error", "✗ Precio VIP requerido", 2200);
+  // PR-2a.5-fix: validacion del MARGEN VIP en rango FINAL §3 (0.5-1.0).
+  const vipMarginInput = form.querySelector("[name='vipUnitMargin']");
+  const vipUnitMargin = Number(vipMarginInput?.value || 0);
+  if (action === "mark" && (vipUnitMargin < 0.5 || vipUnitMargin > 1.0)) {
+    vipMarginInput?.classList.add("is-invalid");
+    showButtonFeedback(submitBtn, "error", "✗ Margen fuera de 0.5–1.0 USDT", 2500);
+    const onInput = () => { vipMarginInput?.classList.remove("is-invalid"); vipMarginInput?.removeEventListener("input", onInput); };
+    vipMarginInput?.addEventListener("input", onInput);
     return;
   }
   showButtonFeedback(submitBtn, "saving", "Guardando...");
@@ -695,7 +701,7 @@ document.querySelector("#vipForm")?.addEventListener("submit", async (event) => 
       method: "POST",
       body: JSON.stringify({
         action: action === "mark" ? "mark_vip" : "unmark_vip",
-        vipUnitPrice,
+        vipUnitMargin,
         reason,
       }),
     });

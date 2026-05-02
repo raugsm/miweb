@@ -40,7 +40,11 @@ export function estimatePortalPrice(quantity) {
   const monthlyTier = (state.catalog?.monthlyTiers || [])
     .filter((tier) => monthlyUsage >= Number(tier.minJobs || 0))
     .sort((a, b) => Number(a.unitPrice) - Number(b.unitPrice))[0];
-  const vipTier = Number(benefit.vipUnitPrice || 0) > 0 ? { unitPrice: Number(benefit.vipUnitPrice), label: "VIP aprobado" } : null;
+  // PR-2a.5-fix: precio VIP = costo proveedor + vipUnitMargin (calculado en backend
+  // y expuesto como vipEffectiveUnitPrice). Al cambiar el costo del proveedor, este
+  // valor cambia automaticamente — el margen del operador se preserva.
+  const vipEffective = Number(benefit.vipEffectiveUnitPrice || 0);
+  const vipTier = vipEffective > 0 ? { unitPrice: vipEffective, label: "VIP aprobado" } : null;
   const selected = [quantityTier, monthlyTier, vipTier]
     .filter(Boolean)
     .sort((a, b) => Number(a.unitPrice) - Number(b.unitPrice))[0] || { unitPrice: base, label: "Precio base" };
@@ -56,7 +60,7 @@ export function customerCanRequestApprovalOptions() {
   const status = normalizeForMatch(state.customer?.client?.status || "");
   const markedClient = ["vip", "empresa"].includes(status);
   const benefit = state.customer?.benefit;
-  return Boolean(markedClient || (benefit?.usableNow && Number(benefit?.vipUnitPrice || 0) > 0));
+  return Boolean(markedClient || (benefit?.usableNow && Number(benefit?.vipUnitMargin ?? benefit?.vipUnitPrice ?? 0) > 0));
 }
 
 export function parseItems(text, quantity) {

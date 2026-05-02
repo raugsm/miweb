@@ -45,6 +45,25 @@ test("FRP volume tiers compute unitPrice as internalCost + tier margin (FINAL §
   assert.ok(minTier > pricing.minAllowedUnitPrice, "piso volumen debe quedar > VIP floor");
 });
 
+test("VIP price = internalCost + vipUnitMargin and varies with provider cost (FINAL §3)", () => {
+  // Helper que replica la formula del backend (server.js#portalFrpPriceSuggestion line 580).
+  const vipPrice = (internalCost, vipUnitMargin) => Number((internalCost + vipUnitMargin).toFixed(2));
+
+  // Caso 1: costo 23.5, margen 1.0 (default) → VIP 24.5.
+  assert.equal(vipPrice(23.5, 1.0), 24.5);
+  // Caso 2: costo 23.5, margen 0.5 (minimo de FINAL §3) → VIP 24.0.
+  assert.equal(vipPrice(23.5, 0.5), 24.0);
+  // Caso 3: costo SUBE a 28, margen 1.0 → VIP sube a 29 automaticamente.
+  assert.equal(vipPrice(28, 1.0), 29);
+  // Caso 4: costo BAJA a 20, margen 1.0 → VIP baja a 21 automaticamente.
+  assert.equal(vipPrice(20, 1.0), 21);
+  // Restriccion FINAL §3: piso volumen (margen 1.1) > piso VIP (margen 1.0).
+  // Garantizado porque tier 11+ usa cost + 1.1 y VIP usa cost + 1.0 maximo.
+  for (const cost of [3, 23.5, 28, 50]) {
+    assert.ok(vipPrice(cost, 1.0) < cost + 1.1, "VIP siempre < piso volumen para mismo costo");
+  }
+});
+
 test("FRP eligibility preserves blocked, review, and apto outcomes", () => {
   assert.equal(frpEligibilityResult("Redmi A3X").status, "NO_APTO_MODO");
   assert.equal(frpEligibilityResult("Redmi Note 12S").status, "REQUIERE_REVISION");

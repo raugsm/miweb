@@ -432,7 +432,12 @@ function defaultCustomerBenefit(clientId, masterClientId = "") {
     quantityDiscountEnabled: true,
     monthlyDiscountEnabled: true,
     goalDiscountEnabled: false,
-    vipUnitPrice: 0,
+    // PR-2a.5-fix: vipUnitMargin reemplaza al legacy vipUnitPrice.
+    // FINAL §3: VIP tiene MARGEN fijo (0.5-1.0 USDT/unidad) sobre el costo del
+    // proveedor, NO precio total. precio_final_VIP = internalCost + vipUnitMargin.
+    // Si el costo del proveedor sube, el precio del VIP sube proporcionalmente —
+    // protege el margen del operador.
+    vipUnitMargin: 0,
     monthlyGoal: 0,
     deviceRequired: true,
     active: true,
@@ -458,7 +463,18 @@ function customerBenefitFor(db, clientId, masterClientId = "") {
   benefit.quantityDiscountEnabled = benefit.quantityDiscountEnabled !== false;
   benefit.monthlyDiscountEnabled = benefit.monthlyDiscountEnabled !== false;
   benefit.goalDiscountEnabled = Boolean(benefit.goalDiscountEnabled);
-  benefit.vipUnitPrice = moneyNumber(benefit.vipUnitPrice || 0);
+  // PR-2a.5-fix: migracion legacy vipUnitPrice -> vipUnitMargin. Antes vipUnitPrice
+  // se interpretaba como precio total con clamp al piso volumen (cost + minMargin).
+  // Para los valores tipicamente seteados (≤ 1.0 USDT), el clamp coincidía con
+  // cost + 1.0 — funcionaba como margen efectivo por accidente. Para preservar
+  // semantica, copiamos el valor numerico tal cual al nuevo campo (cualquier valor
+  // > 1.0 setteado en el viejo modelo sera ahora interpretado como margen, lo que
+  // requiere ajuste manual del operador via panel — tope nuevo 1.0).
+  if (benefit.vipUnitMargin === undefined && benefit.vipUnitPrice !== undefined) {
+    benefit.vipUnitMargin = moneyNumber(benefit.vipUnitPrice || 0);
+    delete benefit.vipUnitPrice;
+  }
+  benefit.vipUnitMargin = moneyNumber(benefit.vipUnitMargin || 0);
   benefit.monthlyGoal = Number.parseInt(benefit.monthlyGoal, 10) || 0;
   benefit.deviceRequired = benefit.deviceRequired !== false;
   benefit.active = benefit.active !== false;
@@ -577,7 +593,13 @@ function portalFrpPriceSuggestion(db, clientId, quantity, canUseBenefits, benefi
   const goalTier = benefit.goalDiscountEnabled && benefit.monthlyGoal > 0 && monthlyUsage >= benefit.monthlyGoal
     ? { unitPrice: Math.max(pricing.minAllowedUnitPrice, baseUnitPrice - 1), label: `Meta ${benefit.monthlyGoal}+` }
     : null;
-  const vipTier = clientId && benefit.vipUnitPrice > 0 ? { unitPrice: Math.max(pricing.minAllowedUnitPrice, benefit.vipUnitPrice), label: "VIP aprobado" } : null;
+  // PR-2a.5-fix: precio VIP = costo proveedor + margen VIP. Sin clamp al piso
+  // volumen (minAllowedUnitPrice) — VIP esta DEBAJO del piso volumen por diseño
+  // (FINAL §3: piso volumen 1.1 > VIP 1.0). La validacion del rango 0.5-1.0
+  // del margen vive en la API de toggle VIP — aqui confiamos en lo persistido.
+  const vipTier = clientId && Number(benefit.vipUnitMargin || 0) > 0
+    ? { unitPrice: moneyNumber(pricing.internalCostUsdt + Number(benefit.vipUnitMargin)), label: "VIP aprobado" }
+    : null;
   const selected = [quantityTier, monthlyTier, goalTier, vipTier]
     .filter(Boolean)
     .sort((a, b) => a.unitPrice - b.unitPrice)[0] || { unitPrice: baseUnitPrice, label: "Precio base" };
@@ -3352,6 +3374,14 @@ async function handleApi(req, res, pathname) {
     const portalCustomers = db.customerClients.slice(0, 200).map((client) => {
       const status = normalizeCustomerStatus(client.status);
       const benefit = (db.customerBenefits || []).find((b) => b.clientId === client.id && b.active !== false);
+      // Migracion read-only: si benefit aun tiene vipUnitPrice legacy (no normalizado),
+      // lo leemos como margen para coherencia visual (no escribimos al DB aqui).
+      const vipUnitMargin = Number(benefit?.vipUnitMargin ?? benefit?.vipUnitPrice ?? 0);
+      const pricingSnapshot = frpCurrentPricing(db);
+      const internalCost = pricingSnapshot?.available ? Number(pricingSnapshot.internalCostUsdt || 0) : 0;
+      const vipEffectiveUnitPrice = vipUnitMargin > 0 && internalCost > 0
+        ? Number((internalCost + vipUnitMargin).toFixed(2))
+        : 0;
       return {
         id: client.id,
         name: client.name,
@@ -3360,7 +3390,8 @@ async function handleApi(req, res, pathname) {
         primaryEmail: client.primaryEmail || "",
         status,
         isVip: status === "VIP",
-        vipUnitPrice: Number(benefit?.vipUnitPrice || 0),
+        vipUnitMargin,
+        vipEffectiveUnitPrice,
         masterClientId: client.masterClientId || "",
         createdAt: client.createdAt,
       };
@@ -3385,8 +3416,9 @@ async function handleApi(req, res, pathname) {
   }
 
   // PR-2a.5: toggle VIP en cliente del portal (Bryam/Jack/Angelo segun FINAL §3).
-  // Marca/desmarca client.status entre VIP y emailVerificado, ajusta benefit.vipUnitPrice,
-  // audita y publica SSE para que el cliente vea el cambio en vivo (pricing recompute).
+  // Marca/desmarca client.status entre VIP y emailVerificado, ajusta benefit.vipUnitMargin
+  // (PR-2a.5-fix: ahora es MARGEN no precio total — precio_final = costo + margen),
+  // audita y publica SSE para que el cliente vea el cambio en vivo.
   const portalVipMatch = pathname.match(/^\/api\/admin\/customer-clients\/([^/]+)\/vip$/);
   if (req.method === "POST" && portalVipMatch) {
     if (!requireUser(user, res)) return;
@@ -3401,18 +3433,25 @@ async function handleApi(req, res, pathname) {
     if (!["mark_vip", "unmark_vip"].includes(action)) return sendJson(res, 400, { error: "Action invalida (mark_vip | unmark_vip)." });
     const previousStatus = client.status;
     const benefit = customerBenefitFor(db, client.id, client.masterClientId || "");
-    const previousVipPrice = Number(benefit.vipUnitPrice || 0);
+    const previousVipMargin = Number(benefit.vipUnitMargin || 0);
     if (action === "mark_vip") {
-      const vipUnitPrice = moneyNumber(input.vipUnitPrice ?? 1.0);
-      if (vipUnitPrice <= 0) return sendJson(res, 400, { error: "vipUnitPrice debe ser mayor a 0." });
+      const vipUnitMargin = moneyNumber(input.vipUnitMargin ?? input.vipUnitPrice ?? 1.0);
+      // FINAL §3: rango 0.5-1.0 USDT por unidad. Tope superior 1.0 protege que el
+      // piso de volumen (1.1) quede SIEMPRE por encima del VIP. Tope inferior 0.5
+      // protege margen minimo del operador.
+      if (vipUnitMargin < 0.5 || vipUnitMargin > 1.0) {
+        return sendJson(res, 400, { error: "vipUnitMargin fuera de rango. Debe estar entre 0.5 y 1.0 USDT (FINAL §3)." });
+      }
       client.status = "VIP";
-      benefit.vipUnitPrice = vipUnitPrice;
+      benefit.vipUnitMargin = vipUnitMargin;
+      delete benefit.vipUnitPrice; // limpia el legacy si quedaba
       benefit.active = true;
       benefit.updatedAt = nowIso();
       benefit.updatedBy = user.id;
     } else {
       client.status = client.emailVerifiedAt ? "EMAIL_VERIFICADO" : "REGISTRADO_NO_VERIFICADO";
-      benefit.vipUnitPrice = 0;
+      benefit.vipUnitMargin = 0;
+      delete benefit.vipUnitPrice;
       benefit.updatedAt = nowIso();
       benefit.updatedBy = user.id;
     }
@@ -3421,8 +3460,8 @@ async function handleApi(req, res, pathname) {
       name: client.name,
       previousStatus,
       newStatus: client.status,
-      previousVipPrice,
-      newVipPrice: benefit.vipUnitPrice,
+      previousVipMargin,
+      newVipMargin: benefit.vipUnitMargin,
       reason,
     });
     await writeDb(db);
@@ -3434,7 +3473,7 @@ async function handleApi(req, res, pathname) {
         name: client.name,
         status: normalizeCustomerStatus(client.status),
         isVip: normalizeCustomerStatus(client.status) === "VIP",
-        vipUnitPrice: Number(benefit.vipUnitPrice || 0),
+        vipUnitMargin: Number(benefit.vipUnitMargin || 0),
       },
     });
   }
