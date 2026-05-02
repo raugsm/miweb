@@ -46,10 +46,23 @@ export function createFrpSerializers({
     const jobs = db.frpJobs.filter((job) => user.role === "ADMIN" || job.workChannel === frpWorkChannel);
     const today = limaDateStamp();
     const todaysJobs = jobs.filter((job) => limaDateStamp(job.createdAt) === today || limaDateStamp(job.doneAt) === today);
+    // QUE: lista (no count) de jobs FINALIZADO con doneAt en el dia actual Lima.
+    // Spec operador-frp-express.md §2.7 + AC #29: la tabla "Finalizados hoy"
+    // muestra finalizados de AMBOS tecnicos del dia, ordenados por doneAt desc
+    // (mas recientes primero).
+    // POR QUE expongo aparte de jobs[]: jobs.slice(0,200) puede recortar dias
+    // antiguos en deployments con muchos jobs historicos y dejaria al frontend
+    // sin garantia de tener todos los del dia actual. finishedTodayJobs filtra
+    // por doneAt antes de cualquier slice.
+    const finishedTodayJobs = todaysJobs
+      .filter((job) => job.status === "FINALIZADO" && limaDateStamp(job.doneAt) === today)
+      .sort((a, b) => String(b.doneAt || "").localeCompare(String(a.doneAt || "")))
+      .map((job) => publicFrpJob(job, db));
     return {
       enabled: true,
       orders: orders.slice(0, 80).map((order) => publicFrpOrder(order, db)),
       jobs: jobs.slice(0, 200).map((job) => publicFrpJob(job, db)),
+      finishedTodayJobs,
       metrics: {
         ordersToday: orders.filter((order) => limaDateStamp(order.createdAt) === today).length,
         finishedToday: todaysJobs.filter((job) => job.status === "FINALIZADO").length,
