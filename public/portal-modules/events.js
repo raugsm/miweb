@@ -49,13 +49,19 @@ async function submitOrderWithProofs(files) {
     syncDetectedItems();
     const data = Object.fromEntries(new FormData(form));
     const quantity = Math.max(1, Math.min(50, Number.parseInt(data.quantity, 10) || 1));
-    const modelHint = ($("#flowEligibilityInput")?.value || "").trim();
+    // PR-2a-final.bundle2-bugs BUG 11: el buscador del paso 2 es helper visual
+    // CLIENT-SIDE solamente — no propagamos su valor al body. Si propagaramos
+    // "Redmi Note 12S" (REVISION_REQUERIDA) o "Redmi A3X" (NO_APTO_MODO), el
+    // backend bloquea con 409 "AriadGSM debe confirmar compatibilidad...". Spec
+    // FINAL: validacion OPCIONAL — el cliente experto sabe lo que pide y la
+    // orden no debe gate por hint en el buscador. Items vacios = APTO_EXPRESS
+    // por default en eligibility.js → sin review → sin gate.
     const payload = await api("/api/portal/orders/frp", {
       method: "POST",
       body: JSON.stringify({
         quantity,
         paymentMethod: data.paymentMethod,
-        items: parseItems(modelHint, quantity),
+        items: parseItems("", quantity),
         note: data.note,
         turnstileToken: turnstileToken("order"),
         paymentProofs: proofs,
