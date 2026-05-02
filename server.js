@@ -2490,9 +2490,52 @@ function publishPortalOrdersForFrpOrder(db, frpOrder, reason = "frp_order_update
 // benefits (VIP, monthly, volumen) y ordenes con su propio priceLocked. Recomputar
 // y enviar por cliente es mas simple que un evento "pricing" abstracto.
 function publishPortalOrdersForAll(db, reason = "pricing_config_updated") {
+  // PR-2a-final.1: cuando cambia pricing, escaneamos locks expirados con
+  // costo favorable o igual y los renovamos auto (15 min adicionales) sin
+  // notificar al cliente. Solo escribe DB si efectivamente algo cambio para
+  // no inflar I/O en eventos sin renewals.
+  const renewed = renewExpiredFavorableLocks(db);
+  if (renewed) {
+    writeDb(db).catch((err) => console.warn("[publishPortalOrdersForAll] writeDb failed:", err?.message || err));
+  }
   for (const clientId of [...portalOrderStreams.keys()]) {
     publishPortalOrders(db, clientId, reason);
   }
+}
+
+// PR-2a-final.1: helper que escanea customerOrders, renueva locks expirados con
+// costo actual <= locked (caso favorable o igual). Devuelve true si algo cambio.
+// No notifica al cliente (silencioso por design — el cliente solo ve la nueva
+// expiracion al renderizar). Si el costo subio, NO renueva — la deteccion del
+// frontend disparara las 3 opciones.
+function renewExpiredFavorableLocks(db) {
+  if (!db?.customerOrders?.length) return false;
+  const now = Date.now();
+  let changed = false;
+  for (const order of db.customerOrders) {
+    const lockedAmount = Number(order.priceLocked || 0);
+    const expiresAt = Date.parse(order.priceLockExpiresAt || "");
+    if (lockedAmount <= 0 || !Number.isFinite(expiresAt)) continue;
+    if (expiresAt > now) continue; // todavia vigente
+    if (order.publicStatus === "CANCELADO" || order.publicStatus === "FINALIZADO") continue;
+    if (order.priceDecisionAction) continue; // cliente ya decidio, no renovamos
+    // Computar precio actual para este cliente y orden con benefits actuales.
+    let currentUnit = lockedAmount;
+    try {
+      const benefit = customerBenefitFor(db, order.clientId, order.masterClientId || "");
+      const suggestion = portalFrpPriceSuggestion(db, order.clientId, order.quantity, true, benefit, order.masterClientId || "");
+      if (suggestion?.available) currentUnit = Number(suggestion.unitPrice) || lockedAmount;
+    } catch {
+      // Si pricing falla, no renovamos — evitamos persistir estado raro.
+      continue;
+    }
+    if (currentUnit > lockedAmount) continue; // subio: queda expirado, frontend muestra 3 opciones
+    // Favorable o igual: renovar 15 min mas.
+    order.priceLockExpiresAt = new Date(now + 15 * 60 * 1000).toISOString();
+    order.updatedAt = nowIso();
+    changed = true;
+  }
+  return changed;
 }
 
 async function getCurrentUser(req) {

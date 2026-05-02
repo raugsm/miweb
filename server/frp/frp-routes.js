@@ -664,6 +664,20 @@ export function createFrpRoutes({
         portalOrder.debtClearedBy = user.id;
         portalOrder.updatedAt = order.paymentReviewedAt;
       }
+      // PR-2a-final.1: el lock de precio arranca AL APROBAR el pago (no al subir
+      // comprobante). Ventana de 15 min. Reset de cualquier decision previa
+      // para casos de re-aprobacion despues de rechazo. El lock value es lo
+      // que el cliente ya pago (order.unitPrice), no el costo actual — eso
+      // permite detectar limpio "subio post-aprobacion → 3 opciones".
+      if (portalOrder) {
+        portalOrder.priceLocked = Number(portalOrder.unitPrice) || 0;
+        portalOrder.priceLockedAt = order.paymentReviewedAt;
+        portalOrder.priceLockExpiresAt = new Date(Date.parse(order.paymentReviewedAt) + 15 * 60 * 1000).toISOString();
+        portalOrder.priceDecisionAction = "";
+        portalOrder.priceDecisionAt = "";
+        portalOrder.priceDecisionWaitUntil = "";
+        portalOrder.updatedAt = order.paymentReviewedAt;
+      }
     } else if (action === "reject") {
       order.paymentStatus = "COMPROBANTE_RECHAZADO";
       order.checklist.paymentValidated = false;

@@ -182,11 +182,12 @@ export function createPortalSerializers({
       nextAction: publicCustomerOrderNextAction(order, db, publicStatus),
       customerConnectionReadyAt: order.customerConnectionReadyAt || "",
       customerConnectedAt: order.customerConnectedAt || "",
-      // PR-2a.2: snapshot del precio al subir 1er comprobante. Si esta seteado,
-      // el cliente paga este precio aunque el operador cambie pricing despues;
-      // si sube post-lock, se le ofrecen las 3 opciones (PR-2a.3).
+      // PR-2a-final.1: lock 15 min con renovacion. Setea cuando operador
+      // aprueba el pago. Si vence con costo favorable/igual, server renueva
+      // silencioso. Si vence con costo subido, frontend muestra 3 opciones.
       priceLocked: moneyNumber(order.priceLocked || 0),
       priceLockedAt: order.priceLockedAt || "",
+      priceLockExpiresAt: order.priceLockExpiresAt || "",
       priceDecisionAction: order.priceDecisionAction || "",
       priceDecisionAt: order.priceDecisionAt || "",
       priceDecisionWaitUntil: order.priceDecisionWaitUntil || "",

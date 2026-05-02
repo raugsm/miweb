@@ -215,18 +215,22 @@ export function renderOrders(orders) {
       statusPill.dataset.stage = stage.toLowerCase();
     }
     $(".order-meta", card).textContent = compactOrderMeta(order);
-    // PR-2a.7+: indicador visual de price lock. Util en testing PR-2a.2/2a.3
-    // y en produccion comunica al cliente que su precio esta asegurado contra
-    // cambios futuros del operador. Cuando llegue PR-5 Layout D se reintegra
-    // al diseño final.
+    // PR-2a-final.1: indicador "Precio asegurado" — copy + dato de vencimiento
+    // (lock 15 min con renovacion). Se oculta cuando el lock expiro Y el costo
+    // subio (el frontend muestra 3 opciones en ese caso). Si el costo es favorable
+    // o igual, server renueva silencioso y el cliente sigue viendo el banner
+    // verde con la nueva expiracion.
     const lockNode = $(".order-lock", card);
     if (lockNode) {
       const lockedAmount = Number(order.priceLocked || 0);
-      if (lockedAmount > 0 && order.priceLockedAt) {
-        const lockedAt = new Date(order.priceLockedAt);
-        const dateStr = lockedAt.toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit" });
-        const timeStr = lockedAt.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
-        lockNode.textContent = `🔒 Precio anclado: ${lockedAmount.toFixed(2)} USDT · ${dateStr} ${timeStr}`;
+      const expiresAtMs = Date.parse(order.priceLockExpiresAt || "");
+      const currentUnit = Number(order.currentUnitPrice || 0);
+      const nowMs = Date.now();
+      const isExpiredAndUp = Number.isFinite(expiresAtMs) && expiresAtMs <= nowMs && currentUnit > lockedAmount;
+      if (lockedAmount > 0 && Number.isFinite(expiresAtMs) && !isExpiredAndUp) {
+        const expires = new Date(expiresAtMs);
+        const expiresStr = expires.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
+        lockNode.textContent = `🔒 Precio asegurado: ${lockedAmount.toFixed(2)} USDT por equipo · vence ${expiresStr}`;
         lockNode.hidden = false;
       } else {
         lockNode.textContent = "";

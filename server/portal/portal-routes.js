@@ -611,13 +611,13 @@ export function createPortalRoutes({
       paymentLabel: payment.label,
       paymentDetails: payment.details,
       paymentProofs: inputProofs.slice(),
-      // QUE: snapshot del precio al subir el primer comprobante. PR-2a.2 / FINAL §2 parte 4.
-      // POR QUE: una vez "anclado", la asimetria de pricing aplica — si baja, silencio
-      // (cliente paga el lock); si sube, se le ofrecen 3 opciones (PR-2a.3 wires el
-      // endpoint /price-decision). Si el primer POST no trae proofs, el lock se setea
-      // recien al PATCH /payment-proof.
-      priceLocked: inputProofs.length ? Number(suggestion.unitPrice) || 0 : 0,
-      priceLockedAt: inputProofs.length ? nowIso() : "",
+      // PR-2a-final.1: el lock arranca recien AL APROBAR el pago el operador
+      // (frp-routes.js#payment-review approve). En upload de comprobante NO se
+      // ancla — el cliente paga lo que ve en pantalla y queda en
+      // PAGO_EN_REVISION sin proteccion temporal hasta la aprobacion.
+      priceLocked: 0,
+      priceLockedAt: "",
+      priceLockExpiresAt: "",
       priceDecisionAction: "",
       priceDecisionAt: "",
       priceDecisionWaitUntil: "",
@@ -855,13 +855,9 @@ export function createPortalRoutes({
     order.paymentProofs = (order.paymentProofs || []).concat(proofs);
     order.publicStatus = "PAGO_EN_REVISION";
     order.updatedAt = nowIso();
-    // QUE: snapshot del precio al primer comprobante (FINAL §2 parte 4). Solo
-    // setea si todavia no estaba anclado — re-uploads tras rechazo NO refrescan
-    // el lock (el cliente sigue debiendo el precio anclado original).
-    if (!Number(order.priceLocked || 0)) {
-      order.priceLocked = Number(order.unitPrice) || 0;
-      order.priceLockedAt = nowIso();
-    }
+    // PR-2a-final.1: lock se setea recien al APROBAR. PATCH /payment-proof
+    // (re-upload post-rechazo) no toca priceLocked — la aprobacion siguiente
+    // creara la ventana fresh.
     const request = db.customerRequests.find((candidate) => candidate.id === order.requestId);
     if (request) {
       request.status = "PAGO_EN_REVISION";

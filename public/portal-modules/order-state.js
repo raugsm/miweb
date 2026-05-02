@@ -78,12 +78,15 @@ export function ordersDisplayState(order) {
   return "";
 }
 
-// QUE: indica que el precio actual subio sobre el anclado y el cliente todavia
-// no decidio que hacer.
-// POR QUE: PR-2a.3 — el operador puede actualizar pricing config en cualquier
-// momento. Si despues del lock la orden costaria mas, el cliente debe elegir
-// entre 3 opciones. Si ya decidio (priceDecisionAction set), no se vuelve a
-// preguntar — la decision se respeta hasta que la orden cierre o cambie.
+// QUE: indica que el precio actual subio sobre el anclado, el lock vencio,
+// y el cliente todavia no decidio que hacer.
+// POR QUE: PR-2a-final.1 — el lock dura 15 min desde la aprobacion del operador.
+// Antes de esos 15 min, el cliente esta protegido aunque el costo suba. Cuando
+// vence:
+//   - Si current <= locked: server renueva silencioso (sigue protegido).
+//   - Si current > locked: NO se renueva, se le piden las 3 opciones.
+// Si ya decidio (priceDecisionAction set), no se vuelve a preguntar hasta
+// que la orden cierre o cambie de fase.
 export function orderRequiresPriceDecision(order) {
   if (!order) return false;
   if (order.priceDecisionAction) return false;
@@ -91,7 +94,10 @@ export function orderRequiresPriceDecision(order) {
   const current = Number(order.currentUnitPrice || 0);
   if (locked <= 0 || current <= 0) return false;
   if (current <= locked) return false;
-  // No tiene sentido pedir decision en orden cancelada o finalizada.
+  // Lock todavia vigente: aun si subio el costo, el cliente esta protegido —
+  // no le pedimos decidir. La decision aparece solo al expirar el lock.
+  const expiresAtMs = Date.parse(order.priceLockExpiresAt || "");
+  if (Number.isFinite(expiresAtMs) && Date.now() < expiresAtMs) return false;
   return !["CANCELADO", "FINALIZADO"].includes(order.publicStatus);
 }
 
