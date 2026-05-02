@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Paso 1 — Precio · AriadGSM</title>
+  <style>
+    :root {
+      --bg-page: #F5F4ED;
+      --bg-card: #FFFFFF;
+      --bg-info-light: #E6F1FB;
+      --bg-dark: #1a1a1a;
+      --text-primary: #1a1a1a;
+      --text-secondary: #5F5E5A;
+      --text-tertiary: #888780;
+      --text-info: #185FA5;
+      --text-info-dark: #0C447C;
+      --border-light: #E5E3DC;
+      --border-medium: #C8C5BB;
+      --primary: #185FA5;
+      --primary-dark: #0C447C;
+      --tether-green: #26A17B;
+      --pulse-green: #4ade80;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--bg-page);
+      color: var(--text-primary);
+      min-height: 100vh;
+      padding: 24px 16px;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+    }
+
+    .phone {
+      width: 100%;
+      max-width: 380px;
+      background: var(--bg-card);
+      border-radius: 28px;
+      border: 0.5px solid var(--border-light);
+      overflow: hidden;
+    }
+
+    .top-bar {
+      padding: 14px 20px 0;
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--text-tertiary);
+    }
+    .top-bar span:last-child { font-weight: 500; }
+
+    .stepper {
+      padding: 16px 20px 0;
+      display: flex;
+      gap: 6px;
+    }
+    .stepper-seg {
+      flex: 1;
+      height: 3px;
+      border-radius: 999px;
+      background: var(--border-light);
+    }
+    .stepper-seg.active { background: var(--primary); }
+
+    .header { padding: 16px 20px 0; }
+    .header-label {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      letter-spacing: 0.6px;
+      font-weight: 500;
+    }
+    .header-title {
+      font-size: 22px;
+      font-weight: 500;
+      margin-top: 2px;
+    }
+
+    .sub-label {
+      padding: 18px 20px 8px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    .pills-wrap { padding: 0 20px; }
+    .pills-row {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .pills-row.row-3 { grid-template-columns: repeat(3, 1fr); }
+    .pills-row.row-2 { grid-template-columns: repeat(2, 1fr); }
+
+    .pill {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 4px;
+      border: 0.5px solid var(--border-light);
+      background: var(--bg-card);
+      border-radius: 999px;
+      cursor: pointer;
+      transition: transform 100ms ease, border-color 150ms ease;
+    }
+    .pill:hover { border-color: var(--border-medium); }
+    .pill:active { transform: scale(0.97); }
+    .pill.selected {
+      border: 2px solid var(--primary);
+      background: var(--bg-info-light);
+    }
+    .pill.selected .pill-text { color: var(--text-info-dark); }
+    .pill-text {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+    .pill:focus-visible {
+      outline: 2px solid var(--primary);
+      outline-offset: 2px;
+    }
+
+    .estimate-card {
+      margin: 20px 20px 16px;
+      background: var(--bg-dark);
+      color: white;
+      border-radius: var(--radius-lg);
+      padding: 16px 18px;
+    }
+    .estimate-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 10px;
+      letter-spacing: 1.2px;
+      color: rgba(255, 255, 255, 0.55);
+      font-weight: 500;
+    }
+    .live-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--pulse-green);
+      display: inline-block;
+      animation: livePulse 1.4s ease-in-out infinite;
+    }
+    @keyframes livePulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%      { opacity: 0.4; transform: scale(0.85); }
+    }
+    .estimate-amount {
+      font-size: 28px;
+      font-weight: 500;
+      margin-top: 10px;
+      letter-spacing: -0.3px;
+    }
+    .estimate-usdt {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.5);
+      margin-top: 4px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .continue-wrap { padding: 0 20px 22px; }
+    .continue-btn {
+      width: 100%;
+      padding: 14px;
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: var(--radius-md);
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .continue-btn:hover { background: var(--primary-dark); }
+    .continue-btn:disabled {
+      background: var(--bg-page);
+      color: var(--text-tertiary);
+      border: 0.5px solid var(--border-light);
+      cursor: not-allowed;
+    }
+
+    /* Tablet (768px – 1199px) */
+    @media (min-width: 768px) {
+      body { padding: 40px 24px; }
+      .phone {
+        max-width: 600px;
+        border-radius: 16px;
+      }
+      .top-bar { display: none; }
+      .stepper { padding-top: 24px; }
+      .header { padding-top: 20px; }
+      .pills-row.row-3,
+      .pills-row.row-2 {
+        grid-template-columns: repeat(5, 1fr);
+      }
+      .estimate-amount { font-size: 32px; }
+    }
+
+    /* Desktop (≥1200px) */
+    @media (min-width: 1200px) {
+      body { padding: 60px 24px; }
+      .header-title { font-size: 24px; }
+      .pill-text { font-size: 12px; }
+      .continue-btn {
+        max-width: 320px;
+        margin: 0 auto;
+        display: block;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="phone">
+
+    <div class="top-bar">
+      <span>9:41</span>
+      <span>AriadGSM</span>
+    </div>
+
+    <div class="stepper" role="progressbar" aria-valuenow="1" aria-valuemin="1" aria-valuemax="4">
+      <div class="stepper-seg active"></div>
+      <div class="stepper-seg"></div>
+      <div class="stepper-seg"></div>
+      <div class="stepper-seg"></div>
+    </div>
+
+    <div class="header">
+      <div class="header-label">PASO 1 / 4</div>
+      <h1 class="header-title">Precio</h1>
+    </div>
+
+    <div class="sub-label">Método de pago</div>
+
+    <div class="pills-wrap">
+
+      <div class="pills-row row-3">
+
+        <button type="button" class="pill" aria-pressed="false">
+          <svg width="22" height="14" viewBox="0 0 22 14" aria-hidden="true">
+            <rect width="22" height="7" fill="#FCD116"/>
+            <rect y="7" width="22" height="3.5" fill="#003893"/>
+            <rect y="10.5" width="22" height="3.5" fill="#CE1126"/>
+          </svg>
+          <span class="pill-text">Colombia</span>
+        </button>
+
+        <button type="button" class="pill selected" aria-pressed="true">
+          <svg width="22" height="14" viewBox="0 0 22 14" aria-hidden="true">
+            <rect width="7.33" height="14" fill="#006847"/>
+            <rect x="7.33" width="7.33" height="14" fill="#FFFFFF"/>
+            <rect x="14.67" width="7.33" height="14" fill="#CE1126"/>
+          </svg>
+          <span class="pill-text">México</span>
+        </button>
+
+        <button type="button" class="pill" aria-pressed="false">
+          <svg width="22" height="14" viewBox="0 0 22 14" aria-hidden="true">
+            <rect width="11" height="7" fill="#0033A0"/>
+            <rect x="11" width="11" height="7" fill="#FFFFFF"/>
+            <rect y="7" width="22" height="7" fill="#D52B1E"/>
+            <polygon points="5.5,1.7 6.1,3.1 7.6,3.2 6.4,4.1 6.8,5.6 5.5,4.7 4.2,5.6 4.6,4.1 3.4,3.2 4.9,3.1" fill="white"/>
+          </svg>
+          <span class="pill-text">Chile</span>
+        </button>
+
+      </div>
+
+      <div class="pills-row row-2">
+
+        <button type="button" class="pill" aria-pressed="false">
+          <svg width="22" height="14" viewBox="0 0 22 14" aria-hidden="true">
+            <rect width="7.33" height="14" fill="#D91023"/>
+            <rect x="7.33" width="7.33" height="14" fill="#FFFFFF"/>
+            <rect x="14.67" width="7.33" height="14" fill="#D91023"/>
+          </svg>
+          <span class="pill-text">Perú</span>
+        </button>
+
+        <button type="button" class="pill" aria-pressed="false">
+          <svg width="20" height="14" viewBox="0 0 32 32" aria-hidden="true">
+            <circle cx="16" cy="16" r="16" fill="#26A17B"/>
+            <path d="M17.92 17.4c-.11.01-.66.04-1.92.04-.99 0-1.71-.03-1.96-.04-3.97-.18-6.93-.87-6.93-1.7 0-.83 2.96-1.52 6.93-1.7v2.71c.27.02 1 .06 1.97.06 1.21 0 1.78-.05 1.91-.06v-2.71c3.96.18 6.91.87 6.91 1.7 0 .83-2.95 1.52-6.91 1.7zm0-3.66v-2.42h5.55V7.62H8.5v3.7h5.55v2.42c-4.51.21-7.9 1.1-7.9 2.17s3.39 1.96 7.9 2.17v7.76h3.87v-7.76c4.5-.21 7.88-1.1 7.88-2.17s-3.38-1.96-7.88-2.17z" fill="white"/>
+          </svg>
+          <span class="pill-text">USDT</span>
+        </button>
+
+      </div>
+
+    </div>
+
+    <div class="estimate-card">
+      <div class="estimate-label">
+        <span class="live-dot" aria-hidden="true"></span>
+        ESTIMADO · EN VIVO
+      </div>
+      <div class="estimate-amount">$489 MXN</div>
+      <div class="estimate-usdt">
+        ≈ 25
+        <svg width="11" height="11" viewBox="0 0 32 32" aria-hidden="true">
+          <circle cx="16" cy="16" r="16" fill="#26A17B"/>
+          <path d="M17.92 17.4c-.11.01-.66.04-1.92.04-.99 0-1.71-.03-1.96-.04-3.97-.18-6.93-.87-6.93-1.7 0-.83 2.96-1.52 6.93-1.7v2.71c.27.02 1 .06 1.97.06 1.21 0 1.78-.05 1.91-.06v-2.71c3.96.18 6.91.87 6.91 1.7 0 .83-2.95 1.52-6.91 1.7zm0-3.66v-2.42h5.55V7.62H8.5v3.7h5.55v2.42c-4.51.21-7.9 1.1-7.9 2.17s3.39 1.96 7.9 2.17v7.76h3.87v-7.76c4.5-.21 7.88-1.1 7.88-2.17s-3.38-1.96-7.88-2.17z" fill="white"/>
+        </svg>
+        USDT
+      </div>
+    </div>
+
+    <div class="continue-wrap">
+      <button type="button" class="continue-btn">Continuar</button>
+    </div>
+
+  </div>
+
+  <script>
+    document.querySelectorAll('.pill').forEach(pill => {
+      pill.addEventListener('click', () => {
+        document.querySelectorAll('.pill').forEach(p => {
+          p.classList.remove('selected');
+          p.setAttribute('aria-pressed', 'false');
+        });
+        pill.classList.add('selected');
+        pill.setAttribute('aria-pressed', 'true');
+      });
+    });
+  </script>
+
+</body>
+</html>

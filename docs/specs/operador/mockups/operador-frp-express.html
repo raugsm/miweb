@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Operador FRP Express · AriadGSM</title>
+  <style>
+    :root {
+      --bg-page: #F5F4ED;
+      --bg-card: #FFFFFF;
+      --bg-secondary: #F0EFE8;
+      --text-primary: #1a1a1a;
+      --text-secondary: #5F5E5A;
+      --text-tertiary: #888780;
+      --border-light: #E5E3DC;
+      --border-medium: #C8C5BB;
+      --primary: #185FA5;
+      --primary-light: #E6F1FB;
+      --primary-border: #B5D4F4;
+      --success-bg: #EAF3DE;
+      --success-text: #173404;
+      --success-dot: #3B6D11;
+      --warning-bg: #FAEEDA;
+      --warning-border: #FAC775;
+      --warning-text: #412402;
+      --warning-text-soft: #633806;
+      --danger-bg: #FCEBEB;
+      --danger-border: #F09595;
+      --danger-text: #501313;
+      --radius-sm: 6px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-mono: ui-monospace, "SF Mono", Menlo, Monaco, "Courier New", monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--bg-page);
+      color: var(--text-primary);
+      min-height: 100vh;
+      padding: 32px 16px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .panel {
+      width: 100%;
+      max-width: 960px;
+      background: var(--bg-card);
+      border-radius: 16px;
+      border: 0.5px solid var(--border-light);
+      overflow: hidden;
+    }
+
+    .panel-header {
+      padding: 18px 24px;
+      border-bottom: 0.5px solid var(--border-light);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .panel-header-label {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      letter-spacing: 0.6px;
+      font-weight: 500;
+    }
+    .panel-header-title {
+      font-size: 20px;
+      font-weight: 500;
+      margin-top: 2px;
+    }
+    .technician-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--success-bg);
+      color: var(--success-text);
+      font-size: 12px;
+      font-weight: 500;
+      padding: 6px 12px;
+      border-radius: 999px;
+    }
+    .technician-badge .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--success-dot);
+      display: inline-block;
+    }
+
+    .panel-body {
+      padding: 22px 24px;
+    }
+
+    .section {
+      margin-bottom: 22px;
+    }
+    .section:last-child { margin-bottom: 0; }
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .section-label {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      letter-spacing: 0.8px;
+      font-weight: 500;
+    }
+    .section-link {
+      font-size: 12px;
+      color: var(--primary);
+      font-weight: 500;
+      cursor: pointer;
+    }
+
+    .work-current {
+      border: 0.5px solid var(--border-light);
+      border-radius: var(--radius-lg);
+      padding: 18px;
+      background: var(--bg-card);
+    }
+    .work-current-empty {
+      border: 0.5px dashed var(--border-medium);
+      border-radius: var(--radius-lg);
+      padding: 22px 18px;
+      background: var(--bg-secondary);
+      text-align: center;
+    }
+    .work-current-empty-text {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 12px;
+    }
+    .work-current-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+    .work-current-meta {
+      font-size: 11px;
+      color: var(--text-tertiary);
+    }
+    .work-current-name {
+      font-size: 16px;
+      font-weight: 500;
+      margin-top: 2px;
+    }
+    .work-current-service {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-top: 2px;
+    }
+    .work-current-time {
+      font-size: 11px;
+      color: var(--text-tertiary);
+      white-space: nowrap;
+    }
+    .work-current-data {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .data-cell {
+      padding: 10px 12px;
+      background: var(--bg-secondary);
+      border-radius: var(--radius-md);
+    }
+    .data-cell-label {
+      font-size: 10px;
+      color: var(--text-tertiary);
+      letter-spacing: 0.5px;
+      font-weight: 500;
+    }
+    .data-cell-value {
+      font-size: 14px;
+      font-weight: 500;
+      font-family: var(--font-mono);
+      margin-top: 2px;
+    }
+    .work-current-actions {
+      display: flex;
+      gap: 8px;
+    }
+    .btn-primary {
+      flex: 1;
+      padding: 12px;
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: var(--radius-md);
+      font-size: 13px;
+      font-weight: 500;
+      text-align: center;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .btn-primary:hover { background: #0C447C; }
+    .btn-secondary {
+      padding: 12px 16px;
+      border: 0.5px solid var(--border-medium);
+      background: var(--bg-card);
+      color: var(--text-primary);
+      border-radius: var(--radius-md);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .btn-secondary:hover { background: var(--bg-secondary); }
+    .btn-take-next {
+      padding: 12px 24px;
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: var(--radius-md);
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .btn-take-next:hover { background: #0C447C; }
+    .btn-take-next:disabled {
+      background: var(--bg-secondary);
+      color: var(--text-tertiary);
+      cursor: not-allowed;
+    }
+
+    .queue-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .queue-card {
+      border: 0.5px solid var(--border-light);
+      border-radius: var(--radius-md);
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .queue-card-meta {
+      font-size: 11px;
+      color: var(--text-tertiary);
+    }
+    .queue-card-name {
+      font-size: 13px;
+      font-weight: 500;
+      margin-top: 2px;
+    }
+    .queue-card-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .queue-card-time {
+      font-size: 11px;
+      color: var(--text-tertiary);
+    }
+    .btn-take {
+      font-size: 12px;
+      color: var(--primary);
+      font-weight: 500;
+      padding: 7px 14px;
+      border: 0.5px solid var(--primary-border);
+      background: var(--bg-card);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .btn-take:hover { background: var(--primary-light); }
+
+    .grid-attention {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    .alert-card {
+      border-radius: var(--radius-md);
+      padding: 11px 13px;
+      cursor: pointer;
+    }
+    .alert-card.warning {
+      border: 0.5px solid var(--warning-border);
+      background: var(--warning-bg);
+    }
+    .alert-card.danger {
+      border: 0.5px solid var(--danger-border);
+      background: var(--danger-bg);
+    }
+    .alert-card-id { font-size: 11px; }
+    .alert-card.warning .alert-card-id { color: var(--warning-text-soft); }
+    .alert-card.danger .alert-card-id { color: var(--danger-text); }
+    .alert-card-title { font-size: 13px; font-weight: 500; margin-top: 1px; }
+    .alert-card.warning .alert-card-title { color: var(--warning-text); }
+    .alert-card.danger .alert-card-title { color: var(--danger-text); }
+    .alert-card-detail { font-size: 11px; margin-top: 2px; }
+    .alert-card.warning .alert-card-detail { color: var(--warning-text-soft); }
+    .alert-card.danger .alert-card-detail { color: var(--danger-text); }
+    .alert-card-action {
+      font-size: 11px;
+      font-weight: 500;
+      margin-top: 6px;
+    }
+    .alert-card.warning .alert-card-action { color: var(--warning-text-soft); }
+    .alert-card.danger .alert-card-action { color: var(--danger-text); }
+    .alert-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .finalized-table {
+      border: 0.5px solid var(--border-light);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+    }
+    .finalized-row {
+      padding: 11px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 0.5px solid var(--border-light);
+      font-size: 12px;
+    }
+    .finalized-row:last-child { border-bottom: none; }
+    .finalized-row-id {
+      font-family: var(--font-mono);
+      color: var(--text-tertiary);
+      font-size: 11px;
+    }
+    .finalized-row-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .finalized-row-time {
+      font-size: 11px;
+      color: var(--text-tertiary);
+    }
+
+    @media (max-width: 768px) {
+      body { padding: 16px 8px; }
+      .panel { border-radius: 8px; }
+      .work-current-data { grid-template-columns: 1fr; }
+      .grid-attention { grid-template-columns: 1fr; }
+      .work-current-actions { flex-direction: column; }
+      .btn-secondary { width: 100%; }
+      .queue-card {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+      }
+      .queue-card-right { width: 100%; justify-content: space-between; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="panel">
+
+    <div class="panel-header">
+      <div>
+        <div class="panel-header-label">PANEL OPERADOR</div>
+        <div class="panel-header-title">FRP Express</div>
+      </div>
+      <div class="technician-badge">
+        <span class="dot"></span>
+        Jack activo
+      </div>
+    </div>
+
+    <div class="panel-body">
+
+      <div class="section">
+        <div class="section-header">
+          <div class="section-label">TU TRABAJO ACTUAL</div>
+        </div>
+
+        <div class="work-current">
+
+          <div class="work-current-head">
+            <div>
+              <div class="work-current-meta">ORD-20260502-008 · 1 de 5 equipos</div>
+              <div class="work-current-name">María González</div>
+              <div class="work-current-service">Xiaomi Cuenta Google · ARD012-AL</div>
+            </div>
+            <div class="work-current-time">tomado hace 3 min</div>
+          </div>
+
+          <div class="work-current-data">
+            <div class="data-cell">
+              <div class="data-cell-label">TECHNICIAN ID</div>
+              <div class="data-cell-value">1000 9983 5478</div>
+            </div>
+            <div class="data-cell">
+              <div class="data-cell-label">CÓDIGO</div>
+              <div class="data-cell-value">CL-20260502-XPK-1</div>
+            </div>
+          </div>
+
+          <div class="work-current-actions">
+            <button type="button" class="btn-primary">Marcar finalizado</button>
+            <button type="button" class="btn-secondary">Reportar problema</button>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-header">
+          <div class="section-label">COLA · 3 LISTOS</div>
+        </div>
+        <div class="queue-list">
+
+          <div class="queue-card">
+            <div>
+              <div class="queue-card-meta">ORD-20260502-009 · 1 equipo</div>
+              <div class="queue-card-name">Pedro López · Xiaomi Cuenta Google</div>
+            </div>
+            <div class="queue-card-right">
+              <span class="queue-card-time">conectado hace 1 min</span>
+              <button type="button" class="btn-take">Tomar</button>
+            </div>
+          </div>
+
+          <div class="queue-card">
+            <div>
+              <div class="queue-card-meta">ORD-20260502-010 · 2 equipos</div>
+              <div class="queue-card-name">Luis Vargas · Xiaomi Cuenta Google</div>
+            </div>
+            <div class="queue-card-right">
+              <span class="queue-card-time">conectado hace 4 min</span>
+              <button type="button" class="btn-take">Tomar</button>
+            </div>
+          </div>
+
+          <div class="queue-card">
+            <div>
+              <div class="queue-card-meta">ORD-20260502-011 · 1 equipo</div>
+              <div class="queue-card-name">Carmen Soto · Xiaomi Cuenta Google</div>
+            </div>
+            <div class="queue-card-right">
+              <span class="queue-card-time">conectado hace 6 min</span>
+              <button type="button" class="btn-take">Tomar</button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="grid-attention">
+
+          <div>
+            <div class="section-header">
+              <div class="section-label">PAGOS POR REVISAR · 2</div>
+            </div>
+            <div class="alert-list">
+              <div class="alert-card warning">
+                <div class="alert-card-id">ORD-20260502-012</div>
+                <div class="alert-card-title">Roberto Díaz · S/ 62.05</div>
+                <div class="alert-card-action">Ver comprobante →</div>
+              </div>
+              <div class="alert-card warning">
+                <div class="alert-card-id">ORD-20260502-013</div>
+                <div class="alert-card-title">Ana Torres · $489 MXN</div>
+                <div class="alert-card-action">Ver comprobante →</div>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="section-header">
+              <div class="section-label">ATENCIÓN · 1</div>
+            </div>
+            <div class="alert-list">
+              <div class="alert-card danger">
+                <div class="alert-card-id">ORD-20260502-005</div>
+                <div class="alert-card-title">Jorge Mamani</div>
+                <div class="alert-card-detail">Modelo no soportado · revisar</div>
+                <div class="alert-card-action">Resolver →</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-header">
+          <div class="section-label">FINALIZADOS HOY · 8</div>
+          <div class="section-link">Ver todos →</div>
+        </div>
+        <div class="finalized-table">
+          <div class="finalized-row">
+            <div class="finalized-row-info">
+              <span class="finalized-row-id">ORD-007-1</span>
+              <span>RAUL GSM · ARD012-AL</span>
+            </div>
+            <span class="finalized-row-time">14:32</span>
+          </div>
+          <div class="finalized-row">
+            <div class="finalized-row-info">
+              <span class="finalized-row-id">ORD-007-2</span>
+              <span>RAUL GSM · ARD013-AM</span>
+            </div>
+            <span class="finalized-row-time">14:18</span>
+          </div>
+          <div class="finalized-row">
+            <div class="finalized-row-info">
+              <span class="finalized-row-id">ORD-006-1</span>
+              <span>RAUL GSM · ARD011-AK</span>
+            </div>
+            <span class="finalized-row-time">13:55</span>
+          </div>
+          <div class="finalized-row">
+            <div class="finalized-row-info">
+              <span class="finalized-row-id">ORD-006-2</span>
+              <span>RAUL GSM · ARD010-AJ</span>
+            </div>
+            <span class="finalized-row-time">13:41</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</body>
+</html>
