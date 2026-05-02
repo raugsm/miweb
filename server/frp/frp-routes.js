@@ -736,6 +736,46 @@ export function createFrpRoutes({
     return sendJson(res, 200, { job: publicFrpJob(job, db), frp: publicFrpState(db, user) });
   }
 
+  // QUE: tomar un job FRP especifico de la cola (no solo el siguiente). Spec
+  // operador-frp-express.md §5.1 + §6.2 + AC #12, #13.
+  // POR QUE: el take-next legacy toma el job mas antiguo. El nuevo panel
+  // permite que el tecnico elija cual tomar primero (filtro VIP, urgencia
+  // visual). Carrera resuelta por el primer writeDb que pisa el status —
+  // segundo intento recibe 409 "Otro tecnico ya tomo este job".
+  // El backend NO valida que user.id === activeTechnician.userId aca, igual
+  // que take-next: la spec exige que UI lo deshabilite (AC #18) pero el
+  // endpoint queda operable para ADMIN que necesita rescatar/troubleshoot.
+  // Si en el futuro se necesita enforcement, agregar check + cambiar take-next
+  // por consistencia (no en este commit, no fue pedido).
+  const frpJobTakeMatch = pathname.match(/^\/api\/frp\/jobs\/([^/]+)\/take$/);
+  if (req.method === "POST" && frpJobTakeMatch) {
+    if (!requireUser(user, res)) return;
+    const db = await readDb();
+    if (!(await requireFrpAccess(user, res, db, "FRP_JOB_TAKE_DENIED", frpJobTakeMatch[1]))) return;
+    const activeJob = frpActiveJobForUser(db, user);
+    if (activeJob) return sendJson(res, 409, { error: `Ya tienes un FRP en proceso: ${activeJob.code}.` });
+    const job = db.frpJobs.find((candidate) => candidate.id === frpJobTakeMatch[1]);
+    if (!job) return sendJson(res, 404, { error: "Trabajo FRP no encontrado." });
+    if (job.status !== "LISTO_PARA_TECNICO") {
+      // Carrera: otro tecnico ya lo tomo (status = EN_PROCESO con technicianId)
+      // o el job ya esta finalizado/cancelado. AC #13.
+      if (job.technicianId && job.technicianId !== user.id) {
+        return sendJson(res, 409, { error: "Otro tecnico ya tomo este job." });
+      }
+      return sendJson(res, 422, { error: "El trabajo no esta disponible para tomar." });
+    }
+    job.status = "EN_PROCESO";
+    job.technicianId = user.id;
+    job.takenAt = nowIso();
+    job.updatedAt = job.takenAt;
+    const order = db.frpOrders.find((candidate) => candidate.id === job.orderId);
+    if (order) syncFrpOrderStatus(db, order);
+    audit(db, user.id, "FRP_JOB_TAKEN_SPECIFIC", job.id, { code: job.code, order: order?.code || "" });
+    await writeDb(db);
+    publishPortalOrdersForFrpOrder(db, order, "frp_job_taken");
+    return sendJson(res, 200, { job: publicFrpJob(job, db), frp: publicFrpState(db, user) });
+  }
+
   if (req.method === "POST" && pathname === "/api/frp/jobs/take-next") {
     if (!requireUser(user, res)) return;
     const db = await readDb();
