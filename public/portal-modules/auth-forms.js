@@ -12,6 +12,7 @@ import { stepGuideMarkup } from "./connection.js";
 import { startTechnicianPolling, stopTechnicianPolling, wireCopyButtonsWithin } from "./technician.js";
 import { deriveFlowState } from "./flow-state.js";
 import { resetPaso2InactivityTimer } from "./paso2-timer.js";
+import { refreshPaso4Banner, startPaso4ReadyMonitor, stopPaso4ReadyMonitor, wirePaso4BannerActions } from "./paso4-timer.js";
 import { state } from "./state.js";
 
 export function renderStaticStepGuide() {
@@ -177,6 +178,7 @@ export function renderCustomer() {
   if (!logged) {
     stopOrdersLive();
     stopTechnicianPolling();
+    stopPaso4ReadyMonitor();
     renderStaticStepGuide();
     return;
   }
@@ -200,6 +202,10 @@ export function renderCustomer() {
   // PR-2a-final.bundle2 item 2: arrancar/refrescar el timer de inactividad
   // paso 2. Auto-stop interno cuando hay orden in-flight (paso 3+).
   resetPaso2InactivityTimer();
+  // PR-2a-final.bundle2 item 3: monitor del banner "¿Listo para conectar?"
+  // (2 min post-aprobacion sin customerConnectedAt).
+  refreshPaso4Banner();
+  startPaso4ReadyMonitor();
   renderOrders(customer.orders || []);
   startOrdersLive();
   renderStaticStepGuide();

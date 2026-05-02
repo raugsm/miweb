@@ -183,6 +183,10 @@ export function createPortalSerializers({
       nextAction: publicCustomerOrderNextAction(order, db, publicStatus),
       customerConnectionReadyAt: order.customerConnectionReadyAt || "",
       customerConnectedAt: order.customerConnectedAt || "",
+      // PR-2a-final.bundle2 item 3: timestamp de aprobacion del pago. Frontend
+      // lo usa para timer "¿Listo para conectar?" (2 min post-aprobacion sin
+      // customerConnectedAt → banner azul con CTAs).
+      paymentReviewedAt: frpOrderForReason?.paymentReviewedAt || "",
       // PR-2a-final.1: lock 15 min con renovacion. Setea cuando operador
       // aprueba el pago. Si vence con costo favorable/igual, server renueva
       // silencioso. Si vence con costo subido, frontend muestra 3 opciones.

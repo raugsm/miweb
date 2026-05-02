@@ -553,6 +553,43 @@
 .paso4-help-link a { color: #1d4ed8; text-decoration: none; }
 .paso4-help-link a:hover { text-decoration: underline; }
 
+/* PR-2a-final.bundle2 item 3 — banner "¿Listo para conectar?" 2min post-aprobacion. */
+.flow-paso4-ready-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 10px 0;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: #eff6ff;
+  border-left: 3px solid #1d4ed8;
+  color: #1e3a8a;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.flow-paso4-ready-banner[hidden] { display: none; }
+.flow-paso4-ready-banner strong { font-size: 13px; font-weight: 700; }
+.flow-paso4-ready-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+.flow-paso4-ready-actions .ghost {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border: 1px solid #93c5fd;
+  background: #fff;
+  color: #1d4ed8;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: none;
+}
+.flow-paso4-ready-actions .ghost:hover { background: #eef4fd; }
+
 /* Modal "¿Dónde pegar?" — recreación aproximada SVG hasta que el usuario
    suba el screenshot real del Redirector v2.5.0.3540. */
 .where-paste-dialog {
