@@ -823,7 +823,13 @@ export function createPortalRoutes({
     const ownsOrder = context.user && context.client && order.clientId === context.client.id;
     const hasAccessCode = accessCode && order.accessCode === accessCode;
     if (!ownsOrder && !hasAccessCode) return sendJson(res, 403, { error: "Acceso no autorizado al comprobante." });
-    if (order.publicStatus !== "FINALIZADO") {
+    // PR-2a-final.bundle2 item 4C bugfix: order.publicStatus es el stored del
+    // schema (legacy, set en creacion), no el derivado que ve el cliente. El
+    // serializer publicCustomerOrder lo recomputa desde frpOrder + jobs. Para
+    // el chequeo "FINALIZADO" usamos el publicStatus derivado, que es lo que
+    // el cliente ve y lo que dispara el boton habilitado en Mis Ordenes.
+    const publicOrder = publicCustomerOrder(order, db);
+    if (publicOrder.publicStatus !== "FINALIZADO") {
       return sendJson(res, 409, { error: "El comprobante PDF se habilita cuando la orden esté finalizada." });
     }
     const items = db.customerOrderItems.filter((item) => item.orderId === order.id).map((item) => {
@@ -836,7 +842,11 @@ export function createPortalRoutes({
       };
     });
     const baseUrl = `http://${req.headers.host || "localhost"}`;
-    const { buffer } = await renderOrderComprobantePdf({ order, items, baseUrl });
+    // Lookup del nombre del cliente — publicOrder no lo expone porque no es
+    // info publica en general, pero el PDF lo incluye como parte del recibo.
+    const clientRecord = db.customerClients.find((candidate) => candidate.id === order.clientId);
+    const orderForPdf = { ...publicOrder, clientName: clientRecord?.name || "" };
+    const { buffer } = await renderOrderComprobantePdf({ order: orderForPdf, items, baseUrl });
     res.writeHead(200, {
       "Content-Type": "application/pdf",
       "Content-Length": String(buffer.length),

@@ -4609,14 +4609,14 @@ async function serveStatic(req, res, pathname) {
 
   // PR-2a-final.bundle2 item 4C — pagina publica de verificacion del
   // comprobante PDF. /v/:orderCode renderiza HTML con el monto, código,
-  // estado y SHA-256 actual de la orden. Quien escanee el QR del PDF
-  // verifica que el hash coincida con el del documento.
+  // estado derivado y SHA-256 actual de la orden. Quien escanee el QR del
+  // PDF verifica que el hash coincida con el del documento.
   const verifyMatch = pathname.match(/^\/v\/([^/]+)$/);
   if (verifyMatch) {
     const code = decodeURIComponent(verifyMatch[1]);
     const db = await readDb();
-    const order = db.customerOrders.find((candidate) => candidate.code === code);
-    const items = order ? db.customerOrderItems.filter((item) => item.orderId === order.id).map((item) => {
+    const orderRaw = db.customerOrders.find((candidate) => candidate.code === code);
+    const items = orderRaw ? db.customerOrderItems.filter((item) => item.orderId === orderRaw.id).map((item) => {
       const job = db.frpJobs.find((candidate) => candidate.id === item.frpJobId);
       return {
         sequence: item.sequence,
@@ -4624,8 +4624,11 @@ async function serveStatic(req, res, pathname) {
         doneAt: job?.doneAt || "",
       };
     }) : [];
-    const hash = order ? computeOrderHash(order, items) : "";
-    return sendHtml(res, order ? 200 : 404, renderOrderVerifyHtml({ order, items, hash }));
+    // Estado derivado (igual que el cliente lo ve en Mis Órdenes) — el stored
+    // publicStatus puede estar desactualizado.
+    const orderForView = orderRaw ? { ...publicCustomerOrder(orderRaw, db), clientName: db.customerClients.find((c) => c.id === orderRaw.clientId)?.name || "" } : null;
+    const hash = orderRaw ? computeOrderHash(orderRaw, items) : "";
+    return sendHtml(res, orderRaw ? 200 : 404, renderOrderVerifyHtml({ order: orderForView, items, hash }));
   }
 
   if (requestShouldRedirectToCustomerPortal(req, pathname)) {
