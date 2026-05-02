@@ -363,6 +363,12 @@ input:focus, select:focus {
 .frp-pending-meta { color: #6b7280; font-size: 11px; }
 .frp-pending-reason { font-style: italic; color: #4b5563; }
 .frp-pending-actions { display: flex; gap: 6px; align-items: center; }
+
+/* PR-2a.7 — botones apilados en columna Accion (Guardar + Archivar) */
+.action-cell-stack { display: flex; flex-direction: column; gap: 4px; min-width: 110px; }
+.action-cell-stack .mini-btn { min-height: 32px; padding: 0 10px; font-size: 12px; }
+.frp-provider-actions { display: flex; justify-content: flex-end; padding: 12px 0 4px; }
+.frp-provider-actions .secondary-btn { min-height: 38px; padding: 0 16px; font-size: 13px; }
 .ghost-btn {
   width: 100%;
   border-color: #d5dfed;

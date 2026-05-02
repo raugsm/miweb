@@ -75,29 +75,41 @@ export function normalizeFrpPricingConfig(config = {}) {
     updatedBy: String(inputPolicy.updatedBy || ""),
   };
   const existingProviders = Array.isArray(config.providers) ? config.providers : [];
-  const providers = defaults.providers.map((defaultProvider) => {
-    const existing = existingProviders.find((provider) => provider.id === defaultProvider.id || provider.name === defaultProvider.name);
+  // PR-2a.7: Preservar providers custom (no en defaults). Antes este normalize
+  // SOLO iteraba defaults.providers, descartando cualquier provider creado via
+  // API. Ahora: 1) normaliza los 3 defaults preservando overrides existentes,
+  // 2) preserva providers extra (custom) aplicando la misma normalizacion.
+  const normalizeOne = (existing, fallback = null) => {
+    const base = fallback || existing || {};
     const status = frpProviderStatuses.has(String(existing?.status || "").toUpperCase())
       ? String(existing.status).toUpperCase()
-      : defaultProvider.status;
+      : base.status || "OFF";
     const costMode = frpProviderCostModes.has(String(existing?.costMode || "").toUpperCase())
       ? String(existing.costMode).toUpperCase()
-      : defaultProvider.costMode;
+      : base.costMode || "FIXED_USDT";
     return {
-      ...defaultProvider,
-      name: cleanText(existing?.name || defaultProvider.name, 40),
+      id: String(existing?.id || base.id || ""),
+      name: cleanText(existing?.name || base.name || "", 40),
       status,
       costMode,
-      fixedCostUsdt: moneyNumber(existing?.fixedCostUsdt ?? defaultProvider.fixedCostUsdt),
-      creditsPerProcess: moneyNumber(existing?.creditsPerProcess ?? defaultProvider.creditsPerProcess),
-      creditUnitCostUsdt: moneyNumber(existing?.creditUnitCostUsdt ?? defaultProvider.creditUnitCostUsdt),
-      priority: Math.max(1, Number.parseInt(existing?.priority ?? defaultProvider.priority, 10) || defaultProvider.priority),
-      reason: cleanText(existing?.reason || defaultProvider.reason || "", 160),
+      fixedCostUsdt: moneyNumber(existing?.fixedCostUsdt ?? base.fixedCostUsdt ?? 0),
+      creditsPerProcess: moneyNumber(existing?.creditsPerProcess ?? base.creditsPerProcess ?? 0),
+      creditUnitCostUsdt: moneyNumber(existing?.creditUnitCostUsdt ?? base.creditUnitCostUsdt ?? 0),
+      priority: Math.max(1, Number.parseInt(existing?.priority ?? base.priority ?? 99, 10) || 99),
+      reason: cleanText(existing?.reason || base.reason || "", 200),
       updatedAt: String(existing?.updatedAt || ""),
       updatedBy: String(existing?.updatedBy || ""),
     };
+  };
+  const defaultProviders = defaults.providers.map((defaultProvider) => {
+    const existing = existingProviders.find((p) => p.id === defaultProvider.id || p.name === defaultProvider.name);
+    return normalizeOne(existing, defaultProvider);
   });
-  return { policy, providers };
+  const customProviders = existingProviders
+    .filter((p) => !defaults.providers.some((d) => d.id === p.id || d.name === p.name))
+    .filter((p) => p && p.id) // descarta entradas corruptas sin id
+    .map((p) => normalizeOne(p, null));
+  return { policy, providers: [...defaultProviders, ...customProviders] };
 }
 
 export function frpProviderCostUsdt(provider) {

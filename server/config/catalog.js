@@ -184,7 +184,10 @@ export const frpMonthlyTiers = [
   { minJobs: 60, unitPrice: 23, label: "Meta 60+" },
   { minJobs: 30, unitPrice: 24, label: "Meta 30+" },
 ];
-export const frpProviderStatuses = new Set(["ACTIVE", "BACKUP", "OFF"]);
+// PR-2a.7: ARCHIVED es estado terminal — no aparece en selector de provider
+// activo (activeFrpProvider filtra por ACTIVE) y la UI lo oculta del listado
+// principal. Queda persistido y en auditoria. NO se elimina definitivamente.
+export const frpProviderStatuses = new Set(["ACTIVE", "BACKUP", "OFF", "ARCHIVED"]);
 export const frpProviderCostModes = new Set(["FIXED_USDT", "CREDITS"]);
 export const frpPermissionKeys = new Set(["frpCostManager"]);
 export const portalPublicServices = [

@@ -85,6 +85,127 @@ export function createFrpRoutes({
     return sendJson(res, 200, { pricing: publicFrpPricingState(db, user), frp: publicFrpState(db, user) });
   }
 
+  // PR-2a.7: crear provider nuevo. Bryam (admin) puede agregar herramientas en
+  // rotacion (4-7 normalmente). Validaciones: nombre unico, costo 1-100 USDT,
+  // motivo >=15 chars. Provider arranca en bootstrap (history vacia para ese id)
+  // hasta acumular 3 entries o pasar 7 dias.
+  if (req.method === "POST" && pathname === "/api/frp/pricing/providers") {
+    if (!requireUser(user, res)) return;
+    const db = await readDb();
+    if (!(await requireFrpCostManagerWithAudit(user, res, db, "FRP_PROVIDER_CREATE_DENIED", "frp-provider-new", { route: pathname }))) return;
+    const input = await parseJson(req);
+    db.pricingConfig = normalizePricingConfig(db.pricingConfig);
+    const name = cleanText(input.name, 40);
+    const reason = cleanText(input.reason, 200);
+    const status = frpProviderStatuses.has(String(input.status || "").toUpperCase()) ? String(input.status).toUpperCase() : "OFF";
+    const costMode = frpProviderCostModes.has(String(input.costMode || "").toUpperCase()) ? String(input.costMode).toUpperCase() : "FIXED_USDT";
+    if (!name) return sendJson(res, 400, { error: "Nombre del proveedor es obligatorio." });
+    if (reason.length < 15) return sendJson(res, 400, { error: `Motivo de creacion necesita >=15 caracteres (actuales: ${reason.length}).` });
+    if (status === "ARCHIVED") return sendJson(res, 400, { error: "No se puede crear un proveedor ya archivado." });
+    const nameLower = name.toLowerCase();
+    const duplicate = db.pricingConfig.frpPricing.providers.find((p) => String(p.name || "").toLowerCase() === nameLower);
+    if (duplicate) return sendJson(res, 409, { error: `Ya existe un proveedor con nombre "${name}". Si era archivado, restauralo desde la BD.` });
+    const fixedCostUsdt = moneyNumber(input.fixedCostUsdt ?? 0);
+    const creditsPerProcess = moneyNumber(input.creditsPerProcess ?? 0);
+    const creditUnitCostUsdt = moneyNumber(input.creditUnitCostUsdt ?? 0);
+    const initialCost = costMode === "CREDITS"
+      ? moneyNumber(creditsPerProcess * creditUnitCostUsdt)
+      : fixedCostUsdt;
+    if (status !== "OFF" && initialCost <= 0) {
+      return sendJson(res, 400, { error: "Costo inicial obligatorio para proveedor activo o respaldo." });
+    }
+    if (initialCost > 0 && (initialCost < 1 || initialCost > 100)) {
+      return sendJson(res, 400, { error: `Costo inicial fuera de rango realista (${initialCost.toFixed(2)} USDT). Debe estar entre 1 y 100 USDT.`, level: 5 });
+    }
+    const newProvider = {
+      id: crypto.randomUUID(),
+      name,
+      status,
+      costMode,
+      fixedCostUsdt,
+      creditsPerProcess,
+      creditUnitCostUsdt,
+      priority: Math.max(1, db.pricingConfig.frpPricing.providers.length + 1),
+      reason,
+      updatedAt: nowIso(),
+      updatedBy: user.id,
+    };
+    db.pricingConfig.frpPricing.providers.push(newProvider);
+    if (newProvider.status === "ACTIVE") {
+      for (const other of db.pricingConfig.frpPricing.providers) {
+        if (other.id !== newProvider.id && other.status === "ACTIVE") other.status = "BACKUP";
+      }
+    }
+    if (initialCost > 0) {
+      db.frpProviderCostHistory.unshift({
+        id: crypto.randomUUID(),
+        providerId: newProvider.id,
+        costUsdt: initialCost,
+        recordedAt: newProvider.updatedAt,
+        recordedBy: user.id,
+        reason,
+        level: 1,
+        deltaPct: 0,
+        baselineNote: "baseline_pending",
+      });
+      if (db.frpProviderCostHistory.length > 500) db.frpProviderCostHistory.length = 500;
+    }
+    audit(db, user.id, "FRP_PROVIDER_CREATED", newProvider.id, {
+      name: newProvider.name,
+      status: newProvider.status,
+      costMode: newProvider.costMode,
+      initialCost,
+      reason,
+    });
+    await writeDb(db);
+    publishPortalOrdersForAll(db, "pricing_provider_created");
+    return sendJson(res, 201, { pricing: publicFrpPricingState(db, user), frp: publicFrpState(db, user), providerId: newProvider.id });
+  }
+
+  // PR-2a.7: archivar provider. Estado terminal, no se elimina. Audita motivo.
+  const frpProviderArchiveMatch = pathname.match(/^\/api\/frp\/pricing\/providers\/([^/]+)\/archive$/);
+  if (req.method === "POST" && frpProviderArchiveMatch) {
+    if (!requireUser(user, res)) return;
+    const db = await readDb();
+    if (!(await requireFrpCostManagerWithAudit(user, res, db, "FRP_PROVIDER_ARCHIVE_DENIED", frpProviderArchiveMatch[1], { route: pathname }))) return;
+    const input = await parseJson(req);
+    db.pricingConfig = normalizePricingConfig(db.pricingConfig);
+    const provider = db.pricingConfig.frpPricing.providers.find((p) => p.id === frpProviderArchiveMatch[1]);
+    if (!provider) return sendJson(res, 404, { error: "Proveedor FRP no encontrado." });
+    const reason = cleanText(input.reason, 200);
+    if (!reason) return sendJson(res, 400, { error: "Motivo de archivado obligatorio." });
+    if (provider.status === "ARCHIVED") return sendJson(res, 409, { error: "El proveedor ya estaba archivado." });
+    const previousStatus = provider.status;
+    const wasActive = provider.status === "ACTIVE";
+    provider.status = "ARCHIVED";
+    provider.reason = reason;
+    provider.updatedAt = nowIso();
+    provider.updatedBy = user.id;
+    audit(db, user.id, "FRP_PROVIDER_ARCHIVED", provider.id, {
+      name: provider.name,
+      previousStatus,
+      reason,
+    });
+    // Si era el activo, hay que promover otro BACKUP a ACTIVE para no quedar
+    // sin proveedor (caso contrario frpCurrentPricing.available = false).
+    if (wasActive) {
+      const promote = db.pricingConfig.frpPricing.providers
+        .filter((p) => p.id !== provider.id && p.status === "BACKUP")
+        .sort((a, b) => Number(a.priority || 99) - Number(b.priority || 99))[0];
+      if (promote) {
+        promote.status = "ACTIVE";
+        promote.updatedAt = nowIso();
+        audit(db, user.id, "FRP_PROVIDER_AUTO_PROMOTED", promote.id, {
+          fromStatus: "BACKUP",
+          reason: `Auto-promovido tras archivar ${provider.name}`,
+        });
+      }
+    }
+    await writeDb(db);
+    publishPortalOrdersForAll(db, "pricing_provider_archived");
+    return sendJson(res, 200, { pricing: publicFrpPricingState(db, user), frp: publicFrpState(db, user) });
+  }
+
   const frpProviderMatch = pathname.match(/^\/api\/frp\/pricing\/providers\/([^/]+)$/);
   if (req.method === "PATCH" && frpProviderMatch) {
     if (!requireUser(user, res)) return;
@@ -94,6 +215,11 @@ export function createFrpRoutes({
     db.pricingConfig = normalizePricingConfig(db.pricingConfig);
     const provider = db.pricingConfig.frpPricing.providers.find((candidate) => candidate.id === frpProviderMatch[1]);
     if (!provider) return sendJson(res, 404, { error: "Proveedor FRP no encontrado." });
+    // PR-2a.7: archived es terminal — no permitimos editar via PATCH. Para
+    // "restaurar" (caso raro, dev tool), se hace direct en BD con auditoria.
+    if (provider.status === "ARCHIVED") {
+      return sendJson(res, 409, { error: "Proveedor archivado. No se puede editar — creá uno nuevo si necesitás reincorporarlo." });
+    }
     const reason = cleanText(input.reason, 200);
     if (!reason) return sendJson(res, 400, { error: "Motivo obligatorio para cambiar costo/proveedor FRP." });
     const previous = structuredClone(provider);

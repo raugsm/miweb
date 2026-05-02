@@ -238,6 +238,53 @@
             </details>
             <div id="frp-pricing-box" class="frp-pricing-box"></div>
             <input id="frp-proof-files" class="hidden" type="file" accept="image/png,image/jpeg,image/webp" multiple />
+
+            <dialog id="newProviderDialog" class="vip-dialog">
+              <form id="newProviderForm" method="dialog" class="vip-dialog-form">
+                <header><h3>Agregar proveedor FRP</h3></header>
+                <label>
+                  Nombre del proveedor (único)
+                  <input type="text" name="name" required maxlength="40" placeholder="Ej: Hydra, FRPBypass, ToolXYZ" />
+                </label>
+                <label>
+                  Estado inicial
+                  <select name="status">
+                    <option value="OFF" selected>Off (apagado)</option>
+                    <option value="BACKUP">Respaldo</option>
+                    <option value="ACTIVE">Activo</option>
+                  </select>
+                </label>
+                <label>
+                  Modo de costo
+                  <select name="costMode">
+                    <option value="FIXED_USDT" selected>USDT fijo</option>
+                    <option value="CREDITS">Créditos</option>
+                  </select>
+                </label>
+                <label data-new-provider-fixed>
+                  Costo USDT fijo (1-100)
+                  <input type="number" name="fixedCostUsdt" min="0" step="0.01" value="0" />
+                </label>
+                <div data-new-provider-credits hidden>
+                  <label>
+                    Créditos por proceso
+                    <input type="number" name="creditsPerProcess" min="0" step="0.01" value="0" />
+                  </label>
+                  <label>
+                    Costo por crédito (USDT)
+                    <input type="number" name="creditUnitCostUsdt" min="0" step="0.01" value="0" />
+                  </label>
+                </div>
+                <label>
+                  Motivo de creación (≥15 caracteres)
+                  <input type="text" name="reason" required minlength="15" maxlength="200" placeholder="Ej: nueva herramienta en rotación desde 02-may" />
+                </label>
+                <div class="dialog-actions">
+                  <button type="button" class="secondary-btn" data-new-provider-action="cancel">Cancelar</button>
+                  <button type="submit" class="primary-btn" data-new-provider-action="confirm">Guardar</button>
+                </div>
+              </form>
+            </dialog>
           </section>
 
           <section id="tickets-panel" class="panel">

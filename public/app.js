@@ -1222,6 +1222,10 @@ function renderFrpPricingBox() {
     </form>
   ` : "";
 
+  // PR-2a.7: archived providers ocultos de la tabla principal. Quedan en
+  // auditoria + en BD pero no aparecen para evitar ruido visual. No se pueden
+  // editar (backend devuelve 409 si intentás).
+  const visibleProviders = (pricing.providers || []).filter((p) => p.status !== "ARCHIVED");
   const providersHtml = canManageFrpCosts() ? `
     <div class="table-wrap frp-provider-table">
       <table>
@@ -1238,7 +1242,7 @@ function renderFrpPricingBox() {
           </tr>
         </thead>
         <tbody>
-          ${(pricing.providers || []).map((provider) => `
+          ${visibleProviders.map((provider) => `
             <tr>
               <td>
                 <strong>${escapeHtml(provider.name)}</strong>
@@ -1257,12 +1261,18 @@ function renderFrpPricingBox() {
               <td><input class="table-input numeric-input" type="number" min="0" step="0.0001" value="${escapeHtml(provider.fixedCostUsdt)}" data-frp-provider-fixed="${escapeHtml(provider.id)}" /></td>
               <td><input class="table-input numeric-input" type="number" min="0" step="0.0001" value="${escapeHtml(provider.creditsPerProcess)}" data-frp-provider-credits="${escapeHtml(provider.id)}" /></td>
               <td><input class="table-input numeric-input" type="number" min="0" step="0.0001" value="${escapeHtml(provider.creditUnitCostUsdt)}" data-frp-provider-credit-cost="${escapeHtml(provider.id)}" /></td>
-              <td><input class="table-input" type="text" maxlength="160" value="" placeholder="${escapeHtml(provider.reason || "Motivo obligatorio")}" data-frp-provider-reason="${escapeHtml(provider.id)}" /></td>
-              <td><button class="mini-btn" type="button" data-save-frp-provider="${escapeHtml(provider.id)}">Guardar</button></td>
+              <td><input class="table-input" type="text" maxlength="200" value="" placeholder="${escapeHtml(provider.reason || "Motivo obligatorio")}" data-frp-provider-reason="${escapeHtml(provider.id)}" /></td>
+              <td class="action-cell-stack">
+                <button class="mini-btn" type="button" data-save-frp-provider="${escapeHtml(provider.id)}">Guardar</button>
+                <button class="mini-btn danger-mini" type="button" data-archive-frp-provider="${escapeHtml(provider.id)}" data-provider-name="${escapeHtml(provider.name)}">Archivar</button>
+              </td>
             </tr>
           `).join("")}
         </tbody>
       </table>
+      <div class="frp-provider-actions">
+        <button class="secondary-btn" type="button" data-action="open-new-provider">+ Agregar proveedor</button>
+      </div>
     </div>
   ` : `<p class="pricing-note"><strong>Precio FRP automatico</strong><span>Solo el administrador o WhatsApp 3 autorizado puede cambiar proveedor y costos.</span></p>`;
 
@@ -2748,9 +2758,122 @@ async function saveFrpProvider(button, providerId, options = {}) {
 }
 
 frpPricingBox?.addEventListener("click", async (event) => {
-  const button = event.target.closest("[data-save-frp-provider]");
-  if (!button) return;
-  await saveFrpProvider(button, button.dataset.saveFrpProvider);
+  const saveBtn = event.target.closest("[data-save-frp-provider]");
+  if (saveBtn) {
+    await saveFrpProvider(saveBtn, saveBtn.dataset.saveFrpProvider);
+    return;
+  }
+  // PR-2a.7: archivar provider con confirm + motivo via prompt.
+  const archiveBtn = event.target.closest("[data-archive-frp-provider]");
+  if (archiveBtn) {
+    const providerId = archiveBtn.dataset.archiveFrpProvider;
+    const providerName = archiveBtn.dataset.providerName;
+    const reason = window.prompt(
+      `Archivar "${providerName}". El proveedor saldrá del selector activo y no se podrá editar. Queda en auditoría. Motivo (obligatorio):`
+    );
+    if (!reason || !reason.trim()) return;
+    archiveBtn.disabled = true;
+    showButtonFeedback(archiveBtn, "saving", "Archivando...");
+    try {
+      const payload = await api(`/api/frp/pricing/providers/${encodeURIComponent(providerId)}/archive`, {
+        method: "POST",
+        body: JSON.stringify({ reason: reason.trim() }),
+      });
+      session.frp = payload.frp;
+      showButtonFeedback(archiveBtn, "success", "✓ Archivado", 1300);
+      frpMessage.textContent = `Proveedor "${providerName}" archivado.`;
+      frpMessage.dataset.type = "success";
+      setTimeout(() => renderFrp(), 1400);
+    } catch (error) {
+      showButtonFeedback(archiveBtn, "error", `✗ ${(error.message || "Error").slice(0, 60)}`, 3500);
+      frpMessage.textContent = error.message;
+      frpMessage.dataset.type = "error";
+    }
+    return;
+  }
+  // PR-2a.7: abrir modal de nuevo proveedor.
+  const openNewBtn = event.target.closest("[data-action='open-new-provider']");
+  if (openNewBtn) {
+    const dialog = document.querySelector("#newProviderDialog");
+    if (!dialog) return;
+    const form = dialog.querySelector("#newProviderForm");
+    form?.reset();
+    // Reset visual de submit button.
+    const submitBtn = form?.querySelector("[data-new-provider-action='confirm']");
+    if (submitBtn) {
+      submitBtn.classList.remove("is-success", "is-error", "is-saving");
+      submitBtn.disabled = false;
+      delete submitBtn.dataset.originalText;
+      submitBtn.textContent = "Guardar";
+    }
+    dialog.showModal();
+  }
+});
+
+// PR-2a.7: cambio entre modos FIXED_USDT y CREDITS muestra/oculta inputs.
+document.querySelector("#newProviderForm select[name='costMode']")?.addEventListener("change", (event) => {
+  const dialog = document.querySelector("#newProviderDialog");
+  const fixedRow = dialog.querySelector("[data-new-provider-fixed]");
+  const creditsRow = dialog.querySelector("[data-new-provider-credits]");
+  if (event.target.value === "CREDITS") {
+    fixedRow.hidden = true;
+    creditsRow.hidden = false;
+  } else {
+    fixedRow.hidden = false;
+    creditsRow.hidden = true;
+  }
+});
+
+// PR-2a.7: cancelar new provider dialog.
+document.querySelector("#newProviderDialog")?.addEventListener("click", (event) => {
+  const cancelBtn = event.target.closest("[data-new-provider-action='cancel']");
+  if (!cancelBtn) return;
+  event.preventDefault();
+  document.querySelector("#newProviderDialog")?.close();
+});
+
+// PR-2a.7: submit new provider.
+document.querySelector("#newProviderForm")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const dialog = document.querySelector("#newProviderDialog");
+  const submitBtn = form.querySelector("[data-new-provider-action='confirm']");
+  const data = Object.fromEntries(new FormData(form));
+  const reason = String(data.reason || "").trim();
+  if (reason.length < 15) {
+    const reasonInput = form.querySelector("[name='reason']");
+    reasonInput?.classList.add("is-invalid");
+    showButtonFeedback(submitBtn, "error", `✗ Motivo ≥15 chars (actual: ${reason.length})`, 2500);
+    const onInput = () => { reasonInput?.classList.remove("is-invalid"); reasonInput?.removeEventListener("input", onInput); };
+    reasonInput?.addEventListener("input", onInput);
+    return;
+  }
+  showButtonFeedback(submitBtn, "saving", "Guardando...");
+  submitBtn.disabled = true;
+  try {
+    const payload = await api("/api/frp/pricing/providers", {
+      method: "POST",
+      body: JSON.stringify({
+        name: String(data.name || "").trim(),
+        status: String(data.status || "OFF"),
+        costMode: String(data.costMode || "FIXED_USDT"),
+        fixedCostUsdt: Number(data.fixedCostUsdt || 0),
+        creditsPerProcess: Number(data.creditsPerProcess || 0),
+        creditUnitCostUsdt: Number(data.creditUnitCostUsdt || 0),
+        reason,
+      }),
+    });
+    session.frp = payload.frp;
+    showButtonFeedback(submitBtn, "success", "✓ Proveedor agregado", 1500);
+    frpMessage.textContent = "Proveedor creado. Arranca en bootstrap (3 cambios o 7 días para validación normal).";
+    frpMessage.dataset.type = "success";
+    setTimeout(() => {
+      dialog.close();
+      renderFrp();
+    }, 1600);
+  } catch (error) {
+    showButtonFeedback(submitBtn, "error", `✗ ${(error.message || "Error").slice(0, 60)}`, 3500);
+  }
 });
 ticketService.addEventListener("change", () => {
   ticketPrice.value = selectedService()?.defaultPrice || 0;
