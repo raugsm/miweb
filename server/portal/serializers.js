@@ -2,6 +2,7 @@ export function createPortalSerializers({
   allowedTicketPaymentMethods,
   cleanText,
   countries,
+  frpEligibilityCatalog,
   customerBenefitFor,
   customerCanUseBenefits,
   customerDeviceIsAuthorized,
@@ -292,6 +293,17 @@ export function createPortalSerializers({
 
   function publicPortalCatalog(db = null) {
     const pricing = db ? frpCurrentPricing(db) : null;
+    // PR-2a-final.2 — buscador inverso del paso 2 (FINAL §5): solo verifica
+    // modelos NO soportados o REQUIERE_REVISION. Si el modelo no aparece, se
+    // asume soportado (98% lo está). Lista expuesta al frontend para chequeo
+    // client-side sin round-trip.
+    const eligibilityHints = (db?.frpEligibilityCatalog || frpEligibilityCatalog || []).map((entry) => ({
+      key: entry.key,
+      publicName: entry.publicName,
+      aliases: Array.isArray(entry.aliases) ? entry.aliases : [],
+      status: entry.status,
+      publicMessage: entry.publicMessage || "",
+    }));
     const pricingConfig = normalizePricingConfig(db?.pricingConfig || defaultPricingConfig());
     const servicesForPortal = portalPublicServices
       .filter((service) => service.enabled)
@@ -315,6 +327,7 @@ export function createPortalSerializers({
       turnstileEnabled: Boolean(turnstileSecret && turnstileSiteKey),
       turnstileSiteKey,
       customerModuleUrl: customerModuleUrl || "",
+      eligibilityHints,
     };
   }
 

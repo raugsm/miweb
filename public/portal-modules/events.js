@@ -12,7 +12,7 @@ import {
 } from "./auth-forms.js";
 import { $, $$, copyText, setMessage } from "./dom.js";
 import { activeOrderForFlow, notifyEquipoConectado } from "./flow-state.js";
-import { parseItems, syncDetectedItems } from "./frp.js";
+import { checkEligibilityHint, parseItems, setQuantity, syncDetectedItems } from "./frp.js";
 import { refreshOrdersSilently, setOrdersLiveStatus, stopOrdersLive } from "./live-orders.js";
 import { orderNeedsPaymentProof } from "./order-state.js";
 import {
@@ -47,12 +47,13 @@ async function submitOrderWithProofs(files) {
     syncDetectedItems();
     const data = Object.fromEntries(new FormData(form));
     const quantity = Math.max(1, Math.min(50, Number.parseInt(data.quantity, 10) || 1));
+    const modelHint = ($("#flowEligibilityInput")?.value || "").trim();
     const payload = await api("/api/portal/orders/frp", {
       method: "POST",
       body: JSON.stringify({
         quantity,
         paymentMethod: data.paymentMethod,
-        items: parseItems(data.items, quantity),
+        items: parseItems(modelHint, quantity),
         note: data.note,
         turnstileToken: turnstileToken("order"),
         paymentProofs: proofs,
@@ -190,8 +191,35 @@ export function wireEvents() {
     }
   });
 
-  $("#orderForm textarea[name='items']").addEventListener("input", updateQuote);
-  $("#paymentSelect").addEventListener("change", updateQuote);
+  // PR-2a-final.fase2: stepper +/- en paso 2 reemplaza al textarea de items.
+  $("#orderForm")?.addEventListener("click", (event) => {
+    const btn = event.target.closest("[data-quantity-action]");
+    if (!btn) return;
+    event.preventDefault();
+    const current = Number($("#flowQuantityDisplay")?.textContent || "1") || 1;
+    const next = btn.dataset.quantityAction === "inc" ? current + 1 : current - 1;
+    setQuantity(next);
+    syncDetectedItems();
+    updateQuote();
+  });
+  // PR-2a-final.fase2: buscador inverso — chequeo client-side contra
+  // catalog.eligibilityHints. Sin round-trip al backend (FINAL §5: lógica
+  // invertida, solo verifica NO soportados).
+  $("#flowEligibilityInput")?.addEventListener("input", (event) => {
+    const feedback = $("#flowEligibilityFeedback");
+    if (!feedback) return;
+    const result = checkEligibilityHint(event.currentTarget.value);
+    if (result.status === "EMPTY") {
+      feedback.hidden = true;
+      feedback.textContent = "";
+      feedback.dataset.eligibility = "";
+      return;
+    }
+    feedback.hidden = false;
+    feedback.textContent = result.message;
+    feedback.dataset.eligibility = result.status.toLowerCase();
+  });
+  $("#paymentSelect")?.addEventListener("change", updateQuote);
   $("#copyPaymentButton").addEventListener("click", () => renderPaymentModal());
   $("#closePaymentModal")?.addEventListener("click", closePaymentModal);
   $("#paymentModal")?.addEventListener("click", (event) => {

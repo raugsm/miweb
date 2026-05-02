@@ -152,11 +152,27 @@
               </article>
 
               <article class="flow-step-card flow-request-card">
-                <span>2</span>
-                <strong>Solicitud</strong>
-                <label>Equipos
-                  <textarea name="items" rows="3" placeholder="Ej: Redmi Note 12"></textarea>
+                <div class="flow-request-head">
+                  <div>
+                    <span>2</span>
+                    <strong>Solicitud</strong>
+                  </div>
+                  <span class="flow-coverage-badge" title="98% de modelos Xiaomi/Redmi/Poco compatibles">98% modelos soportados</span>
+                </div>
+                <div class="flow-quantity-row">
+                  <button class="flow-quantity-btn" type="button" data-quantity-action="dec" aria-label="Restar equipo">−</button>
+                  <span class="flow-quantity-display" id="flowQuantityDisplay">1</span>
+                  <button class="flow-quantity-btn" type="button" data-quantity-action="inc" aria-label="Sumar equipo">+</button>
+                  <span class="flow-quantity-unit-label" id="flowQuantityUnitLabel">equipo · <b id="flowQuantityUnitPrice">-</b> c/u</span>
+                </div>
+                <div class="flow-quantity-total">
+                  Total: <b id="flowQuantityTotal">-</b>
+                </div>
+                <label class="flow-eligibility-search">
+                  ¿Tu modelo aplica?
+                  <input type="text" id="flowEligibilityInput" placeholder="Ej: Redmi Note 12, Poco X5 (opcional)" autocomplete="off" maxlength="60" />
                 </label>
+                <p id="flowEligibilityFeedback" class="flow-eligibility-feedback" hidden></p>
               </article>
 
               <article class="flow-step-card flow-payment-card">
