@@ -932,20 +932,25 @@
   background: #ffffff;
 }
 
-/* QUE: el codigo (Technician ID o codigo del cliente) se muestra en una linea con
-   ellipsis si no cabe, y permite scroll horizontal solo dentro de la caja propia.
-   POR QUE: patron tipo Stripe y GitHub. El cliente debe poder seleccionar el texto
-   completo aunque no quepa visible, pero sin que el wrap rompa la lectura. La copia
-   completa la hace el boton, asi que el texto truncado visualmente no es problema. */
+/* QUE: el codigo (Technician ID o "Codigo del proceso") se muestra completo
+   permitiendo wrap entre guiones u otros chars cuando no cabe en una linea.
+   POR QUE: BUG 14-15. Antes era nowrap + overflow-x:auto + ellipsis estilo
+   Stripe/GitHub: visualmente truncaba "CL-20260502-007-2" a "CL-20260502-..."
+   y el cliente perdia visibilidad del codigo completo en cards angostas del
+   paso 4 (~220px). Ahora wrap controlado: texto rompe en guiones (overflow-wrap
+   anywhere) sin desbordar la card. El boton de copia sigue copiando el valor
+   completo del data-copy-value, asi que la copia no se ve afectada por el
+   render visual. */
 .copy-field code {
   min-width: 0;
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
   color: var(--ink);
   font-weight: 800;
   font-size: 0.92rem;
-  white-space: nowrap;
-  overflow-x: auto;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  line-height: 1.35;
 }
 
 /* QUE: boton de copiar tipo Stripe/GitHub: cuadrado, solo icono, sin texto.

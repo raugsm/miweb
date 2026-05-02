@@ -14,13 +14,23 @@ export function processCode(order) {
   return `${base}-${quantity}`;
 }
 
+// PR-2a-final.bundle2-bugs BUG 12-13: el boton "Descargar Redirector v2.5"
+// debe aparecer SIEMPRE. Antes el fallback era un `<small>Pidelo por WhatsApp
+// 3.</small>` cuando customerModuleUrl quedaba vacio (default en dev sin
+// ARIAD_CUSTOMER_MODULE_URL configurado), rompiendo el spec FINAL §7. Ahora
+// si no hay URL configurada redirigimos al WhatsApp 3 con mensaje pre-armado,
+// pero MANTENEMOS el visual de boton azul grande — solo cambia el copy.
 function downloadStepHtml(customerModuleUrl) {
   const url = String(customerModuleUrl || "").trim();
-  if (!url) {
-    return `<small>Pidelo por WhatsApp 3.</small>`;
-  }
-  return `<a class="redirector-download-btn" href="${escapeHtml(url)}" target="_blank" rel="noopener">Descargar Redirector v2.5</a>
-    <small class="redirector-download-meta">Archivo firmado · No requiere instalación · 4.2 MB</small>`;
+  const fallbackUrl = "https://wa.me/51993357553?text=Necesito%20el%20Redirector%20v2.5%20para%20conectar%20mi%20equipo";
+  const hasDirectUrl = Boolean(url);
+  const href = hasDirectUrl ? url : fallbackUrl;
+  const label = hasDirectUrl ? "Descargar Redirector v2.5" : "Solicitar Redirector v2.5 por WhatsApp";
+  const meta = hasDirectUrl
+    ? "Archivo firmado · No requiere instalación · 4.2 MB"
+    : "Te lo enviamos por WhatsApp en segundos";
+  return `<a class="redirector-download-btn" href="${escapeHtml(href)}" target="_blank" rel="noopener">${label}</a>
+    <small class="redirector-download-meta">${meta}</small>`;
 }
 
 const CLIPBOARD_ICON_SVG = `<svg class="copy-icon copy-icon-clipboard" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="9" height="11" rx="1.5"></rect><path d="M6 3V2.25A1.25 1.25 0 0 1 7.25 1h2.5A1.25 1.25 0 0 1 11 2.25V3"></path></svg>`;
