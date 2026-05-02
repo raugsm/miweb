@@ -24,10 +24,25 @@ test("default FRP pricing still resolves the public 25 USDT unit price", () => {
   assert.equal(pricing.provider.id, "krypto");
   assert.equal(pricing.internalCostUsdt, 3);
   assert.equal(pricing.unitPrice, 25);
+});
+
+test("FRP volume tiers compute unitPrice as internalCost + tier margin (FINAL §3)", () => {
+  // Costo realista (~23.5 USDT) — coincide con la curva 24.6/24.7/24.8/24.9/25.
+  const config = defaultFrpPricingConfig();
+  config.providers[0].fixedCostUsdt = 23.5;
+  const db = { pricingConfig: { frpPricing: config } };
+  const pricing = frpCurrentPricing(db);
+
+  assert.equal(pricing.internalCostUsdt, 23.5);
+  assert.equal(pricing.minAllowedUnitPrice, 24.5); // cost + minMargin (1.0) = piso VIP
+  // Tiers ordenados de mayor minQty a menor, margenes 1.1/1.2/1.3/1.4/1.5:
   assert.deepEqual(
     frpDynamicQuantityTiers(pricing).map((tier) => tier.unitPrice),
-    [22, 23, 24, 25],
+    [24.6, 24.7, 24.8, 24.9, 25],
   );
+  // Piso 1.1 USDT siempre 0.1 por encima del piso VIP (1.0). FINAL §3.
+  const minTier = Math.min(...frpDynamicQuantityTiers(pricing).map((t) => t.unitPrice));
+  assert.ok(minTier > pricing.minAllowedUnitPrice, "piso volumen debe quedar > VIP floor");
 });
 
 test("FRP eligibility preserves blocked, review, and apto outcomes", () => {

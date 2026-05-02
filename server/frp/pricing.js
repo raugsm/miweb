@@ -140,12 +140,32 @@ export function frpCurrentPricing(db) {
   };
 }
 
+// QUE: calcula el unitPrice efectivo de un tier dado el contexto pricing actual.
+// Soporta dos modelos:
+//   1. Tier con `marginUsdt` (frpQuantityTiers post PR-2a.1, FINAL §3): unit =
+//      max(piso, internalCost + margin). Tier 1 usa minSellPriceUsdt como piso
+//      (precio nominal 25 USDT); tiers de volumen usan minAllowedUnitPrice
+//      (= internalCost + minMarginUsdt = piso VIP).
+//   2. Tier con `unitPrice` (frpMonthlyTiers, sin migrar — fallback legacy):
+//      computa descuento contra el precio nominal y aplica.
 export function frpDynamicTier(defaultTier, pricing) {
   if (!pricing?.available) return { ...defaultTier };
+  const minAllowed = moneyNumber(pricing.minAllowedUnitPrice);
+  const minSell = moneyNumber(pricing.config?.policy?.minSellPriceUsdt || 0);
+  const internalCost = moneyNumber(pricing.internalCostUsdt || 0);
+  if (defaultTier.marginUsdt !== undefined) {
+    const margin = moneyNumber(defaultTier.marginUsdt);
+    const isBaseTier = Number(defaultTier.minQty || 1) <= 1;
+    const floor = isBaseTier ? Math.max(minSell, minAllowed) : minAllowed;
+    return {
+      ...defaultTier,
+      unitPrice: moneyNumber(Math.max(floor, internalCost + margin)),
+    };
+  }
   const discount = moneyNumber(25 - Number(defaultTier.unitPrice || 25));
   return {
     ...defaultTier,
-    unitPrice: moneyNumber(Math.max(pricing.minAllowedUnitPrice, pricing.unitPrice - discount)),
+    unitPrice: moneyNumber(Math.max(minAllowed, pricing.unitPrice - discount)),
   };
 }
 
