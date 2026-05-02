@@ -153,6 +153,14 @@ export function createPortalSerializers({
       nextAction: publicCustomerOrderNextAction(order, db, publicStatus),
       customerConnectionReadyAt: order.customerConnectionReadyAt || "",
       customerConnectedAt: order.customerConnectedAt || "",
+      // PR-2a.2: snapshot del precio al subir 1er comprobante. Si esta seteado,
+      // el cliente paga este precio aunque el operador cambie pricing despues;
+      // si sube post-lock, se le ofrecen las 3 opciones (PR-2a.3).
+      priceLocked: moneyNumber(order.priceLocked || 0),
+      priceLockedAt: order.priceLockedAt || "",
+      priceDecisionAction: order.priceDecisionAction || "",
+      priceDecisionAt: order.priceDecisionAt || "",
+      priceDecisionWaitUntil: order.priceDecisionWaitUntil || "",
       urgentRequested: Boolean(order.urgentRequested),
       urgentStatus: order.urgentStatus || "",
       postpayRequested: Boolean(order.postpayRequested),

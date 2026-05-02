@@ -599,6 +599,16 @@ export function createPortalRoutes({
       paymentLabel: payment.label,
       paymentDetails: payment.details,
       paymentProofs: inputProofs.slice(),
+      // QUE: snapshot del precio al subir el primer comprobante. PR-2a.2 / FINAL §2 parte 4.
+      // POR QUE: una vez "anclado", la asimetria de pricing aplica — si baja, silencio
+      // (cliente paga el lock); si sube, se le ofrecen 3 opciones (PR-2a.3 wires el
+      // endpoint /price-decision). Si el primer POST no trae proofs, el lock se setea
+      // recien al PATCH /payment-proof.
+      priceLocked: inputProofs.length ? Number(suggestion.unitPrice) || 0 : 0,
+      priceLockedAt: inputProofs.length ? nowIso() : "",
+      priceDecisionAction: "",
+      priceDecisionAt: "",
+      priceDecisionWaitUntil: "",
       customerConnectionReadyAt: "",
       urgentRequested,
       urgentStatus: urgentRequested ? "SOLICITADO" : "",
@@ -833,6 +843,13 @@ export function createPortalRoutes({
     order.paymentProofs = (order.paymentProofs || []).concat(proofs);
     order.publicStatus = "PAGO_EN_REVISION";
     order.updatedAt = nowIso();
+    // QUE: snapshot del precio al primer comprobante (FINAL §2 parte 4). Solo
+    // setea si todavia no estaba anclado — re-uploads tras rechazo NO refrescan
+    // el lock (el cliente sigue debiendo el precio anclado original).
+    if (!Number(order.priceLocked || 0)) {
+      order.priceLocked = Number(order.unitPrice) || 0;
+      order.priceLockedAt = nowIso();
+    }
     const request = db.customerRequests.find((candidate) => candidate.id === order.requestId);
     if (request) {
       request.status = "PAGO_EN_REVISION";
@@ -852,6 +869,84 @@ export function createPortalRoutes({
     });
     await writeDb(db);
     publishPortalOrders(db, context.client.id, "payment_proof_uploaded");
+    return sendJson(res, 200, {
+      order: publicCustomerOrder(order, db),
+      customer: publicCustomerState(db, context),
+    });
+  }
+
+  const portalPriceDecisionMatch = pathname.match(/^\/api\/portal\/orders\/([^/]+)\/price-decision$/);
+  if (req.method === "POST" && portalPriceDecisionMatch) {
+    // QUE: cliente decide que hacer cuando el precio subio post-lock (FINAL §2 parte 5).
+    // Tres opciones: subir 2do comprobante por la diferencia, esperar 1 hora con
+    // auto-cancel si baja, o cancelar y pedir reembolso manual. Stage 2a.2 persiste
+    // la decision; Stage 2a.3 wires SSE detection + UI inline.
+    const context = await getCurrentCustomerContext(req);
+    if (!requireCustomer(context, res)) return;
+    const input = await parseJson(req);
+    const db = context.db;
+    const order = db.customerOrders.find((candidate) => (
+      candidate.id === portalPriceDecisionMatch[1] && candidate.clientId === context.client.id
+    ));
+    if (!order) return sendJson(res, 404, { error: "Orden no encontrada." });
+    if (!Number(order.priceLocked || 0)) {
+      return sendJson(res, 409, { error: "Esta orden no tiene precio anclado todavia." });
+    }
+    if (order.priceDecisionAction) {
+      return sendJson(res, 409, { error: "Ya tomaste una decision para esta diferencia de precio." });
+    }
+    if (order.publicStatus === "CANCELADO" || order.publicStatus === "FINALIZADO") {
+      return sendJson(res, 409, { error: "La orden no acepta decisiones de precio en su estado actual." });
+    }
+    const action = cleanText(input.action, 20);
+    if (!["second_proof", "wait", "cancel"].includes(action)) {
+      return sendJson(res, 400, { error: "Accion invalida. Usa second_proof, wait o cancel." });
+    }
+    const currentSuggestion = portalFrpPriceSuggestion(
+      db,
+      context.client.id,
+      order.quantity,
+      true,
+      customerBenefitFor(db, context.client.id, context.client.masterClientId || ""),
+      context.client.masterClientId || ""
+    );
+    const currentUnit = Number(currentSuggestion?.unitPrice || 0);
+    const lockedUnit = Number(order.priceLocked || 0);
+    if (currentUnit <= lockedUnit) {
+      return sendJson(res, 409, { error: "El precio actual no esta por encima del anclado. No hace falta decidir." });
+    }
+    const timestamp = nowIso();
+    order.priceDecisionAction = action;
+    order.priceDecisionAt = timestamp;
+    order.updatedAt = timestamp;
+    if (action === "wait") {
+      // 1 hora desde la decision. Stage 2a.3 monitorea SSE y auto-cancela si baja.
+      order.priceDecisionWaitUntil = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    }
+    if (action === "cancel") {
+      order.publicStatus = "CANCELADO";
+      order.cancellationReason = "PRICE_UP_AFTER_LOCK";
+      const frpOrder = db.frpOrders.find((candidate) => candidate.id === order.frpOrderId);
+      if (frpOrder) {
+        frpOrder.orderStatus = "CANCELADA";
+        frpOrder.updatedAt = timestamp;
+        syncFrpOrderStatus(db, frpOrder);
+      }
+      const request = db.customerRequests.find((candidate) => candidate.id === order.requestId);
+      if (request) {
+        request.status = "CANCELADO";
+        request.updatedAt = timestamp;
+      }
+    }
+    audit(db, context.user.id, "PORTAL_PRICE_DECISION", order.id, {
+      code: order.code,
+      action,
+      lockedUnit,
+      currentUnit,
+      delta: Number((currentUnit - lockedUnit).toFixed(2)),
+    });
+    await writeDb(db);
+    publishPortalOrders(db, context.client.id, "price_decision");
     return sendJson(res, 200, {
       order: publicCustomerOrder(order, db),
       customer: publicCustomerState(db, context),
