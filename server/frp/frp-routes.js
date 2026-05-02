@@ -809,11 +809,23 @@ export function createFrpRoutes({
     if (!job || !order) return sendJson(res, 404, { error: "Trabajo FRP no encontrado." });
     if (job.technicianId && job.technicianId !== user.id && user.role !== "ADMIN") return sendJson(res, 403, { error: "Este trabajo lo tomo otro tecnico." });
     if (job.status !== "EN_PROCESO" && user.role !== "ADMIN") return sendJson(res, 400, { error: "Solo puedes finalizar un trabajo en proceso." });
-    const finalLog = cleanText(input.finalLog, 500);
+    const inputLog = cleanText(input.finalLog, 500);
     const finalImages = sanitizeFinalLogImages(input.finalImages);
-    if (!finalLog && !finalImages.length) return sendJson(res, 400, { error: "Para finalizar se requiere log escrito o imagen." });
+    // Spec operador-frp-express.md decision #1 (sesion 6): el panel rediseñado
+    // no pide log al tecnico cuando aprieta "Marcar finalizado" — el flujo es
+    // un click directo sin sub-modal. Si el frontend no envia finalLog,
+    // generamos auto-log con nombre + hora Lima para preservar trazabilidad.
+    // La evidencia (imagenes) sigue siendo opcional via sub-accion separada.
+    // ANTES: requeria log o imagen obligatorio (return 400). AHORA: ambos opt.
+    const limaTime = new Intl.DateTimeFormat("es-PE", {
+      timeZone: "America/Lima",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).format(new Date());
+    const finalLog = inputLog || job.finalLog || `Finalizado por ${user.name || "operador"} a las ${limaTime}`;
     job.status = "FINALIZADO";
-    job.finalLog = finalLog || job.finalLog;
+    job.finalLog = finalLog;
     if (finalImages.length) job.finalImages = finalImages;
     job.ardCode ||= nextFrpArdCode(db);
     job.doneAt = nowIso();
