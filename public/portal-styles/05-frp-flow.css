@@ -459,6 +459,27 @@
   background: #fee2e2; border-left: 2px solid #b91c1c; color: #7f1d1d;
 }
 
+/* PR-2a-final.bundle2 item 2 — banner inactividad paso 2 (30s info / 90s warn). */
+.flow-paso2-inactivity {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.flow-paso2-inactivity[hidden] { display: none; }
+.flow-paso2-inactivity strong { display: block; margin-bottom: 3px; font-weight: 700; font-size: 13px; }
+.flow-paso2-inactivity[data-level="info"] {
+  background: #eff6ff;
+  border-left: 2px solid #60a5fa;
+  color: #1e3a8a;
+}
+.flow-paso2-inactivity[data-level="warn"] {
+  background: #fef3c7;
+  border-left: 2px solid #d97706;
+  color: #78350f;
+}
+
 /* PR-2a-final.fase4 — Paso 4 al spec FINAL §7. Banner verde + Redirector
    download + Technician ID + Código del proceso + boton "¿Dónde pegar?". */
 .paso4-confirm-banner {

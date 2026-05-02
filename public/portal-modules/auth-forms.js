@@ -11,6 +11,7 @@ import {
 import { stepGuideMarkup } from "./connection.js";
 import { startTechnicianPolling, stopTechnicianPolling, wireCopyButtonsWithin } from "./technician.js";
 import { deriveFlowState } from "./flow-state.js";
+import { resetPaso2InactivityTimer } from "./paso2-timer.js";
 import { state } from "./state.js";
 
 export function renderStaticStepGuide() {
@@ -196,6 +197,9 @@ export function renderCustomer() {
   }
   applyFlowState(customer);
   updateFlowPaymentDropzone();
+  // PR-2a-final.bundle2 item 2: arrancar/refrescar el timer de inactividad
+  // paso 2. Auto-stop interno cuando hay orden in-flight (paso 3+).
+  resetPaso2InactivityTimer();
   renderOrders(customer.orders || []);
   startOrdersLive();
   renderStaticStepGuide();

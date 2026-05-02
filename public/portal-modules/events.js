@@ -24,6 +24,7 @@ import {
   updateQuote,
 } from "./payments.js";
 import { filesToProofs, hasDraggedFiles, uploadPaymentProofFromFlow, wireGlobalFileDropGuard } from "./proofs.js";
+import { resetPaso2InactivityTimer } from "./paso2-timer.js";
 import { renderTrackedOrder } from "./deep-links.js";
 import { state } from "./state.js";
 
@@ -202,6 +203,7 @@ export function wireEvents() {
     setQuantity(next);
     syncDetectedItems();
     updateQuote();
+    resetPaso2InactivityTimer();
   });
   // PR-2a-final.fase2: buscador inverso — chequeo client-side contra
   // catalog.eligibilityHints. Sin round-trip al backend (FINAL §5: lógica
@@ -214,11 +216,12 @@ export function wireEvents() {
       feedback.hidden = true;
       feedback.textContent = "";
       feedback.dataset.eligibility = "";
-      return;
+    } else {
+      feedback.hidden = false;
+      feedback.textContent = result.message;
+      feedback.dataset.eligibility = result.status.toLowerCase();
     }
-    feedback.hidden = false;
-    feedback.textContent = result.message;
-    feedback.dataset.eligibility = result.status.toLowerCase();
+    resetPaso2InactivityTimer();
   });
   // PR-2a-final.fase3: pills de paso 1 reemplazan el select. Click delegado
   // en el container actualiza hidden input + recalcula precio en moneda nueva.
@@ -227,6 +230,7 @@ export function wireEvents() {
     if (!pill) return;
     setSelectedPayment(pill.dataset.paymentPill);
     updateQuote();
+    resetPaso2InactivityTimer();
   });
   // PR-2a-final.fase4: modal "¿Dónde pegar?" — abrir desde paso 4.
   $("#orderForm")?.addEventListener("click", (event) => {
