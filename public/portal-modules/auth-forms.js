@@ -4,9 +4,7 @@ import { normalizeForMatch } from "./format.js";
 import { startOrdersLive, stopOrdersLive } from "./live-orders.js";
 import { renderOrders } from "./orders.js";
 import {
-  compatiblePaymentMethodsForCustomer,
-  paymentOptionLabel,
-  preferredPaymentForCustomer,
+  renderPaymentPills,
   updateFlowPaymentDropzone,
   updateQuote,
 } from "./payments.js";
@@ -162,25 +160,10 @@ export function renderCatalog() {
     });
   }
   updatePhoneCountryFromInput();
-  const paymentSelect = $("#paymentSelect");
-  if (paymentSelect) {
-    const previousValue = paymentSelect.value;
-    const compatiblePayments = compatiblePaymentMethodsForCustomer();
-    paymentSelect.innerHTML = "";
-    compatiblePayments.forEach((payment) => {
-      const option = document.createElement("option");
-      option.value = payment.code;
-      option.textContent = paymentOptionLabel(payment);
-      paymentSelect.append(option);
-    });
-    const previousOption = Array.from(paymentSelect.options).find((option) => option.value === previousValue);
-    const preferred = preferredPaymentForCustomer();
-    if (previousOption) {
-      paymentSelect.value = previousValue;
-    } else if (preferred) {
-      paymentSelect.value = preferred.code;
-    }
-  }
+  // PR-2a-final.fase3: paso 1 al spec FINAL §4 — 5 pills con flags SVG en
+  // lugar de <select>. paymentSelect queda como hidden input para preservar
+  // el form data; el valor se setea cuando el cliente clickea una pill.
+  renderPaymentPills();
   updateQuote();
   renderTurnstileWidgets().catch((error) => setMessage($("#authMessage"), error.message, "error"));
 }

@@ -31,21 +31,78 @@ export function paymentAmountText(value, payment = currentPayment()) {
   return `$${amount.toFixed(2)} ${payment?.currency || "USD"}`;
 }
 
+// PR-2a-final.fase3: SVG flags inline reemplazan emoji per FINAL §4. Cada
+// flag es una aproximacion sencilla (rectangulos de color del pais). Logos
+// oficiales descargados quedan para PR-3.
+const PAYMENT_FLAG_SVGS = {
+  Mexico: '<svg viewBox="0 0 18 12" width="18" height="12" aria-hidden="true"><rect width="6" height="12" fill="#006847"/><rect x="6" width="6" height="12" fill="#fff"/><rect x="12" width="6" height="12" fill="#ce1126"/></svg>',
+  Peru: '<svg viewBox="0 0 18 12" width="18" height="12" aria-hidden="true"><rect width="6" height="12" fill="#d91023"/><rect x="6" width="6" height="12" fill="#fff"/><rect x="12" width="6" height="12" fill="#d91023"/></svg>',
+  Colombia: '<svg viewBox="0 0 18 12" width="18" height="12" aria-hidden="true"><rect width="18" height="6" fill="#fcd116"/><rect y="6" width="18" height="3" fill="#003893"/><rect y="9" width="18" height="3" fill="#ce1126"/></svg>',
+  Chile: '<svg viewBox="0 0 18 12" width="18" height="12" aria-hidden="true"><rect width="9" height="6" fill="#0039a6"/><rect x="9" width="9" height="6" fill="#fff"/><rect y="6" width="18" height="6" fill="#d52b1e"/><polygon points="4.5,3 5,4.4 6.5,4.4 5.3,5.3 5.7,6.7 4.5,5.9 3.3,6.7 3.7,5.3 2.5,4.4 4,4.4" fill="#fff"/></svg>',
+  Global: '<svg viewBox="0 0 18 12" width="18" height="12" aria-hidden="true"><circle cx="9" cy="6" r="5.5" fill="#26A17B"/><text x="9" y="9" fill="#fff" font-size="7" font-weight="700" text-anchor="middle" font-family="Arial,sans-serif">₮</text></svg>',
+};
+
+export function paymentFlagSvg(payment = currentPayment()) {
+  const country = String(payment?.country || "");
+  return PAYMENT_FLAG_SVGS[country] || PAYMENT_FLAG_SVGS.Global;
+}
+
+// Compat con consumidores que esperan un texto corto (operator panel, etc).
 export function paymentFlag(payment = currentPayment()) {
   const country = String(payment?.country || "");
-  const byCountry = {
-    Mexico: "🇲🇽",
-    Peru: "🇵🇪",
-    Colombia: "🇨🇴",
-    Chile: "🇨🇱",
-    Global: "🌎",
-  };
+  const byCountry = { Mexico: "🇲🇽", Peru: "🇵🇪", Colombia: "🇨🇴", Chile: "🇨🇱", Global: "🌎" };
   return byCountry[country] || "🌎";
 }
 
 export function paymentOptionLabel(payment) {
   if (!payment) return "Método de pago";
   return `${paymentFlag(payment)} ${payment.label}`;
+}
+
+// PR-2a-final.fase3: render del listado de pills de paso 1 (FINAL §4). Cada
+// pill tiene flag SVG + nombre del pais. Click setea hidden input value y
+// dispara updateQuote para recalcular el precio en la nueva moneda.
+export function renderPaymentPills() {
+  const container = $("#flowPaymentPills");
+  const hidden = $("#paymentSelect");
+  if (!container || !hidden) return;
+  const compatible = compatiblePaymentMethodsForCustomer();
+  if (!compatible.length) {
+    container.innerHTML = "";
+    hidden.value = "";
+    return;
+  }
+  const previousValue = hidden.value;
+  const preferred = preferredPaymentForCustomer();
+  const selectedCode = compatible.find((p) => p.code === previousValue)?.code
+    || preferred?.code
+    || compatible[0]?.code
+    || "";
+  hidden.value = selectedCode;
+  container.innerHTML = compatible.map((payment) => {
+    const isSelected = payment.code === selectedCode;
+    const country = String(payment.country || "");
+    const label = country === "Global" ? "USDT" : country;
+    return `
+      <button type="button" role="radio" class="flow-payment-pill${isSelected ? " is-selected" : ""}"
+              data-payment-pill="${payment.code}" aria-checked="${isSelected ? "true" : "false"}">
+        <span class="flow-payment-pill-flag">${paymentFlagSvg(payment)}</span>
+        <span class="flow-payment-pill-label">${label}</span>
+      </button>
+    `;
+  }).join("");
+}
+
+// Helper para que events.js sincronice valor + UI cuando cambia desde fuera.
+export function setSelectedPayment(code) {
+  const hidden = $("#paymentSelect");
+  if (!hidden) return;
+  hidden.value = code;
+  $$(".flow-payment-pill").forEach((pill) => {
+    const isSelected = pill.dataset.paymentPill === code;
+    pill.classList.toggle("is-selected", isSelected);
+    pill.setAttribute("aria-checked", isSelected ? "true" : "false");
+  });
 }
 
 export function compatiblePaymentMethodsForCustomer() {
@@ -245,5 +302,9 @@ export function updateFlowPaymentDropzone() {
 }
 
 export function paymentSelectedInDropdown(paymentCode) {
-  return paymentCode && Array.from($("#paymentSelect").options).some((option) => option.value === paymentCode);
+  // PR-2a-final.fase3: pills reemplazan al <select>. Chequea si el codigo
+  // existe entre las pills disponibles.
+  if (!paymentCode) return false;
+  const compatible = compatiblePaymentMethodsForCustomer();
+  return compatible.some((payment) => payment.code === paymentCode);
 }

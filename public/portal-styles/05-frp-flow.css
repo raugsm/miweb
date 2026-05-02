@@ -285,6 +285,86 @@
   color: #6d7f99;
 }
 
+/* PR-2a-final.fase3 — Paso 1 al spec FINAL §4. 5 pills horizontales con
+   flags SVG inline + indicador "Estimado en vivo" con dot pulsante +
+   jerarquía monto principal grande / USDT pequeño con logo Tether. */
+.flow-price-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.flow-price-head > div { display: inline-flex; align-items: center; gap: 8px; }
+.flow-live-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #065f46;
+  white-space: nowrap;
+}
+.flow-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+  animation: liveRing 1.8s ease-in-out infinite;
+  box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.55);
+}
+@keyframes liveRing {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.55); }
+  50% { box-shadow: 0 0 0 7px rgba(16, 185, 129, 0); }
+}
+.flow-payment-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.flow-payment-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid #d4dae5;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  color: #4b5563;
+  cursor: pointer;
+}
+.flow-payment-pill:hover { border-color: #93c5fd; }
+.flow-payment-pill.is-selected {
+  border-color: #1D4ED8;
+  background: #E6F1FB;
+  color: #1D4ED8;
+}
+.flow-payment-pill-flag svg { display: block; border-radius: 2px; }
+.flow-payment-pill-label { white-space: nowrap; }
+.flow-price-amount {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.flow-price-amount > b {
+  font-size: 24px;
+  font-weight: 800;
+  color: #0f1629;
+}
+.flow-price-conversion {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #6b7280;
+}
+.flow-price-conversion b { color: #0f1629; font-weight: 700; }
+.flow-tether-icon { vertical-align: -2px; }
+
 /* PR-2a-final.fase2 — Paso 2 al spec FINAL §5. Reemplaza textarea por
    stepper + buscador inverso + insignia "98% modelos soportados". */
 .flow-request-head {

@@ -20,6 +20,7 @@ import {
   paymentSelectedInDropdown,
   paymentUploadTargetOrder,
   renderPaymentModal,
+  setSelectedPayment,
   updateQuote,
 } from "./payments.js";
 import { filesToProofs, hasDraggedFiles, uploadPaymentProofFromFlow, wireGlobalFileDropGuard } from "./proofs.js";
@@ -64,7 +65,7 @@ async function submitOrderWithProofs(files) {
     const selectedPayment = payload.order?.paymentMethod || data.paymentMethod;
     renderCatalog();
     if (paymentSelectedInDropdown(selectedPayment)) {
-      $("#paymentSelect").value = selectedPayment;
+      setSelectedPayment(selectedPayment);
     }
     updateQuote();
     renderCustomer();
@@ -219,7 +220,14 @@ export function wireEvents() {
     feedback.textContent = result.message;
     feedback.dataset.eligibility = result.status.toLowerCase();
   });
-  $("#paymentSelect")?.addEventListener("change", updateQuote);
+  // PR-2a-final.fase3: pills de paso 1 reemplazan el select. Click delegado
+  // en el container actualiza hidden input + recalcula precio en moneda nueva.
+  $("#flowPaymentPills")?.addEventListener("click", (event) => {
+    const pill = event.target.closest("[data-payment-pill]");
+    if (!pill) return;
+    setSelectedPayment(pill.dataset.paymentPill);
+    updateQuote();
+  });
   $("#copyPaymentButton").addEventListener("click", () => renderPaymentModal());
   $("#closePaymentModal")?.addEventListener("click", closePaymentModal);
   $("#paymentModal")?.addEventListener("click", (event) => {
