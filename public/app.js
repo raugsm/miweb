@@ -2875,7 +2875,6 @@ document.querySelector("#refresh-users").addEventListener("click", refreshSessio
 document.querySelector("#refresh-tickets").addEventListener("click", refreshSession);
 document.querySelector("#refresh-clients").addEventListener("click", refreshSession);
 document.querySelector("#refresh-pricing").addEventListener("click", refreshSession);
-document.querySelector("#refresh-frp")?.addEventListener("click", refreshSession);
 // QUE: feedback inline al guardar (texto del boton + clase). PR-2a-fix BUG 2.
 // POR QUE: antes el unico feedback estaba en #frp-message lejos del boton de
 // pricing (off-screen). El cliente apretaba "Guardar" sin ver si funciono.

@@ -2246,3 +2246,56 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
   }
   .frp-ops-v2-finalized-row { flex-wrap: wrap; }
 }
+
+/* ============================================================
+   Costos FRP — estilo del summary del acordeón colapsable.
+   Spec: commit 6b cleanup visual. Solo estiliza el header del <details>.
+   El contenido de #frp-pricing-box NO se toca acá — su rediseño visual
+   queda para sesión separada (ver docs/specs/_costos-frp-redesign-pendiente.md).
+   Tokens en valores literales del mockup v2 para no depender del scope
+   .frp-ops-v2 (este <details> es sibling, no descendiente).
+   ============================================================ */
+.frp-costs-collapsed {
+  margin-top: 12px;
+}
+.frp-costs-collapsed > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  background: #FFFFFF;
+  border: 0.5px solid #E5E3DC;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.6px;
+  color: #888780;
+  text-transform: uppercase;
+  user-select: none;
+  transition: background-color 150ms ease, border-color 150ms ease;
+}
+.frp-costs-collapsed > summary::-webkit-details-marker { display: none; }
+.frp-costs-collapsed > summary::after {
+  content: "›";
+  font-size: 18px;
+  line-height: 1;
+  color: #888780;
+  font-weight: 400;
+  transition: transform 150ms ease;
+}
+.frp-costs-collapsed[open] > summary::after {
+  transform: rotate(90deg);
+}
+.frp-costs-collapsed[open] > summary {
+  margin-bottom: 8px;
+}
+.frp-costs-collapsed > summary:hover {
+  background: #F0EFE8;
+  border-color: #C8C5BB;
+}
+.frp-costs-collapsed > summary:focus-visible {
+  outline: 2px solid #185FA5;
+  outline-offset: 2px;
+}
