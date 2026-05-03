@@ -2,7 +2,7 @@
 
 **Para Claudes futuros que retomen este trabajo.** Si abrís un chat nuevo, leé este archivo primero, después abrí los otros archivos en `docs/specs/`. Después de eso, ya sabés todo lo necesario para continuar.
 
-**Última actualización:** 3 de mayo 2026 · v1.5
+**Última actualización:** 3 de mayo 2026 · v1.6
 
 ---
 
@@ -40,6 +40,21 @@ Estas son patrones reales que aparecieron en sesiones anteriores. Si te encontr�
 | **"Una mejora chiquita de yapa"** | Claude Code agrega cosa fuera de scope con buena intención (ej. accessibility) | Aunque sea correcto, debe preguntarse antes. Transparentar después es mejor que esconder, pero preguntar antes es lo correcto. |
 | **"Aparece un bug nuevo, mejor rediseñemos todo"** | Reaccionar a una frustración con un cambio de plan grande durante una sesión | El plan grande se discute en sesión aparte, en frío. Un bug ≠ tirar el plan. Sin entender los bugs primero, esos bugs migran al rediseño. |
 | **"El audit ya confirmó que es dead code"** | Confiar en el audit como verdad final sin pruebas empíricas | El audit puede equivocarse (caso H-004 → B-008 en sesión 8). Smoke test es el último filtro antes de cerrar. |
+| **"Decisión nueva al final de sesión cansado"** | Bryam abre una decisión grande de producto al final de una sesión larga, en respuesta a algo que vio en smoke test | Registrar como input crudo en HANDOFF, NO como decisión tomada. Spec formal con cabeza fresca, en sesión dedicada. |
+
+---
+
+## Contexto del despliegue
+
+**La web es local, sin clientes reales todavía.** Está alojada en un servidor local de Bryam, no en la nube. No hay urgencia de "lanzamiento" presionando ni clientes afectados por bugs en cola. Bryam puede parar la web cuando quiera para hacer cambios o pruebas.
+
+Esto NO cambia el rigor del proceso (Plan → Design → Implement → Test → Review sigue siendo obligatorio). Lo que cambia es:
+
+- No hay urgencia falsa que justifique saltar etapas.
+- Bugs descubiertos pueden esperar a sesión dedicada sin riesgo comercial.
+- Smoke tests pueden hacerse sin presión de tiempo.
+
+Si un Claude futuro se ve tentado a apurar a Bryam con argumentos de "los clientes esperan" o "esto bloquea el lanzamiento", **frenar**. No aplica.
 
 ---
 
@@ -50,7 +65,7 @@ Estas son patrones reales que aparecieron en sesiones anteriores. Si te encontr�
 **Validación profunda toca recién en QA integral**, cuando:
 - Operador FRP Express completo (sesión 7 ✅)
 - Bugs cliente activados (sesión 8 ✅ parcial — falta B-008)
-- B-008 fix (sesión 9)
+- B-008 fix (sesión 9 — escenarios 1, 2, 3 validados; escenario 4 pendiente)
 - Cualquier cleanup pendiente (Bundle 3)
 
 Razón: probar feature por feature mientras hay bugs cliente conocidos genera ruido. Bugs del operador y del cliente se mezclan. Mejor cerrar bloques completos y QA integral al final.
@@ -59,7 +74,7 @@ Razón: probar feature por feature mientras hay bugs cliente conocidos genera ru
 
 ## Qué es AriadGSM
 
-Servicio remoto de FRP/Cuenta Google para Xiaomi en Latam. Procesa ~130 órdenes/día. El cliente final son técnicos de tienda (B2B) que pagan en USDT, transferencia local (PE/MX/CO/CL) o Yape Perú.
+Servicio remoto de FRP/Cuenta Google para Xiaomi en Latam. Procesa ~130 órdenes/día (proyección — hoy la web es local sin clientes reales). El cliente final son técnicos de tienda (B2B) que pagan en USDT, transferencia local (PE/MX/CO/CL) o Yape Perú.
 
 **Owner:** Bryam (no es programador, aprende haciendo, prefiere mockups visuales sobre texto largo).
 **Operadores internos:** Jack (principal) + Angelo (apoyo). Trabajan en turnos distintos, no simultáneos.
@@ -67,6 +82,8 @@ Servicio remoto de FRP/Cuenta Google para Xiaomi en Latam. Procesa ~130 órdenes
 **Producto:** monorepo Node.js que sirve dos frontends según host:
 - `ariadgsm.com` → portal cliente (4 pasos para que el técnico mande su pedido)
 - `ops.ariadgsm.com` → panel operador (donde Jack/Angelo procesan los pedidos)
+
+En entorno local: `localhost:4173/cliente` (cliente) y `localhost:4173/` (operador). Login operador: `admin@local.test`. Cliente de prueba: `raugsm.69@gmail.com`. Comando arranque: `npm start`.
 
 **Característica clave del bypass:** dura 5-10 segundos físicos. La interfaz del operador acompaña el antes y después del bypass, no el durante. Decisiones como "cancelar de raíz" son seguras.
 
@@ -83,11 +100,11 @@ SESIÓN 7 (cerrada)
 SESIÓN 8 (cerrada)
 └── B-001 fix paso 4 cliente (1 commit) + descubrimiento de B-008 ✅
 
-SESIÓN 9
-└── B-008 fix (crítico) + QA integral cliente + operador
+SESIÓN 9 (cerrada parcialmente)
+└── B-008 fix (crítico) ✅ + escenarios 1-3 smoke test ✅ + escenario 4 pendiente
 
-SESIÓN 10
-└── Spec + implementación paso 1 cliente
+SESIÓN 10 (próxima)
+└── Cerrar escenario 4 B-008 (5 min) + Spec + implementación paso 1 cliente
 
 SESIÓN 11
 └── Spec + implementación paso 2 cliente
@@ -96,15 +113,17 @@ SESIÓN 12
 └── Spec + implementación paso 3 cliente
 
 SESIÓN 13
-└── Spec + implementación paso 4 cliente
+└── Spec + implementación paso 4 cliente (incluye decisiones pendientes — ver "Inputs crudos para spec futura")
 
 SESIÓN 14
 └── QA final cliente rediseñado
 
-→ LANZAMIENTO (~1-2 semanas de trabajo dependiendo de cadencia)
+→ LANZAMIENTO (cadencia depende de Bryam — no hay urgencia comercial al ser local)
 ```
 
-**Si en sesión 9 surge urgencia de lanzar antes** con cliente "feo pero funcional", se puede cambiar a Opción A (lanzar con cliente actual + bugs arreglados, postergar rediseño visual). La decisión no es irreversible.
+**Cadencia:** Bryam construye solo y atiende clientes en paralelo por WhatsApp. La cadencia de sesiones la define Bryam. No hay deadline real. Si una sesión por semana es mucho, se distribuyen con margen. Esto es importante: en sesión 9 Bryam reconoció cansancio acumulado, lo que activó la trampa "Decisión nueva al final de sesión cansado". Claudes futuros: si notan a Bryam fatigado, sugieran cortar y retomar con cabeza fresca antes que insistir en cerrar.
+
+**Si en sesión 10 surge urgencia de lanzar antes** con cliente "feo pero funcional", se puede cambiar a Opción A (lanzar con cliente actual + bugs arreglados, postergar rediseño visual). La decisión no es irreversible.
 
 **En sesión 8 hubo una propuesta de saltar al rediseño en caliente** después de detectar B-008. Se frenó. Ver bitácora de errores de proceso. Si vuelve a surgir, el camino es: sesión dedicada en frío, no decisión durante implementación.
 
@@ -127,7 +146,8 @@ SESIÓN 14
 - Cierre diario con export Excel
 - Auditoría completa
 - Master clients + dedup cross-canal
-- **NUEVO sesión 8:** Paso 4 cliente muestra código real de orden activa (no más placeholder permanente)
+- **Sesión 8:** Paso 4 cliente muestra código real de orden activa (no más placeholder permanente)
+- **Sesión 9:** Items vacíos retornan APTO_EXPRESS, desbloqueando creación de órdenes con comprobante (B-008)
 
 ### Implementado en sesión 7 — Operador FRP Express completo
 
@@ -159,7 +179,25 @@ SESIÓN 14
 
 - `964413b` — `fix(portal-cliente): paso 4 muestra codigo real de orden activa (B-001)`. `renderStaticStepGuide` ahora pasa `activeOrderForFlow(state.customer)` en lugar de `null`. Cliente con orden EN_PREPARACION/LISTO_PARA_CONEXION ve su código real `CL-YYYYMMDD-NNN-Q` en paso 4 en lugar del placeholder `CL-YYYYMMDD-000-1`. Diff: 2 inserciones / 2 eliminaciones en `public/portal-modules/auth-forms.js` (líneas 13 y 22).
 
-**Total sesión 8: 1 commit. Smoke test del paso 4 NO completado por aparición de B-008 (pre-existente, ver "Bugs conocidos en cola"). El smoke test se completará en sesión 9 después de arreglar B-008.**
+**Total sesión 8: 1 commit. Smoke test del paso 4 NO completado por aparición de B-008 (pre-existente). El smoke test se completó en sesión 9 después de arreglar B-008.**
+
+### Implementado en sesión 9 — Fix B-008 items vacíos
+
+**1 commit, branch `feat-b008-fix` (creada desde `feat-step4-redesign`):**
+
+- `21e1790` — `fix(eligibility): items vacios retornan APTO_EXPRESS (B-008)`. Guarda al inicio de `frpEligibilityResult` que devuelve `APTO_EXPRESS` cuando `originalText` es string vacío. Soluciona la causa raíz del bug crítico que bloqueaba la creación de órdenes nuevas con comprobante. Cubre análisis previo empírico de los 3 fixes posibles (a, b, c). Diff: 3 archivos, +14 / -2 LOC:
+  - `server/frp/eligibility.js` — +10 / -0 (guarda nueva)
+  - `test/phase3a.contract.test.js` — +1 / -0 (assertion empty string)
+  - `public/portal-modules/events.js` — +3 / -2 (comentario actualizado al mecanismo real)
+
+**Smoke test B-008 (validación post-fix):**
+
+- ✅ Escenario 1 — cliente sin modelo + comprobante → orden creada en PAGO_EN_REVISION sin error 409. Confirma fix B-008.
+- ✅ Escenario 2 — operador valida pago → cliente ve EN_PREPARACION con código real `CL-20260503-001-1`. Cierra B-001 que quedó pendiente de sesión 8.
+- ✅ Escenario 3 — cliente con modelo válido ("Redmi Note 13") + comprobante → flujo normal sin diferencias. Control de no-regresión OK.
+- ⏳ Escenario 4 — cliente con modelo ambiguo ("xy") + comprobante → debería bloquear con REVISION_COMPATIBILIDAD. **Pendiente** porque la orden del escenario 1 quedó en `LISTO_PARA_CONEXION` y bloquea creación de nuevas órdenes con el mismo cliente. Se completa en sesión 10.
+
+**Total sesión 9: 1 commit. Branch `feat-b008-fix` sin push, sin merge a main hasta cerrar escenario 4. Tests 11/11 pass.**
 
 ### Lo que está parcial
 
@@ -167,8 +205,7 @@ SESIÓN 14
 - Notificaciones in-portal: planeado como PR-2c, no empezado
 - Anti-fraude 4 capas: planeado como PR-2b, no empezado
 - Multi-orden enforcement: UI prioriza pero backend no enforce
-- **B-008 (comprobante bloqueado):** identificado, no arreglado. Pre-existente. Bloquea creación de órdenes nuevas con comprobante. Sin urgencia inmediata porque app no está deployada. Target sesión 9.
-- **Smoke test B-001:** parcial. Solo se confirmó que el commit no causa regresión. Los 4 escenarios de validación del paso 4 quedaron pendientes porque B-008 bloquea llegar al paso 4 con orden fresh. Completar en sesión 9 una vez resuelto B-008.
+- **Smoke test B-008 escenario 4:** pendiente, se completa en sesión 10 (5 min de trabajo).
 
 ### Lo que NO existe
 
@@ -180,21 +217,20 @@ SESIÓN 14
 
 ### Bugs conocidos en cola
 
-**El conteo "16 bugs" del HANDOFF previo estaba obsoleto.** Audit de Claude Code en sesión 8 reveló que la mayoría ya se cerraron en commits previos (ca03afc paso 2, b433733 modelo opcional, e768f3a paso 4, 5b cleanup). Estado real:
-
-- **B-001 (paso 4 código real)** — ✅ ARREGLADO sesión 8 (commit 964413b)
-- **B-002 (pills "Perú" duplicadas en paso 1)** — UX, requiere decisión de producto. Target sesión 9 o Bundle 3.
+- **B-001 (paso 4 código real)** — ✅ ARREGLADO sesión 8 (commit 964413b), validado sesión 9 escenario 2.
+- **B-002 (pills "Perú" duplicadas en paso 1)** — UX, requiere decisión de producto. Target sesión 10 o Bundle 3.
 - **B-003** `wirePaso4BannerActions` import muerto en `auth-forms.js:15` — Bundle 3
 - **B-004** `operationCode` sin callers en `connection.js:3-7` — Bundle 3
 - **B-005** `customerName` ignorado en `stepGuideMarkup` (`auth-forms.js:25` lo envía pero `connection.js:81` no lo recibe) — Bundle 3
 - **B-006** `liveRing` animación 1.8s vs spec 1.4s en `05-frp-flow.css:321` — Bundle 3
 - **H-008** copy "pasos 1, 2 y 3" en paso 3 (debería decir "1 y 2") en `portal.html:210` — Bundle 3
-- **B-008 NUEVO — comprobante bloqueado en creación de orden nueva — CRÍTICO.** Pre-existente desde commit b433733. El backend (`portal-routes.js:528`) marca `compatibilityReviewRequired=true` cuando items vacíos retornan `REQUIERE_REVISION` desde `frpEligibilityResult("")`. Audit en H-004 lo dio por dead code incorrectamente. Sin fix, ningún cliente nuevo puede crear orden con comprobante. Target: sesión 9 con análisis previo de los 3 fixes posibles (ver "Pendientes y próximos pasos").
+- **B-008 (comprobante bloqueado)** — ✅ ARREGLADO sesión 9 (commit 21e1790). Pendiente escenario 4 del smoke test (control de no-regresión para casos ambiguos).
 
 **Otros pendientes Bundle 3:**
 
 - **2 pills "Perú" duplicadas** (PE_YAPE_BRYAMS + PE_YAPE_PEREGRINA) — Bundle 3 (mismo issue que B-002)
-- **`compatibilityReviewRequired` dead code** después del fix B-008 — Bundle 3
+- **`compatibilityReviewRequired` semi-dead code** después del fix B-008 — Bundle 3 (mantenido como safety net defensivo).
+- **`postpayEligible` indefinido** en `server/portal/portal-routes.js:679` — referenciado en audit dentro de rama hoy muerta (`postpayRequested = false` hardcoded). Si se reintroduce UI postpago lanzaría ReferenceError. Bundle 3 o sesión postpago UI.
 - **`ARIAD_ENABLE_SETUP_RESET=true` en producción** abre vector de attack — Bundle 3
 - **CSP error con Google Fonts** en consola del operador — Bundle 3
 - **CSS huérfano (~200 líneas)** en `public/styles.css` después del cleanup — Bundle 3
@@ -209,6 +245,82 @@ SESIÓN 14
 - **Sub-acción "Adjuntar evidencia" post-finalización:** mencionada en spec v1.2 (decisión auto-log de finalize). No implementada todavía. Spec separada cuando sea necesario.
 
 - **`:focus-visible` en summary del acordeón Costos FRP:** Claude Code lo agregó en commit 6b sin estar en scope original. Es accessibility útil, transparente sobre la desviación. Documentado como caso en bitácora de errores de proceso.
+
+---
+
+## Hallazgos abiertos pendientes de spec/investigación
+
+### Hallazgo sesión 9 — flujo de comprobantes y estados en panel operador
+
+Durante el smoke test post-fix B-008, Bryam observó que cuando el cliente sube comprobante en paso 3, la orden asociada no aparece en el panel del operador FRP Express hasta que el operador valida el pago. Bryam describió cómo debería funcionar el flujo correcto:
+
+**Línea de tiempo del flujo propuesto:**
+
+1. **Cliente sube comprobante (paso 3)** → la orden aparece en el panel del operador con etiqueta "sin verificar", junto al comprobante. Razón: el operador necesita ver la orden y el comprobante juntos para tener contexto al validar (qué se pagó, cuántos equipos, qué método).
+
+2. **Operador valida pago** → la etiqueta cambia a "verificado". La orden queda en el panel del operador pero NO disponible para el técnico todavía. Validar pagos y procesar jobs son acciones independientes — el operador puede validar varios pagos seguidos sin que eso encadene procesamiento.
+
+3. **Cliente vuelve al paso 4 y aprieta el botón** → dispara dos cosas simultáneas: (a) seguimiento en vivo del lado del cliente, (b) la orden cambia a etiqueta "listo para procesar" en el panel del operador.
+
+4. **Técnico toma el job de la cola "listo para procesar"** cuando está disponible y ejecuta el bypass.
+
+**Razón del flujo:** "verificado" ≠ "listo para procesar". El técnico no debe procesar órdenes solo verificadas porque el cliente puede no estar listo (todavía no conectó el equipo, todavía no abrió Mini-Redirector, etc.). El botón del paso 4 es la señal del cliente de "ya estoy listo, vengan a procesarme". Esto evita que el técnico ejecute el bypass cuando el cliente ni está mirando la PC, o que tome jobs y quede esperando.
+
+**Open questions para la spec formal (no se resuelven hoy):**
+
+- ¿Qué pasa si el cliente nunca aprieta el botón del paso 4? ¿La orden queda eternamente en "verificado"? Bryam confirma que existen casos reales de clientes que pagan y procesan al día siguiente, hoy lo maneja manualmente por WhatsApp. (Ver "Inputs crudos para spec futura" abajo.)
+- ¿Las etiquetas "sin verificar" / "verificado" / "listo para procesar" reemplazan al estado actual `LISTO_PARA_CONEXION`, o conviven con él?
+- ¿El cambio afecta también el panel del cliente "Mis órdenes" o solo el lado operador?
+- ¿Cómo se mapea esto al `paymentStatus` existente (`ESPERANDO_COMPROBANTE`, `PAGO_EN_VALIDACION`, `PAGO_VALIDADO`)?
+
+**Pendiente para sesión futura (NO sesión 10):**
+
+1. Verificación empírica con Claude Code: ¿cómo maneja hoy el panel del operador los pagos pendientes? ¿Hay otra pestaña, otro panel, u otro mecanismo que muestre órdenes con comprobante sin validar? Posible que el flujo actual ya tenga algo similar pero no esté visible donde Bryam estuvo mirando.
+2. Si el flujo actual NO contempla esto, decidir si es bug a arreglar (flujo viejo incompleto) o feature nueva a especificar (rediseño del panel operador). Cualquier implementación requiere spec formal con las 8 piezas (mockup, estados, edge cases, etc.) antes de tocar código.
+3. Decidir prioridad: ¿se hace antes, durante o después de las sesiones 10-13 del rediseño visual del cliente? El panel del operador ya se rediseñó en sesión 7 — un cambio aquí implicaría reabrir esa spec.
+
+**Importante:** este hallazgo NO es regresión del fix B-008. El fix B-008 cerró correctamente el bug crítico (escenarios 1, 2, 3 validados; escenario 4 pendiente). El hallazgo es comportamiento pre-existente del flujo viejo, descubierto al poder atravesar el flujo end-to-end gracias al fix B-008.
+
+---
+
+## Inputs crudos para spec futura
+
+**Esta sección registra ideas y propuestas que Bryam compartió en chat pero NO son decisiones tomadas.** Quedan registradas para ser convertidas en spec formal en una sesión dedicada con cabeza fresca, mockups, fuentes externas e investigación. **NO implementar basándose en esta sección.** Si un Claude futuro va a trabajar en cualquiera de estos temas, primero debe abrir sesión dedicada para escribir spec con las 8 piezas.
+
+### Sistema de tiempo y alertas en flujo de pago/conexión
+
+*Registrado al cierre de sesión 9. Bryam estaba cansado al momento del registro y reconoció que necesitaba cabeza fresca. Pendiente revisar TODO esto en frío antes de tomarlo como decisión.*
+
+**Sobre clientes que no aprietan paso 4:**
+Bryam confirma que existen casos reales de clientes que pagan y procesan al día siguiente. Hoy lo maneja manualmente por WhatsApp: si tiene visión de que pagó y el costo sigue siendo el mismo, le hace el proceso. Pendiente: investigar fuentes externas sobre cómo manejar esto en mercado latinoamericano sin sonar agresivo, manteniendo tono "express".
+
+**Propuesta de Bryam para reemplazar el lock de 15 min y el timer de 2 min del paso 4:**
+Sistema de alertas escaladas que se dispara desde que el cliente sube el comprobante:
+- 1.5 min → primera alerta: "los precios pueden variar, el precio brindado es seguro solo por 5 minutos"
+- 3 min → alerta naranja: recordatorio
+- 5 min → alerta roja: "el precio final puede variar"
+
+Bryam plantea que esta nueva regla reemplazaría tanto el lock de 15 minutos como el timer de 2 min del paso 4 ("¿listo para conectar?"). Ubicación de las alertas (paso 3 o paso 4): a definir.
+
+**Propuesta de Bryam sobre cambio de precio post-5min:**
+Si después de los 5 min el cliente no apretó el botón del paso 4 y el precio cambió:
+- En el lado cliente: alerta de que tiene que reintegrar dinero o se le reembolsa.
+- En el lado operador: la orden vuelve al estado "revisar pago" avisando que va a aumentar de precio.
+- Bryam aclara que los cambios suelen ser bajos (0.5–1 USD) y la mayoría de clientes aceptan.
+
+**Open questions para la spec formal:**
+
+- ¿La nueva regla de 1.5/3/5 min REEMPLAZA el lock de 15 min, o son cosas distintas (ej. lock interno = 15 min, alertas visuales al cliente = 1.5/3/5 min)?
+- ¿Las alertas viven en paso 3, paso 4, o ambos? ¿Y "Mis órdenes"?
+- ¿"Reembolso" es decisión automática del sistema o manual del operador? ¿Política comercial escrita?
+- ¿El estado "vuelve a revisar pago" requiere nuevo enum en `paymentStatus` del backend? ¿O reusa `PAGO_EN_VALIDACION`?
+- ¿Se notifica al cliente del cambio de precio antes de pedirle reintegro, o se le presenta como hecho?
+- Tono: investigar fuentes externas sobre comunicación con consumidor latinoamericano para que las alertas no suenen agresivas.
+
+**Conflictos con decisiones firmes actuales del HANDOFF (a resolver en spec formal):**
+
+- Sección "Pricing": *"Lock por orden completa por 15 min desde aprobación del comprobante"* → contradice regla nueva de 5 min.
+- Sección "Timers cliente": *"Paso 4: 2 min sin apretar 'Equipo conectado' → banner '🔧 ¿Listo para conectar?'"* → Bryam plantea reemplazar.
 
 ---
 
@@ -242,6 +354,7 @@ Cuando un commit es grande (>200 LOC, >3 archivos, o múltiples áreas tocadas),
 - Usa instancia paralela de Claude Code para implementación
 - El Claude del chat hace specs/diseño, Claude Code hace código
 - **Sin jerga técnica**. Si Bryam pide hablar "más suave", se cumple. Términos como "regresión", "branch", "diff", "scope", se traducen o se evitan.
+- **Si Bryam menciona cansancio, fatiga o "construí esto algo lento"**, eso es señal real. Sugerir cortar la sesión y retomar con cabeza fresca antes que insistir en cerrar decisiones.
 
 ### 9. Frase de arranque obligatoria de Bryam
 Cuando Bryam abre un chat nuevo conmigo, debe arrancar con esta frase (o similar):
@@ -256,12 +369,17 @@ Durante implementación de Fase 1, smoke test rápido. Validación profunda reci
 ### 11. Audit no es verdad final
 Un audit de Claude Code es ayuda valiosa pero NO infalible. Smoke test es el último filtro. En sesión 8, el audit afirmó que cierta rama era "dead code" (H-004) pero el smoke test descubrió que era B-008, un bug bloqueante. Lección: confiar en el audit pero verificar empíricamente cuando se pueda.
 
+### 12. Decisiones grandes en frío, nunca al final de sesión cansado
+Si Bryam empieza a abrir decisiones grandes (cambiar lock de pricing, reemplazar timers, agregar políticas comerciales) al final de una sesión larga, mientras estaba haciendo smoke test, o después de haber dicho que estaba cansado: **frenar**. Registrar como input crudo en HANDOFF, NO como decisión tomada. Decisiones grandes requieren sesión dedicada con mockups, fuentes externas, y revisión en frío. Esto le pasó a Bryam en sesión 9 y lo reconoció él mismo.
+
 ---
 
 ## Decisiones de producto firmes (no se reabren)
 
+**IMPORTANTE:** algunas de estas decisiones tienen propuestas de cambio en "Inputs crudos para spec futura". Hasta que esas propuestas se conviertan en spec formal aprobada, **las decisiones firmes de abajo siguen vigentes**. NO implementar nada distinto basándose en los inputs crudos.
+
 ### Pricing
-- Lock por orden completa por 15 min desde aprobación del comprobante
+- Lock por orden completa por 15 min desde aprobación del comprobante *(propuesta de cambio a 5 min en inputs crudos sesión 9 — no aprobada)*
 - Validación 5 niveles: `<15%` silencio, `15-30%` confirm, `30-50%` motivo+notif, `>50%` admin Bryam, `<1` o `>100 USDT` rechazo absoluto
 
 ### VIPs
@@ -275,7 +393,7 @@ Un audit de Claude Code es ayuda valiosa pero NO infalible. Smoke test es el úl
 
 ### Timers cliente
 - Paso 2: 30s banner azul, 90s banner amarillo
-- Paso 4: 2 min sin apretar "Equipo conectado" → banner "🔧 ¿Listo para conectar?"
+- Paso 4: 2 min sin apretar "Equipo conectado" → banner "🔧 ¿Listo para conectar?" *(propuesta de reemplazo en inputs crudos sesión 9 — no aprobada)*
 
 ### Mis Órdenes
 - Solo aparece después que cliente apreta "Equipo conectado"
@@ -318,6 +436,12 @@ Un audit de Claude Code es ayuda valiosa pero NO infalible. Smoke test es el úl
 - Durante los 5-10s del bypass (orden en estado EN_PROCESO), el campo "Código del proceso" muestra el placeholder transitorio `CL-YYYYMMDD-000-1` porque `activeOrderForFlow` no incluye ese estado en sus filtros.
 - **Decisión: aceptado (Opción A — mínima).** El cliente ya tiene el código copiado antes de EN_PROCESO. Si en QA integral se observa que molesta a clientes reales, abrir commit separado para extender `activeOrderForFlow` (sin tocarlo en B-001 para no expandir scope).
 
+### Eligibility de items vacíos (sesión 9)
+- `frpEligibilityResult("")` retorna `APTO_EXPRESS`. Items con `originalText` vacío no gatean revisión de compatibilidad.
+- Casos ambiguos no-vacíos (ej. "xy", "asdf") siguen retornando `REQUIERE_REVISION` (gate sigue activo).
+- Casos de catálogo válidos (ej. "Redmi Note 13") sin cambio.
+- `compatibilityReviewRequired` se mantiene como safety net defensivo aunque hoy no se dispare desde el FE.
+
 ### Formatos
 - Technician ID: `1000 9983 5478` (espaciado cada 4 dígitos)
 - Código del proceso: `CL-{code}-{quantity}` (ej. `CL-20260502-007-2`)
@@ -348,7 +472,7 @@ Un audit de Claude Code es ayuda valiosa pero NO infalible. Smoke test es el úl
 
 ### `docs/specs/`
 - **`PLAN.md`** — plan estratégico de 7 specs en 3 fases. Versión actual: v1.1.
-- **`HANDOFF.md`** — este archivo. Bridge entre sesiones. **Versión actual: v1.5.**
+- **`HANDOFF.md`** — este archivo. Bridge entre sesiones. **Versión actual: v1.6.**
 - **`audit-template.md`** — template para auditar el repo con Claude Code.
 - **`_template-prompt-claude-code.md`** — templates obligatorios para prompts a Claude Code.
 - **`_brand-tokens-pendiente.md`** — placeholder para sesión de polish visual con logo.
@@ -385,39 +509,29 @@ Un audit de Claude Code es ayuda valiosa pero NO infalible. Smoke test es el úl
 
 ## Pendientes y próximos pasos
 
-### Sesión 9 (próxima)
+### Sesión 10 (próxima)
 
-**Foco:** B-008 fix + QA integral cliente + operador.
+**Foco:** cerrar B-008 (escenario 4) + Spec + implementación paso 1 cliente.
 
 Procedimiento:
 
-1. **Audit + análisis previo de B-008** (Template A en Claude Code). Los 3 fixes posibles identificados en sesión 8:
-   - **(a) Backend en `eligibility.js:33-67`:** `frpEligibilityResult("")` retorna `APTO_EXPRESS` en lugar de `REQUIERE_REVISION`. Cambia semántica del helper. Riesgo: validación de fraude debilitada si en el futuro se reintroducen items con texto.
-   - **(b) Backend en `portal-routes.js:528`:** `compatibilityReviewRequired = items.some(item => item.originalText !== "" && eligibility.review)`. Excluye items vacíos del flag. Más quirúrgico, mantiene `frpEligibilityResult` intacta. Recomendación inicial.
-   - **(c) Frontend en `events.js:64`:** dejar de mandar `items` al backend cuando el cliente no escribió modelo. Backend genera placeholders sin items específicos. Más invasivo, requiere alinear validador del backend para aceptar requests sin items.
+1. **Cerrar smoke test B-008 escenario 4 (5 min):** cliente con modelo ambiguo ("xy") + comprobante → debe seguir bloqueando con `REVISION_COMPATIBILIDAD`. Si pasa, B-008 cierra formalmente y se puede mergear `feat-b008-fix` a la branch principal de trabajo.
 
-2. **Decisión de producto + Plan → Design** del fix elegido.
+2. **Spec paso 1 cliente (rediseño visual):** según el plan, sesión 10 arranca el rediseño cliente paso 1. Mockups validados en sesiones 1-5, hay spec base en `docs/specs/cliente/paso-1-precio.md`. Revisar spec, completar las 8 open questions, y definir plan de implementación.
 
-3. **Implementación + smoke test** del flow completo (creación de orden + comprobante + paso 4 con código real, completando lo pendiente del smoke test de B-001).
+3. **Implementación paso 1 cliente:** Template B con scope acotado. Si el rediseño es grande, partir en sub-commits.
 
-4. **QA integral** con validación profunda (checklist completo) cliente + operador. Esto incluye:
-   - Verificar que el smoke test de B-001 pasa los 4 escenarios después del fix B-008
-   - Recorrer los 8 tabs del operador
-   - Recorrer los 4 pasos del cliente con cuenta nueva
-   - Verificar SSE end-to-end
-   - Verificar que B-002 a B-006 + H-008 siguen donde están (no introducimos regresiones)
+### Sesiones 11-13
 
-### Sesiones 10-13
-
-Spec + implementación de mockups del cliente (paso 1, 2, 3, 4 en sesiones separadas).
+Spec + implementación de mockups del cliente (paso 2, 3, 4 en sesiones separadas). Sesión 13 (paso 4) deberá considerar el hallazgo del flujo de comprobantes y los inputs crudos sobre alertas/lock/reembolso registrados en sesión 9 — pero NO tomarlos como decisiones, sino como insumos para la spec formal.
 
 ### Sesión 14
 
-QA final del cliente rediseñado + lanzamiento.
+QA final del cliente rediseñado + lanzamiento (cuando Bryam decida — sin urgencia comercial).
 
 ### Post-lanzamiento (Bundle 3 + futuro)
 
-- Bundle 3 cleanup (CSS huérfano, funciones zombi, error CSP, Perú dup, B-003 a B-006, H-008)
+- Bundle 3 cleanup (CSS huérfano, funciones zombi, error CSP, Perú dup, B-003 a B-006, H-008, postpayEligible, compatibilityReviewRequired si confirma muerto)
 - B-002 (decisión de producto sobre pills "Perú")
 - Endpoint admin para revertir pagos (dispara `payment_reverted` SSE)
 - Modal "Reportar problema"
@@ -430,6 +544,8 @@ QA final del cliente rediseñado + lanzamiento.
 - Rediseño visual de Costos FRP (con mockup, ver `_costos-frp-redesign-pendiente.md`)
 - Polish visual con logo (ver `_brand-tokens-pendiente.md`)
 - DOM diffing si flicker es molesto
+- Hallazgo flujo de comprobantes en panel operador (ver "Hallazgos abiertos")
+- Sistema de alertas/lock/reembolso (ver "Inputs crudos para spec futura" — requiere spec formal antes de implementar)
 
 ---
 
@@ -439,7 +555,7 @@ Esta sección documenta cuando una sesión salteó pasos del proceso. Sirve para
 
 ### Sesión 5 — Inicial: "no nos trabamos con specs todavía, sigamos con mockups"
 - **Qué pasó:** El Claude del chat sugirió seguir con mockups uno por uno (paso 1, 2, 3, 4) en vez de planificar el método completo de specs.
-- **Por qué falló:** Los mockups solos cubren "happy path", no estados, edge cases, responsive, behavior, etc. Eso generó los 16 bugs en cola (que sesión 8 demostró eran 7 reales).
+- **Por qué falló:** Los mockups solos cubren "happy path", no estados, edge cases, responsive, behavior, etc.
 - **Cómo se corrigió:** Bryam aportó referencias de Miro 2026 sobre las 8 piezas. Cambio de método. Plan estratégico v1.0.
 - **Lección:** No minimizar advertencias del cliente cuando aporta fuentes externas.
 
@@ -457,27 +573,33 @@ Esta sección documenta cuando una sesión salteó pasos del proceso. Sirve para
 
 ### Sesión 7 — Commit 6: "la spec ya cubre esto"
 - **Qué pasó:** El Claude del chat mandó prompt directo de implementación para commit 6 (banner timeout 30 min) sin pedir Template A primero.
-- **Por qué falló:** La spec describe **qué** hacer; el análisis describe **cómo** y **qué se rompe**. Son distintos. Claude Code podría haber improvisado decisiones técnicas (cómo calcular `takenAt`, cómo trigger el banner sin SSE, etc.).
+- **Por qué falló:** La spec describe **qué** hacer; el análisis describe **cómo** y **qué se rompe**. Son distintos.
 - **Cómo se corrigió:** Bryam preguntó "¿estás siguiendo Plan → Design → Implement → Test → Review?" El Claude reconoció el error y refactorizó el prompt a análisis previo. Claude Code devolvió 5 ambigüedades que requerían decisión.
 - **Lección:** Tener spec NO equivale a tener análisis. Análisis previo siempre, aún con spec validada.
 
 ### Sesión 7 — Commit 6b: scope creep silencioso de Claude Code
-- **Qué pasó:** Claude Code agregó `:focus-visible` accessibility al summary del acordeón Costos FRP sin estar en el scope acordado. Lo transparentó al final con "te aviso porque excede el reporte original aunque es minimal".
-- **Por qué falló parcialmente:** Es accesibilidad útil, pero violó "scope acordado, nada más". Patrón peligroso: alguien improvisa "una mejora chiquita" sin pasar por Plan → Design.
+- **Qué pasó:** Claude Code agregó `:focus-visible` accessibility al summary del acordeón Costos FRP sin estar en el scope acordado. Lo transparentó al final.
+- **Por qué falló parcialmente:** Es accesibilidad útil, pero violó "scope acordado, nada más".
 - **Cómo se mitigó:** Lo dejamos (es 4 líneas, útil, transparente). Pero registrado como caso a evitar.
-- **Lección:** Claude Code debe **preguntar antes**, no implementar y avisar después. Próxima vez, si surge "una mejora chiquita gratis" durante implementación, parar y preguntar.
+- **Lección:** Claude Code debe **preguntar antes**, no implementar y avisar después.
 
 ### Sesión 8 — propuesta de saltar al rediseño en caliente
-- **Qué pasó:** Durante el smoke test del fix B-001, apareció el mensaje rojo de B-008 (bug pre-existente bloqueante que el audit no había detectado). Bryam, frustrado, propuso "rediseñemos todo el flujo y esta página como hicimos con la otra, no quiero perder 2 días corrigiendo bug por bug".
-- **Por qué fallaba:** Era una decisión de plan grande (saltar 4-5 sesiones del plan acordado en sesión 7) tomada en caliente, en respuesta a un solo bug nuevo, sin Plan/Design previo, sin análisis de costo real. Repetía el patrón del error de sesión 5 ("sigamos con mockups"): asumir que el rediseño visual cura los bugs de fondo.
-- **Cómo se manejó:** El Claude del chat aplicó la regla "si me proponés saltar etapas, frename" del HANDOFF. Validó la frustración pero separó las dos cosas: (1) bug específico → diagnóstico técnico empírico via Claude Code, (2) cambio de plan grande → no se decide en caliente. Mostró que el rediseño no acortaría tiempos (4-5 sesiones igual) y que sin entender los bugs primero, esos bugs migran al rediseño nuevo. Bryam aceptó cerrar sesión 8 con solo B-001 y atacar B-008 en sesión 9 con cabeza fresca.
-- **Lección:** Las propuestas de cambio grande de plan se discuten en sesión aparte, con cabeza fría, no como reacción a fricción de implementación. Un bug nuevo no justifica tirar el plan. Si la frustración con el plan reaparece de manera consistente entre sesiones, ahí sí merece sesión dedicada para reabrir Opción A vs Opción B en frío.
+- **Qué pasó:** Durante el smoke test del fix B-001, apareció el mensaje rojo de B-008 (bug pre-existente bloqueante). Bryam, frustrado, propuso "rediseñemos todo el flujo y esta página como hicimos con la otra, no quiero perder 2 días corrigiendo bug por bug".
+- **Por qué fallaba:** Era una decisión de plan grande tomada en caliente, en respuesta a un solo bug nuevo, sin Plan/Design previo.
+- **Cómo se manejó:** El Claude del chat aplicó la regla "si me proponés saltar etapas, frename". Validó la frustración pero separó las dos cosas. Bryam aceptó cerrar sesión 8 con solo B-001 y atacar B-008 en sesión 9.
+- **Lección:** Las propuestas de cambio grande de plan se discuten en sesión aparte, con cabeza fría.
 
 ### Sesión 8 — audit incorrecto en H-004 → bug crítico oculto
-- **Qué pasó:** El audit de Claude Code en sesión 8 clasificó `compatibilityReviewRequired` como dead code (H-004), basándose en el comentario en `events.js:55-58` ("Items vacios = APTO_EXPRESS por default"). Pero la lógica real en `eligibility.js:33-67` marca items vacíos como `REQUIERE_REVISION` (vía rama de ambigüedad), no `APTO_EXPRESS`. La rama no era dead code: era B-008, un bug crítico bloqueante.
-- **Por qué falló:** Claude Code se basó en un comentario del código sin validar empíricamente la lógica del helper que el comentario afirmaba. El comentario fue agregado en commit b433733 con la asunción incorrecta y nadie lo verificó después.
-- **Cómo se descubrió:** El smoke test del paso 4 (post-fix B-001) ejercitó el flow completo de creación de orden con comprobante. El bug se manifestó en pantalla del cliente y Bryam lo reportó con captura.
-- **Lección:** El audit puede equivocarse, especialmente cuando se basa en comentarios o asunciones sin verificar la lógica real. Nueva trampa común agregada al HANDOFF: "El audit ya confirmó que es dead code". Smoke test es el último filtro antes de cerrar; no se omite "porque el audit ya validó".
+- **Qué pasó:** El audit de Claude Code clasificó `compatibilityReviewRequired` como dead code (H-004), basándose en un comentario incorrecto del código. La rama no era dead code: era B-008.
+- **Por qué falló:** Claude Code se basó en un comentario sin validar empíricamente la lógica del helper.
+- **Cómo se descubrió:** El smoke test del paso 4 (post-fix B-001) ejercitó el flow completo y el bug se manifestó en pantalla.
+- **Lección:** El audit puede equivocarse. Smoke test es el último filtro. Esto motivó el énfasis en "verificación empírica" del análisis B-008 en sesión 9, que validó correctamente fix (a) y descartó (b) que el HANDOFF marcaba como recomendación inicial errada.
+
+### Sesión 9 — "decisión nueva al final de sesión cansado"
+- **Qué pasó:** Al final de sesión 9 (después de smoke test de B-008), Bryam empezó a abrir decisiones grandes de producto: cambiar el lock de pricing de 15 a 5 min, reemplazar el timer del paso 4, política de reembolso si el precio cambia, sistema de alertas escaladas con tono específico para mercado latinoamericano. Pidió que Claude buscara fuentes externas y propusiera ideas.
+- **Por qué fallaba:** Sesión 9 era B-008 + QA, no diseño de producto. Las decisiones planteadas contradecían decisiones firmes ya registradas (lock de 15 min, timer paso 4 de 2 min) y agregaban política comercial nueva (reembolsos). Bryam mismo había mencionado cansancio en mensajes previos. Si Claude validaba o investigaba, esas ideas iban a quedar registradas como "lo que decidimos" sin haber pasado por sesión dedicada con mockups y cabeza fresca.
+- **Cómo se manejó:** El Claude del chat frenó explícitamente: no investigó fuentes externas, no propuso ideas, no validó números. Todo lo registró textualmente como "input crudo" en HANDOFF, marcado explícitamente como NO decisión, con open questions y conflictos con decisiones firmes señalados. Bryam reconoció: "construí esta página algo lento. Y estuve agotado estos días. Ahora veo con más claridad el panorama". Sesión cerró sin decisiones nuevas tomadas.
+- **Lección:** Cansancio + final de sesión + smoke test reciente = combinación de alto riesgo para decisiones de producto. La regla "decisiones grandes en frío, en sesión aparte" se aplica especialmente acá. Agregada como trampa común #11 y regla #12 de cómo trabajamos.
 
 ---
 
@@ -490,11 +612,13 @@ Si sos un Claude que abre un chat nuevo:
 3. Bryam te va a decir en qué spec quiere trabajar. Buscá el archivo `.md` correspondiente en `docs/specs/`.
 4. **Antes de proponer implementación, validá el checklist** Plan → Design → Implement → Test → Review.
 5. **Antes de proponer cosas nuevas, revisá la sección "Decisiones de producto firmes" arriba.** Si querés contradecir alguna, decíselo explícitamente y pedí confirmación.
-6. Una sesión = un archivo entregado. No empezar dos cosas a la vez.
-7. **Cada sesión termina con un prompt para Claude Code** que mueva los archivos generados al repo. Bryam los descarga a `C:\Users\Bryams\Desktop\AriadGsm\files1\`.
-8. **Al final de la sesión, actualizá este HANDOFF** si hay decisiones nuevas o si una spec cambió de versión.
-9. **Si Bryam te pide saltar el proceso por urgencia o por "es simple", frená.** Tu rol es proteger el proceso, incluso de él.
-10. **Si Bryam pide hablar más simple/suave**, sin jerga técnica, cumplir. No es programador.
+6. **NO confundas "Inputs crudos para spec futura" con decisiones tomadas.** Esa sección es material a procesar en sesión dedicada, no implementar.
+7. Una sesión = un archivo entregado. No empezar dos cosas a la vez.
+8. **Cada sesión termina con un prompt para Claude Code** que mueva los archivos generados al repo. Bryam los descarga a `C:\Users\Bryams\Desktop\AriadGsm\files1\`.
+9. **Al final de la sesión, actualizá este HANDOFF** si hay decisiones nuevas o si una spec cambió de versión.
+10. **Si Bryam te pide saltar el proceso por urgencia o por "es simple", frená.** Tu rol es proteger el proceso, incluso de él.
+11. **Si Bryam pide hablar más simple/suave**, sin jerga técnica, cumplir. No es programador.
+12. **Si Bryam menciona cansancio o construcción lenta**, sugerí cortar y retomar con cabeza fresca antes de cerrar decisiones grandes.
 
 ### Frase de arranque que Bryam debe usar
 
@@ -507,25 +631,20 @@ Si no usa esa frase, recordásela vos antes de avanzar.
 ## Sesiones previas (resumen mínimo)
 
 - **Sesión 1-4:** mockups visuales de los 4 pasos cliente. Iteramos hasta cerrar diseño visual. Mockups validados pero no persistidos como archivo en sesiones 1-3.
-- **Sesión 5:** definimos el método (8 piezas por spec). Spec completa de paso 1 cliente como piloto. Plan estratégico v1.1. Audit del repo (revelado que 80% ya está implementado, plan rebajado de 15 a 7 specs). Spec inicial del operador FRP Express v1.0.
-- **Sesión 6:** Bryam respondió las 8 Open Questions del operador FRP Express. Spec actualizada a v1.1 (38 AC, 0 OQ). Mockup actualizado con filtro VIP y columna de técnico. Decisión de bypass 5-10s justifica "cancelar de raíz" y "timeout 30 min con banner".
-- **Sesión 7 (cerrada):** 11 commits implementados. Operador FRP Express completo end-to-end:
-  - 4 commits backend (take, cancel, finalize auto-log, finishedTodayJobs)
-  - 3 commits visuales (rediseño + cleanup 5b + cleanup 6b)
-  - 1 commit feature (banner timeout 30 min)
-  - 3 sub-commits SSE (7a backend base, 7b cross-cutting, 7c frontend completo)
-  - Decisiones registradas: beep eliminado, finalize auto-log, technicianId, ARD-, sin XXX, sin Crear orden manual, sin botón Actualizar, polling acelerado durante swap reemplaza al 2do evento.
-  - HANDOFF actualizado a v1.3 con 4 nuevas trampas comunes y 5 errores de proceso documentados.
-  - Plan revisado: Opción B (lanzar con visual nuevo cliente). Estimación: ~7 sesiones más para lanzamiento.
-- **Sesión 8 (cerrada):** 1 commit + descubrimiento crítico.
-  - **Audit del estado actual** reveló que el conteo "16 bugs" estaba obsoleto. La mayoría ya se cerraron en commits previos (ca03afc, b433733, e768f3a, 5b cleanup). Bugs reales detectados: 7 (B-001 a B-006 + H-008) más hallazgos H-001 a H-008.
-  - **B-001 implementado** — fix de 2 LOC en `auth-forms.js:13` y `auth-forms.js:22`. Paso 4 cliente muestra código real de orden activa. Commit `964413b` en branch `feat-step4-redesign`. Diff: 2 inserciones / 2 eliminaciones.
-  - **Decisión Opción A** sobre edge case EN_PROCESO: placeholder transitorio aceptado durante el bypass de 5-10s. Si en QA molesta, commit separado para extender `activeOrderForFlow`.
-  - **B-008 descubierto** durante smoke test del paso 4. Pre-existente desde commit b433733. Bloquea creación de orden con comprobante. El audit en H-004 lo había clasificado erróneamente como dead code. Registrado para sesión 9 con 3 fixes posibles ya identificados.
-  - **2 trampas evitadas:** (1) propuesta de "saltar al rediseño en caliente" frenada por Claude del chat aplicando regla del HANDOFF. (2) confiar en el audit como verdad final, descubierto al destapar B-008.
-  - **HANDOFF actualizado a v1.4** con 2 nuevas trampas comunes ("Aparece un bug nuevo, mejor rediseñemos todo" y "El audit ya confirmó que es dead code"), 2 errores de proceso documentados, regla #11 sobre tono sin jerga, y regla #11 sobre audit no es verdad final.
-- **Sesión 9 (en curso, inicio):**
-  - **HANDOFF v1.5:** limpieza de referencias a "BryamsIA" (proyecto que no existe en este flujo, fue un error de copy/paste del owner en una versión previa). Removida la regla #10 de "Cómo arrancar próxima sesión" sobre verificar repo, y removida la entrada de bitácora "Sesión 7 — Confusión de proyectos". Sin impacto en decisiones técnicas ni de producto.
+- **Sesión 5:** definimos el método (8 piezas por spec). Spec completa de paso 1 cliente como piloto. Plan estratégico v1.1. Audit del repo. Spec inicial del operador FRP Express v1.0.
+- **Sesión 6:** Bryam respondió las 8 Open Questions del operador FRP Express. Spec actualizada a v1.1 (38 AC, 0 OQ). Mockup actualizado con filtro VIP y columna de técnico.
+- **Sesión 7 (cerrada):** 11 commits implementados. Operador FRP Express completo end-to-end (4 commits backend + 3 commits visuales + 1 commit feature + 3 sub-commits SSE). Tests pass. HANDOFF v1.3.
+- **Sesión 8 (cerrada):** 1 commit + descubrimiento crítico. Audit del estado actual reveló que "16 bugs" estaba obsoleto (mayoría ya cerrados; reales: 7). B-001 implementado en `964413b`. Decisión Opción A sobre edge case EN_PROCESO. **B-008 descubierto** durante smoke test. 2 trampas evitadas: rediseño en caliente, audit como verdad final. HANDOFF v1.4.
+- **Sesión 9 (cerrada parcialmente):**
+  - **HANDOFF v1.5:** limpieza de referencias erróneas a "BryamsIA" (proyecto que no existía en este flujo).
+  - **Análisis previo B-008** (Template A) verificó empíricamente la cadena de causas y evaluó los 3 fixes posibles. Confirmó que fix (b) — la "recomendación inicial" del HANDOFF — era inferior por dejar datos inconsistentes. Recomendó fix (a). Validó la regla "audit no es verdad final" / "verificación empírica antes de elegir".
+  - **Implementación fix (a)** en commit `21e1790` (branch `feat-b008-fix`): 3 archivos, +14/-2 LOC. Tests 11/11 pass.
+  - **Smoke test:** escenarios 1, 2, 3 ✅. Escenario 4 ⏳ pendiente (orden de prueba quedó en `LISTO_PARA_CONEXION` y bloquea creación de nuevas órdenes; se cierra en sesión 10).
+  - **Hallazgo abierto:** flujo de comprobantes en panel operador. Bryam describió línea de tiempo de 4 pasos con etiquetas "sin verificar" / "verificado" / "listo para procesar". NO es regresión de B-008, es comportamiento pre-existente del flujo viejo descubierto al atravesar el flujo end-to-end.
+  - **Inputs crudos registrados (NO decisiones):** sistema de alertas escaladas 1.5/3/5 min, propuesta de reemplazar lock de 15 min y timer paso 4 de 2 min, política de reembolso si precio cambia post-5min. Bryam reconoció cansancio. Quedan para spec formal en sesión dedicada.
+  - **Trampa nueva registrada:** "Decisión nueva al final de sesión cansado". Agregada como regla #12.
+  - **Aclaración explícita:** web local sin clientes reales, sin urgencia de lanzamiento. Cadencia de sesiones la define Bryam.
+  - **HANDOFF v1.6** con todo lo anterior.
 
 ---
 
