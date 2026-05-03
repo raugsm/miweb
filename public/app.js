@@ -67,17 +67,9 @@ const copyPaymentPreview = document.querySelector("#copy-payment-preview");
 const ticketMessage = document.querySelector("#ticket-message");
 const manualCopyPanel = document.querySelector("#manual-copy-panel");
 const manualCopyText = document.querySelector("#manual-copy-text");
-const frpForm = document.querySelector("#frp-form");
-const frpClient = document.querySelector("#frp-client");
-const frpQuantity = document.querySelector("#frp-quantity");
-const frpUnitPrice = document.querySelector("#frp-unit-price");
-const frpPayment = document.querySelector("#frp-payment");
-const frpSuggestion = document.querySelector("#frp-suggestion");
 const frpPricingBox = document.querySelector("#frp-pricing-box");
 const frpMessage = document.querySelector("#frp-message");
-const frpMetrics = document.querySelector("#frp-metrics");
 const frpWorkbench = document.querySelector("#frp-workbench");
-const frpProofFiles = document.querySelector("#frp-proof-files");
 const ticketChannelFilter = document.querySelector("#ticket-channel-filter");
 const ticketBoard = document.querySelector("#ticket-board");
 const ticketsTable = document.querySelector("#tickets-table");
@@ -122,8 +114,6 @@ let session = emptySession();
 let pendingFinalLogResolve = null;
 let pendingFinalLogImages = [];
 let pendingPaymentProofTicketId = "";
-let pendingFrpProofOrderId = "";
-let frpWebFilter = "ALL";
 let draggingTicketId = "";
 let selectedChannelFilter = "mine";
 let adminPreviewChannel = localStorage.getItem("ariad_admin_preview_channel") || "";
@@ -494,10 +484,8 @@ function renderCatalog() {
   ticketService.disabled = !services.length;
   normalizeTicketClientDisplay();
   syncPaymentOptions();
-  syncFrpPaymentOptions();
   syncSelectedService();
   syncPaymentPreview();
-  syncFrpSuggestion();
 }
 
 function renderUsers() {
@@ -1131,49 +1119,6 @@ function inferredCountryFromText(value) {
   return countryByText || countryFromFlag(value);
 }
 
-function syncFrpPaymentOptions() {
-  if (!frpPayment) return;
-  const payments = availablePaymentsForClient();
-  const previous = frpPayment.value;
-  frpPayment.innerHTML = payments
-    .map((payment) => `<option value="${payment.code}">${escapeHtml(payment.globalOption ? "Binance USDT" : payment.label)}</option>`)
-    .join("");
-  const suggested = suggestedPaymentCodeForCountry(inferredCountryFromText(frpClient.value));
-  frpPayment.value = payments.some((payment) => payment.code === previous)
-    ? previous
-    : payments.some((payment) => payment.code === suggested)
-      ? suggested
-      : "BINANCE_PAY";
-}
-
-function syncFrpSuggestion() {
-  if (!frpSuggestion) return;
-  const quantity = Math.max(1, Number(frpQuantity.value || 1));
-  const pricing = session.frp?.pricing;
-  if (pricing?.summary && !pricing.summary.available) {
-    frpUnitPrice.value = "";
-    frpSuggestion.innerHTML = `
-      <div class="payment-main">
-        <strong>FRP sin precio activo</strong>
-        <span>${escapeHtml(pricing.summary.reason || "Configura un proveedor FRP activo.")}</span>
-      </div>
-    `;
-    return;
-  }
-  const tier = frpQuantityTier(quantity);
-  frpUnitPrice.value = Number(tier.unitPrice || pricing?.summary?.unitPrice || 0).toFixed(2);
-  const payment = frpPaymentByCode(frpPayment.value) || binancePayment();
-  const total = Number(tier.unitPrice || frpUnitPrice.value || 0) * quantity;
-  frpSuggestion.innerHTML = `
-    <div class="payment-main">
-      <span>Total sugerido</span>
-      <strong>${escapeHtml(formatAmountForPayment(total, payment))}</strong>
-      <span>${escapeHtml(quantity)} equipo(s) x ${escapeHtml(formatAmountForPayment(Number(tier.unitPrice || frpUnitPrice.value || 0), payment))}</span>
-      <em>${escapeHtml(tier.label)}. El servidor valida descuentos por consumo frecuente y metas.</em>
-    </div>
-  `;
-}
-
 function frpCostModeLabel(mode) {
   return mode === "CREDITS" ? "Creditos" : "USDT fijo";
 }
@@ -1379,18 +1324,6 @@ function checklistDone(checklist, keys) {
   return keys.filter((key) => checklist?.[key]).length;
 }
 
-const frpWebFilters = [
-  { code: "ALL", label: "Todas" },
-  { code: "WEB_NUEVA", label: "Nuevas" },
-  { code: "PAGO_COMPROBANTE", label: "Pago/comprobante" },
-  { code: "PREPARACION", label: "Preparacion" },
-  { code: "LISTO_TECNICO", label: "Listo tecnico" },
-  { code: "CLIENTE_CONECTADO", label: "Cliente conectado" },
-  { code: "EN_PROCESO", label: "En proceso" },
-  { code: "REVISION_PROBLEMA", label: "Revision/problema" },
-  { code: "FINALIZADO", label: "Finalizadas" },
-];
-
 function isPortalFrpOrder(order) {
   return order?.source === "PORTAL_CLIENTE" || Boolean(order?.portalOrderId);
 }
@@ -1399,211 +1332,17 @@ function frpOrderJobs(order) {
   return Array.isArray(order?.jobs) ? order.jobs : frpJobs().filter((job) => job.orderId === order?.id);
 }
 
-function frpOrderStage(order) {
-  const jobs = frpOrderJobs(order);
-  const paymentValidated = Boolean(order?.checklist?.paymentValidated || order?.paymentStatus === "COMPROBANTE_RECIBIDO" || order?.paymentStatus === "PAGO_VALIDADO");
-  const proofCount = Array.isArray(order?.paymentProofs) ? order.paymentProofs.length : 0;
-  if (order?.orderStatus === "CERRADA" || (jobs.length && jobs.every((job) => ["FINALIZADO", "CANCELADO"].includes(job.status)))) return "FINALIZADO";
-  if (order?.paymentStatus === "COMPROBANTE_RECHAZADO" || jobs.some((job) => ["REQUIERE_REVISION", "ESPERANDO_CLIENTE"].includes(job.status))) return "REVISION_PROBLEMA";
-  if (jobs.some((job) => job.status === "EN_PROCESO")) return "EN_PROCESO";
-  // QUE: cliente ya aviso "Equipo conectado" y todavia hay un job listo o en preparacion.
-  // POR QUE: este stage adelanta al operador la informacion que el cliente esta fisicamente
-  // enganchado al USB Redirector, asi puede procesar antes que tomar otro listo cualquiera.
-  if (order?.customerConnectedAt && jobs.some((job) => ["LISTO_PARA_TECNICO", "ESPERANDO_PREPARACION"].includes(job.status))) {
-    return "CLIENTE_CONECTADO";
-  }
-  if (jobs.some((job) => job.status === "LISTO_PARA_TECNICO")) return "LISTO_TECNICO";
-  if (paymentValidated || ["PAGO_VALIDADO", "EN_PREPARACION", "PARCIAL_LISTA", "LISTA_PARA_TECNICO"].includes(order?.orderStatus)) return "PREPARACION";
-  if (proofCount || ["PAGO_EN_VALIDACION", "COMPROBANTE_RECIBIDO"].includes(order?.paymentStatus)) return "PAGO_COMPROBANTE";
-  return "WEB_NUEVA";
-}
-
-function frpStageLabel(stage) {
-  return frpWebFilters.find((filter) => filter.code === stage)?.label || stage || "-";
-}
-
-function frpProofLabel(order) {
-  const proofs = Array.isArray(order?.paymentProofs) ? order.paymentProofs : [];
-  if (!proofs.length) return "Sin comprobante";
-  const pending = proofs.filter((proof) => !proof.reviewStatus || proof.reviewStatus === "PENDIENTE").length;
-  const rejected = proofs.filter((proof) => proof.reviewStatus === "RECHAZADO").length;
-  if (rejected) return `${proofs.length} comprobante(s) - rechazado`;
-  if (pending) return `${proofs.length} comprobante(s) - pendiente`;
-  return `${proofs.length} comprobante(s) - validado`;
-}
-
-function frpNextAction(order) {
-  const stage = frpOrderStage(order);
-  if (order?.postpayRequested && order?.postpayStatus !== "APROBADO") return "Postpago solicitado: no procesar hasta aprobacion administrativa.";
-  if (stage === "WEB_NUEVA") return "Esperar comprobante o reenviar datos de pago.";
-  if (stage === "PAGO_COMPROBANTE") return canReviewPayments() ? "Validar o rechazar comprobante." : "Esperar validacion de pago.";
-  if (stage === "PREPARACION") {
-    if (order.customerConnectionReadyAt && !order.checklist?.connectionDataSent) return "Cliente listo para conexion; enviar datos y marcar conexion enviada.";
-    if (!order.checklist?.connectionDataSent) return "Copiar conexion y marcarla enviada.";
-    if (!order.checklist?.authorizationConfirmed) return "Confirmar autorizacion/preparacion.";
-    return "Enviar equipos listos a tecnico.";
-  }
-  if (stage === "LISTO_TECNICO") return "Tecnico debe tomar el siguiente equipo.";
-  if (stage === "EN_PROCESO") return "Tecnico procesando.";
-  if (stage === "REVISION_PROBLEMA") return "Resolver motivo de revision.";
-  if (stage === "FINALIZADO") return "Copiar Done si el cliente lo solicita.";
-  return "Revisar solicitud.";
-}
-
-function renderFrpOrderBadges(order) {
-  const badges = [];
-  if (order?.customerConnectionReadyAt) badges.push("Cliente listo");
-  if (order?.urgentRequested) badges.push(order.urgentStatus === "APROBADO" ? "Urgente aprobado" : "Urgente solicitado");
-  if (order?.postpayRequested) {
-    const label = order.postpayStatus === "APROBADO"
-      ? "Postpago aprobado"
-      : order.postpayStatus === "NO_ELEGIBLE"
-        ? "Postpago no elegible"
-        : "Postpago solicitado";
-    badges.push(label);
-  }
-  if (!badges.length) return "";
-  return `<div class="frp-badge-row">${badges.map((badge) => `<span>${escapeHtml(badge)}</span>`).join("")}</div>`;
-}
-
-function renderFrpMetrics(webOrders = frpOrders().filter(isPortalFrpOrder)) {
-  const counts = frpWebFilters
-    .filter((filter) => filter.code !== "ALL")
-    .map((filter) => [filter.label, webOrders.filter((order) => frpOrderStage(order) === filter.code).length]);
-  frpMetrics.innerHTML = counts.map(([label, value]) => `
-    <article>
-      <span>${escapeHtml(label)}</span>
-      <strong>${escapeHtml(value)}</strong>
-    </article>
-  `).join("");
-}
-
-function renderOrderChecklist(order) {
-  const labels = {
-    priceSent: "Precio enviado",
-    paymentValidated: "Pago validado",
-    connectionDataSent: "Conexion enviada",
-    authorizationConfirmed: "Autorizacion",
-  };
-  return Object.entries(labels).map(([key, label]) => `
-    <label class="inline-check compact-check">
-      <input type="checkbox" data-frp-order-check="${escapeHtml(order.id)}" data-key="${escapeHtml(key)}" ${order.checklist?.[key] ? "checked" : ""} ${key === "paymentValidated" ? "disabled" : ""} />
-      ${escapeHtml(label)}
-    </label>
-  `).join("");
-}
-
-function renderJobChecklist(job) {
-  const labels = {
-    clientConnected: "Conectado",
-    requiredStateConfirmed: "Estado listo",
-    modelSupported: "Modelo OK",
-  };
-  return Object.entries(labels).map(([key, label]) => `
-    <label class="inline-check compact-check">
-      <input type="checkbox" data-frp-job-check="${escapeHtml(job.id)}" data-key="${escapeHtml(key)}" ${job.checklist?.[key] ? "checked" : ""} ${job.status === "FINALIZADO" ? "disabled" : ""} />
-      ${escapeHtml(label)}
-    </label>
-  `).join("");
-}
-
-function renderFrpEligibilityNote(job) {
-  if (!job?.eligibilityStatus || job.eligibilityStatus === "APTO_EXPRESS") return "";
-  const parts = [
-    job.eligibilityDetectedMatch ? `Coincidencia: ${job.eligibilityDetectedMatch}` : "",
-    job.eligibilityStatus ? `Estado: ${job.eligibilityStatus}` : "",
-    job.eligibilityInternalReason || job.reviewReason || "",
-  ].filter(Boolean);
-  if (!parts.length) return "";
-  return `<small class="frp-eligibility-note">${parts.map(escapeHtml).join(" | ")}</small>`;
-}
-
-function renderFrpJobRow(job) {
-  const canMoveToReview = !["FINALIZADO", "CANCELADO"].includes(job.status);
-  const canSendReady = ["ESPERANDO_PREPARACION", "ESPERANDO_CLIENTE", "REQUIERE_REVISION"].includes(job.status);
-  const reference = [job.model, job.imei].filter(Boolean).join(" - ");
-  return `
-    <div class="frp-job-row">
-      <strong>${escapeHtml(job.code)}</strong>
-      <span>${escapeHtml(reference || `${frpStatusLabel(job.status)} - equipo ${job.sequence}`)}</span>
-      <em>${escapeHtml(frpStatusLabel(job.status))}</em>
-      <div class="frp-checks">${renderJobChecklist(job)}</div>
-      <div class="action-row">
-        ${canSendReady ? `<button class="mini-btn" type="button" data-frp-ready="${escapeHtml(job.id)}">Enviar a tecnico</button>` : ""}
-        ${canMoveToReview ? `<button class="mini-btn danger-mini" type="button" data-frp-review="${escapeHtml(job.id)}">Revision</button>` : ""}
-      </div>
-      ${renderFrpEligibilityNote(job)}
-    </div>
-  `;
-}
-
-function renderFrpOrder(order, options = {}) {
-  const stage = frpOrderStage(order);
-  const readyCount = order.jobCounts?.LISTO_PARA_TECNICO || 0;
-  const finishedCount = order.jobCounts?.FINALIZADO || 0;
-  const jobs = frpOrderJobs(order);
-  return `
-    <article class="frp-card ${isPortalFrpOrder(order) ? "frp-card-web" : "frp-card-manual"}">
-      <header>
-        <div>
-          <strong>${escapeHtml(order.code)}</strong>
-          <span>${escapeHtml(order.clientName)} - ${escapeHtml(order.country || "")}</span>
-        </div>
-        <em>${escapeHtml(options.stageLabel || frpStageLabel(stage))}</em>
-      </header>
-      ${renderFrpOrderBadges(order)}
-      <div class="frp-card-grid">
-        <span><strong>Equipos</strong>${escapeHtml(order.quantity)}</span>
-        <span><strong>Pago</strong>${escapeHtml(order.paymentLabel)}</span>
-        <span><strong>Total</strong>${escapeHtml(order.priceFormatted || `${order.totalPrice} USDT`)}</span>
-        <span><strong>Comprobante</strong>${escapeHtml(frpProofLabel(order))}</span>
-      </div>
-      <p class="frp-next-action"><strong>Proxima accion:</strong> ${escapeHtml(frpNextAction(order))}</p>
-      <small>${escapeHtml(order.discountLabel || "Normal")} - uso mensual al crear: ${escapeHtml(order.monthlyUsageAtCreation || 0)}</small>
-      ${order.nextMonthlyTier ? `<small>Meta: faltan ${escapeHtml(order.nextMonthlyTier.remaining)} para ${escapeHtml(order.nextMonthlyTier.label)} (${escapeHtml(order.nextMonthlyTier.unitPrice)} USDT)</small>` : ""}
-      <div class="frp-checks">${renderOrderChecklist(order)}</div>
-      <div class="action-row">
-        <button class="mini-btn" type="button" data-frp-copy-price="${escapeHtml(order.id)}">Copiar pago</button>
-        <button class="mini-btn" type="button" data-frp-copy-connection="${escapeHtml(order.id)}">Copiar conexion</button>
-        <button class="mini-btn" type="button" data-frp-upload-proof="${escapeHtml(order.id)}">Comprobante</button>
-        ${canReviewPayments() && order.paymentStatus === "PAGO_EN_VALIDACION" && order.paymentProofs?.length ? `
-          <button class="mini-btn" type="button" data-frp-review-payment="${escapeHtml(order.id)}" data-review-action="approve">Validar pago</button>
-          <button class="mini-btn danger-mini" type="button" data-frp-review-payment="${escapeHtml(order.id)}" data-review-action="reject">Rechazar</button>
-        ` : ""}
-      </div>
-      <small>${escapeHtml(readyCount)} listo(s), ${escapeHtml(finishedCount)} finalizado(s), ${escapeHtml(order.paymentProofs?.length || 0)} comprobante(s)</small>
-      <div class="frp-job-list">
-        ${jobs.map(renderFrpJobRow).join("")}
-      </div>
-    </article>
-  `;
-}
-
-function renderFrpJobCard(job, actions = "") {
-  return `
-    <article class="frp-card">
-      <header>
-        <div>
-          <strong>${escapeHtml(job.code)}</strong>
-          <span>${escapeHtml(job.order?.clientName || job.clientName)} - ${escapeHtml(job.sequence)} de ${escapeHtml(job.totalJobs)}</span>
-        </div>
-        <em>${escapeHtml(frpStatusLabel(job.status))}</em>
-      </header>
-      <p>${escapeHtml(job.serviceName)}${job.ardCode ? ` - ${escapeHtml(job.ardCode)}` : ""}</p>
-      ${renderFrpEligibilityNote(job)}
-      ${job.reviewReason ? `<small>Revision: ${escapeHtml(job.reviewReason)}</small>` : ""}
-      ${actions}
-    </article>
-  `;
-}
-
 // ============================================================
 // FRP Ops v2 — render rediseñado (spec operador-frp-express.md v1.1)
 // Reemplaza el layout de 6 lanes horizontales por vista vertical priorizada:
 // 1) Header con técnico activo, 2) Tu trabajo actual (hero), 3) Cola con
 // filtro VIP, 4) grid Pagos/Atención, 5) Finalizados hoy.
-// Helpers viejos (renderFrpOrder, renderFrpJobCard, frpWebFilters) quedan
-// disponibles para otros consumidores potenciales — limpieza en Bundle 3.
+// Cleanup commit 5b (chore/frp-ops): se eliminaron los helpers viejos
+// (renderFrpOrder, renderFrpJobCard, renderFrpMetrics, frpWebFilters,
+// frpOrderStage, etc.) junto con #frp-metrics, #frp-manual-panel y los
+// handlers delegados muertos. Quedan solo los renders y handlers del
+// rediseño activo. CSS huérfano (.frp-lane, .frp-card, etc.) pendiente
+// para Bundle 3 cleanup separado.
 // ============================================================
 
 const FRP_OPS_V2_VIP_FILTER_KEY = "frpOpsV2VipFilter";
@@ -1923,27 +1662,18 @@ function frpOpsV2RenderFinalized(jobs) {
 }
 
 function renderFrp() {
-  if (!frpWorkbench || !frpMetrics) return;
-  frpForm?.classList.toggle("hidden", !frpEnabled());
+  if (!frpWorkbench) return;
   if (!frpEnabled()) {
     renderFrpPricingBox();
-    frpMetrics.innerHTML = "";
     frpWorkbench.innerHTML = `<div class="pricing-note"><strong>FRP Express pertenece a WhatsApp 3</strong><span>Tu usuario no tiene este modulo habilitado.</span></div>`;
     return;
   }
   renderFrpPricingBox();
-  syncFrpSuggestion();
-  const frpSubmit = frpForm?.querySelector("button[type='submit']");
-  if (frpSubmit) frpSubmit.disabled = session.frp?.pricing?.summary?.available === false;
 
   const orders = frpOrders();
   const jobs = frpJobs();
   const finishedToday = session.frp?.finishedTodayJobs || [];
   const tech = technicianStatusCache;
-
-  // Métricas viejas (renderFrpMetrics) — mantengo el render para no romper
-  // consumidores que lean #frp-metrics. Cuando se limpie en Bundle 3, sacar.
-  renderFrpMetrics(orders.filter(isPortalFrpOrder));
 
   const myActiveJob = jobs.find((j) => j.status === "EN_PROCESO" && j.technicianId === session.user?.id);
   const otherActiveJob = !myActiveJob
@@ -3057,24 +2787,6 @@ document.querySelector("#refresh-tickets").addEventListener("click", refreshSess
 document.querySelector("#refresh-clients").addEventListener("click", refreshSession);
 document.querySelector("#refresh-pricing").addEventListener("click", refreshSession);
 document.querySelector("#refresh-frp")?.addEventListener("click", refreshSession);
-frpClient?.addEventListener("input", () => {
-  syncFrpPaymentOptions();
-  syncFrpSuggestion();
-});
-frpClient?.addEventListener("blur", () => {
-  const country = inferredCountryFromText(frpClient.value);
-  if (country) {
-    const withoutFlags = stripCountryFlags(frpClient.value);
-    const withoutPhone = stripPhoneFromClientText(withoutFlags);
-    const name = removeTrailingCountryName(withoutPhone, country);
-    if (name) frpClient.value = `${name} ${country}`;
-  }
-  syncFrpPaymentOptions();
-  syncFrpSuggestion();
-});
-frpQuantity?.addEventListener("input", syncFrpSuggestion);
-frpUnitPrice?.addEventListener("input", syncFrpSuggestion);
-frpPayment?.addEventListener("change", syncFrpSuggestion);
 // QUE: feedback inline al guardar (texto del boton + clase). PR-2a-fix BUG 2.
 // POR QUE: antes el unico feedback estaba en #frp-message lejos del boton de
 // pricing (off-screen). El cliente apretaba "Guardar" sin ver si funciono.
@@ -3740,81 +3452,7 @@ ticketForm.addEventListener("submit", async (event) => {
   }
 });
 
-frpForm?.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  if (!frpEnabled()) {
-    frpMessage.textContent = "FRP Express pertenece a WhatsApp 3.";
-    frpMessage.dataset.type = "error";
-    return;
-  }
-  const button = frpForm.querySelector("button[type='submit']");
-  const form = new FormData(frpForm);
-  button.disabled = true;
-  frpMessage.textContent = "";
-  try {
-    const payload = await api("/api/frp/orders", {
-      method: "POST",
-      body: JSON.stringify(Object.fromEntries(form)),
-    });
-    frpMessage.textContent = `Orden ${payload.order.code} creada con ${payload.order.quantity} equipo(s).`;
-    frpMessage.dataset.type = "success";
-    frpForm.reset();
-    await refreshSession();
-  } catch (error) {
-    frpMessage.textContent = error.message;
-    frpMessage.dataset.type = "error";
-  } finally {
-    button.disabled = false;
-    syncFrpPaymentOptions();
-    syncFrpSuggestion();
-  }
-});
-
 frpWorkbench?.addEventListener("click", async (event) => {
-  const filterButton = event.target.closest("[data-frp-web-filter]");
-  if (filterButton) {
-    frpWebFilter = filterButton.dataset.frpWebFilter || "ALL";
-    renderFrp();
-    return;
-  }
-
-  const priceButton = event.target.closest("[data-frp-copy-price]");
-  if (priceButton) {
-    const order = frpOrders().find((candidate) => candidate.id === priceButton.dataset.frpCopyPrice);
-    if (!order) return;
-    await copyFrpText(buildFrpPriceText(order), `Precio de ${order.code} copiado.`);
-    await updateFrpOrderChecklist(order.id, "priceSent", true);
-    return;
-  }
-
-  const connectionButton = event.target.closest("[data-frp-copy-connection]");
-  if (connectionButton) {
-    const order = frpOrders().find((candidate) => candidate.id === connectionButton.dataset.frpCopyConnection);
-    if (!order) return;
-    await copyFrpText(buildFrpConnectionText(order), `Conexion de ${order.code} copiada.`);
-    await updateFrpOrderChecklist(order.id, "connectionDataSent", true);
-    return;
-  }
-
-  const uploadButton = event.target.closest("[data-frp-upload-proof]");
-  if (uploadButton) {
-    pendingFrpProofOrderId = uploadButton.dataset.frpUploadProof;
-    frpProofFiles.click();
-    return;
-  }
-
-  const reviewButton = event.target.closest("[data-frp-review-payment]");
-  if (reviewButton) {
-    await reviewFrpPayment(reviewButton.dataset.frpReviewPayment, reviewButton.dataset.reviewAction);
-    return;
-  }
-
-  const readyButton = event.target.closest("[data-frp-ready]");
-  if (readyButton) {
-    await markFrpJobReady(readyButton.dataset.frpReady);
-    return;
-  }
-
   const takeNextButton = event.target.closest("[data-frp-take-next]");
   if (takeNextButton) {
     await takeNextFrpJob();
@@ -3854,30 +3492,6 @@ frpWorkbench?.addEventListener("click", async (event) => {
     await requestFrpReview(reviewJobButton.dataset.frpReview);
     return;
   }
-
-  const doneButton = event.target.closest("[data-frp-copy-done]");
-  if (doneButton) {
-    const job = frpJobs().find((candidate) => candidate.id === doneButton.dataset.frpCopyDone);
-    if (!job) return;
-    await copyFrpText(buildFrpDoneText(job), `Done de ${job.code} copiado.`);
-  }
-});
-
-frpWorkbench?.addEventListener("change", async (event) => {
-  const orderCheck = event.target.closest("[data-frp-order-check]");
-  if (orderCheck) {
-    await updateFrpOrderChecklist(orderCheck.dataset.frpOrderCheck, orderCheck.dataset.key, orderCheck.checked);
-    return;
-  }
-  const jobCheck = event.target.closest("[data-frp-job-check]");
-  if (jobCheck) {
-    await updateFrpJobChecklist(jobCheck.dataset.frpJobCheck, jobCheck.dataset.key, jobCheck.checked);
-  }
-});
-
-frpProofFiles?.addEventListener("change", () => {
-  if (!pendingFrpProofOrderId) return;
-  uploadFrpPaymentProof(pendingFrpProofOrderId, frpProofFiles.files);
 });
 
 ticketBoard.addEventListener("dragstart", (event) => {
