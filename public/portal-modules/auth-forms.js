@@ -10,7 +10,7 @@ import {
 } from "./payments.js";
 import { stepGuideMarkup } from "./connection.js";
 import { startTechnicianPolling, stopTechnicianPolling, wireCopyButtonsWithin } from "./technician.js";
-import { deriveFlowState } from "./flow-state.js";
+import { activeOrderForFlow, deriveFlowState } from "./flow-state.js";
 import { resetPaso2InactivityTimer } from "./paso2-timer.js";
 import { refreshPaso4Banner, startPaso4ReadyMonitor, stopPaso4ReadyMonitor, wirePaso4BannerActions } from "./paso4-timer.js";
 import { state } from "./state.js";
@@ -19,7 +19,7 @@ export function renderStaticStepGuide() {
   const container = document.querySelector("#stepGuide");
   if (!container) return;
   container.innerHTML = stepGuideMarkup({
-    order: null,
+    order: activeOrderForFlow(state.customer),
     technicianState: state.activeTechnician,
     customerName: state.customer?.client?.name || "",
     customerModuleUrl: state.catalog?.customerModuleUrl || state.customerModuleUrl || "",
