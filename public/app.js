@@ -1389,6 +1389,80 @@ function frpOpsV2TechInitial(name) {
   return String(name).trim().charAt(0).toUpperCase() || "?";
 }
 
+// Spec operador-frp-express.md §3.3 + AC #23-25: banner de timeout 30 min
+// sobre el card "Tu trabajo actual". Evaluacion local desde takenAt — no hay
+// evento del servidor que dispare a los 30 min, lo computa el cliente.
+const FRP_OPS_V2_BANNER_30MIN_MS = 30 * 60 * 1000;
+const FRP_OPS_V2_KEEP_WORKING_PREFIX = "frpOpsV2KeepWorking_";
+
+function frpOpsV2BannerMutedUntil(jobId) {
+  if (!jobId) return 0;
+  try {
+    const raw = localStorage.getItem(`${FRP_OPS_V2_KEEP_WORKING_PREFIX}${jobId}`);
+    const ms = Number(raw);
+    return Number.isFinite(ms) ? ms : 0;
+  } catch {
+    // localStorage no disponible (incognito) — sin mute
+    return 0;
+  }
+}
+
+// QUE: si el job lleva 30+ min en EN_PROCESO Y el tecnico no clickeo
+// "Sigo trabajando" en los ultimos 30 min, mostrar banner. Se llama
+// solo desde el render del card actual (modo activo o readonly).
+// POR QUE: el calculo se hace cliente porque el threshold cambia segun
+// el reloj del navegador y el render se dispara via setInterval 60s.
+function frpOpsV2ShouldShow30MinBanner(job, { respectMute = true } = {}) {
+  if (!job?.takenAt) return false;
+  const takenAtMs = new Date(job.takenAt).getTime();
+  if (!Number.isFinite(takenAtMs)) return false;
+  const ageMs = Date.now() - takenAtMs;
+  if (ageMs <= FRP_OPS_V2_BANNER_30MIN_MS) return false;
+  if (respectMute && Date.now() < frpOpsV2BannerMutedUntil(job.id)) return false;
+  return true;
+}
+
+// QUE: registra el click "Sigo trabajando" del tecnico — silencia el banner
+// 30 min mas DESDE EL CLICK (no desde takenAt). Persiste en localStorage para
+// sobrevivir reloads/cierres del tab.
+// POR QUE: spec §3.3 — "Vuelve a aparecer 30 min despues si todavia no se
+// finalizo". Decision aprobada por Bryam: 30 min desde el click.
+function frpOpsV2MarkKeepWorking(jobId) {
+  if (!jobId) return;
+  try {
+    localStorage.setItem(
+      `${FRP_OPS_V2_KEEP_WORKING_PREFIX}${jobId}`,
+      String(Date.now() + FRP_OPS_V2_BANNER_30MIN_MS),
+    );
+  } catch { /* localStorage no disponible — no-op silencioso */ }
+}
+
+function frpOpsV2RenderActiveBanner(jobId) {
+  return `
+    <div class="frp-ops-v2-banner-30min" role="alert">
+      <div>
+        <strong>Este job lleva 30+ min. ¿Necesitás ayuda?</strong>
+        <span>El equipo del cliente sigue conectado. Decidí si seguís procesando o cancelás para que otro técnico lo retome.</span>
+      </div>
+      <div class="frp-ops-v2-banner-30min-actions">
+        <button type="button" class="frp-ops-v2-banner-30min-action-keep" data-frp-keep-working="${escapeHtml(jobId)}">Sigo trabajando</button>
+        <button type="button" class="frp-ops-v2-banner-30min-action-cancel" data-frp-cancel-timeout="${escapeHtml(jobId)}">Cancelar job</button>
+      </div>
+    </div>
+  `;
+}
+
+function frpOpsV2RenderObserverBanner(otherName) {
+  const name = String(otherName || "").trim() || "El tecnico activo";
+  return `
+    <div class="frp-ops-v2-banner-30min" role="status">
+      <div>
+        <strong>${escapeHtml(name)} lleva 30+ min en este job</strong>
+      </div>
+    </div>
+  `;
+}
+
 function frpOpsV2RenderHeader(tech) {
   let badgeClass = "frp-ops-v2-tech-badge";
   let badgeText = "Sin tecnico activo";
@@ -1426,11 +1500,15 @@ function frpOpsV2RenderCurrentActive(job, { swapInProgress, tech }) {
   const processCode = order.processCode || "-";
   const takenAtRel = frpOpsV2RelativeTime(job.takenAt);
   const actionsDisabled = swapInProgress;
+  const bannerHtml = frpOpsV2ShouldShow30MinBanner(job)
+    ? frpOpsV2RenderActiveBanner(job.id)
+    : "";
   return `
     <section class="frp-ops-v2-section">
       <div class="frp-ops-v2-section-header">
         <div class="frp-ops-v2-section-label">Tu trabajo actual</div>
       </div>
+      ${bannerHtml}
       <div class="frp-ops-v2-current">
         <div class="frp-ops-v2-current-head">
           <div>
@@ -1470,11 +1548,18 @@ function frpOpsV2RenderCurrentActive(job, { swapInProgress, tech }) {
 
 function frpOpsV2RenderCurrentReadonly(job, otherName) {
   const order = job.order || {};
+  // Modo observador: si el job lleva 30+ min se muestra banner sin botones,
+  // tono observador (no "¿necesitás ayuda?"). NO respeta localStorage del
+  // [Sigo trabajando] del titular — eso es del actor, no del observador.
+  const bannerHtml = frpOpsV2ShouldShow30MinBanner(job, { respectMute: false })
+    ? frpOpsV2RenderObserverBanner(otherName)
+    : "";
   return `
     <section class="frp-ops-v2-section">
       <div class="frp-ops-v2-section-header">
         <div class="frp-ops-v2-section-label">Tu trabajo actual</div>
       </div>
+      ${bannerHtml}
       <div class="frp-ops-v2-current frp-ops-v2-current--readonly">
         <div class="frp-ops-v2-current-head">
           <div>
@@ -1661,14 +1746,18 @@ function frpOpsV2RenderFinalized(jobs) {
   `;
 }
 
-function renderFrp() {
+// QUE: opciones del render. skipPricing=true preserva el estado del Costos
+// FRP collapsible (inputs editables, dropdowns) cuando el render lo dispara
+// el setInterval de tick 60s — sin esto, repintar la tabla de proveedores
+// borra lo que el admin esté tipeando.
+function renderFrp({ skipPricing = false } = {}) {
   if (!frpWorkbench) return;
   if (!frpEnabled()) {
-    renderFrpPricingBox();
+    if (!skipPricing) renderFrpPricingBox();
     frpWorkbench.innerHTML = `<div class="pricing-note"><strong>FRP Express pertenece a WhatsApp 3</strong><span>Tu usuario no tiene este modulo habilitado.</span></div>`;
     return;
   }
-  renderFrpPricingBox();
+  if (!skipPricing) renderFrpPricingBox();
 
   const orders = frpOrders();
   const jobs = frpJobs();
@@ -3481,6 +3570,28 @@ frpWorkbench?.addEventListener("click", async (event) => {
     return;
   }
 
+  // FRP Ops v2 — banner timeout 30 min: [Sigo trabajando] silencia el banner
+  // 30 min mas desde el click. Re-render con skipPricing para no destruir
+  // el estado del Costos FRP collapsible.
+  const keepWorkingButton = event.target.closest("[data-frp-keep-working]");
+  if (keepWorkingButton) {
+    frpOpsV2MarkKeepWorking(keepWorkingButton.dataset.frpKeepWorking);
+    renderFrp({ skipPricing: true });
+    return;
+  }
+
+  // FRP Ops v2 — banner timeout 30 min: [Cancelar job] confirma + invoca
+  // endpoint cancel con reason='timeout'. cancelFrpJob ya hace refreshSession
+  // que dispara el render completo (con pricing).
+  const cancelTimeoutButton = event.target.closest("[data-frp-cancel-timeout]");
+  if (cancelTimeoutButton) {
+    const ok = window.confirm("¿Cancelar este job? Vuelve a la cola para que otro técnico lo tome.");
+    if (ok) {
+      await cancelFrpJob(cancelTimeoutButton.dataset.frpCancelTimeout, "timeout", "Cancelado tras 30+ min sin finalizar");
+    }
+    return;
+  }
+
   const finalizeButton = event.target.closest("[data-frp-finalize]");
   if (finalizeButton) {
     await finalizeFrpJob(finalizeButton.dataset.frpFinalize);
@@ -3671,6 +3782,19 @@ function startTechnicianWidgetPolling() {
   technicianRefreshTimer = setInterval(refreshTechnicianWidget, 30_000);
   refreshTechnicianWidget();
 }
+
+// FRP Ops v2 — tick global de 60s para que el panel se repinte sin
+// requerir mutaciones del usuario. Necesario para que:
+//  - El banner de timeout 30 min aparezca automaticamente al cumplirse el
+//    threshold (spec §3.3, AC #23) sin que el tecnico tenga que clickear
+//    nada para que se entere.
+//  - El "tomado hace X min" del card actual se actualice progresivamente.
+// skipPricing:true para preservar el estado del Costos FRP collapsible —
+// si Bryam esta editando un input de proveedor, el tick no le borra el
+// trabajo. El render visible solo repinta el workbench.
+// Nota: si el flicker visual del repintado cada 60s resulta molesto, v2
+// puede agregar DOM diffing (no implementado en este commit por scope).
+setInterval(() => renderFrp({ skipPricing: true }), 60_000);
 
 function stopTechnicianWidgetPolling() {
   if (technicianRefreshTimer) {
