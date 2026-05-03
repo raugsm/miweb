@@ -1,8 +1,20 @@
 # Operador — Panel FRP Express
 
-**Versión:** 1.1 · **Fecha:** 2 de mayo 2026 · **Estado:** aprobado por Bryam, listo para implementación
+**Versión:** 1.2 · **Fecha:** 3 de mayo 2026 · **Estado:** implementado en sesiones 6-7, validación profunda pendiente
 
-**Cambios respecto a v1.0:** Las 8 Open Questions originales se resolvieron con Bryam. Las decisiones están integradas en las secciones correspondientes.
+**Cambios respecto a v1.1:**
+- Se eliminó el sistema de beep al entrar nuevos jobs (decisión sesión 7)
+- `finalize` no requiere log/imagen obligatorio: auto-genera "Finalizado por <user> a las <HH:MM>" (Lima timezone)
+- Campo en código se llama `technicianId` (no `takenBy` como decía v1.1)
+- Order code: formato real es `ARD-YYYYMMDD-NNN` (no `ORD-`)
+- Código del proceso: formato real es `CL-{code}-{quantity}` (sin XXX random letters)
+- Se eliminó "Crear orden manual" del panel (no se usa)
+- Se eliminó botón "Actualizar" del header del panel (innecesario con SSE)
+- Se eliminaron los 8 contadores numéricos arriba del panel (código zombi del rediseño)
+- Sección "Costos FRP" colapsada bajo acordeón con estilo del mockup
+- SSE operador implementado en `/api/operator/frp/events`
+- Reconnect banner implementado
+- Polling acelerado del switch técnico durante swap window
 
 ---
 
@@ -18,7 +30,7 @@ Pantalla principal del panel operador donde Jack o Angelo (los técnicos de Aria
 
 **Característica clave del bypass:** el bypass de FRP en sí dura **5-10 segundos**. La interfaz del operador acompaña el antes y el después del bypass, no el durante. Esto significa que decisiones como "cancelar de raíz" son seguras — no hay equipos físicamente conectados durante minutos.
 
-**Lo que esta spec NO cubre:** otras tabs del panel operador (Tickets, Clientes, Precios, Cierre diario, Usuarios, Auditoría) ni el modal de "Reportar problema" (es spec separada). Esta es solo la pantalla "FRP Express" / "Solicitudes FRP web".
+**Lo que esta spec NO cubre:** otras tabs del panel operador (Tickets, Clientes, Precios, Cierre diario, Usuarios, Auditoría) ni el modal de "Reportar problema" (es spec separada) ni el rediseño visual interno de "Costos FRP" (spec separada documentada en `_costos-frp-redesign-pendiente.md`). Esta es solo la pantalla "FRP Express" / "Solicitudes FRP web".
 
 ---
 
@@ -29,10 +41,12 @@ Archivo: `docs/specs/operador/mockups/operador-frp-express.html`
 **Estructura visual de arriba hacia abajo:**
 
 1. **Header del panel:** label "PANEL OPERADOR" + título "FRP Express" + badge a la derecha indicando técnico activo (ej. "Jack activo" con dot verde pulsante).
-2. **Sección "TU TRABAJO ACTUAL":** card grande con el job que el técnico tomó. Muestra orden + cliente + servicio + Technician ID + Código del proceso + dos botones (Marcar finalizado / Reportar problema). Si no hay job tomado, card vacía con CTA grande "Tomar siguiente".
-3. **Sección "COLA · X listos":** lista vertical de jobs en estado `LISTO_PARA_TECNICO` con botón "Tomar" en cada uno + filtro VIP en el header.
-4. **Sección "PAGOS POR REVISAR" + "ATENCIÓN":** grid de 2 columnas. A la izquierda, comprobantes de pago pendientes de revisar (color amber). A la derecha, jobs con problemas que requieren atención (color rojo).
-5. **Sección "FINALIZADOS HOY":** tabla compacta con los jobs finalizados del día (de **ambos** técnicos). Sin acciones — es informativa pura.
+2. **Banner SSE de estado** (oculto cuando OK): "Conectando…" / "Reconectando…" / "Sin conexión" según estado de la conexión SSE.
+3. **Sección "TU TRABAJO ACTUAL":** card grande con el job que el técnico tomó. Muestra orden + cliente + servicio + Technician ID + Código del proceso + dos botones (Marcar finalizado / Reportar problema). Si no hay job tomado, card vacía con CTA grande "Tomar siguiente". Banner amarillo de timeout 30 min cuando aplica.
+4. **Sección "COLA · X listos":** lista vertical de jobs en estado `LISTO_PARA_TECNICO` con botón "Tomar" en cada uno + filtro VIP en el header.
+5. **Sección "PAGOS POR REVISAR" + "ATENCIÓN":** grid de 2 columnas. A la izquierda, comprobantes de pago pendientes de revisar (color amber). A la derecha, jobs con problemas que requieren atención (color rojo).
+6. **Sección "FINALIZADOS HOY":** tabla compacta con los jobs finalizados del día (de **ambos** técnicos). Sin acciones — es informativa pura.
+7. **Acordeón "COSTOS FRP" (colapsado):** al final del panel, contenedor colapsable que esconde la tabla de pricing por proveedor. Estilo coherente con el resto del panel (label uppercase, chevron rotable, hover sutil). Contenido interno tiene rediseño visual pendiente como spec separada.
 
 ---
 
@@ -49,30 +63,43 @@ Estático en cuanto a layout. El badge de técnico activo cambia según switch.
 | En transición (10s ventana) | Badge gris + dot gris no pulsante + "Cambiando técnico…" |
 | Ninguno activo (raro) | Badge rojo claro + dot rojo + "Sin técnico activo" |
 
-### 2.2 Card "TU TRABAJO ACTUAL"
+**Polling acelerado durante swap:** mientras `swap.inProgress === true`, `paintTechnicianWidget` consulta `/api/operator/technician/status` cada 2s (en lugar de cada 30s). Cuando el swap completa, regresa a 30s. Esto reemplaza al 2do evento del switch técnico que se decidió no implementar en backend.
+
+### 2.2 Banner SSE de estado
+
+Banner sibling de `#frp-workbench` (afuera del re-render) que indica el estado de la conexión SSE.
+
+| Estado | Apariencia |
+|---|---|
+| Conectado | Hidden |
+| Conectando | Visible, dot pulsante amarillo, texto "Conectando..." |
+| Reconectando | Visible, dot pulsante amarillo, texto "Reconectando..." |
+| Desconectado | Visible, dot rojo, texto "Sin conexión" (variante `.is-error`) |
+
+### 2.3 Card "TU TRABAJO ACTUAL"
 
 | Estado | Trigger | Apariencia |
 |---|---|---|
-| Con job tomado (normal) | Job en `EN_PROCESO` con `takenBy === currentUser.id`, tomado hace <30 min | Card blanco con border 0.5px, datos del job, botones Finalizar (primary) + Reportar problema (secondary) |
-| Con job tomado (timeout 30 min) | Mismo job pero `(now - takenAt) > 30 min` | Mismo card pero con **banner amarillo arriba**: "Este job lleva 30+ min. ¿Necesitás ayuda?" + botones [Sigo trabajando] (cierra banner por 30 min más) y [Cancelar job] (cancela el job, libera) |
-| Con job tomado por otro (visible solo al ver de Jack como Angelo) | Job en `EN_PROCESO` con `takenBy !== currentUser.id` | Card en modo lectura: datos visibles, botones disabled con texto "Tomado por [Jack]" |
+| Con job tomado (normal) | Job en `EN_PROCESO` con `technicianId === currentUser.id`, tomado hace <30 min | Card blanco con border 0.5px, datos del job, botones Finalizar (primary) + Reportar problema (secondary) |
+| Con job tomado (timeout 30 min) | Mismo job pero `(now - takenAt) > 30 min` | Mismo card pero con **banner amarillo arriba**: "Este job lleva 30+ min. ¿Necesitás ayuda?" + botones [Sigo trabajando] (cierra banner por 30 min más, persiste en localStorage) y [Cancelar job] (confirm dialog → cancela el job con `reason: 'timeout'`) |
+| Con job tomado por otro (visible solo al ver de Jack como Angelo) | Job en `EN_PROCESO` con `technicianId !== currentUser.id` | Card en modo lectura: datos visibles, botones disabled con texto "Tomado por [Jack]". Si el job lleva +30 min, aparece banner observador "Jack lleva 30+ min en este job" sin botones |
 | Sin job + cola con jobs | No hay job tomado y la cola tiene `LISTO_PARA_TECNICO` | Card dasheado gris con texto "Sin trabajo actual" + botón grande "Tomar siguiente" (primary, full-width) |
 | Sin job + cola vacía | No hay job tomado y la cola está vacía | Card dasheado gris con texto "Sin trabajo actual. Esperando que clientes conecten equipos." + botón "Tomar siguiente" disabled |
 | Loading (al apretar Marcar finalizado) | Click en Finalizar enviado al backend | Botón primario muestra spinner, ambos botones disabled hasta respuesta |
-| Job cancelado por reversión de pago | Pago revertido por admin mientras el job estaba `EN_PROCESO` | Card cambia a estado vacío + toast rojo "Job cancelado: el pago fue revertido" |
-| Error de finalización | Backend devuelve error | Toast rojo con mensaje, card vuelve a estado normal |
+| Job cancelado por reversión de pago | Pago revertido por admin mientras el job estaba `EN_PROCESO` | Card cambia a estado vacío + frpMessage rojo "Job cancelado: el pago fue revertido" (vía notice del payload SSE) |
+| Error de finalización | Backend devuelve error | frpMessage con error, card vuelve a estado normal |
 
 **Datos visibles cuando hay job tomado:**
-- Header: `<orderCode> · <jobSequence> de <orderQuantity>` (ej. "ORD-20260502-008 · 1 de 5 equipos")
+- Header: `<orderCode> · <jobSequence> de <orderQuantity>` (ej. "ARD-20260502-008 · 1 de 5 equipos")
 - Nombre del cliente
 - Servicio + ARD code (ej. "Xiaomi Cuenta Google · ARD012-AL")
-- Tiempo desde que lo tomó (relativo, "tomado hace 3 min")
+- Tiempo desde que lo tomó (relativo, "tomado hace 3 min", actualizado cada 60s vía setInterval)
 - Technician ID (copiable, monospace)
 - Código del proceso (copiable, monospace)
 
-### 2.3 Filtro VIP en cola
+### 2.4 Filtro VIP en cola
 
-Elemento nuevo en el header de la sección "COLA". Permite filtrar la cola por jobs de clientes VIP.
+Elemento en el header de la sección "COLA". Permite filtrar la cola por jobs de clientes VIP.
 
 | Estado | Apariencia |
 |---|---|
@@ -80,7 +107,7 @@ Elemento nuevo en el header de la sección "COLA". Permite filtrar la cola por j
 | Filtrado VIP | Toggle on, fondo amarillo claro, texto "Solo VIP" + contador (ej. "Solo VIP · 2") |
 | Sin VIPs en cola | Toggle visible pero al activarlo muestra "No hay VIPs en cola" en lugar de la lista |
 
-### 2.4 Card de cola (cada item de la lista)
+### 2.5 Card de cola (cada item de la lista)
 
 | Estado | Trigger | Apariencia |
 |---|---|---|
@@ -88,15 +115,15 @@ Elemento nuevo en el header de la sección "COLA". Permite filtrar la cola por j
 | VIP | Mismo + cliente.status === 'VIP' | Igual que default + badge dorado pequeño "VIP" arriba a la derecha |
 | Hover (desktop) | Mouse encima del card | Borde se vuelve más oscuro, fondo levemente gris |
 | Loading (al apretar Tomar) | Click en Tomar enviado al backend | Botón muestra spinner, card disabled |
-| Tomado por otro técnico (carrera) | Backend rechaza take porque otro lo tomó primero | Card desaparece de la lista (refresh SSE) + toast informativo "Otro técnico tomó este job" |
+| Tomado por otro técnico (carrera) | Backend rechaza take porque otro lo tomó primero | Card desaparece de la lista (refresh SSE) + frpMessage informativo "Otro técnico tomó este job" |
 
 **Datos visibles:**
 - Header: `<orderCode> · <quantity> equipo(s)` + badge VIP (si aplica)
 - Nombre del cliente + servicio
 - Tiempo desde conexión del cliente
-- Botón "Tomar"
+- Botón "Tomar" → llama `POST /api/frp/jobs/:id/take` (endpoint específico, no take-next)
 
-### 2.5 Card "PAGOS POR REVISAR" (cada item)
+### 2.6 Card "PAGOS POR REVISAR" (cada item)
 
 | Estado | Trigger | Apariencia |
 |---|---|---|
@@ -109,7 +136,7 @@ Elemento nuevo en el header de la sección "COLA". Permite filtrar la cola por j
 - Cliente + monto en moneda local (ej. "Roberto Díaz · S/ 62.05")
 - Link "Ver comprobante →"
 
-### 2.6 Card "ATENCIÓN" (cada item)
+### 2.7 Card "ATENCIÓN" (cada item)
 
 | Estado | Trigger | Apariencia |
 |---|---|---|
@@ -122,17 +149,28 @@ Elemento nuevo en el header de la sección "COLA". Permite filtrar la cola por j
 - Razón del problema (ej. "Modelo no soportado · revisar")
 - Link "Resolver →"
 
-### 2.7 Tabla de finalizados
+### 2.8 Tabla de finalizados
 
 Estado único, informativa. Muestra finalizados de **ambos técnicos** (Jack y Angelo) del día actual. Cada fila:
-- Order code (formato corto, ej. "ORD-007-1")
+- Order code (formato corto)
 - Cliente + ARD code (ej. "RAUL GSM · ARD012-AL")
 - Hora de finalización (ej. "14:32")
 - Técnico que finalizó (avatar pequeño o iniciales: "J" para Jack, "A" para Angelo)
 
 Sin acciones. Sin botones. Click en "Ver todos →" del header lleva a vista filtrada de histórico (esa vista no es parte de esta spec).
 
-### 2.8 Botones genéricos
+### 2.9 Acordeón "Costos FRP"
+
+Acordeón colapsable al final del panel.
+
+| Estado | Apariencia |
+|---|---|
+| Cerrado (default) | Header con label "COSTOS FRP" en uppercase gris, chevron `›` apuntando a la derecha, hover sutil con fondo `--bg-secondary` |
+| Abierto | Mismo header con chevron rotado 90° (apunta hacia abajo), contenido del pricing-box visible debajo |
+
+**Nota:** el contenido interno del acordeón (tabla de proveedores, política, pending changes) tiene rediseño visual pendiente, documentado en `_costos-frp-redesign-pendiente.md`.
+
+### 2.10 Botones genéricos
 
 | Tipo | Apariencia |
 |---|---|
@@ -146,38 +184,35 @@ Sin acciones. Sin botones. Click en "Ver todos →" del header lleva a vista fil
 
 ## 3. Edge cases
 
-### 3.1 Switch técnico mientras tenés job tomado **[DECISIÓN: el job se queda con quien lo tomó]**
+### 3.1 Switch técnico mientras tenés job tomado
 
-Si Jack tiene un job en `EN_PROCESO` y Angelo se vuelve activo:
-- El job mantiene `takenBy = jack.id` aunque Angelo sea el activo.
-- Angelo ve el job en la sección "TU TRABAJO ACTUAL" pero en modo lectura, con botones disabled y texto "Tomado por Jack".
-- Cuando Jack vuelve a estar activo, retoma su job desde donde lo dejó.
-- **Razón:** el equipo del cliente está físicamente conectado en la PC de Jack. Angelo no tiene acceso al equipo real.
+El job mantiene `technicianId = jack.id` aunque Angelo sea el activo. Angelo ve el job en modo lectura con botones disabled. Cuando Jack vuelve a estar activo, retoma su job desde donde lo dejó. Razón: el equipo está físicamente conectado en la PC de Jack.
 
-### 3.2 Pago revertido mientras el job está `EN_PROCESO` **[DECISIÓN: cancelación de raíz]**
+### 3.2 Pago revertido mientras el job está `EN_PROCESO`
 
-Si Bryam (admin) revierte una aprobación de pago después de que el job ya estaba en `EN_PROCESO`:
-- El job se cancela automáticamente sin importar el estado.
-- En la pantalla del técnico aparece un toast rojo: "Job cancelado: el pago fue revertido".
-- El card "TU TRABAJO ACTUAL" cambia al estado vacío.
-- **Razón:** el bypass real dura 5-10 segundos. La probabilidad de que alguien revierta justo durante esos segundos es muy baja. Si pasa, el equipo no se daña porque el bypass o ya terminó o ni empezó.
+Cuando admin revierte una aprobación de pago: el job se cancela automáticamente. Toast rojo "Job cancelado: el pago fue revertido" (vía `payload.notice` en SSE). El card "TU TRABAJO ACTUAL" vuelve a estado vacío. Razón: el bypass real dura 5-10s, no hay equipo físicamente conectado durante minutos.
 
-### 3.3 Job lleva más de 30 minutos en proceso **[DECISIÓN: banner con opciones]**
+**Nota técnica v1.2:** el mecanismo `notice` en el payload SSE está implementado pero el endpoint admin que dispara la reversión no existe todavía. Cuando se construya, dispara `publishFrpOps(db, "payment_reverted", { notice: { type: 'error', message: '...' } })`.
+
+### 3.3 Job lleva más de 30 minutos en proceso
 
 Si el técnico tomó un job hace más de 30 minutos y todavía no lo finalizó:
 - Aparece banner amarillo arriba del card: "Este job lleva 30+ min. ¿Necesitás ayuda?"
 - Banner tiene 2 botones:
-  - **[Sigo trabajando]** → cierra el banner. Vuelve a aparecer 30 min después si todavía no se finalizó.
-  - **[Cancelar job]** → cancela el job (vuelve a `LISTO_PARA_TECNICO` o se mueve a `REQUIERE_REVISION`, decisión técnica al implementar).
-- El técnico decide. No hay autocancelación.
+  - **[Sigo trabajando]** → cierra el banner por 30 min más (persiste en `localStorage` con key `frpOpsV2KeepWorking_<jobId>`)
+  - **[Cancelar job]** → confirm dialog "¿Cancelar este job?" → si OK, llama `PATCH /api/frp/jobs/:id/cancel` con `reason: 'timeout'` y `note: 'Cancelado tras 30+ min sin finalizar'`
+- El banner re-evalúa cada 60s vía `setInterval` global (también actualiza el "tomado hace X min")
+- Sin autocancelación
+
+**En modo readonly (otro técnico tiene el job):** banner observador "Jack lleva 30+ min en este job" sin botones (alerta informativa).
 
 ### 3.4 Cola vacía + sin job tomado
 
-Mensaje "Sin trabajo actual. Esperando que clientes conecten equipos." Botón "Tomar siguiente" disabled. Cuando un job entra (vía SSE), la cola se actualiza en vivo y suena el beep (ver sección 5.5).
+Mensaje "Sin trabajo actual. Esperando que clientes conecten equipos." Botón "Tomar siguiente" disabled. Cuando un job entra (vía SSE), la cola se actualiza en vivo.
 
 ### 3.5 Carrera de tomado
 
-Dos técnicos no pueden estar activos al mismo tiempo (restricción de switch). Pero entre el momento que un técnico ve el botón "Tomar" y aprieta, podría haber `ARIAD_TECHNICIAN_SWAP_MS` ventana donde el otro se vuelve activo y tomó otro job. El backend resuelve por timestamp y devuelve error al segundo intento. UI muestra toast: "Otro técnico tomó este job".
+Dos técnicos no pueden estar activos al mismo tiempo (restricción de switch). Pero entre el momento que un técnico ve el botón "Tomar" y aprieta, podría haber `ARIAD_TECHNICIAN_SWAP_MS` ventana donde el otro se vuelve activo y tomó otro job. El backend resuelve por timestamp y devuelve error al segundo intento. UI muestra frpMessage: "Otro técnico tomó este job".
 
 ### 3.6 Cliente desconecta el equipo durante procesamiento
 
@@ -185,11 +220,11 @@ El bypass dura 5-10s, así que esto raramente pasa. Si pasa: el job sigue en `EN
 
 ### 3.7 Conexión perdida con el servidor (SSE caído)
 
-Banner amarillo arriba del panel: "Reconectando…" con dot pulsante. Reintenta cada 25s (heartbeat default). Mientras está caído, la UI no actualiza datos pero los datos ya cargados quedan visibles.
+Banner `#frpOpsLiveStatus` arriba del panel pasa a estado "Reconectando…" con dot pulsante. El navegador reintenta automáticamente cada 5000ms (configurado en backend con `retry: 5000\n\n`). Mientras está caído, la UI no actualiza datos pero los datos ya cargados quedan visibles.
 
 ### 3.8 Sesión del técnico expirada
 
-Redirige a `/login` automáticamente. No muestra datos viejos.
+`renderLayout(!loggedIn)` cubre el path: dispara `stopFrpOpsLive()` automáticamente cuando detecta que la sesión expiró. Redirige a `/login`.
 
 ### 3.9 Cliente con texto muy largo (nombre, servicio)
 
@@ -197,11 +232,20 @@ Truncar con `text-overflow: ellipsis` después de 2 líneas en el card actual, 1
 
 ### 3.10 Cero finalizados hoy
 
-Sección entera oculta o con texto "Sin finalizados hoy".
+Sección entera oculta o con mensaje "Sin finalizados hoy".
 
 ### 3.11 Cola muy larga + filtro VIP
 
-Si la cola tiene 10+ jobs (caso pico que vos mencionaste) y se activa filtro VIP, se muestran solo los VIP. Si no hay VIPs, mensaje "No hay VIPs en cola, mostrando todos…" y se desactiva el filtro automáticamente.
+Si la cola tiene 10+ jobs (caso pico) y se activa filtro VIP, se muestran solo los VIP. Si no hay VIPs, mensaje "No hay VIPs en cola, mostrando todos…" y se desactiva el filtro automáticamente.
+
+### 3.12 Múltiples timers coexistiendo (deuda v2)
+
+El render del panel se dispara por 3 fuentes:
+- `setInterval 60s` (banner timeout 30 min) — implementado en commit 6
+- Polling técnico 30s/2s — implementado en commit 7c
+- Eventos SSE entrantes — implementado en commit 7c
+
+Todos llaman `renderFrp({ skipPricing: true })`. Si se nota flicker visual molesto, deuda v2: implementar DOM diffing.
 
 ---
 
@@ -238,57 +282,63 @@ Si la cola tiene 10+ jobs (caso pico que vos mencionaste) y se activa filtro VIP
 | Acción UI | Endpoint backend | Resultado |
 |---|---|---|
 | Apretar "Tomar siguiente" (card vacío) | `POST /api/frp/jobs/take-next` | Toma el job más antiguo de la cola |
-| Apretar "Tomar" en card específica de cola | **`POST /api/frp/jobs/:id/take` [ENDPOINT NUEVO A AGREGAR]** | Toma ese job específico. Si ya fue tomado por otro, devuelve 409. |
-| Apretar "Marcar finalizado" | `PATCH /api/frp/jobs/:id/finalize` | Cambia estado a `FINALIZADO`, registra `doneAt`, dispara generación de PDF cliente |
+| Apretar "Tomar" en card específica de cola | `POST /api/frp/jobs/:id/take` | Toma ese job específico. 409 si ya fue tomado |
+| Apretar "Marcar finalizado" | `PATCH /api/frp/jobs/:id/finalize` | Cambia estado a `FINALIZADO`, registra `doneAt`, auto-genera log "Finalizado por <user> a las <HH:MM>" Lima, dispara generación de PDF cliente |
 | Apretar "Reportar problema" | Abre modal (otra spec). Modal llama `PATCH /api/frp/jobs/:id/review` con razón + categoría |
-| Apretar "Sigo trabajando" en banner 30 min | (sin endpoint) cierra banner client-side, lo re-abre 30 min después |
-| Apretar "Cancelar job" en banner 30 min | `PATCH /api/frp/jobs/:id/cancel` (ya existe o agregar) | Cancela el job, libera al técnico |
-| Toggle "Solo VIP" | (sin endpoint) filtro client-side sobre la cola ya cargada |
+| Apretar "Sigo trabajando" en banner 30 min | (sin endpoint) cierra banner client-side, persiste en localStorage |
+| Apretar "Cancelar job" en banner 30 min | confirm → `PATCH /api/frp/jobs/:id/cancel` con `{reason: 'timeout', note: 'Cancelado tras 30+ min sin finalizar'}` |
+| Toggle "Solo VIP" | (sin endpoint) filtro client-side sobre la cola ya cargada, persiste en sessionStorage |
 | Apretar "Ver comprobante" | Abre modal con `paymentProofs[]` + botones Aprobar/Rechazar |
 | Apretar "Aprobar" en modal de comprobante | `PATCH /api/frp/orders/:id/payment-review` (action: approve) | Aprueba pago, dispara lock 15min |
 | Apretar "Rechazar" en modal de comprobante | `PATCH /api/frp/orders/:id/payment-review` (action: reject) | Rechaza pago, vuelve a cliente con razón |
-| Reversión de pago aprobado (admin desde otra vista) | (endpoint admin existente) | Si hay job en `EN_PROCESO`, lo cancela. Toast en panel operador. |
 
 ### 5.2 Real-time updates (SSE)
 
-- El panel se suscribe a stream SSE del operador.
-- Eventos que disparan refresh:
-  - Cliente apreta "Equipo conectado" → job nuevo aparece en cola + dispara beep (si aplica)
-  - Cliente sube comprobante → card aparece en "Pagos por revisar"
-  - Otro admin/técnico aprueba/rechaza un pago → card desaparece o cambia
-  - Otro técnico (en sesión paralela) toma un job → card desaparece de la cola
-  - Switch técnico activado → badge del header cambia
-  - Pago revertido sobre job en proceso → toast rojo + card de trabajo actual se vacía
-  - Job pasa a 30 min → banner amarillo aparece en card de trabajo actual
+Endpoint: `GET /api/operator/frp/events`. Auth via cookie operador + rol con acceso FRP.
+
+**Eventos emitidos por backend:**
+
+| Reason | Trigger |
+|---|---|
+| `connected` | Snapshot inicial al abrir conexión |
+| `frp_job_ready_for_technician` | Cliente apreta "Equipo conectado" → job entra a cola |
+| `payment_review_needed` | Cliente sube comprobante (creación o re-upload) |
+| `payment_review_resolved` | Operador aprueba/rechaza pago |
+| `frp_job_taken` | Operador toma un job (take-next o take específico) |
+| `frp_job_done` | Operador finaliza job |
+| `frp_job_canceled` | Operador cancela job (timeout/manual/payment_reverted) |
+| `frp_job_ready` | Operador marca job ready (paso preparación → técnico) |
+| `frp_job_review_required` | Operador reporta problema (review) |
+| `technician_switched` | Switch Jack ↔ Angelo (1er evento al iniciar) |
+| `frp_order_created` | Nueva orden manual (operador) o portal (cliente) |
+| `payment_reverted` | (Mecanismo listo, sin disparador hasta que se construya endpoint admin) |
+
+**Payload:** `{ reason, frp: <publicFrpState>, notice?: { type: 'info'|'error', message: '...' } }`
+
+Si hay `notice`, el frontend pinta `#frp-message` con el dataset.type. Sin notice, refresh silencioso.
+
+**Heartbeat:** 25s. Reconnect: navegador retry automático cada 5000ms.
 
 ### 5.3 Filtro VIP
 
 - Toggle client-side, no requiere endpoint.
 - Filtra la cola ya cargada por `cliente.status === 'VIP'`.
-- Persiste en sessionStorage del técnico (si lo apaga y vuelve, queda como lo dejó).
+- Persiste en sessionStorage del técnico.
 - Si filtro activo y entran jobs nuevos no-VIP, no aparecen en la vista filtrada (pero el contador "COLA · X" sigue contando todos).
 
 ### 5.4 Validaciones antes de actions
 
-- "Marcar finalizado" requiere que `job.takenBy === currentUser.id`. Si no, botón disabled con tooltip "Solo quien tomó el job puede finalizarlo".
+- "Marcar finalizado" requiere que `job.technicianId === currentUser.id`. Si no, botón disabled con tooltip "Solo quien tomó el job puede finalizarlo".
 - "Tomar" no permite tomar si ya hay un job en `EN_PROCESO` para este técnico. Botón disabled.
 - "Aprobar comprobante" requiere rol `ADMIN` o `COORDINADOR`. Si rol `ATENCION_TECNICA`, botón disabled con tooltip "Permisos insuficientes".
 - Cuando hay switch en transición (10s), todos los botones de acción están disabled.
 
-### 5.5 Notificación sonora (beep)
+### 5.5 Polling acelerado durante swap
 
-- Sonido corto (0.3s, frecuencia ~880Hz) cuando entra un job nuevo a la cola.
-- **Solo suena si el técnico no tiene job tomado** (no interrumpir si está procesando).
-- **Solo suena si el tab está visible** (no molestar si está minimizado en background).
-- El técnico puede silenciar con un toggle en algún lugar del panel (preferencia local en localStorage). **Default: ON.**
-- Sonido se carga como audio embebido (data URI), no requiere request externo.
-
-### 5.6 Keyboard shortcuts (opcional, no implementar en v1.1)
-
-Reservado para v2:
-- `T` → Tomar siguiente
-- `F` → Marcar finalizado
-- `R` → Reportar problema
+- Mientras `swap.inProgress === true`, `paintTechnicianWidget` consulta `/api/operator/technician/status` cada 2s.
+- Cuando `swap.inProgress === false`, regresa a 30s.
+- Esto reemplaza al 2do evento del switch técnico (decisión de no instrumentar `readDb`).
+- Resultado UX: badge "Cambiando técnico..." dura ~10-12s reales, no 35s del peor caso.
 
 ---
 
@@ -300,7 +350,7 @@ Reservado para v2:
 
 `frpJob`:
 - `id`, `frpOrderId`, `ardCode`, `status` (enum)
-- `takenBy`, `takenAt`, `doneAt`
+- **`technicianId`**, `takenAt`, `doneAt`
 - `requiredStateConfirmed`, `modelSupported`, `clientConnected`
 
 `frpOrder`:
@@ -316,28 +366,31 @@ Reservado para v2:
 `activeTechnician`:
 - `userId`, `redirectorId`, `switchedAt`, `swapEndsAt`
 
-### 6.2 Endpoints a agregar al backend
+### 6.2 Endpoints implementados
 
-**Nuevo:** `POST /api/frp/jobs/:id/take`
-- Body: vacío
-- Auth: requiere rol `ADMIN`/`COORDINADOR`/`ATENCION_TECNICA`
-- Lógica: si `job.status === 'LISTO_PARA_TECNICO'` y el técnico está activo → toma el job (igual que take-next pero para uno específico)
-- Respuestas: 200 con job actualizado, 409 si ya fue tomado por otro, 403 si no es técnico activo, 422 si el job no está en estado válido
+**Sesión 7 (commits f1267a3, d2bc27f, 99aae55, defc7f8):**
 
-**Verificar que existe:** `PATCH /api/frp/jobs/:id/cancel`
-- Si no existe, agregar
-- Body: `{ reason: 'timeout' | 'payment_reverted' | 'manual', note?: string }`
-- Auth: técnico que tomó el job, o ADMIN
+- `POST /api/frp/jobs/:id/take` — toma específico
+- `PATCH /api/frp/jobs/:id/cancel` — body `{ reason, note }`
+- `PATCH /api/frp/jobs/:id/finalize` modificado: ya no requiere log, auto-genera Lima
+- `publicFrpState` extendido con `finishedTodayJobs[]`
+
+**Sesión 7 (commits ca81c63, 011c60a, f6c2927):**
+
+- `GET /api/operator/frp/events` — SSE stream operador
+- Helper `publishFrpOps(db, reason, opts?)` con campo `notice` opcional
+- Map `frpOpsStreams<userId, Set<stream>>` con cleanup en disconnect
+- 13 puntos de instrumentación en mutaciones existentes
 
 ### 6.3 Validaciones
 
 **Frontend:**
 - Solo mostrar el panel a usuarios con rol `ADMIN`, `COORDINADOR`, o `ATENCION_TECNICA`.
 - Botones de aprobación de pago solo a `ADMIN` y `COORDINADOR`.
-- Botón "Marcar finalizado" solo si `job.takenBy === currentUser.id`.
+- Botón "Marcar finalizado" solo si `job.technicianId === currentUser.id`.
 - Botón "Tomar" disabled si el técnico no es el activo del momento.
 
-**Backend** (ya implementado, no se toca):
+**Backend** (ya implementado):
 - Validación de rol en cada endpoint.
 - Validación de transición de estado.
 - Lock 15min al aprobar pago.
@@ -347,79 +400,84 @@ Reservado para v2:
 ## 7. Acceptance criteria
 
 **Layout y estilo:**
-1. Header del panel muestra título "FRP Express" y badge con técnico activo (Jack o Angelo).
+1. Header del panel muestra título "FRP Express" y badge con técnico activo.
 2. Badge tiene dot verde pulsante con animación.
 3. Card "Tu trabajo actual" ocupa ancho completo y tiene borde 0.5px.
 4. Cards de cola están en lista vertical con gap de 6px.
 5. Cards VIP en cola tienen badge dorado "VIP" arriba a la derecha.
 6. Pagos por revisar y Atención están en grid de 2 columnas en desktop, 1 columna en mobile.
 7. Finalizados muestra como tabla con filas separadas por borde, con columna/inicial del técnico que finalizó.
+8. Acordeón "Costos FRP" colapsado por default con label uppercase y chevron rotable.
 
 **Funcionalidad básica:**
-8. Al cargar el panel, se hace fetch del estado actual y se renderiza con datos reales.
-9. SSE establecido al cargar, reconecta cada 25s si se cae.
-10. Botón "Tomar siguiente" disabled si la cola está vacía.
-11. Click en "Tomar siguiente" llama `POST /api/frp/jobs/take-next` y actualiza la UI con el job tomado.
-12. Click en "Tomar" de un card específico llama `POST /api/frp/jobs/:id/take` y actualiza la UI.
-13. Si otro técnico toma un job, el card desaparece de la cola en menos de 2s (vía SSE) + toast "Otro técnico tomó este job".
-14. Click en "Marcar finalizado" llama `PATCH /api/frp/jobs/:id/finalize`, refresca el panel, mueve el job a Finalizados.
-15. Click en "Reportar problema" abre modal de reportar problema (otra spec).
-16. Click en "Ver comprobante" abre modal con paymentProofs y botones de aprobar/rechazar.
-17. Approve de un comprobante llama `PATCH /api/frp/orders/:id/payment-review` y dispara lock 15min.
+9. Al cargar el panel, se hace fetch del estado actual y se renderiza con datos reales.
+10. SSE establecido al cargar, reconecta automáticamente con `retry: 5000`.
+11. Botón "Tomar siguiente" disabled si la cola está vacía.
+12. Click en "Tomar siguiente" llama `POST /api/frp/jobs/take-next` y actualiza la UI con el job tomado.
+13. Click en "Tomar" de un card específico llama `POST /api/frp/jobs/:id/take` y actualiza la UI.
+14. Si otro técnico toma un job, el card desaparece de la cola en menos de 2s (vía SSE).
+15. Click en "Marcar finalizado" llama `PATCH /api/frp/jobs/:id/finalize` (auto-log generado), refresca el panel, mueve el job a Finalizados.
+16. Click en "Reportar problema" abre modal de reportar problema (otra spec).
+17. Click en "Ver comprobante" abre modal con paymentProofs y botones de aprobar/rechazar.
+18. Approve de un comprobante llama `PATCH /api/frp/orders/:id/payment-review` y dispara lock 15min.
 
 **Estados especiales:**
-18. Si el técnico activo es Jack y currentUser es Angelo (visualizando el panel), el botón "Tomar" está disabled con tooltip.
-19. Si rol es `ATENCION_TECNICA`, los botones de aprobar/rechazar pago están disabled.
-20. Durante el switch (10s ventana), badge del header dice "Cambiando técnico…" en gris y todos los botones de acción están disabled.
-21. Si la sesión del técnico expira, redirige a `/login` automáticamente.
-22. Si Jack tiene un job y Angelo es activo, Angelo ve el card de trabajo actual en modo lectura con texto "Tomado por Jack".
+19. Si el técnico activo es Jack y currentUser es Angelo, el botón "Tomar" está disabled con tooltip.
+20. Si rol es `ATENCION_TECNICA`, los botones de aprobar/rechazar pago están disabled.
+21. Durante el switch (10s ventana), badge del header dice "Cambiando técnico…" en gris y todos los botones de acción están disabled. Polling acelerado a 2s para confirmar fin del swap rápido.
+22. Si la sesión del técnico expira, `renderLayout(!loggedIn)` dispara `stopFrpOpsLive()` y redirige a `/login`.
+23. Si Jack tiene un job y Angelo es activo, Angelo ve el card de trabajo actual en modo lectura con texto "Tomado por Jack".
 
-**Decisiones de producto v1.1:**
-23. Cuando un job lleva 30 min en `EN_PROCESO`, banner amarillo "Este job lleva 30+ min" aparece arriba del card con botones [Sigo trabajando] y [Cancelar job].
-24. Click en [Sigo trabajando] cierra banner por 30 min más.
-25. Click en [Cancelar job] llama endpoint de cancelación y libera el card.
-26. Si admin revierte un pago aprobado mientras el job está `EN_PROCESO`, el job se cancela automáticamente y aparece toast rojo "Job cancelado: el pago fue revertido".
-27. Toggle "Solo VIP" en cola filtra la lista mostrando solo jobs de clientes con `status === 'VIP'`.
-28. Si toggle "Solo VIP" activado y entran jobs nuevos no-VIP, no aparecen en vista filtrada pero contador total se actualiza.
-29. Sección "Finalizados hoy" muestra finalizados de Jack y Angelo, con identificador visual del técnico.
-30. Sonido beep al entrar job nuevo a cola, solo si técnico no tiene job tomado y tab está visible. Toggle ON por default.
+**Decisiones de producto v1.1+v1.2:**
+24. Cuando un job lleva 30 min en `EN_PROCESO`, banner amarillo "Este job lleva 30+ min" aparece arriba del card con botones [Sigo trabajando] y [Cancelar job].
+25. Click en [Sigo trabajando] cierra banner por 30 min más, persiste en localStorage.
+26. Click en [Cancelar job] dispara confirm dialog. Si OK, llama endpoint con `reason: 'timeout'` y libera el card.
+27. En modo readonly (otro técnico tiene el job), banner observador sin botones "X lleva 30+ min en este job".
+28. Si admin revierte un pago aprobado mientras el job está `EN_PROCESO`, el job se cancela automáticamente y aparece notice "Job cancelado: el pago fue revertido" en frpMessage (mecanismo SSE, sin disparador hasta endpoint admin).
+29. Toggle "Solo VIP" en cola filtra la lista mostrando solo jobs de clientes con `status === 'VIP'`.
+30. Sección "Finalizados hoy" muestra finalizados de Jack y Angelo, con identificador visual del técnico.
+
+**Real-time (SSE):**
+31. Conexión SSE establecida al hacer login, cleanup automático en logout/sesión expirada.
+32. Banner `#frpOpsLiveStatus` muestra estado de la conexión (oculto cuando OK, "Reconectando..." cuando se cae).
+33. Eventos SSE entrantes con notice pintan `#frp-message` con dataset.type.
+34. Eventos sin notice solo refrescan el state (renderFrp silencioso).
+35. Switch técnico: polling acelerado a 2s mientras `swap.inProgress === true`, vuelve a 30s al completarse.
 
 **Responsive:**
-31. En mobile (<768px), cards de cola se vuelven verticales (info arriba, botón abajo).
-32. En mobile, grid de Pagos+Atención se vuelve 1 columna.
-33. En mobile, data cells del card "Tu trabajo actual" se apilan en 1 columna.
-34. Filtro VIP visible en mobile en línea separada arriba de la cola.
+36. En mobile (<768px), cards de cola se vuelven verticales (info arriba, botón abajo).
+37. En mobile, grid de Pagos+Atención se vuelve 1 columna.
+38. En mobile, data cells del card "Tu trabajo actual" se apilan en 1 columna.
+39. Filtro VIP visible en mobile en línea separada arriba de la cola.
 
 **Edge cases:**
-35. Si la cola está vacía y no hay job tomado, mensaje "Sin trabajo actual. Esperando que clientes conecten equipos."
-36. Si SSE se cae, banner amarillo arriba del panel "Reconectando…" hasta que vuelva.
-37. Texto largo en nombres se trunca con ellipsis.
-38. Cero finalizados hoy: sección oculta o mensaje "Sin finalizados hoy".
+40. Si la cola está vacía y no hay job tomado, mensaje "Sin trabajo actual. Esperando que clientes conecten equipos."
+41. Si SSE se cae, banner amarillo "Reconectando…" hasta que vuelva.
+42. Texto largo en nombres se trunca con ellipsis.
+43. Cero finalizados hoy: sección oculta o mensaje "Sin finalizados hoy".
 
 ---
 
 ## 8. Open questions / Decisiones pendientes
 
-**Todas las 8 Open Questions de v1.0 fueron resueltas con Bryam y están integradas en las secciones correspondientes.**
+**Todas las Open Questions de v1.0 y v1.1 fueron resueltas.**
 
-Resumen de decisiones tomadas:
+**Open questions abiertas para v1.3 (futuras sesiones):**
 
-| Pregunta original | Decisión |
-|---|---|
-| 1. Switch técnico con job tomado | Job se queda con quien lo tomó (Opción A) |
-| 2. Tomar específico vs take-next | Técnico elige cuál tomar (botón en cada card) |
-| 3. Pago revertido con job en curso | Cancelación de raíz (bypass dura 5-10s, no hay riesgo físico) |
-| 4. Timeout de jobs en proceso | Banner amarillo a los 30 min con [Sigo trabajando] / [Cancelar] |
-| 5. Finalizados hoy: solo del técnico activo o de ambos | De ambos técnicos, con identificador visual |
-| 6. Reportar problema: razón obligatoria | Texto libre + opciones predefinidas (modal en otra spec) |
-| 7. Filtro/búsqueda en cola | Filtro VIP simple (toggle) |
-| 8. Beep al entrar job | Sí, solo si no tiene job tomado y tab visible. Toggle ON por default. |
+1. **Disparador de `payment_reverted`:** mecanismo SSE listo, falta implementar endpoint admin que dispara la reversión. Cuando se haga, llamar `publishFrpOps(db, "payment_reverted", { notice: { type: 'error', message: 'Job cancelado: el pago fue revertido' } })` después de cancelar el job afectado.
 
-**Si surgen preguntas nuevas durante la implementación**, se agregan acá con su decisión y se actualiza changelog.
+2. **DOM diffing para evitar flicker:** múltiples timers convergen a `renderFrp({ skipPricing: true })`. Si se nota flicker molesto en uso real, implementar diffing.
+
+3. **Adjuntar evidencia post-finalización:** la spec menciona sub-acción "Adjuntar evidencia" después de finalizar (decisión sesión 7 con auto-log). NO está implementado todavía. Spec separada cuando sea necesario.
+
+4. **Toast flotante real:** decisión actual es reusar `#frp-message` inline. Si se quiere toast flotante en el futuro, spec separada.
 
 ---
 
 ## Changelog
 
-- **v1.1** (2026-05-02) — Bryam respondió las 8 Open Questions. Decisiones integradas en componentes, edge cases, comportamiento y acceptance criteria. Agregado: filtro VIP, banner timeout 30 min, beep, columna de técnico en finalizados, endpoint nuevo `POST /api/frp/jobs/:id/take`. Spec aprobada para implementación.
-- **v1.0** (2026-05-02) — Spec inicial. 8 piezas completas. 8 Open Questions pendientes.
+- **v1.2** (2026-05-03) — Sesión 7. SSE operador end-to-end (commits ca81c63 + 011c60a + f6c2927). Cleanup post-rediseño (5b). Banner timeout 30 min (6). Cleanup visual + acordeón Costos FRP estilizado (6b). Decisiones registradas: beep eliminado, finalize auto-log, technicianId, formato ARD-, sin XXX, sin Crear orden manual, sin botón Actualizar, sin 8 contadores. 2do evento del switch reemplazado por polling acelerado (Opción D).
+
+- **v1.1** (2026-05-02) — Sesión 6. Bryam respondió las 8 Open Questions originales. 38 acceptance criteria. Filtro VIP, banner timeout, beep (luego eliminado en v1.2), columna técnico en finalizados.
+
+- **v1.0** (2026-05-02) — Sesión 5. Spec inicial. 8 piezas completas. 8 Open Questions pendientes.
