@@ -2206,23 +2206,40 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
   border: 0.5px solid var(--danger-border);
 }
 
-/* Banner SSE reconectando (commit 7) — placeholder por anticipación */
+/* Banner SSE estado de conexion (commit 7c). Vive FUERA del .frp-ops-v2
+   (sibling de #frp-workbench) porque el render rewrite del workbench
+   borraria su estado en cada re-render. Por eso usa valores literales
+   en vez de tokens scoped al .frp-ops-v2. */
 .frp-ops-v2-sse-banner {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: var(--warning-bg);
-  border-bottom: 0.5px solid var(--warning-border);
-  padding: 8px 24px;
+  background: #FAEEDA;
+  border: 0.5px solid #FAC775;
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin: 8px 0;
   font-size: 12px;
-  color: var(--warning-text-soft);
+  color: #633806;
 }
+.frp-ops-v2-sse-banner[hidden] { display: none; }
 .frp-ops-v2-sse-banner-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--warning-border);
+  background: #FAC775;
+  display: inline-block;
+  flex-shrink: 0;
   animation: frpOpsV2Pulse 1.4s ease-in-out infinite;
+}
+.frp-ops-v2-sse-banner.is-error {
+  background: #FCEBEB;
+  border-color: #F09595;
+  color: #501313;
+}
+.frp-ops-v2-sse-banner.is-error .frp-ops-v2-sse-banner-dot {
+  background: #F09595;
+  animation: none;
 }
 
 /* Responsive — mobile <768px */

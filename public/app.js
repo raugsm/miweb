@@ -441,6 +441,7 @@ function renderLayout() {
   if (!loggedIn) {
     stopPresenceRefresh();
     stopTechnicianWidgetPolling();
+    stopFrpOpsLive();
     return;
   }
 
@@ -468,6 +469,11 @@ function renderLayout() {
   renderTicketBoard();
   renderTickets();
   startTechnicianWidgetPolling();
+  // FRP Ops v2 SSE — arranca solo si el user tiene acceso FRP (guard interno
+  // en startFrpOpsLive). Llamarlo despues del primer renderFrp asegura que
+  // session.frp ya esta poblada — el snapshot inicial del backend reemplaza
+  // ese state pero coincide en shape, sin race observable.
+  startFrpOpsLive();
 }
 
 function renderCatalog() {
@@ -3734,6 +3740,19 @@ function clearTechnicianRevertCountdown() {
 
 function paintTechnicianWidget(status) {
   technicianStatusCache = status;
+  // Opcion D — acelera polling a 2s mientras hay swap en curso, vuelve a
+  // 30s cuando completa. Render del badge en el panel FRP (renderFrp lee
+  // technicianStatusCache directamente) tambien repinta — combinado con
+  // el SSE da UX casi real-time sin tocar backend del switch.
+  if (status?.swap?.inProgress) {
+    setTechnicianPollInterval(FRP_OPS_TECHNICIAN_POLL_SWAP_MS);
+  } else if (technicianRefreshTimer) {
+    setTechnicianPollInterval(FRP_OPS_TECHNICIAN_POLL_NORMAL_MS);
+  }
+  // El renderFrp() debe refrescar el badge del header para reflejar el
+  // status nuevo (ej. "Cambiando tecnico..." durante swap). Lo dispara
+  // skipPricing:true para no destruir el estado del Costos FRP collapsible.
+  if (frpEnabled()) renderFrp({ skipPricing: true });
   if (!userCanViewTechnicianWidget() || !status?.active) {
     technicianWidget.classList.add("hidden");
     return;
@@ -3776,9 +3795,26 @@ async function refreshTechnicianWidget() {
   }
 }
 
+// FRP Ops v2 — Opcion D del commit 7c: durante un switch de tecnico, el
+// polling de /api/operator/technician/status acelera de 30s a 2s para que
+// el badge transite de "Cambiando tecnico..." a "Jack/Angelo activo" sin
+// el delay del peor caso (~25s). Reemplaza al 2do evento SSE del switch
+// que se omitio en backend (commit 011c60a).
+const FRP_OPS_TECHNICIAN_POLL_NORMAL_MS = 30_000;
+const FRP_OPS_TECHNICIAN_POLL_SWAP_MS = 2_000;
+let currentTechnicianPollMs = FRP_OPS_TECHNICIAN_POLL_NORMAL_MS;
+
+function setTechnicianPollInterval(ms) {
+  if (currentTechnicianPollMs === ms && technicianRefreshTimer) return; // idempotente
+  currentTechnicianPollMs = ms;
+  if (technicianRefreshTimer) clearInterval(technicianRefreshTimer);
+  technicianRefreshTimer = setInterval(refreshTechnicianWidget, ms);
+}
+
 function startTechnicianWidgetPolling() {
   if (technicianRefreshTimer) clearInterval(technicianRefreshTimer);
-  technicianRefreshTimer = setInterval(refreshTechnicianWidget, 30_000);
+  currentTechnicianPollMs = FRP_OPS_TECHNICIAN_POLL_NORMAL_MS;
+  technicianRefreshTimer = setInterval(refreshTechnicianWidget, currentTechnicianPollMs);
   refreshTechnicianWidget();
 }
 
@@ -3800,7 +3836,91 @@ function stopTechnicianWidgetPolling() {
     clearInterval(technicianRefreshTimer);
     technicianRefreshTimer = null;
   }
+  currentTechnicianPollMs = FRP_OPS_TECHNICIAN_POLL_NORMAL_MS;
   clearTechnicianRevertCountdown();
+}
+
+// ============================================================
+// FRP Ops v2 SSE — cliente. Recibe eventos del endpoint
+// /api/operator/frp/events (commit ca81c63) y actualiza session.frp
+// + renderFrp({ skipPricing: true }) al instante. Reconnect automatico
+// vía retry: 5000 del backend; el banner #frpOpsLiveStatus muestra el
+// estado de conexion al usuario. Spec operador-frp-express.md §5.2 +
+// AC #9, #13, #36.
+// ============================================================
+const frpOpsLiveEl = document.querySelector("#frpOpsLiveStatus");
+const frpOpsLiveTextEl = frpOpsLiveEl?.querySelector("[data-frp-ops-live-text]");
+let frpOpsStream = null;
+
+function setFrpOpsLiveStatus(text, type = "") {
+  if (!frpOpsLiveEl) return;
+  if (!text) {
+    frpOpsLiveEl.hidden = true;
+    frpOpsLiveEl.classList.remove("is-error");
+    return;
+  }
+  frpOpsLiveEl.hidden = false;
+  if (frpOpsLiveTextEl) frpOpsLiveTextEl.textContent = text;
+  frpOpsLiveEl.classList.toggle("is-error", type === "error");
+}
+
+function frpOpsHandleEvent(rawData) {
+  let payload;
+  try {
+    payload = JSON.parse(rawData || "{}");
+  } catch {
+    return;
+  }
+  if (payload.frp) {
+    session.frp = payload.frp;
+    // skipPricing:true preserva el estado del Costos FRP collapsible
+    // (igual que el setInterval 60s del commit 6).
+    renderFrp({ skipPricing: true });
+  }
+  // Decision #1 del reporte 7: NO toast flotante. Si el payload trae
+  // notice, lo pintamos en #frp-message inline (mismo patron que el
+  // resto de mensajes del panel). Sin notice, refresh silencioso.
+  if (payload.notice && frpMessage) {
+    const type = payload.notice.type === "error" ? "error" : "neutral";
+    frpMessage.textContent = String(payload.notice.message || "");
+    frpMessage.dataset.type = type;
+  }
+}
+
+function startFrpOpsLive() {
+  if (frpOpsStream) return; // idempotente
+  if (!session.user || !frpEnabled()) return;
+  if (!window.EventSource) {
+    setFrpOpsLiveStatus("Sin soporte SSE en este navegador", "error");
+    return;
+  }
+  setFrpOpsLiveStatus("Conectando...");
+  let stream;
+  try {
+    stream = new EventSource("/api/operator/frp/events");
+  } catch {
+    setFrpOpsLiveStatus("Sin conexión", "error");
+    return;
+  }
+  frpOpsStream = stream;
+  stream.onopen = () => setFrpOpsLiveStatus("");
+  stream.addEventListener("frp", (event) => {
+    setFrpOpsLiveStatus("");
+    frpOpsHandleEvent(event.data);
+  });
+  stream.onerror = () => {
+    // EventSource reintenta automaticamente con retry: 5000 del backend.
+    // Mientras tanto, mostrar banner amarillo.
+    setFrpOpsLiveStatus("Reconectando...");
+  };
+}
+
+function stopFrpOpsLive() {
+  if (frpOpsStream) {
+    try { frpOpsStream.close(); } catch { /* ignore */ }
+  }
+  frpOpsStream = null;
+  setFrpOpsLiveStatus("");
 }
 
 function openTechnicianSwitchModal({ temporary }) {
