@@ -1597,6 +1597,331 @@ function renderFrpJobCard(job, actions = "") {
   `;
 }
 
+// ============================================================
+// FRP Ops v2 — render rediseñado (spec operador-frp-express.md v1.1)
+// Reemplaza el layout de 6 lanes horizontales por vista vertical priorizada:
+// 1) Header con técnico activo, 2) Tu trabajo actual (hero), 3) Cola con
+// filtro VIP, 4) grid Pagos/Atención, 5) Finalizados hoy.
+// Helpers viejos (renderFrpOrder, renderFrpJobCard, frpWebFilters) quedan
+// disponibles para otros consumidores potenciales — limpieza en Bundle 3.
+// ============================================================
+
+const FRP_OPS_V2_VIP_FILTER_KEY = "frpOpsV2VipFilter";
+function frpOpsV2VipFilterEnabled() {
+  try { return sessionStorage.getItem(FRP_OPS_V2_VIP_FILTER_KEY) === "1"; }
+  catch { return false; }
+}
+function setFrpOpsV2VipFilter(value) {
+  try {
+    if (value) sessionStorage.setItem(FRP_OPS_V2_VIP_FILTER_KEY, "1");
+    else sessionStorage.removeItem(FRP_OPS_V2_VIP_FILTER_KEY);
+  } catch { /* sessionStorage no disponible (incognito) — silencioso */ }
+}
+
+function frpOpsV2RelativeTime(iso) {
+  if (!iso) return "";
+  const ms = new Date(iso).getTime();
+  if (!Number.isFinite(ms)) return "";
+  const diff = Math.max(0, Date.now() - ms);
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return "ahora mismo";
+  if (min === 1) return "hace 1 min";
+  if (min < 60) return `hace ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h === 1) return "hace 1 h";
+  if (h < 24) return `hace ${h} h`;
+  return `hace ${Math.floor(h / 24)} d`;
+}
+
+function frpOpsV2LimaTime(iso) {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("es-PE", {
+    timeZone: "America/Lima",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
+}
+
+function frpOpsV2TechInitial(name) {
+  if (!name) return "?";
+  return String(name).trim().charAt(0).toUpperCase() || "?";
+}
+
+function frpOpsV2RenderHeader(tech) {
+  let badgeClass = "frp-ops-v2-tech-badge";
+  let badgeText = "Sin tecnico activo";
+  if (tech?.swap?.inProgress) {
+    badgeClass += " is-swap";
+    badgeText = "Cambiando tecnico…";
+  } else if (tech?.active?.name) {
+    badgeText = `${tech.active.name} activo`;
+  } else {
+    badgeClass += " is-empty";
+  }
+  return `
+    <div class="frp-ops-v2-header">
+      <div>
+        <div class="frp-ops-v2-header-label">Panel operador</div>
+        <div class="frp-ops-v2-header-title">FRP Express</div>
+      </div>
+      <div class="${badgeClass}">
+        <span class="frp-ops-v2-tech-dot"></span>
+        ${escapeHtml(badgeText)}
+      </div>
+    </div>
+  `;
+}
+
+function frpOpsV2RenderCurrentActive(job, { swapInProgress, tech }) {
+  const order = job.order || {};
+  const orderCode = order.code || job.code || "";
+  const sequence = job.sequence || 1;
+  const totalEquipos = order.quantity || job.totalJobs || 1;
+  const clientName = order.clientName || job.clientName || "-";
+  const serviceName = job.serviceName || "Xiaomi Cuenta Google";
+  const ardCode = job.ardCode || "";
+  const technicianId = tech?.active?.redirectorId || "-";
+  const processCode = order.processCode || "-";
+  const takenAtRel = frpOpsV2RelativeTime(job.takenAt);
+  const actionsDisabled = swapInProgress;
+  return `
+    <section class="frp-ops-v2-section">
+      <div class="frp-ops-v2-section-header">
+        <div class="frp-ops-v2-section-label">Tu trabajo actual</div>
+      </div>
+      <div class="frp-ops-v2-current">
+        <div class="frp-ops-v2-current-head">
+          <div>
+            <div class="frp-ops-v2-current-meta">${escapeHtml(orderCode)} · ${escapeHtml(sequence)} de ${escapeHtml(totalEquipos)} equipos</div>
+            <div class="frp-ops-v2-current-name">${escapeHtml(clientName)}</div>
+            <div class="frp-ops-v2-current-service">${escapeHtml(serviceName)}${ardCode ? ` · ${escapeHtml(ardCode)}` : ""}</div>
+          </div>
+          ${takenAtRel ? `<div class="frp-ops-v2-current-time">tomado ${escapeHtml(takenAtRel)}</div>` : ""}
+        </div>
+        <div class="frp-ops-v2-current-data">
+          <div class="frp-ops-v2-data-cell">
+            <div class="frp-ops-v2-data-cell-label">Technician ID</div>
+            <div class="frp-ops-v2-data-cell-value">${escapeHtml(technicianId)}</div>
+          </div>
+          <div class="frp-ops-v2-data-cell">
+            <div class="frp-ops-v2-data-cell-label">Codigo del proceso</div>
+            <div class="frp-ops-v2-data-cell-value">${escapeHtml(processCode)}</div>
+          </div>
+        </div>
+        <div class="frp-ops-v2-current-actions">
+          <button type="button" class="frp-ops-v2-btn-primary"
+            data-frp-finalize="${escapeHtml(job.id)}"
+            ${actionsDisabled ? "disabled" : ""}
+            ${actionsDisabled ? `title="Cambio de tecnico en curso"` : ""}>
+            Marcar finalizado
+          </button>
+          <button type="button" class="frp-ops-v2-btn-secondary"
+            data-frp-review="${escapeHtml(job.id)}"
+            ${actionsDisabled ? "disabled" : ""}>
+            Reportar problema
+          </button>
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+function frpOpsV2RenderCurrentReadonly(job, otherName) {
+  const order = job.order || {};
+  return `
+    <section class="frp-ops-v2-section">
+      <div class="frp-ops-v2-section-header">
+        <div class="frp-ops-v2-section-label">Tu trabajo actual</div>
+      </div>
+      <div class="frp-ops-v2-current frp-ops-v2-current--readonly">
+        <div class="frp-ops-v2-current-head">
+          <div>
+            <div class="frp-ops-v2-current-meta">${escapeHtml(order.code || job.code || "")} · ${escapeHtml(job.sequence || 1)} de ${escapeHtml(order.quantity || 1)} equipos</div>
+            <div class="frp-ops-v2-current-name">${escapeHtml(order.clientName || job.clientName || "-")}</div>
+          </div>
+          <span class="frp-ops-v2-readonly-tag">Tomado por ${escapeHtml(otherName)}</span>
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+function frpOpsV2RenderCurrentEmpty({ queueLen, isMeActive, swapInProgress }) {
+  const hasJobsInQueue = queueLen > 0;
+  const canTake = hasJobsInQueue && isMeActive && !swapInProgress;
+  const disabledTip = swapInProgress
+    ? "Cambio de tecnico en curso"
+    : !isMeActive ? "No sos el tecnico activo"
+    : !hasJobsInQueue ? "Sin trabajos listos en cola"
+    : "";
+  return `
+    <section class="frp-ops-v2-section">
+      <div class="frp-ops-v2-section-header">
+        <div class="frp-ops-v2-section-label">Tu trabajo actual</div>
+      </div>
+      <div class="frp-ops-v2-current frp-ops-v2-current--empty">
+        <p class="frp-ops-v2-current-empty-text">
+          ${hasJobsInQueue
+            ? "Sin trabajo actual."
+            : "Sin trabajo actual. Esperando que clientes conecten equipos."}
+        </p>
+        <button type="button" class="frp-ops-v2-btn-primary"
+          data-frp-take-next
+          ${canTake ? "" : "disabled"}
+          ${disabledTip ? `title="${escapeHtml(disabledTip)}"` : ""}>
+          Tomar siguiente
+        </button>
+      </div>
+    </section>
+  `;
+}
+
+function frpOpsV2RenderQueueCard(job, { isMeActive, swapInProgress, hasMyActive }) {
+  const order = job.order || {};
+  const isVip = order.customerStatus === "VIP";
+  const orderCode = order.code || job.code || "";
+  const quantity = order.quantity || 1;
+  const clientName = order.clientName || job.clientName || "-";
+  const serviceName = job.serviceName || "Xiaomi Cuenta Google";
+  const readyRel = frpOpsV2RelativeTime(job.readyAt || job.updatedAt || job.createdAt);
+  const canTake = isMeActive && !swapInProgress && !hasMyActive;
+  const disabledTip = hasMyActive
+    ? "Ya tenes un FRP en proceso"
+    : swapInProgress ? "Cambio de tecnico en curso"
+    : !isMeActive ? "No sos el tecnico activo"
+    : "";
+  return `
+    <div class="frp-ops-v2-queue-card${isVip ? " is-vip" : ""}">
+      ${isVip ? `<span class="frp-ops-v2-queue-card-vip-badge">VIP</span>` : ""}
+      <div>
+        <div class="frp-ops-v2-queue-card-meta">${escapeHtml(orderCode)} · ${escapeHtml(quantity)} equipo${quantity === 1 ? "" : "s"}</div>
+        <div class="frp-ops-v2-queue-card-name">${escapeHtml(clientName)} · ${escapeHtml(serviceName)}</div>
+      </div>
+      <div class="frp-ops-v2-queue-card-right">
+        ${readyRel ? `<span class="frp-ops-v2-queue-card-time">${escapeHtml(readyRel)}</span>` : ""}
+        <button type="button" class="frp-ops-v2-btn-take"
+          data-frp-take-specific="${escapeHtml(job.id)}"
+          ${canTake ? "" : "disabled"}
+          ${disabledTip ? `title="${escapeHtml(disabledTip)}"` : ""}>
+          Tomar
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function frpOpsV2RenderQueueSection({ queueJobs, isMeActive, swapInProgress, hasMyActive }) {
+  const total = queueJobs.length;
+  const vipOnly = frpOpsV2VipFilterEnabled();
+  const vipJobs = queueJobs.filter((j) => j.order?.customerStatus === "VIP");
+  const vipCount = vipJobs.length;
+  // Spec §3.11: si filtro activo pero no hay VIPs, mostrar todos con nota.
+  const fallbackToAll = vipOnly && vipCount === 0 && total > 0;
+  const showJobs = vipOnly && !fallbackToAll ? vipJobs : queueJobs;
+  const vipBtnLabel = vipCount > 0 ? `Solo VIP · ${vipCount}` : "Solo VIP";
+  return `
+    <section class="frp-ops-v2-section">
+      <div class="frp-ops-v2-section-header">
+        <div class="frp-ops-v2-section-label">Cola · ${escapeHtml(total)} listo${total === 1 ? "" : "s"}</div>
+        <button type="button" class="frp-ops-v2-vip-toggle ${vipOnly ? "is-active" : ""}" data-frp-vip-toggle>
+          <span class="frp-ops-v2-vip-toggle-dot"></span>
+          ${escapeHtml(vipBtnLabel)}
+        </button>
+      </div>
+      ${fallbackToAll ? `<p class="frp-ops-v2-queue-empty">No hay VIPs en cola, mostrando todos.</p>` : ""}
+      ${!showJobs.length ? `<p class="frp-ops-v2-queue-empty">No hay FRP listos.</p>` : ""}
+      ${showJobs.length ? `<div class="frp-ops-v2-queue">${showJobs.map((j) => frpOpsV2RenderQueueCard(j, { isMeActive, swapInProgress, hasMyActive })).join("")}</div>` : ""}
+    </section>
+  `;
+}
+
+function frpOpsV2RenderAttentionGrid({ pagosRevisar, reviewJobs }) {
+  const canReview = canReviewPayments();
+  const pagosHtml = pagosRevisar.length
+    ? pagosRevisar.map((o) => `
+      <button type="button" class="frp-ops-v2-alert-card is-warning"
+        data-frp-show-proof="${escapeHtml(o.id)}"
+        ${canReview ? "" : `disabled title="Permisos insuficientes"`}>
+        <div class="frp-ops-v2-alert-card-id">${escapeHtml(o.code)}</div>
+        <div class="frp-ops-v2-alert-card-title">${escapeHtml(o.clientName || "-")} · ${escapeHtml(o.priceFormatted || `${o.totalPrice} USDT`)}</div>
+        <div class="frp-ops-v2-alert-card-action">Ver comprobante →</div>
+      </button>
+    `).join("")
+    : `<p class="frp-ops-v2-alert-empty">Sin pagos pendientes.</p>`;
+  const reviewHtml = reviewJobs.length
+    ? reviewJobs.map((j) => `
+      <button type="button" class="frp-ops-v2-alert-card is-danger"
+        data-frp-show-review="${escapeHtml(j.id)}">
+        <div class="frp-ops-v2-alert-card-id">${escapeHtml(j.order?.code || j.code)}</div>
+        <div class="frp-ops-v2-alert-card-title">${escapeHtml(j.order?.clientName || j.clientName || "-")}</div>
+        <div class="frp-ops-v2-alert-card-detail">${escapeHtml(j.reviewReason || "Requiere atencion")}</div>
+        <div class="frp-ops-v2-alert-card-action">Resolver →</div>
+      </button>
+    `).join("")
+    : `<p class="frp-ops-v2-alert-empty">Sin casos en revision.</p>`;
+  return `
+    <section class="frp-ops-v2-section">
+      <div class="frp-ops-v2-grid-attention">
+        <div>
+          <div class="frp-ops-v2-section-header">
+            <div class="frp-ops-v2-section-label">Pagos por revisar · ${escapeHtml(pagosRevisar.length)}</div>
+          </div>
+          <div class="frp-ops-v2-alert-list">${pagosHtml}</div>
+        </div>
+        <div>
+          <div class="frp-ops-v2-section-header">
+            <div class="frp-ops-v2-section-label">Atencion · ${escapeHtml(reviewJobs.length)}</div>
+          </div>
+          <div class="frp-ops-v2-alert-list">${reviewHtml}</div>
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+function frpOpsV2RenderFinalized(jobs) {
+  const items = (jobs || []).slice(0, 12);
+  if (!items.length) {
+    return `
+      <section class="frp-ops-v2-section">
+        <div class="frp-ops-v2-section-header">
+          <div class="frp-ops-v2-section-label">Finalizados hoy · 0</div>
+        </div>
+        <p class="frp-ops-v2-alert-empty">Sin finalizados hoy.</p>
+      </section>
+    `;
+  }
+  const rowsHtml = items.map((j) => {
+    const initial = frpOpsV2TechInitial(j.technicianName);
+    const time = frpOpsV2LimaTime(j.doneAt);
+    const idText = j.code || j.order?.code || "";
+    const nameText = `${j.order?.clientName || j.clientName || "-"}${j.ardCode ? ` · ${j.ardCode}` : ""}`;
+    return `
+      <div class="frp-ops-v2-finalized-row">
+        <div class="frp-ops-v2-finalized-row-info">
+          <span class="frp-ops-v2-finalized-row-id">${escapeHtml(idText)}</span>
+          <span>${escapeHtml(nameText)}</span>
+        </div>
+        <div class="frp-ops-v2-finalized-row-right">
+          ${time ? `<span class="frp-ops-v2-finalized-row-time">${escapeHtml(time)}</span>` : ""}
+          <span class="frp-ops-v2-tech-mark" title="${escapeHtml(j.technicianName || "")}">${escapeHtml(initial)}</span>
+        </div>
+      </div>
+    `;
+  }).join("");
+  return `
+    <section class="frp-ops-v2-section">
+      <div class="frp-ops-v2-section-header">
+        <div class="frp-ops-v2-section-label">Finalizados hoy · ${escapeHtml(items.length)}</div>
+      </div>
+      <div class="frp-ops-v2-finalized">${rowsHtml}</div>
+    </section>
+  `;
+}
+
 function renderFrp() {
   if (!frpWorkbench || !frpMetrics) return;
   frpForm?.classList.toggle("hidden", !frpEnabled());
@@ -1610,66 +1935,49 @@ function renderFrp() {
   syncFrpSuggestion();
   const frpSubmit = frpForm?.querySelector("button[type='submit']");
   if (frpSubmit) frpSubmit.disabled = session.frp?.pricing?.summary?.available === false;
+
   const orders = frpOrders();
   const jobs = frpJobs();
-  const webOrders = orders.filter(isPortalFrpOrder);
-  const manualOrders = orders.filter((order) => !isPortalFrpOrder(order) && !["CERRADA", "CANCELADA"].includes(order.orderStatus));
-  if (!frpWebFilters.some((filter) => filter.code === frpWebFilter)) frpWebFilter = "ALL";
-  const filteredWebOrders = frpWebFilter === "ALL"
-    ? webOrders
-    : webOrders.filter((order) => frpOrderStage(order) === frpWebFilter);
-  renderFrpMetrics(webOrders);
-  const readyJobs = jobs.filter((job) => job.status === "LISTO_PARA_TECNICO");
-  const myActiveJobs = jobs.filter((job) => job.status === "EN_PROCESO" && job.technicianId === session.user?.id);
-  const reviewJobs = jobs.filter((job) => job.status === "REQUIERE_REVISION");
-  const finishedJobs = jobs.filter((job) => job.status === "FINALIZADO").slice(0, 8);
-  const clientConnectedOrders = webOrders.filter((order) => frpOrderStage(order) === "CLIENTE_CONECTADO");
-  const filterHtml = `
-    <div class="frp-filterbar" role="tablist" aria-label="Filtros FRP web">
-      ${frpWebFilters.map((filter) => {
-        const count = filter.code === "ALL" ? webOrders.length : webOrders.filter((order) => frpOrderStage(order) === filter.code).length;
-        return `<button class="mini-btn ${frpWebFilter === filter.code ? "active" : ""}" type="button" data-frp-web-filter="${escapeHtml(filter.code)}">${escapeHtml(filter.label)} <span>${escapeHtml(count)}</span></button>`;
-      }).join("")}
-    </div>
-  `;
+  const finishedToday = session.frp?.finishedTodayJobs || [];
+  const tech = technicianStatusCache;
+
+  // Métricas viejas (renderFrpMetrics) — mantengo el render para no romper
+  // consumidores que lean #frp-metrics. Cuando se limpie en Bundle 3, sacar.
+  renderFrpMetrics(orders.filter(isPortalFrpOrder));
+
+  const myActiveJob = jobs.find((j) => j.status === "EN_PROCESO" && j.technicianId === session.user?.id);
+  const otherActiveJob = !myActiveJob
+    ? jobs.find((j) => j.status === "EN_PROCESO" && j.technicianId && j.technicianId !== session.user?.id)
+    : null;
+  const queueJobs = jobs.filter((j) => j.status === "LISTO_PARA_TECNICO");
+  const reviewJobs = jobs.filter((j) => j.status === "REQUIERE_REVISION");
+  const pagosRevisar = orders.filter((o) => o.paymentStatus === "PAGO_EN_VALIDACION" && (o.paymentProofs?.length || 0) > 0);
+
+  const isMeActive = Boolean(tech?.active?.userId && tech.active.userId === session.user?.id);
+  const swapInProgress = Boolean(tech?.swap?.inProgress);
+
+  let currentHtml;
+  if (myActiveJob) {
+    currentHtml = frpOpsV2RenderCurrentActive(myActiveJob, { swapInProgress, tech });
+  } else if (otherActiveJob) {
+    const otherName = (tech?.eligible || []).find((e) => e.userId === otherActiveJob.technicianId)?.name
+      || otherActiveJob.technicianName
+      || "otro tecnico";
+    currentHtml = frpOpsV2RenderCurrentReadonly(otherActiveJob, otherName);
+  } else {
+    currentHtml = frpOpsV2RenderCurrentEmpty({ queueLen: queueJobs.length, isMeActive, swapInProgress });
+  }
+
   frpWorkbench.innerHTML = `
-    <section class="frp-lane wide">
-      <header><span>Solicitudes FRP Web</span><strong>${filteredWebOrders.length}</strong></header>
-      ${filterHtml}
-      ${filteredWebOrders.length ? filteredWebOrders.map((order) => renderFrpOrder(order)).join("") : `<p class="muted-cell">No hay solicitudes web en este filtro.</p>`}
-      ${manualOrders.length ? `
-        <details class="frp-manual-orders">
-          <summary>Ordenes manuales activas (${manualOrders.length})</summary>
-          ${manualOrders.slice(0, 8).map((order) => renderFrpOrder(order, { stageLabel: "Manual" })).join("")}
-        </details>
-      ` : ""}
-    </section>
-    <section class="frp-lane">
-      <header><span>Listo para tecnico</span><strong>${readyJobs.length}</strong></header>
-      <button class="primary-btn full-action" type="button" data-frp-take-next>Tomar siguiente</button>
-      ${readyJobs.length ? readyJobs.map((job) => renderFrpJobCard(job)).join("") : `<p class="muted-cell">No hay FRP listos.</p>`}
-    </section>
-    <section class="frp-lane">
-      <header><span>Cliente conectado, listo para procesar</span><strong>${clientConnectedOrders.length}</strong></header>
-      ${clientConnectedOrders.length ? clientConnectedOrders.map((order) => renderFrpOrder(order, { stageLabel: "Cliente conectado" })).join("") : `<p class="muted-cell">Sin clientes conectados ahora mismo.</p>`}
-    </section>
-    <section class="frp-lane">
-      <header><span>Mi trabajo actual</span><strong>${myActiveJobs.length}</strong></header>
-      ${myActiveJobs.length ? myActiveJobs.map((job) => renderFrpJobCard(job, `
-        <div class="action-row">
-          <button class="mini-btn" type="button" data-frp-finalize="${escapeHtml(job.id)}">Finalizar</button>
-          <button class="mini-btn danger-mini" type="button" data-frp-review="${escapeHtml(job.id)}">Revision</button>
-        </div>
-      `)).join("") : `<p class="muted-cell">Toma un trabajo listo para empezar.</p>`}
-    </section>
-    <section class="frp-lane">
-      <header><span>Revision</span><strong>${reviewJobs.length}</strong></header>
-      ${reviewJobs.length ? reviewJobs.map((job) => renderFrpJobCard(job)).join("") : `<p class="muted-cell">Sin casos en revision.</p>`}
-    </section>
-    <section class="frp-lane wide">
-      <header><span>Finalizados</span><strong>${finishedJobs.length}</strong></header>
-      ${finishedJobs.length ? finishedJobs.map((job) => renderFrpJobCard(job, `<button class="mini-btn" type="button" data-frp-copy-done="${escapeHtml(job.id)}">Copiar Done</button>`)).join("") : `<p class="muted-cell">Sin FRP finalizados.</p>`}
-    </section>
+    <div class="frp-ops-v2">
+      ${frpOpsV2RenderHeader(tech)}
+      <div class="frp-ops-v2-body">
+        ${currentHtml}
+        ${frpOpsV2RenderQueueSection({ queueJobs, isMeActive, swapInProgress, hasMyActive: Boolean(myActiveJob) })}
+        ${frpOpsV2RenderAttentionGrid({ pagosRevisar, reviewJobs })}
+        ${frpOpsV2RenderFinalized(finishedToday)}
+      </div>
+    </div>
   `;
 }
 
@@ -2332,13 +2640,16 @@ async function takeNextFrpJob() {
 async function finalizeFrpJob(jobId) {
   const job = frpJobs().find((candidate) => candidate.id === jobId);
   if (!job) return;
-  const result = await requestFinalLog({ code: job.code });
-  if (!result.finalLog?.trim() && !result.finalImages?.length) return;
+  // Spec operador-frp-express.md decision #1: el panel rediseñado finaliza con
+  // un solo click. El backend (commit 99aae55) genera auto-log con nombre +
+  // hora Lima si no se manda body. Adjuntar evidencia es sub-accion separada
+  // (no implementada en este commit, queda pendiente para un sub-acción
+  // "Adjuntar evidencia" posterior al finalizado).
   frpMessage.textContent = "";
   try {
     await api(`/api/frp/jobs/${jobId}/finalize`, {
       method: "PATCH",
-      body: JSON.stringify(result),
+      body: JSON.stringify({}),
     });
     frpMessage.textContent = `FRP ${job.code} finalizado.`;
     frpMessage.dataset.type = "success";
@@ -2348,6 +2659,135 @@ async function finalizeFrpJob(jobId) {
     frpMessage.dataset.type = "error";
   }
 }
+
+async function takeSpecificFrpJob(jobId) {
+  const job = frpJobs().find((candidate) => candidate.id === jobId);
+  frpMessage.textContent = "";
+  try {
+    const payload = await api(`/api/frp/jobs/${jobId}/take`, { method: "POST" });
+    frpMessage.textContent = `Tomaste ${payload.job.code}.`;
+    frpMessage.dataset.type = "success";
+    await refreshSession();
+  } catch (error) {
+    // AC #13: si otro tomó primero, el backend devuelve 409 + mensaje claro.
+    frpMessage.textContent = error.message;
+    frpMessage.dataset.type = "error";
+    await refreshSession(); // refresca cola para que el card desaparezca
+  }
+}
+
+// Reservado para commit 6 (banner timeout 30 min). Endpoint ya existe (commit
+// d2bc27f). Lo dejo aca para que el wiring del banner solo tenga que invocar.
+async function cancelFrpJob(jobId, reason, note = "") {
+  const job = frpJobs().find((candidate) => candidate.id === jobId);
+  frpMessage.textContent = "";
+  try {
+    await api(`/api/frp/jobs/${jobId}/cancel`, {
+      method: "PATCH",
+      body: JSON.stringify({ reason, note }),
+    });
+    frpMessage.textContent = `Job ${job?.code || ""} cancelado (${reason}).`;
+    frpMessage.dataset.type = "success";
+    await refreshSession();
+  } catch (error) {
+    frpMessage.textContent = error.message;
+    frpMessage.dataset.type = "error";
+  }
+}
+
+// Modal "Ver comprobante" — spec operador-frp-express.md §5.1, AC #16, #17.
+// Reemplaza el window.prompt() del flow anterior por dialog estructurado:
+// muestra imágenes del comprobante + monto, deja aprobar directo o pedir
+// motivo de rechazo (≥10 chars) antes de submitear.
+const frpProofDialog = document.querySelector("#frpProofDialog");
+
+function frpProofMessageEl() {
+  return frpProofDialog?.querySelector("[data-proof-message]") || null;
+}
+
+function setFrpProofMessage(text, type = "") {
+  const el = frpProofMessageEl();
+  if (!el) return;
+  el.textContent = text || "";
+  if (type) el.dataset.type = type;
+  else delete el.dataset.type;
+}
+
+function openFrpProofDialog(orderId) {
+  if (!frpProofDialog) return;
+  const order = frpOrders().find((candidate) => candidate.id === orderId);
+  if (!order) return;
+  frpProofDialog.dataset.orderId = orderId;
+  const meta = frpProofDialog.querySelector("[data-proof-meta]");
+  if (meta) meta.textContent = `${order.code} · ${order.clientName || "-"} · ${order.priceFormatted || `${order.totalPrice} USDT`}`;
+  setFrpProofMessage("");
+  const reasonRow = frpProofDialog.querySelector(".frp-proof-dialog-reason");
+  if (reasonRow) {
+    reasonRow.hidden = true;
+    const ta = reasonRow.querySelector("textarea");
+    if (ta) ta.value = "";
+  }
+  const imagesContainer = frpProofDialog.querySelector("[data-proof-images]");
+  if (imagesContainer) {
+    const proofs = Array.isArray(order.paymentProofs) ? order.paymentProofs : [];
+    imagesContainer.innerHTML = proofs.map((p) => {
+      const src = p.dataUrl || p.url || "";
+      return src ? `<img src="${escapeHtml(src)}" alt="Comprobante" />` : "";
+    }).filter(Boolean).join("");
+  }
+  if (typeof frpProofDialog.showModal === "function") frpProofDialog.showModal();
+  else frpProofDialog.setAttribute("open", "");
+}
+
+function closeFrpProofDialog() {
+  if (!frpProofDialog) return;
+  if (typeof frpProofDialog.close === "function") frpProofDialog.close();
+  else frpProofDialog.removeAttribute("open");
+}
+
+async function submitFrpProofDecision(action) {
+  if (!frpProofDialog) return;
+  const orderId = frpProofDialog.dataset.orderId || "";
+  if (!orderId) return;
+  const reasonRow = frpProofDialog.querySelector(".frp-proof-dialog-reason");
+  const reasonInput = reasonRow?.querySelector("textarea");
+  const reason = reasonInput?.value.trim() || "";
+  if (action === "reject") {
+    if (reasonRow?.hidden) {
+      // Primer click en Rechazar → muestra textarea.
+      reasonRow.hidden = false;
+      setFrpProofMessage("Indicá motivo del rechazo (mínimo 10 caracteres).", "error");
+      reasonInput?.focus();
+      return;
+    }
+    if (reason.length < 10) {
+      setFrpProofMessage("El motivo debe tener al menos 10 caracteres.", "error");
+      reasonInput?.focus();
+      return;
+    }
+  }
+  try {
+    await api(`/api/frp/orders/${orderId}/payment-review`, {
+      method: "PATCH",
+      body: JSON.stringify({ action, reason }),
+    });
+    setFrpProofMessage(action === "approve" ? "Pago aprobado." : "Comprobante rechazado.", "success");
+    await refreshSession();
+    setTimeout(() => closeFrpProofDialog(), 600);
+  } catch (error) {
+    setFrpProofMessage(error.message, "error");
+  }
+}
+
+frpProofDialog?.addEventListener("click", (event) => {
+  const action = event.target.closest("[data-proof-action]")?.dataset?.proofAction;
+  if (!action) return;
+  if (action === "cancel") {
+    closeFrpProofDialog();
+  } else if (action === "approve" || action === "reject") {
+    submitFrpProofDecision(action);
+  }
+});
 
 async function requestFrpReview(jobId) {
   const job = frpJobs().find((candidate) => candidate.id === jobId);
@@ -3378,6 +3818,28 @@ frpWorkbench?.addEventListener("click", async (event) => {
   const takeNextButton = event.target.closest("[data-frp-take-next]");
   if (takeNextButton) {
     await takeNextFrpJob();
+    return;
+  }
+
+  // FRP Ops v2 — botón "Tomar" en card específico de la cola.
+  const takeSpecificButton = event.target.closest("[data-frp-take-specific]");
+  if (takeSpecificButton) {
+    await takeSpecificFrpJob(takeSpecificButton.dataset.frpTakeSpecific);
+    return;
+  }
+
+  // FRP Ops v2 — toggle filtro VIP (client-side, sessionStorage).
+  const vipToggle = event.target.closest("[data-frp-vip-toggle]");
+  if (vipToggle) {
+    setFrpOpsV2VipFilter(!frpOpsV2VipFilterEnabled());
+    renderFrp();
+    return;
+  }
+
+  // FRP Ops v2 — abrir modal "Ver comprobante" desde card de Pagos por revisar.
+  const showProofButton = event.target.closest("[data-frp-show-proof]");
+  if (showProofButton) {
+    openFrpProofDialog(showProofButton.dataset.frpShowProof);
     return;
   }
 

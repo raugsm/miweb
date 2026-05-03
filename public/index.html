@@ -239,6 +239,26 @@
             <div id="frp-pricing-box" class="frp-pricing-box"></div>
             <input id="frp-proof-files" class="hidden" type="file" accept="image/png,image/jpeg,image/webp" multiple />
 
+            <dialog id="frpProofDialog" class="frp-proof-dialog">
+              <form method="dialog" class="frp-proof-dialog-form">
+                <header>
+                  <h3>Comprobante de pago</h3>
+                  <span class="frp-proof-dialog-meta" data-proof-meta></span>
+                </header>
+                <p class="frp-proof-dialog-message" data-proof-message aria-live="polite"></p>
+                <div class="frp-proof-dialog-images" data-proof-images></div>
+                <label class="frp-proof-dialog-reason" hidden>
+                  Motivo del rechazo (≥10 caracteres)
+                  <textarea name="reason" minlength="10" maxlength="200" rows="3" placeholder="Ej: comprobante ilegible, monto distinto al esperado"></textarea>
+                </label>
+                <div class="dialog-actions">
+                  <button type="button" class="secondary-btn" data-proof-action="cancel">Cerrar</button>
+                  <button type="button" class="secondary-btn danger-mini" data-proof-action="reject">Rechazar</button>
+                  <button type="button" class="primary-btn" data-proof-action="approve">Aprobar</button>
+                </div>
+              </form>
+            </dialog>
+
             <dialog id="newProviderDialog" class="vip-dialog">
               <form id="newProviderForm" method="dialog" class="vip-dialog-form">
                 <header><h3>Agregar proveedor FRP</h3></header>

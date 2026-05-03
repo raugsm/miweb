@@ -23,6 +23,23 @@ export function createFrpSerializers({
   function publicFrpJob(job, db, includeOrder = true) {
     const technician = db.users.find((user) => user.id === job.technicianId);
     const order = includeOrder ? db.frpOrders.find((candidate) => candidate.id === job.orderId) : null;
+    // QUE: lookup hasta el customerClient para exponer status VIP y el code
+    // del lado portal (CL-...) que se usa para "Codigo del proceso" y filtro
+    // VIP del panel operador rediseñado.
+    // POR QUE: spec operador-frp-express.md §2.2 (header del card "1 de N
+    // equipos") + AC #5, #27, #28 (filtro VIP). El frontend no tiene acceso
+    // a customerOrders/customerClients directamente, asi que encapsulamos la
+    // resolucion VIP aca para que el filtro client-side trabaje sobre un
+    // string ya derivado.
+    const portalOrder = order?.portalOrderId
+      ? db.customerOrders.find((candidate) => candidate.id === order.portalOrderId)
+      : null;
+    const customerClient = portalOrder?.clientId
+      ? db.customerClients.find((candidate) => candidate.id === portalOrder.clientId)
+      : null;
+    const processCode = portalOrder?.code && order?.quantity
+      ? `${portalOrder.code}-${Math.max(1, Number(order.quantity) || 1)}`
+      : "";
     return {
       ...job,
       technicianName: technician?.name || "",
@@ -34,6 +51,10 @@ export function createFrpSerializers({
         unitPrice: order.unitPrice,
         totalPrice: order.totalPrice,
         paymentLabel: order.paymentLabel,
+        quantity: Number(order.quantity || 1),
+        customerStatus: customerClient?.status || "",
+        portalOrderCode: portalOrder?.code || "",
+        processCode,
       } : undefined,
     };
   }
