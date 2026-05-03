@@ -2,7 +2,7 @@
 
 **Para Claudes futuros que retomen este trabajo.** Si abrís un chat nuevo, leé este archivo primero, después abrí los otros archivos en `docs/specs/`. Después de eso, ya sabés todo lo necesario para continuar.
 
-**Última actualización:** 2 de mayo 2026 · cierre sesión 8
+**Última actualización:** 3 de mayo 2026 · v1.5
 
 ---
 
@@ -348,7 +348,7 @@ Un audit de Claude Code es ayuda valiosa pero NO infalible. Smoke test es el úl
 
 ### `docs/specs/`
 - **`PLAN.md`** — plan estratégico de 7 specs en 3 fases. Versión actual: v1.1.
-- **`HANDOFF.md`** — este archivo. Bridge entre sesiones. **Versión actual: v1.4.**
+- **`HANDOFF.md`** — este archivo. Bridge entre sesiones. **Versión actual: v1.5.**
 - **`audit-template.md`** — template para auditar el repo con Claude Code.
 - **`_template-prompt-claude-code.md`** — templates obligatorios para prompts a Claude Code.
 - **`_brand-tokens-pendiente.md`** — placeholder para sesión de polish visual con logo.
@@ -467,11 +467,6 @@ Esta sección documenta cuando una sesión salteó pasos del proceso. Sirve para
 - **Cómo se mitigó:** Lo dejamos (es 4 líneas, útil, transparente). Pero registrado como caso a evitar.
 - **Lección:** Claude Code debe **preguntar antes**, no implementar y avisar después. Próxima vez, si surge "una mejora chiquita gratis" durante implementación, parar y preguntar.
 
-### Sesión 7 — Confusión de proyectos: BryamsIA vs AriadGSM
-- **Qué pasó:** Bryam pegó prompt de AriadGSM en una sesión de Claude Code de otro proyecto (BryamsIA). El reporte resultante hablaba de "C4 architecture" y otras cosas no relacionadas.
-- **Cómo se detectó:** Bryam mostró la respuesta y el Claude del chat detectó que la terminología no matcheaba. Frenó antes de seguir avanzando.
-- **Lección:** Verificar siempre en qué proyecto/carpeta está parado Claude Code antes de pegar prompts. Especialmente cuando se trabaja con múltiples proyectos en paralelo. Los prompts de sesión 8 incluyen confirmación explícita del repo al inicio.
-
 ### Sesión 8 — propuesta de saltar al rediseño en caliente
 - **Qué pasó:** Durante el smoke test del fix B-001, apareció el mensaje rojo de B-008 (bug pre-existente bloqueante que el audit no había detectado). Bryam, frustrado, propuso "rediseñemos todo el flujo y esta página como hicimos con la otra, no quiero perder 2 días corrigiendo bug por bug".
 - **Por qué fallaba:** Era una decisión de plan grande (saltar 4-5 sesiones del plan acordado en sesión 7) tomada en caliente, en respuesta a un solo bug nuevo, sin Plan/Design previo, sin análisis de costo real. Repetía el patrón del error de sesión 5 ("sigamos con mockups"): asumir que el rediseño visual cura los bugs de fondo.
@@ -499,8 +494,7 @@ Si sos un Claude que abre un chat nuevo:
 7. **Cada sesión termina con un prompt para Claude Code** que mueva los archivos generados al repo. Bryam los descarga a `C:\Users\Bryams\Desktop\AriadGsm\files1\`.
 8. **Al final de la sesión, actualizá este HANDOFF** si hay decisiones nuevas o si una spec cambió de versión.
 9. **Si Bryam te pide saltar el proceso por urgencia o por "es simple", frená.** Tu rol es proteger el proceso, incluso de él.
-10. **Verificá en qué proyecto está parado Claude Code** antes de mandar prompts. Confusión de proyectos pasó en sesión 7.
-11. **Si Bryam pide hablar más simple/suave**, sin jerga técnica, cumplir. No es programador.
+10. **Si Bryam pide hablar más simple/suave**, sin jerga técnica, cumplir. No es programador.
 
 ### Frase de arranque que Bryam debe usar
 
@@ -530,6 +524,8 @@ Si no usa esa frase, recordásela vos antes de avanzar.
   - **B-008 descubierto** durante smoke test del paso 4. Pre-existente desde commit b433733. Bloquea creación de orden con comprobante. El audit en H-004 lo había clasificado erróneamente como dead code. Registrado para sesión 9 con 3 fixes posibles ya identificados.
   - **2 trampas evitadas:** (1) propuesta de "saltar al rediseño en caliente" frenada por Claude del chat aplicando regla del HANDOFF. (2) confiar en el audit como verdad final, descubierto al destapar B-008.
   - **HANDOFF actualizado a v1.4** con 2 nuevas trampas comunes ("Aparece un bug nuevo, mejor rediseñemos todo" y "El audit ya confirmó que es dead code"), 2 errores de proceso documentados, regla #11 sobre tono sin jerga, y regla #11 sobre audit no es verdad final.
+- **Sesión 9 (en curso, inicio):**
+  - **HANDOFF v1.5:** limpieza de referencias a "BryamsIA" (proyecto que no existe en este flujo, fue un error de copy/paste del owner en una versión previa). Removida la regla #10 de "Cómo arrancar próxima sesión" sobre verificar repo, y removida la entrada de bitácora "Sesión 7 — Confusión de proyectos". Sin impacto en decisiones técnicas ni de producto.
 
 ---
 
