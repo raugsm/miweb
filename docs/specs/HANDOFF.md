@@ -2,7 +2,7 @@
 
 **Para Claudes futuros que retomen este trabajo.** Si abrís un chat nuevo, leé este archivo primero, después abrí los otros archivos en `docs/specs/`. Después de eso, ya sabés todo lo necesario para continuar.
 
-**Última actualización:** 3 de mayo 2026 · v1.7
+**Última actualización:** 3 de mayo 2026 · v1.8
 
 ---
 
@@ -42,6 +42,7 @@ Estas son patrones reales que aparecieron en sesiones anteriores. Si te encontr�
 | **"El audit ya confirmó que es dead code"** | Confiar en el audit como verdad final sin pruebas empíricas | El audit puede equivocarse (caso H-004 → B-008 en sesión 8). Smoke test es el último filtro antes de cerrar. |
 | **"Decisión nueva al final de sesión cansado"** | Bryam abre una decisión grande de producto al final de una sesión larga, en respuesta a algo que vio en smoke test | Registrar como input crudo en HANDOFF, NO como decisión tomada. Spec formal con cabeza fresca, en sesión dedicada. |
 | **"Descubrimiento conceptual a mitad de spec → improvisar diseño encima"** | Durante spec del paso 1, aparece info nueva del modelo de negocio que cambia el marco. Si Claude sigue cerrando preguntas que dependen de esa info nueva, está improvisando. | Detectar dependencias entre la pregunta abierta y el descubrimiento nuevo. Pausar las preguntas dependientes, cerrar las independientes, registrar el descubrimiento como input crudo, abrir spec dedicada. |
+| **"Mockup conceptual = spec lista para implementar"** | Bryam aporta un mockup que define un modelo nuevo (sesión 11: pantalla principal con 4 paneles paralelos). Tentación de saltar directo a implementación basándose en ese mockup. | El mockup es base conceptual, no spec con las 8 piezas. Antes de implementar: spec formal con estados, edge cases, responsive, comportamiento, datos, acceptance criteria, open questions. Sesión dedicada. |
 
 ---
 
@@ -90,31 +91,51 @@ En entorno local: `localhost:4173/cliente` (cliente) y `localhost:4173/` (operad
 
 ---
 
-## Modelo de uso del cliente — descubrimiento de sesión 10
+## Modelo de uso del cliente — procesado en sesión 11
 
-**IMPORTANTE — info nueva no documentada en specs anteriores.** Durante la sesión 10, mientras se cerraban open questions del paso 1, Bryam reveló que el modelo de uso real del cliente es distinto al que asumía la spec actual. Esta sección registra el descubrimiento. **NO es decisión todavía** — requiere sesión dedicada para procesarlo (ver "Inputs crudos para spec futura").
+**Estado:** modelo conceptual cerrado en sesión 11. Spec formal de pantalla principal pendiente para sesión 12 (ver `docs/specs/cliente/pantalla-principal-cliente.md` v0.1).
 
-**Lo que se sabe hoy:**
+En sesión 10 se descubrió que el cliente no hace un flujo lineal de 4 pasos. En sesión 11 se procesó ese descubrimiento en frío y resultó ser más profundo de lo que parecía: la pantalla cliente no es una secuencia de pasos saltable, sino **una pantalla única con 4 paneles paralelos visibles a la vez** + una zona de "Mis órdenes" debajo. Bryam aportó dos mockups que sirvieron como fuente de verdad reference-driven.
 
-- El cliente NO hace un flujo lineal de 4 pasos para una sola orden y después se va. Hace **múltiples órdenes en paralelo**, una por cada equipo a desbloquear.
-- Patrón típico: cliente paga por equipo A → sin esperar que termine el A, paga por equipo B → mientras A está en paso 3 y B en paso 1, paga por C → etc.
-- La mayoría de los clientes hace 1-5 órdenes en una sesión, pero hay casos de 10 en un solo "tirón".
-- Política firme: **pago anticipado** (cliente regular paga antes de procesar). Excepción: clientes VIP procesan primero, pagan después.
-- El paso 3 (subir comprobante) es donde la orden aparece en el panel del operador.
-- Bryam quiere que el flujo "se libere" para empezar otra orden recién después que el cliente apriete "conectado" en el paso 4 — no antes.
+### Los 4 modelos de uso identificados
 
-**Implicancia:** la pantalla principal cliente NO es solo "el paso 1 arriba + Mis órdenes abajo". Es un espacio donde conviven:
-1. Iniciar nueva orden (lo que hoy es paso 1)
-2. Ver/seguir órdenes activas en distintos pasos
-3. Atender una orden específica (subir comprobante, marcar como conectada, etc.)
+**Modelo 1 — Agrupado (mayoría de los casos).** Cliente llega con 2+ equipos a la mano. Hace UN solo pedido con N equipos (cantidad en panel 2). Paga una vez, un comprobante. En panel operador aparece UNA orden con N equipos adentro. Si un equipo no es soportado se cancela ese individual; los demás siguen.
 
-Esto choca con varias decisiones firmes (timer paso 4 de 2 min, regla multi-orden, lock pricing 15 min) y se cruza con el hallazgo abierto de sesión 9 (flujo de comprobantes y panel operador). Requiere spec formal dedicada en sesión 11.
+**Modelo 2 — Encadenado.** Cliente arranca con 1 equipo. Antes de pagar, le llega otro: simplemente sube cantidad en panel 2 (NO crea pedido nuevo, agranda el existente). Después de subir comprobante: paneles 1-2-3 congelados, no puede agrandar; tiene que terminar el ciclo (apretar botón panel 4 cuando técnico valide), recién ahí se descongela y puede arrancar pedido nuevo.
+
+**Modelo 3 — Atajo de pago.** Cliente experto repetidor que conoce la dinámica. Va directo a panel 3 (Pago) sin tocar 1 ni 2. **Resuelto por el layout**: los 4 paneles visibles a la vez + preselección por perfil/última pill en panel 1 + cantidad por defecto en panel 2 = el cliente experto hace clic directo en panel 3. NO se necesita botón "pagar rápido" extra.
+
+**Caso 4 — Abortar orden.** Cliente final se arrepiente y se lleva el equipo. Técnico necesita cancelar una orden ya en seguimiento (puede haber pasado pago/conexión/ambos). Sucede pocas veces pero pasa. Resolución: botón "Abortar proceso" (o nombre más corto) en cada card de Mis órdenes. Detalles en spec aparte.
+
+### Mecánica "congelar/descongelar"
+
+Reemplaza al concepto viejo de "candados visibles". Mecanismo invisible:
+
+1. Estado inicial: paneles 1-2-3 editables. Panel 4 inactivo.
+2. Cliente sube comprobante en panel 3 → paneles 1-2-3 se **congelan**.
+3. Técnico revisa comprobante, dos caminos:
+   - **Válido:** paneles 1-2-3 siguen congelados. Panel 4 activa botón "Conexión lista" (nombre tentativo). Cliente lo aprieta → la orden **nace** y aparece en Mis órdenes → paneles 1-2-3 se **descongelan**.
+   - **Rechazado:** alerta en panel 3. Paneles 1-2-3 se descongelan. Panel 4 NO se activa. Cliente puede modificar y reintentar.
+
+### Concepto clave: cuándo "nace" una orden
+
+**Una orden nace recién cuando el cliente aprieta el botón del panel 4 con comprobante validado.** Antes de eso lo que existe es un "pedido en armado". La sección Mis órdenes muestra solo entidades que cruzaron ese umbral. Esto reemplaza la noción anterior (HANDOFF v1.7) de que "orden = lo que el cliente arrancó desde paso 1".
+
+### Implicancias para decisiones firmes anteriores
+
+- **Multi-orden** ("permitir nuevas EXCEPTO si hay órdenes en `ESPERANDO_PAGO` o `PAGO_RECHAZADO`"): **incompatible con el modelo nuevo**. Se reemplaza por la regla "mientras paneles 1-2-3 estén congelados, no se puede armar pedido nuevo". Spec formal de pantalla principal (sesión 12) cierra esto.
+- **Timer paso 4 de 2 min:** sin cambios todavía. Cambia dónde vive (panel 4) pero no su lógica.
+- **Lock pricing 15 min:** sin cambios todavía.
+
+### Lo que NO se resolvió en sesión 11 (queda para sesión 12)
+
+10 open questions (OQ-1 a OQ-10) listadas en `pantalla-principal-cliente.md` v0.1. Cubren: layout de cards de Mis órdenes, paginación de órdenes históricas, mecánica de Abortar proceso, texto exacto del botón panel 4, transición entre pedidos, polling vs SSE, detalle del rechazo de comprobante, espera durante validación, relación con login, botón Solicitar Redirector.
 
 ---
 
-## Plan de lanzamiento (decisión sesión 7, ratificado sesión 8, ajustado sesión 10)
+## Plan de lanzamiento (decisión sesión 7, ratificado sesión 8, ajustado sesiones 10 y 11)
 
-Bryam eligió **Opción B**: lanzar con visual nuevo del cliente, no solo bugs arreglados. Estimación realista actualizada:
+Bryam eligió **Opción B**: lanzar con visual nuevo del cliente, no solo bugs arreglados. Estimación realista actualizada en sesión 11:
 
 ```
 SESIÓN 7 (cerrada)
@@ -129,20 +150,26 @@ SESIÓN 9 (cerrada parcialmente)
 SESIÓN 10 (cerrada parcialmente)
 └── Escenario 4 B-008 PAUSADO (bloqueo técnico) + Spec paso 1 cliente 7/8 cerradas + descubrimiento modelo paralelo ✅
 
-SESIÓN 11 (próxima)
-└── Procesar modelo de órdenes paralelas en frío + spec "página principal cliente" o equivalente + cierre #5 paso 1
+SESIÓN 11 (cerrada)
+└── Modelo de uso del cliente procesado en frío ✅ + 4 modelos identificados ✅
+    + descubrimiento "pantalla principal con 4 paneles paralelos" ✅
+    + base conceptual `pantalla-principal-cliente.md` v0.1 ✅
+    + pregunta #5 paso 1 cerrada en concepto ✅
 
-SESIÓN 12
-└── Implementación paso 1 cliente (después que sesión 11 defina el marco)
+SESIÓN 12 (próxima)
+└── Spec formal de pantalla principal cliente (las 8 piezas) + adaptación de spec del panel 1
+    (a partir de paso-1-precio.md v1.1) + spec esbozo "Tasa de cambio manual" y "Métodos de pago"
+    del Centro de configuración (dependencias de panel 1)
 
 SESIÓN 13
-└── Spec + implementación paso 2 cliente
+└── Spec del panel 2 + spec de Mis órdenes (incluye "Abortar proceso")
 
 SESIÓN 14
-└── Spec + implementación paso 3 cliente (incluye corrección USDT/Binance Pay vs TRC20)
+└── Spec del panel 3 (incluye corrección USDT/Binance Pay vs TRC20) + spec del panel 4
+    (incluye sistema de tiempos/alertas si para entonces hay decisión formal)
 
 SESIÓN 15
-└── Spec + implementación paso 4 cliente (incluye decisiones del modelo paralelo si aplica, ver "Inputs crudos")
+└── Implementación de la pantalla principal completa (paneles + Mis órdenes + congelado/descongelado)
 
 SESIÓN 16
 └── QA final cliente rediseñado (incluye reintento escenario 4 B-008)
@@ -150,9 +177,9 @@ SESIÓN 16
 → LANZAMIENTO (cadencia depende de Bryam — no hay urgencia comercial al ser local)
 ```
 
-**Cadencia:** Bryam construye solo y atiende clientes en paralelo por WhatsApp. La cadencia de sesiones la define Bryam. No hay deadline real. Si una sesión por semana es mucho, se distribuyen con margen. En sesión 9 Bryam reconoció cansancio acumulado, lo que activó la trampa "Decisión nueva al final de sesión cansado". En sesión 10 se aplicó preventivamente la regla cuando apareció el descubrimiento del modelo paralelo. Claudes futuros: si notan a Bryam fatigado, sugieran cortar y retomar con cabeza fresca antes que insistir en cerrar.
+**Cadencia:** Bryam construye solo y atiende clientes en paralelo por WhatsApp. La cadencia de sesiones la define Bryam. No hay deadline real. En sesión 9 Bryam reconoció cansancio acumulado, lo que activó la trampa "Decisión nueva al final de sesión cansado". En sesión 10 se aplicó preventivamente la regla cuando apareció el descubrimiento del modelo paralelo. En sesión 11 se aplicaron las reglas #12 y #13 múltiples veces (recalibrar vocabulario, frenar ante descubrimientos nuevos, evitar improvisar diseño sobre mockup conceptual). Claudes futuros: si notan a Bryam fatigado, sugieran cortar y retomar con cabeza fresca antes que insistir en cerrar.
 
-**Si en sesión 11 surge urgencia de lanzar antes** con cliente "feo pero funcional", se puede cambiar a Opción A (lanzar con cliente actual + bugs arreglados, postergar rediseño visual). La decisión no es irreversible.
+**Si en sesiones futuras surge urgencia de lanzar antes** con cliente "feo pero funcional", se puede cambiar a Opción A (lanzar con cliente actual + bugs arreglados, postergar rediseño visual). La decisión no es irreversible.
 
 ---
 
@@ -238,6 +265,19 @@ SESIÓN 16
 - Spec `paso-1-precio.md` actualizada a v1.1
 - Descubrimientos registrados como inputs crudos
 - Hallazgos abiertos nuevos identificados
+
+### Implementado en sesión 11
+
+**Nada nuevo en código.** Sesión exclusivamente conceptual / de descubrimiento:
+- Procesamiento del modelo de órdenes paralelas en frío.
+- Identificación de los 4 modelos de uso del cliente (agrupado, encadenado, atajo de pago, abortar orden).
+- Descubrimiento del modelo "pantalla principal con 4 paneles paralelos + Mis órdenes" a partir de mockups aportados por Bryam.
+- Concepto "congelar/descongelar" reemplaza al de "candados visibles".
+- Concepto "cuándo nace una orden" definido (al apretar botón panel 4 con comprobante validado).
+- Pregunta #5 del paso 1 cliente cerrada en concepto.
+- Archivo nuevo `docs/specs/cliente/pantalla-principal-cliente.md` v0.1 (borrador inicial).
+- 10 open questions identificadas para sesión 12 (OQ-1 a OQ-10).
+- Plan de lanzamiento reorganizado: sesiones 12-15 redefinidas.
 
 ### Lo que NO existe
 
@@ -337,30 +377,27 @@ El mockup actual `paso-1-precio.html` cubre el estado "todo bien" pero no incluy
 
 **Esta sección registra ideas y propuestas que Bryam compartió en chat pero NO son decisiones tomadas.** Quedan registradas para ser convertidas en spec formal en una sesión dedicada con cabeza fresca, mockups, fuentes externas e investigación. **NO implementar basándose en esta sección.** Si un Claude futuro va a trabajar en cualquiera de estos temas, primero debe abrir sesión dedicada para escribir spec con las 8 piezas.
 
-### Modelo de órdenes paralelas y "liberación" del flujo (sesión 10)
+### Modelo de órdenes paralelas y "liberación" del flujo (sesión 10) — ✅ PROCESADO en sesión 11
 
-*Descubrimiento clave de sesión 10. Cambia el marco de cómo se diseña la página principal cliente y todos los pasos del flujo. Detalle completo en sección "Modelo de uso del cliente" arriba.*
+*Procesado en frío en sesión 11. Resultó ser un descubrimiento más profundo que el modelo de "órdenes paralelas": la pantalla cliente es un layout con 4 paneles paralelos + Mis órdenes. Detalle completo en sección "Modelo de uso del cliente" arriba y en `docs/specs/cliente/pantalla-principal-cliente.md` v0.1.*
 
-**Propuestas de Bryam para discutir en sesión 11:**
+**Lo que era input crudo y ahora es base conceptual:**
 
-- Después del paso 3 (subir comprobante) debería existir un temporizador para que el cliente en paso 4 marque como conectado.
-- El flujo "se libera" (el cliente puede empezar otra orden sin trabas) recién cuando el cliente apreta "conectado" en paso 4.
-- La orden aparece en el panel del operador como "listo para procesar" recién en ese momento (cruza con hallazgo sesión 9).
-- Esto debería convivir con que el cliente pueda tener múltiples órdenes en distintos pasos al mismo tiempo.
+- Los 4 modelos de uso identificados (agrupado, encadenado, atajo de pago, abortar orden).
+- Mecánica congelar/descongelar reemplaza al concepto de candados.
+- "El flujo se libera al apretar conectado" → ahora se entiende como: el botón del panel 4 con comprobante validado es lo que hace nacer la orden y descongela paneles 1-2-3.
+- Pantalla principal NO es una sucesión de pasos, es un layout único con paneles paralelos.
 
-**Conflictos con decisiones firmes actuales:**
+**Lo que sigue pendiente como input crudo (no se procesó en sesión 11):**
 
-- Choca con timer paso 4 de 2 min (firme, ver "Decisiones de producto firmes").
-- Choca con regla multi-orden actual ("permitir nuevas EXCEPTO si hay órdenes en `ESPERANDO_PAGO` o `PAGO_RECHAZADO`").
-- Se cruza con hallazgo abierto sesión 9 (flujo de comprobantes y panel operador).
-- Se cruza con propuestas del Sistema de tiempo y alertas (sesión 9).
+- **Sistema de tiempos y alertas escaladas** (1.5 / 3 / 5 min, cambio de precio post-5min, reembolsos): sigue siendo input crudo. Se cruza con el modelo nuevo pero requiere su propia spec dedicada. Cierre formal en sesión futura, posiblemente entre 13 y 15 cuando se especifique el panel 4.
+- **Lock pricing 5 vs 15 min:** sigue siendo input crudo. La decisión firme actual (15 min) sigue vigente hasta que la spec del sistema de tiempos lo redefina.
 
-**Pendiente para sesión 11:**
+**Conflictos con decisiones firmes (resueltos parcialmente en sesión 11):**
 
-1. Procesar este modelo en frío con cabeza fresca.
-2. Definir cómo conviven en la pantalla principal cliente: paso 1 (nueva orden) + Mis órdenes (órdenes activas) + flujo paralelo.
-3. Posiblemente generar una spec nueva ("página principal cliente" o "Mis órdenes ampliada") que precede a las specs individuales de cada paso.
-4. Cerrar pregunta #5 del paso 1 (vista en desktop) que quedó en pausa porque depende de este marco.
+- ~~Multi-orden actual ("permitir nuevas EXCEPTO si hay órdenes en `ESPERANDO_PAGO` o `PAGO_RECHAZADO`")~~ → **se reemplaza** por la regla congelar/descongelar. La decisión vieja queda derogada cuando la spec formal de pantalla principal (sesión 12) entre en vigencia. Hasta entonces, el código sigue funcionando con la regla vieja.
+- Timer paso 4 de 2 min: sigue firme.
+- Lock pricing 15 min: sigue firme.
 
 ### Modo express sin login (sesión 10)
 
@@ -457,7 +494,13 @@ Un audit de Claude Code es ayuda valiosa pero NO infalible. Smoke test es el úl
 Si Bryam empieza a abrir decisiones grandes al final de una sesión larga, mientras estaba haciendo smoke test, o después de haber dicho que estaba cansado: **frenar**. Registrar como input crudo en HANDOFF, NO como decisión tomada.
 
 ### 13. Descubrimientos conceptuales a mitad de spec — pausar lo dependiente
-Si durante la respuesta a una open question Bryam revela info nueva del modelo de negocio que cambia el marco (ej: sesión 10 — "los clientes hacen órdenes en paralelo"), **detectar las preguntas dependientes y pausarlas**. Cerrar las preguntas independientes que no toca el descubrimiento, registrar el descubrimiento como input crudo, y abrir spec dedicada en sesión siguiente. NO improvisar diseño encima del descubrimiento fresco.
+Si durante la respuesta a una open question Bryam revela info nueva del modelo de negocio que cambia el marco (ej: sesión 10 — "los clientes hacen órdenes en paralelo"; sesión 11 — "la pantalla no es secuencia de pasos sino paneles paralelos"), **detectar las preguntas dependientes y pausarlas**. Cerrar las preguntas independientes que no toca el descubrimiento, registrar el descubrimiento como input crudo, y abrir spec dedicada en sesión siguiente. NO improvisar diseño encima del descubrimiento fresco.
+
+### 14. Mockup conceptual no es spec lista para implementar
+Cuando Bryam aporta un mockup que define un modelo nuevo (ej: sesión 11 — pantalla con 4 paneles paralelos + Mis órdenes), ese mockup es **base conceptual reference-driven**, no spec con las 8 piezas. Antes de implementar: spec formal con mockup HTML standalone, estados, edge cases, responsive, comportamiento, datos, acceptance criteria, open questions. Sesión dedicada. NO saltar de "Bryam mostró mockup" a "Claude Code implementá esto".
+
+### 15. Recalibrar vocabulario cuando aparezcan términos divergentes
+Si durante una sesión Claude usa una palabra (ej: "orden", "paso", "candado") y Bryam la entiende distinto, **frenar de inmediato y alinear vocabulario antes de seguir**. Las palabras que parecen sinónimas pero significan cosas distintas son fuente de malentendidos compuestos. Patrón aparecido en sesión 11: Claude decía "orden" desde el primer clic en paso 1; Bryam llamaba "orden" solo a lo que ya está en seguimiento (post comprobante validado). Recalibrar antes de avanzar.
 
 ---
 
@@ -478,7 +521,8 @@ Si durante la respuesta a una open question Bryam revela info nueva del modelo d
 - VIP procesa primero, paga después (excepción al pago anticipado).
 
 ### Multi-orden
-- Permitir nuevas EXCEPTO si hay órdenes en `ESPERANDO_PAGO` o `PAGO_RECHAZADO` *(propuesta de modelo paralelo en inputs crudos sesión 10 — no aprobada)*
+- Permitir nuevas EXCEPTO si hay órdenes en `ESPERANDO_PAGO` o `PAGO_RECHAZADO` *(propuesta de modelo paralelo en inputs crudos sesión 10 — procesada en sesión 11)*
+- **Sesión 11:** esta regla **se reemplaza** conceptualmente por la mecánica congelar/descongelar de paneles 1-2-3 cuando hay un comprobante en revisión o esperando que el cliente apriete el botón del panel 4. La nueva regla queda formalizada cuando la spec de pantalla principal cliente entre en vigencia (sesión 12-15). Hasta entonces, el código existente sigue con la regla vieja.
 
 ### Timers cliente
 - Paso 2: 30s banner azul, 90s banner amarillo
@@ -531,15 +575,15 @@ Si durante la respuesta a una open question Bryam revela info nueva del modelo d
 - Casos de catálogo válidos sin cambio.
 - `compatibilityReviewRequired` se mantiene como safety net defensivo.
 
-### Paso 1 cliente — decisiones de sesión 10
+### Paso 1 cliente — decisiones de sesión 10 + actualización sesión 11
 
-**7 de 8 open questions cerradas. La #5 queda pausada hasta resolver el modelo de órdenes paralelas (sesión 11).**
+**8 de 8 open questions cerradas (la #5 cerrada en concepto en sesión 11).** Spec `paso-1-precio.md` v1.1 sigue en vigencia para el contenido de pills, card estimado y decisiones #1-#8. Lo que cambia en sesión 12 es su "envoltorio": pasa de ser "spec de la pantalla paso 1" a ser "spec del panel 1 dentro de la pantalla principal".
 
 - **#1 Detección de país:** preselección desde **perfil del cliente registrado**. NO se usa IP en el modo con login. Cloudflare `cf-ipcountry` queda reservado para el "modo express sin login" futuro (input crudo separado).
 - **#2 Tasa de cambio USDT → moneda local:** **manual desde Centro de configuración** (sub-sección "Tasa de cambio manual"). NO se usa fuente externa (CoinGecko, Binance API, etc. descartadas). Cuando admin actualiza la tasa, el cliente que está mirando paso 1 ve el monto cambiar en vivo.
 - **#3 Polling de tasa:** **anulada**. No hay fuente externa que pollear.
 - **#4 Costo unitario:** fijo en USDT, mismo para los 5 destinos. Rango real actual 3.0–5.5 USDT por equipo. Configurable por admin (corregir spec — el ejemplo de 6.25 USDT está desactualizado).
-- **#5 Vista en desktop:** **PAUSADA.** Depende del modelo de órdenes paralelas (sesión 11).
+- **#5 Vista en desktop:** **cerrada en concepto en sesión 11.** La respuesta es: en desktop, panel 1 es una columna dentro de la pantalla principal con 4 paneles paralelos. NO sidebar separada. Mis órdenes ocupa ancho completo abajo. Spec del panel 1 se reescribe en sesión 12 a partir de `paso-1-precio.md` v1.1 ajustada al nuevo marco.
 - **#6 Persistencia entre sesiones:** **recordar última pill elegida**, no siempre la del perfil. Si el cliente peruano elige USDT, la próxima vez que entra ve USDT preseleccionado. Si elige Perú de nuevo, vuelve a Perú. La pantalla "aprende" de la última elección.
 - **#7 Aclaración TRC20 en pill USDT:** NO mostrar TRC20 en paso 1. Pill muestra solo "USDT" + logo Tether (verde, ya está en mockup).
 - **#8 Desactivar métodos de pago:** Sí. Vive en pestaña nueva del panel admin (NO en "Precios"). Cambio se refleja en vivo (sin recargar). Mensaje al cliente es **configurable**: por defecto "No disponible temporalmente", pero admin puede escribir texto custom (ej. "USDT vuelve mañana 9 AM").
@@ -602,8 +646,10 @@ Sub-secciones identificadas (NO diseñadas todavía, solo nombradas):
 - **`_costos-frp-redesign-pendiente.md`** — placeholder para rediseño visual interno de Costos FRP.
 
 ### `docs/specs/cliente/`
-- **`paso-1-precio.md`** — spec completo del paso 1. **Versión actual: v1.1.** 7 de 8 open questions cerradas en sesión 10. La #5 (vista desktop) queda pendiente del modelo de órdenes paralelas. Mockup pendiente de actualización antes de implementación.
+- **`pantalla-principal-cliente.md`** — base conceptual del modelo de pantalla principal cliente con 4 paneles paralelos + Mis órdenes. **Versión actual: v0.1 (borrador inicial, sesión 11).** NO es spec lista para implementación. La spec formal con las 8 piezas se desarrolla en sesión 12.
+- **`paso-1-precio.md`** — spec original del paso 1 cliente. **Versión actual: v1.1.** 8 de 8 open questions cerradas (la #5 cerrada en concepto en sesión 11). Pendiente reescribirla en sesión 12 como "spec del panel 1" dentro de la pantalla principal. El contenido (pills, card estimado, decisiones #1-#8) sigue siendo válido; cambia el envoltorio. Mockup pendiente de actualización.
 - **`mockups/paso-1-precio.html`** — mockup HTML standalone responsive del paso 1. **Pendiente actualización** con 2 estados nuevos (pill desactivada con mensaje custom + banner amarillo de tasa cambiada). Sesión chica futura antes de implementación.
+- **`mockups/pantalla-principal-cliente.html`** — pendiente. Crear en sesión 12 a partir de los 2 mockups que Bryam aportó en sesión 11 (archivados en chat).
 
 ### `docs/specs/operador/`
 - **`operador-frp-express.md`** — spec completo del panel FRP Express v1.2. 43 acceptance criteria, 4 open questions abiertas (futuras sesiones).
@@ -632,33 +678,32 @@ Sub-secciones identificadas (NO diseñadas todavía, solo nombradas):
 
 ## Pendientes y próximos pasos
 
-### Sesión 11 (próxima)
+### Sesión 12 (próxima)
 
-**Foco:** procesar en frío el modelo de órdenes paralelas descubierto en sesión 10.
+**Foco:** spec formal de pantalla principal cliente con las 8 piezas, a partir del borrador conceptual `pantalla-principal-cliente.md` v0.1. Y reescritura de la spec del panel 1 a partir de `paso-1-precio.md` v1.1 ajustada al nuevo marco.
 
-**No es:** ni implementación, ni cerrar paso 1, ni avanzar al paso 2.
+**Procedimiento sugerido:**
 
-**Es:** sentarse con cabeza fresca a definir cómo conviven en la pantalla principal cliente: paso 1 (nueva orden) + Mis órdenes (órdenes activas) + flujo paralelo. Esto puede generar una spec nueva ("página principal cliente" o "Mis órdenes ampliada") que precede a las specs de paso 1, 2, 3, 4 individuales.
+1. Releer `pantalla-principal-cliente.md` v0.1 (creado en sesión 11) y validar que sigue reflejando el modelo mental de Bryam.
+2. Resolver las 10 open questions (OQ-1 a OQ-10) listadas en ese archivo. Probablemente requiera 2 sesiones (12a y 12b), no 1.
+3. Convertir los 2 mockups de Bryam (archivados en chat sesión 11) en archivos HTML standalone en `docs/specs/cliente/mockups/pantalla-principal-cliente.html`.
+4. Adaptar `paso-1-precio.md` v1.1 a una nueva versión que refleje "panel 1 dentro de pantalla principal" en vez de "paso 1 como pantalla independiente". El contenido (pills, card estimado, decisiones #1-#8) se preserva.
+5. Esbozar al menos en formato de placeholder las sub-secciones del Centro de configuración que el panel 1 consume: "Tasa de cambio manual", "Métodos de pago", "Costo del servicio".
+6. Cerrar sesión 12 con: spec formal de pantalla principal lista para implementar O abierta con OQ residuales para sesión 13, según cómo avance la entrevista.
 
-Procedimiento sugerido:
+**No es:** sesión de implementación. NO mandar nada a Claude Code para tocar código en sesión 12.
 
-1. **Empezar revisando el descubrimiento sesión 10** (sección "Modelo de uso del cliente" arriba) y los inputs crudos relacionados (modelo paralelo, sistema de tiempo y alertas).
-2. **Mockup de la pantalla principal cliente** que represente correctamente el modelo paralelo. Validar con Bryam.
-3. **Resolver los conflictos con decisiones firmes** (timer paso 4, multi-orden, lock pricing) explícitamente: cuál se mantiene, cuál se reemplaza.
-4. **Cerrar pregunta #5 del paso 1** (vista en desktop) ahora que se sabe cómo conviven los espacios.
-5. **Spec resultante:** decidir si va como nueva spec dedicada o como sección expandida de specs existentes.
+### Sesión 13
 
-### Sesión 12
+Spec del panel 2 (cantidad de equipos + modelo opcional) + spec de Mis órdenes (la zona de abajo, con cards, paginación, estados, y "Abortar proceso"). Si sesión 12 quedó abierta con OQ residuales, sesión 13 los cierra primero antes de pasar a estos temas.
 
-Implementación paso 1 cliente. Requisitos previos:
-- Sesión 11 cerrada (modelo paralelo definido).
-- Paso 1 spec a v1.2 con #5 cerrada y notas del modelo paralelo aplicadas si corresponde.
-- Mockup del paso 1 actualizado con estados nuevos.
-- Spec del Centro de configuración con sub-secciones "Tasa de cambio manual" y "Métodos de pago" al menos esbozadas (porque paso 1 las consume).
+### Sesión 14
 
-### Sesiones 13-15
+Spec del panel 3 (incluye corrección USDT/Binance Pay vs TRC20) + spec del panel 4 (incluye sistema de tiempos/alertas si para entonces hay decisión formal — sino, panel 4 spec sin sistema de tiempos y este queda como input crudo todavía).
 
-Spec + implementación de paso 2, 3, 4 cliente. Sesión 14 (paso 3) deberá incluir corrección USDT/Binance Pay vs TRC20. Sesión 15 (paso 4) deberá considerar el sistema de tiempo y alertas + el modelo paralelo si para entonces se decidió implementarlo.
+### Sesión 15
+
+Implementación de la pantalla principal completa (paneles + Mis órdenes + congelado/descongelado). Es probable que esto se parta en sub-commits (15a, 15b, 15c) por tamaño.
 
 ### Sesión 16
 
@@ -679,12 +724,13 @@ QA final del cliente rediseñado. **Reintento del escenario 4 de B-008** una vez
 - Rediseño visual de Costos FRP
 - Polish visual con logo
 - DOM diffing si flicker es molesto
-- Hallazgo flujo de comprobantes en panel operador (resuelto idealmente en sesión 11)
+- Hallazgo flujo de comprobantes en panel operador (queda integrado en spec de pantalla principal sesión 12, ya no es ítem separado)
 - Sistema de alertas/lock/reembolso (requiere spec formal antes de implementar)
 - **Modo express sin login** (línea de producto futura, requiere spec formal)
 - **Centro de configuración** (panel admin con 8 sub-secciones, cada una requiere spec)
 - **Validación de precio que falla** (investigar y arreglar — hallazgo sesión 10)
-- **Polish visual mockup paso 1** (estados nuevos antes de implementación sesión 12)
+- **Polish visual mockup paso 1** (estados nuevos antes de implementación)
+- **Ajuste menor pendiente del cierre de sesión 11** (registrado en cierre): mover la regla "no soy programador, hablame simple" a la frase de arranque obligatoria; agregar al HANDOFF un patrón de "recordatorios específicos por sesión" como práctica documentada. Aplicar al inicio de sesión 12.
 
 ---
 
@@ -750,6 +796,23 @@ Esta sección documenta cuando una sesión salteó pasos del proceso. Sirve para
 - **Cómo se manejó:** El Claude del chat aplicó preventivamente la regla #12 + #13: registró como input crudo, NO como decisión, propuso cortar sesión. Bryam aceptó y validó cerrar con 7/8 preguntas resueltas.
 - **Lección:** La regla #12 funciona. Reaplicarla cada vez que vuelva a aparecer el patrón.
 
+### Sesión 11 — vocabulario divergente entre Claude y Bryam ("orden", "paso", "candado")
+- **Qué pasó:** Durante la entrevista para entender el modelo de uso, Claude usaba "orden" desde el primer clic en paso 1. Bryam llamaba "orden" solo a lo que ya estaba en seguimiento (post comprobante validado). Igual con "paso" (Claude lo entendía secuencial, Bryam lo entendía como paneles paralelos) y "candado" (Bryam lo descartó como anticuado).
+- **Por qué fallaba el camino fácil:** Si Claude seguía haciendo preguntas con su vocabulario, las respuestas de Bryam iban a sonar incoherentes y se acumulaba ruido. Cada pregunta nueva agravaba el malentendido.
+- **Cómo se manejó:** Bryam frenó explícitamente ("recalibremos por que no te entendí"). Claude paró, registró el malentendido, pidió definiciones a Bryam ("¿en qué momento exacto, para vos, ya hay orden?"), y ajustó vocabulario antes de seguir.
+- **Lección:** Cuando palabras parecen sinónimas pero las dos partes las usan distinto, el costo del malentendido crece compuesto. **Recalibrar de inmediato.** Agregada como regla #15.
+
+### Sesión 11 — descubrimientos múltiples a mitad de entrevista (modelo "atajo de pago" + "abortar orden")
+- **Qué pasó:** Mientras se procesaba el modelo paralelo de sesión 10, aparecieron dos modelos más que no estaban en el HANDOFF: clientes expertos que saltan paso 1 y 2, y casos de aborto por arrepentimiento del cliente final.
+- **Por qué fallaba el camino fácil:** Si Claude seguía con el plan original de 5 etapas (mockup → conflictos → cerrar #5), iba a estar diseñando sobre 4 modelos pero solo entendiendo 1. Mismo patrón que la trampa #12 pero apareció dos veces seguidas.
+- **Cómo se manejó:** Claude paró, propuso 3 opciones (seguir plan original / cambiar plan a "solo entender modelos de uso" / otra), Bryam eligió cambiar plan. Sesión 11 dedicada entera a entender modelos. Resultado: 4 modelos identificados, mockup de Bryam, archivo conceptual nuevo.
+- **Lección:** Cuando aparecen 2+ descubrimientos seguidos en una sesión, **el plan de la sesión cambia, no se fuerza el original**. Cambio de plan en frío durante la sesión es válido si Bryam lo aprueba.
+
+### Sesión 11 — mockup conceptual de Bryam evita 2-3 sesiones de mockup iterativo
+- **Qué pasó:** Después de varios intentos de Claude por hacer preguntas dirigidas para entender el layout, Bryam aportó un mockup hecho por él mostrando el modelo de 4 paneles paralelos.
+- **Por qué fue valioso:** El mockup respondió en 30 segundos lo que las preguntas dirigidas no podían capturar. Aplica regla #1 (reference-driven design — los mockups visuales son fuente de verdad).
+- **Lección:** Si el cliente puede aportar un mockup, dejar que lo aporte antes que insistir con preguntas. Las preguntas dirigidas funcionan cuando el modelo mental ya está claro; cuando no lo está, el mockup es más rápido. **Pero ojo:** el mockup conceptual NO es spec lista para implementar (regla #14 nueva). Sigue requiriendo las 8 piezas formales después.
+
 ---
 
 ## Cómo arrancar próxima sesión
@@ -769,6 +832,8 @@ Si sos un Claude que abre un chat nuevo:
 11. **Si Bryam pide hablar más simple/suave**, sin jerga técnica, cumplir.
 12. **Si Bryam menciona cansancio o construcción lenta**, sugerí cortar y retomar con cabeza fresca antes de cerrar decisiones grandes.
 13. **Si aparece un descubrimiento conceptual a mitad de una spec**, separá dependencias: cerrá lo que NO depende, pausá lo que sí, abrí spec dedicada. NO improvises diseño sobre lo recién descubierto.
+14. **Si Bryam aporta un mockup conceptual**, tratalo como base reference-driven, no como spec lista para implementar. La spec con las 8 piezas viene después.
+15. **Si una palabra parece estar generando malentendido** (ej: "orden", "paso"), recalibrar vocabulario explícitamente antes de seguir. Pedir definición a Bryam, registrarla, usar la suya.
 
 ### Frase de arranque que Bryam debe usar
 
@@ -804,6 +869,20 @@ Si no usa esa frase, recordásela vos antes de avanzar.
   - **Reglas y trampas nuevas:** regla #13 (descubrimientos conceptuales a mitad de spec), trampa #12 (improvisar diseño sobre descubrimiento fresco).
   - **Aplicación correcta de regla #12 (preventiva)** cuando Bryam abrió propuesta de temporizador paso 4 cerca del final.
   - **HANDOFF v1.7.**
+- **Sesión 11 (cerrada):**
+  - **Modelo de uso del cliente procesado en frío.** Sesión exclusivamente conceptual.
+  - **4 modelos de uso identificados:** agrupado, encadenado, atajo de pago, abortar orden.
+  - **Descubrimiento clave:** la pantalla cliente NO es secuencia de pasos; es **pantalla única con 4 paneles paralelos visibles + Mis órdenes debajo**. Bryam aportó 2 mockups que sirvieron como fuente de verdad.
+  - **Mecánica "congelar/descongelar"** reemplaza al concepto de candados. Concepto "cuándo nace una orden" (botón panel 4 con comprobante validado) definido.
+  - **Pregunta #5 paso 1 cerrada en concepto** (panel 1 = columna en pantalla principal, sin sidebar separada).
+  - **Archivo nuevo:** `docs/specs/cliente/pantalla-principal-cliente.md` v0.1 (borrador).
+  - **10 open questions identificadas** (OQ-1 a OQ-10) para sesión 12.
+  - **Plan de lanzamiento reorganizado:** sesiones 12-15 redefinidas con foco en pantalla principal en lugar de paso por paso individual.
+  - **Decisión multi-orden** (HANDOFF v1.7) **se reemplaza** conceptualmente por la regla congelar/descongelar. Cierre formal cuando spec de pantalla principal entre en vigencia.
+  - **Aplicaciones correctas de reglas #12, #13 múltiples veces:** cambio de plan en frío durante la sesión, recalibrar vocabulario, no improvisar sobre descubrimientos frescos.
+  - **Reglas y trampas nuevas:** regla #14 (mockup conceptual ≠ spec lista), regla #15 (recalibrar vocabulario), trampa #13 (mockup conceptual = spec lista para implementar).
+  - **Ajuste menor pendiente:** mover "no soy programador, hablame simple" a frase de arranque obligatoria + agregar patrón de "recordatorios específicos por sesión" como práctica documentada. Aplicar al inicio de sesión 12.
+  - **HANDOFF v1.8.**
 
 ---
 
