@@ -574,6 +574,7 @@ export function createFrpRoutes({
     });
     audit(db, user.id, "FRP_JOBS_CREATED", order.id, { jobCount: jobs.length });
     await writeDb(db);
+    publishFrpOps(db, "frp_order_created");
     return sendJson(res, 201, { order: publicFrpOrder(order, db), frp: publicFrpState(db, user) });
   }
 

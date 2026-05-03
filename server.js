@@ -3341,6 +3341,7 @@ const handlePortalApi = createPortalRoutes({
   publicCustomerState,
   publicPortalCatalog,
   publishPortalOrders,
+  publishFrpOps,
   publicActiveTechnician,
   customerModuleUrl,
   readDb,
@@ -4628,6 +4629,14 @@ async function handleApi(req, res, pathname) {
       autoRevertAt: result.state.autoRevertAt ? new Date(result.state.autoRevertAt).toISOString() : null,
     });
     await writeDb(db);
+    // Spec operador-frp-express.md ambigüedad #7 (1er evento): emitido al
+    // INICIAR el switch para que todos los operadores vean el badge cambiar
+    // a "Cambiando técnico..." al instante.
+    //
+    // 2do evento del switch (cierre de swap window) NO se emite desde backend
+    // para no instrumentar readDb. Frontend resuelve con polling acelerado a
+    // 2s durante swap, vuelve a 30s después. Implementar en commit 7c.
+    publishFrpOps(db, "technician_switched");
     const status = operatorTechnicianStatus(db, db.activeTechnician, now);
     return sendJson(res, 200, { technician: status });
   }

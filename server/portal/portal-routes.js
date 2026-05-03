@@ -47,6 +47,7 @@ export function createPortalRoutes({
   publicCustomerState,
   publicPortalCatalog,
   publishPortalOrders,
+  publishFrpOps,
   publicActiveTechnician,
   customerModuleUrl,
   readDb,
@@ -689,6 +690,7 @@ export function createPortalRoutes({
     }
     await writeDb(db);
     publishPortalOrders(db, context.client.id, inputProofs.length ? "order_created_with_proof" : "order_created");
+    publishFrpOps(db, inputProofs.length ? "payment_review_needed" : "frp_order_created");
     return sendJson(res, 201, {
       order: publicCustomerOrder(order, db),
       customer: publicCustomerState(db, context),
@@ -802,6 +804,7 @@ export function createPortalRoutes({
     });
     await writeDb(db);
     publishPortalOrders(db, context.client.id, "customer_connected");
+    publishFrpOps(db, "frp_job_ready_for_technician");
     return sendJson(res, 200, {
       ok: true,
       order: publicCustomerOrder(order, db),
@@ -919,6 +922,7 @@ export function createPortalRoutes({
     });
     await writeDb(db);
     publishPortalOrders(db, context.client.id, "payment_proof_uploaded");
+    publishFrpOps(db, "payment_review_needed");
     return sendJson(res, 200, {
       order: publicCustomerOrder(order, db),
       customer: publicCustomerState(db, context),
