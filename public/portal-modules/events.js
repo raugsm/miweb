@@ -54,8 +54,9 @@ async function submitOrderWithProofs(files) {
     // "Redmi Note 12S" (REVISION_REQUERIDA) o "Redmi A3X" (NO_APTO_MODO), el
     // backend bloquea con 409 "AriadGSM debe confirmar compatibilidad...". Spec
     // FINAL: validacion OPCIONAL — el cliente experto sabe lo que pide y la
-    // orden no debe gate por hint en el buscador. Items vacios = APTO_EXPRESS
-    // por default en eligibility.js → sin review → sin gate.
+    // orden no debe gate por hint en el buscador. Items con originalText vacio
+    // retornan APTO_EXPRESS via la guarda al inicio de frpEligibilityResult,
+    // sin review y sin gate.
     const payload = await api("/api/portal/orders/frp", {
       method: "POST",
       body: JSON.stringify({

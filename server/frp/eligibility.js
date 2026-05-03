@@ -32,6 +32,16 @@ export function frpEquipmentLooksAmbiguous(textIndex, rawText) {
 
 export function frpEligibilityResult(rawText) {
   const originalText = cleanText(rawText, 180);
+  if (!originalText) {
+    return {
+      originalText: "",
+      detectedMatch: "",
+      matchedAlias: "",
+      status: "APTO_EXPRESS",
+      internalReason: "Sin texto de equipo: se asume apto por default.",
+      publicMessage: "Equipo apto para FRP Express.",
+    };
+  }
   const textIndex = normalizeFrpEligibilityText(originalText);
   if (frpEquipmentLooksAmbiguous(textIndex, originalText)) {
     return {

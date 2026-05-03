@@ -110,6 +110,7 @@ test("FRP eligibility preserves blocked, review, and apto outcomes", () => {
   assert.equal(frpEligibilityResult("Redmi A3X").status, "NO_APTO_MODO");
   assert.equal(frpEligibilityResult("Redmi Note 12S").status, "REQUIERE_REVISION");
   assert.equal(frpEligibilityResult("Redmi Note 13").status, "APTO_EXPRESS");
+  assert.equal(frpEligibilityResult("").status, "APTO_EXPRESS");
 
   const summary = summarizeFrpEligibility([
     { originalText: "Redmi A3X" },
