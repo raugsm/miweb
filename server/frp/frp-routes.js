@@ -37,6 +37,7 @@ export function createFrpRoutes({
   publicFrpState,
   publishPortalOrdersForFrpOrder,
   publishPortalOrdersForAll,
+  publishFrpOps,
   classifyCostChange,
   computeProviderBaseline,
   readDb,
@@ -693,6 +694,7 @@ export function createFrpRoutes({
     audit(db, user.id, action === "approve" ? "FRP_PAYMENT_VALIDATED" : "FRP_PAYMENT_REJECTED", order.id, { code: order.code, orderStatus: order.orderStatus });
     await writeDb(db);
     publishPortalOrdersForFrpOrder(db, order, action === "approve" ? "frp_payment_validated" : "frp_payment_rejected");
+    publishFrpOps(db, "payment_review_resolved");
     return sendJson(res, 200, { order: publicFrpOrder(order, db), frp: publicFrpState(db, user) });
   }
 
@@ -733,6 +735,7 @@ export function createFrpRoutes({
     audit(db, user.id, "FRP_JOB_READY", job.id, { code: job.code, order: order.code });
     await writeDb(db);
     publishPortalOrdersForFrpOrder(db, order, "frp_job_ready");
+    publishFrpOps(db, "frp_job_ready");
     return sendJson(res, 200, { job: publicFrpJob(job, db), frp: publicFrpState(db, user) });
   }
 
@@ -773,6 +776,7 @@ export function createFrpRoutes({
     audit(db, user.id, "FRP_JOB_TAKEN_SPECIFIC", job.id, { code: job.code, order: order?.code || "" });
     await writeDb(db);
     publishPortalOrdersForFrpOrder(db, order, "frp_job_taken");
+    publishFrpOps(db, "frp_job_taken");
     return sendJson(res, 200, { job: publicFrpJob(job, db), frp: publicFrpState(db, user) });
   }
 
@@ -795,6 +799,7 @@ export function createFrpRoutes({
     audit(db, user.id, "FRP_JOB_TAKEN", job.id, { code: job.code, order: order?.code || "" });
     await writeDb(db);
     publishPortalOrdersForFrpOrder(db, order, "frp_job_taken");
+    publishFrpOps(db, "frp_job_taken");
     return sendJson(res, 200, { job: publicFrpJob(job, db), frp: publicFrpState(db, user) });
   }
 
@@ -835,6 +840,7 @@ export function createFrpRoutes({
     audit(db, user.id, "FRP_JOB_DONE", job.id, { code: job.code, order: order.code, ardCode: job.ardCode });
     await writeDb(db);
     publishPortalOrdersForFrpOrder(db, order, "frp_job_done");
+    publishFrpOps(db, "frp_job_done");
     return sendJson(res, 200, { job: publicFrpJob(job, db), frp: publicFrpState(db, user) });
   }
 
@@ -891,6 +897,7 @@ export function createFrpRoutes({
     });
     await writeDb(db);
     publishPortalOrdersForFrpOrder(db, order, "frp_job_canceled");
+    publishFrpOps(db, "frp_job_canceled");
     return sendJson(res, 200, { job: publicFrpJob(job, db), frp: publicFrpState(db, user) });
   }
 
@@ -913,6 +920,7 @@ export function createFrpRoutes({
     audit(db, user.id, "FRP_JOB_REVIEW_REQUIRED", job.id, { code: job.code, order: order.code, reason });
     await writeDb(db);
     publishPortalOrdersForFrpOrder(db, order, "frp_job_review_required");
+    publishFrpOps(db, "frp_job_review_required");
     return sendJson(res, 200, { job: publicFrpJob(job, db), frp: publicFrpState(db, user) });
   }
 

@@ -126,6 +126,11 @@ const publicBaseUrl = String(process.env.ARIAD_PUBLIC_URL || process.env.RENDER_
 const mailFrom = process.env.ARIAD_MAIL_FROM || '"AriadGSM Soporte" <soporte@ariadgsm.com>';
 const customerPortalBaseUrl = resolveCustomerPortalBaseUrl();
 const portalOrderStreams = new Map();
+// QUE: streams SSE del panel operador FRP. Map<userId, Set<stream>>.
+// Multiples streams por user son validos (laptop + movil del mismo operador).
+// Spec operador-frp-express.md §5.2 + AC #9, #13, #36. Patron clonado del
+// SSE del cliente (portalOrderStreams) para mantener consistencia.
+const frpOpsStreams = new Map();
 
 const cloudflareTurnstileOrigin = "https://challenges.cloudflare.com";
 const turnstileEnabled = Boolean(turnstileSiteKey && turnstileSecret);
@@ -2485,6 +2490,69 @@ function publishPortalOrdersForFrpOrder(db, frpOrder, reason = "frp_order_update
   if (portalOrder) publishPortalOrders(db, portalOrder.clientId, reason);
 }
 
+// ============================================================
+// SSE operador FRP — patron clonado del SSE cliente arriba.
+// Map<userId, Set<stream>>; multiples streams por user (laptop + movil).
+// Cada publish recomputa publicFrpState(db, streamUser) por stream porque
+// el filtro depende de role/canal del operador conectado (un ADMIN ve todos
+// los canales; Jack/Angelo solo ven WhatsApp 3).
+// Spec operador-frp-express.md §5.2 + AC #9, #13, #36.
+// ============================================================
+function addFrpOpsStream(userId, stream) {
+  if (!frpOpsStreams.has(userId)) frpOpsStreams.set(userId, new Set());
+  frpOpsStreams.get(userId).add(stream);
+}
+
+function removeFrpOpsStream(userId, stream) {
+  const streams = frpOpsStreams.get(userId);
+  if (!streams) return;
+  streams.delete(stream);
+  if (!streams.size) frpOpsStreams.delete(userId);
+}
+
+// QUE: emite un evento SSE "frp" a todos los streams operador conectados.
+// El payload incluye reason (string corto) y frp (publicFrpState calculado
+// por user). Si opts.notice = { type: 'info'|'error', message } se
+// adjunta para que el frontend pueda pintar #frp-message.
+// POR QUE: la ambigüedad #1 del reporte de auditoria (sesion de planificacion
+// commit 7) decidio NO crear toast flotante. El frontend del 7c reusa
+// #frp-message como banner inline. El campo notice es opcional — sin notice
+// el frontend solo refresca state silenciosamente.
+function publishFrpOps(db, reason = "frp_updated", opts = {}) {
+  if (!frpOpsStreams.size) return;
+  const updatedAt = nowIso();
+  const notice = opts.notice && typeof opts.notice === "object" ? {
+    type: String(opts.notice.type || "info"),
+    message: String(opts.notice.message || ""),
+  } : null;
+  for (const [userId, streams] of [...frpOpsStreams.entries()]) {
+    const streamUser = (db.users || []).find((candidate) => candidate.id === userId);
+    if (!streamUser) {
+      // Usuario desactivado o eliminado entre conexion y publish — limpiar.
+      for (const stream of [...streams]) removeFrpOpsStream(userId, stream);
+      continue;
+    }
+    const payload = {
+      reason,
+      updatedAt,
+      frp: publicFrpState(db, streamUser),
+    };
+    if (notice) payload.notice = notice;
+    for (const stream of [...streams]) {
+      if (stream.closed || stream.res.destroyed || stream.res.writableEnded) {
+        removeFrpOpsStream(userId, stream);
+        continue;
+      }
+      try {
+        sendSseEvent(stream.res, "frp", payload, `${Date.now()}`);
+      } catch {
+        stream.closed = true;
+        removeFrpOpsStream(userId, stream);
+      }
+    }
+  }
+}
+
 // QUE: re-publica el listado de ordenes a TODOS los clientes con stream activo.
 // PR-2a.3 lo usa cuando el operador cambia pricing config — cada cliente conectado
 // recibe sus ordenes con currentUnitPrice recalculado para detectar price-up
@@ -3333,6 +3401,7 @@ const handleFrpApi = createFrpRoutes({
   publicFrpState,
   publishPortalOrdersForFrpOrder,
   publishPortalOrdersForAll,
+  publishFrpOps,
   classifyCostChange,
   computeProviderBaseline,
   readDb,
@@ -4458,6 +4527,70 @@ async function handleApi(req, res, pathname) {
     audit(db, user.id, "USER_UPDATED", target.id, { before: previous, after: publicUser(target) });
     await writeDb(db);
     return sendJson(res, 200, { user: publicUser(target) });
+  }
+
+  // Spec operador-frp-express.md §5.2 + AC #9, #13, #36 — SSE del panel
+  // operador FRP. Emite eventos "frp" cuando cualquier mutacion FRP (take,
+  // finalize, cancel, ready, review, payment-review) ocurre. Patron clonado
+  // del /api/portal/orders/events (cliente). Auth via cookie operador y
+  // canUseFrp; si el user no tiene acceso, 403 deny by default.
+  if (req.method === "GET" && pathname === "/api/operator/frp/events") {
+    if (!requireUser(user, res)) return;
+    const db = await readDb();
+    if (!(await requireFrpAccess(user, res, db, "FRP_OPS_STREAM_DENIED", "frp-ops-stream"))) return;
+    const streamId = crypto.randomUUID();
+    audit(db, user.id, "FRP_OPS_STREAM_CONNECTED", user.id, {
+      streamId,
+      ipHash: hashToken(clientIp(req)),
+    });
+    await writeDb(db);
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-store, no-transform",
+      "Connection": "keep-alive",
+      "X-Accel-Buffering": "no",
+    });
+    res.write("retry: 5000\n\n");
+    const stream = {
+      id: streamId,
+      userId: user.id,
+      res,
+      startedAtMs: Date.now(),
+      closed: false,
+    };
+    addFrpOpsStream(user.id, stream);
+    // Snapshot inicial para que el frontend no tenga que hacer otra request
+    // tras conectar. Reason "connected" indica primera emision.
+    sendSseEvent(res, "frp", {
+      reason: "connected",
+      updatedAt: nowIso(),
+      frp: publicFrpState(db, user),
+    }, `${Date.now()}`);
+    const heartbeat = setInterval(() => {
+      if (stream.closed || res.destroyed || res.writableEnded) return;
+      res.write(`: heartbeat ${Date.now()}\n\n`);
+    }, portalOrdersSseHeartbeatMs);
+    const cleanup = () => {
+      if (stream.closed) return;
+      stream.closed = true;
+      clearInterval(heartbeat);
+      removeFrpOpsStream(user.id, stream);
+      (async () => {
+        try {
+          const disconnectDb = await readDb();
+          audit(disconnectDb, user.id, "FRP_OPS_STREAM_DISCONNECTED", user.id, {
+            streamId,
+            durationMs: Date.now() - stream.startedAtMs,
+          });
+          await writeDb(disconnectDb);
+        } catch (error) {
+          console.error(error);
+        }
+      })();
+    };
+    req.on("close", cleanup);
+    res.on("error", cleanup);
+    return;
   }
 
   if (req.method === "GET" && pathname === "/api/operator/technician/status") {
