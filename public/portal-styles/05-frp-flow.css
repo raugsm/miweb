@@ -786,39 +786,54 @@
   box-shadow: 0 30px 80px rgba(15, 23, 42, 0.3);
 }
 .where-paste-dialog::backdrop { background: rgba(15, 23, 42, 0.45); }
-.where-paste-mock {
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  font-family: "Segoe UI", Tahoma, sans-serif;
-  font-size: 12px;
+/* Sub-commit 15c.2: SVG mock del Redirector reemplazado por captura real
+   (public/images/redirector-screenshot.jpg). Selectores eliminados:
+   .where-paste-mock, .where-paste-mock-header, .where-paste-mock-body,
+   .where-paste-mock-title, .where-paste-mock-field (+ label), .where-paste-mock-input,
+   .where-paste-mock-info, .where-paste-mock-footer (+ > span), .where-paste-mock-btn,
+   .where-paste-placeholder-note. */
+
+/* Wrapper que ancla los badges en posición absoluta sobre la imagen real.
+   La imagen ocupa el ancho completo del modal; los badges se reposicionan
+   con porcentajes para escalar correctamente en mobile/desktop. */
+.where-paste-screenshot-wrap {
+  position: relative;
   margin-bottom: 12px;
-  background: #f1f5f9;
 }
-.where-paste-mock-header {
-  background: #1e293b;
-  color: #fff;
-  padding: 6px 10px;
-  font-weight: 600;
-  border-radius: 6px 6px 0 0;
+
+.where-paste-redirector-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
 }
-.where-paste-mock-body { padding: 12px; background: #fff; border-radius: 0 0 6px 6px; }
-.where-paste-mock-title { font-weight: 700; margin-bottom: 8px; color: #166534; }
-.where-paste-mock-field { position: relative; margin-bottom: 12px; }
-.where-paste-mock-field label { display: block; font-size: 11px; color: #475569; margin-bottom: 2px; }
-.where-paste-mock-input { height: 22px; border: 1px solid #94a3b8; background: #f8fafc; border-radius: 2px; }
+
+/* Badges 1° azul / 2° verde flotantes sobre la captura. Posicionados con
+   porcentajes calculados sobre la imagen del Customer Module v2.5.0.3540
+   para que queden alineados con los inputs Technician ID + Additional info.
+   Si la captura cambia (nueva versión del Redirector), recalibrar top%. */
 .where-paste-arrow {
   position: absolute;
-  right: -56px;
-  top: 16px;
-  padding: 2px 8px;
+  padding: 3px 10px;
   border-radius: 6px;
   font-size: 11px;
   font-weight: 700;
   color: #fff;
   white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.25);
 }
-.where-paste-arrow-blue { background: #1d4ed8; }
-.where-paste-arrow-green { background: #059669; }
+.where-paste-arrow-blue {
+  background: #1d4ed8;
+  top: 33%;
+  right: 6%;
+}
+.where-paste-arrow-green {
+  background: #059669;
+  top: 53%;
+  right: 6%;
+}
 .where-paste-arrow::before {
   content: "";
   position: absolute;
@@ -830,32 +845,13 @@
 }
 .where-paste-arrow-blue::before { border-right-color: #1d4ed8; }
 .where-paste-arrow-green::before { border-right-color: #059669; }
-.where-paste-mock-info { font-size: 11px; color: #475569; margin: 6px 0 8px; }
-.where-paste-mock-footer { display: flex; align-items: center; gap: 8px; font-size: 11px; }
-.where-paste-mock-footer > span { flex: 1; color: #94a3b8; }
-.where-paste-mock-btn {
-  padding: 4px 10px;
-  border: 1px solid #94a3b8;
-  background: #e2e8f0;
-  border-radius: 3px;
-  font-size: 11px;
-  cursor: default;
-}
+
 .where-paste-steps {
   margin: 0 0 8px 18px;
   padding: 0;
   font-size: 13px;
   line-height: 1.5;
   color: #1e293b;
-}
-.where-paste-placeholder-note {
-  margin: 8px 0 12px;
-  padding: 8px 10px;
-  background: #fef9c3;
-  border-radius: 6px;
-  font-size: 11px;
-  color: #78350f;
-  font-style: italic;
 }
 
 /* Sub-commit 15b.2: bloques eliminados al migrar el paso 3 al panel 3 nuevo.
