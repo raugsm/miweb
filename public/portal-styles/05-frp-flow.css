@@ -220,6 +220,7 @@
 
 .flow-payment-pill-label {
   display: inline-block;
+  white-space: nowrap;
 }
 
 /* Pill placeholder (slot vacío en fila 2 según spec — Perú · USDT · México
