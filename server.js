@@ -646,15 +646,24 @@ function portalFrpPriceSuggestion(db, clientId, quantity, canUseBenefits, benefi
     return suggestion;
   }
   const monthlyUsage = customerMonthlyUsage(db, clientId, new Date(), masterClientId || benefit?.masterClientId || "");
-  const quantityTier = benefit.quantityDiscountEnabled ? frpTierForQuantity(safeQuantity, pricing) : { unitPrice: baseUnitPrice, label: "Precio base", minQty: 1 };
+  // Sub-commit 15a.5 (spec panel-2 §8): clientes VIP no reciben volume tier — solo
+  // su precio VIP particular. Detectamos VIP por status="VIP" o por vipUnitMargin>0
+  // (cualquier signal positivo activa el modelo VIP).
+  const clientRecord = clientId ? db.customerClients.find((c) => c.id === clientId) : null;
+  const isVipClient = clientId && (
+    String(clientRecord?.status || "").toUpperCase() === "VIP" ||
+    Number(benefit.vipUnitMargin || 0) > 0
+  );
+  const quantityTier = !isVipClient && benefit.quantityDiscountEnabled
+    ? frpTierForQuantity(safeQuantity, pricing)
+    : { unitPrice: baseUnitPrice, label: "Precio base", minQty: 1 };
   const monthlyTier = benefit.monthlyDiscountEnabled ? frpTierForMonthlyUsage(monthlyUsage, pricing) : null;
   const goalTier = benefit.goalDiscountEnabled && benefit.monthlyGoal > 0 && monthlyUsage >= benefit.monthlyGoal
     ? { unitPrice: Math.max(pricing.minAllowedUnitPrice, baseUnitPrice - 1), label: `Meta ${benefit.monthlyGoal}+` }
     : null;
   // PR-2a.5-fix: precio VIP = costo proveedor + margen VIP. Sin clamp al piso
-  // volumen (minAllowedUnitPrice) — VIP esta DEBAJO del piso volumen por diseño
-  // (FINAL §3: piso volumen 1.1 > VIP 1.0). La validacion del rango 0.5-1.0
-  // del margen vive en la API de toggle VIP — aqui confiamos en lo persistido.
+  // volumen — VIP esta DEBAJO del piso volumen por diseño (spec panel-2 §8: VIP
+  // tiene su propio modelo, fuera del scope de protection floor de volumen).
   const vipTier = clientId && Number(benefit.vipUnitMargin || 0) > 0
     ? { unitPrice: moneyNumber(pricing.internalCostUsdt + Number(benefit.vipUnitMargin)), label: "VIP aprobado" }
     : null;

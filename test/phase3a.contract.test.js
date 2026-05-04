@@ -4,7 +4,7 @@ import test from "node:test";
 import { frpServiceCode, frpWorkChannel, portalPublicServices } from "../server/config/catalog.js";
 import { limaDateStamp, limaMonthStamp } from "../server/core/dates.js";
 import { sendSseEvent } from "../server/core/http.js";
-import { classifyCostChange, computeProviderBaseline, defaultFrpPricingConfig, frpCurrentPricing, frpDynamicQuantityTiers } from "../server/frp/pricing.js";
+import { classifyCostChange, computeProviderBaseline, defaultFrpPricingConfig, frpCurrentPricing, frpDynamicQuantityTiers, frpDynamicTier } from "../server/frp/pricing.js";
 import { frpEligibilityResult, summarizeFrpEligibility } from "../server/frp/eligibility.js";
 
 test("portal Xiaomi FRP keeps its internal service and WhatsApp 3 mapping", () => {
@@ -28,15 +28,34 @@ test("default FRP pricing resolves to internalCost + targetMargin (no static flo
   assert.equal(pricing.unitPrice, 25);
 });
 
-test("FRP volume tiers compute unitPrice as internalCost + tier margin (FINAL §3)", () => {
+test("FRP volume tiers compute unitPrice as internalCost + tier margin (spec panel-2 §8)", () => {
   const db = { pricingConfig: { frpPricing: defaultFrpPricingConfig() } };
   const pricing = frpCurrentPricing(db);
 
-  // Tiers ordenados de mayor minQty a menor, margenes 1.1/1.2/1.3/1.4/1.5:
+  // 4 tiers (sub-commit 15a.5), ordenados de mayor minQty a menor.
+  // Margenes 1.10/1.25/1.35/1.50 sobre costo default 23.5 → 24.60/24.75/24.85/25.00.
   assert.deepEqual(
     frpDynamicQuantityTiers(pricing).map((tier) => tier.unitPrice),
-    [24.6, 24.7, 24.8, 24.9, 25],
+    [24.6, 24.75, 24.85, 25],
   );
+  // discountPct expuesto literal del spec (0/3/5/8) para el badge frontend.
+  assert.deepEqual(
+    frpDynamicQuantityTiers(pricing).map((tier) => tier.discountPct),
+    [8, 5, 3, 0],
+  );
+});
+
+test("FRP volume tiers clamp at internalCost + 1 USDT protection floor (spec panel-2 §8)", () => {
+  // Pricing con costo alto + tier hipotetico de margen bajo (debajo de 1.0).
+  // El clamp debe activarse silenciosamente y subir el unitPrice al piso.
+  const pricing = { available: true, internalCostUsdt: 23.5, unitPrice: 25 };
+  const lowMarginTier = { minQty: 1, marginUsdt: 0.5, unitPrice: 24, label: "Test" };
+  const result = frpDynamicTier(lowMarginTier, pricing);
+  // computed = 23.5 + 0.5 = 24.0; floor = 23.5 + 1.0 = 24.5; max(computed, floor) = 24.5.
+  assert.equal(result.unitPrice, 24.5);
+  // Tiers default (margenes >= 1.10) NO activan el clamp — quedan tal cual.
+  const okTier = { minQty: 1, marginUsdt: 1.10, unitPrice: 24.6, label: "OK" };
+  assert.equal(frpDynamicTier(okTier, pricing).unitPrice, 24.6);
 });
 
 test("classifyCostChange enforces 5-level validation (PR-2a.6)", () => {

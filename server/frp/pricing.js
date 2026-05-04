@@ -160,31 +160,30 @@ export function frpCurrentPricing(db) {
   };
 }
 
-// QUE: calcula el unitPrice efectivo de un tier (post PR-2a.6 — sin floors
-// estaticos). Soporta dos modelos:
-//   1. Tier con `marginUsdt` (frpQuantityTiers, FINAL §3): unit = cost + margin.
-//      Sin clamp. La validacion de rangos sanos del costo vive en el sistema
-//      de validacion dinamica de cambios (frp-routes 5-niveles).
+// QUE: calcula el unitPrice efectivo de un tier. Soporta dos modelos:
+//   1. Tier con `marginUsdt` (frpQuantityTiers, spec panel-2 §8): unit = cost + margin,
+//      con piso de proteccion absoluto = cost + 1.0 USDT (sub-commit 15a.5 — clamp
+//      silencioso, garantiza ganancia minima del operador).
 //   2. Tier con `unitPrice` (frpMonthlyTiers, sin migrar — fallback legacy):
-//      computa descuento contra el precio nominal y aplica.
+//      computa descuento contra el precio nominal 25 y aplica el mismo piso.
 export function frpDynamicTier(defaultTier, pricing) {
   if (!pricing?.available) return { ...defaultTier };
   const internalCost = moneyNumber(pricing.internalCostUsdt || 0);
+  const protectionFloor = moneyNumber(internalCost + 1.0);
   if (defaultTier.marginUsdt !== undefined) {
     const margin = moneyNumber(defaultTier.marginUsdt);
+    const computed = moneyNumber(internalCost + margin);
     return {
       ...defaultTier,
-      unitPrice: moneyNumber(internalCost + margin),
+      unitPrice: moneyNumber(Math.max(computed, protectionFloor)),
     };
   }
-  // Legacy unitPrice-based (frpMonthlyTiers). Mantenemos el modelo previo: el
-  // descuento es la diferencia respecto al precio nominal 25, aplicada sobre el
-  // pricing.unitPrice actual. No tiene sentido perfecto sin floors, pero queda
-  // como compat hasta que se migre o reemplace.
+  // Legacy unitPrice-based (frpMonthlyTiers).
   const discount = moneyNumber(25 - Number(defaultTier.unitPrice || 25));
+  const computed = moneyNumber(Math.max(0, pricing.unitPrice - discount));
   return {
     ...defaultTier,
-    unitPrice: moneyNumber(Math.max(0, pricing.unitPrice - discount)),
+    unitPrice: moneyNumber(Math.max(computed, protectionFloor)),
   };
 }
 

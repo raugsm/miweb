@@ -164,20 +164,19 @@ export const frpEligibilityCatalog = [
 ];
 export const frpOrderChecklistKeys = ["priceSent", "paymentValidated", "connectionDataSent", "authorizationConfirmed"];
 export const frpJobChecklistKeys = ["clientConnected", "requiredStateConfirmed", "modelSupported"];
-// QUE: tiers de descuento por volumen — FINAL §3 (PR-2a.1).
-// `marginUsdt` es el margen que el operador conserva por unidad (se suma al costo
-// del proveedor activo para obtener el precio de venta). El tier 1 (marginUsdt
-// 1.5) tiene piso = minSellPriceUsdt; los tiers de volumen tienen piso =
-// internalCost + minMarginUsdt (1.0 = VIP floor).
-// `unitPrice` queda como FALLBACK cuando no hay pricingConfig disponible aun
-// (publicPortalCatalog lo expone tal cual). Refleja la curva esperada con costo
-// ~23.5 USDT y reservacion para VIP.
+// QUE: tiers de descuento por volumen — spec panel-2-solicitud.md v1.1 §8 (sub-commit 15a.5).
+// 4 tiers (1 / 2-3 / 4-6 / 7-10). Tier 11+ removido porque el frontend cap a 10.
+// `marginUsdt` = margen que conserva el operador por unidad (se suma al costo del
+// proveedor activo para obtener el precio de venta). Piso de proteccion absoluto:
+// internalCost + 1.0 USDT, aplicado en frpDynamicTier (clamp silencioso).
+// `discountPct` = % nominal del tier para mostrar en el badge de la card "TOTAL".
+// `unitPrice` = FALLBACK cuando no hay pricingConfig (publicPortalCatalog lo expone
+// tal cual). Refleja la curva esperada con costo default 23.5 USDT.
 export const frpQuantityTiers = [
-  { minQty: 11, marginUsdt: 1.1, unitPrice: 24.6, label: "Volumen 11+" },
-  { minQty: 7, marginUsdt: 1.2, unitPrice: 24.7, label: "Volumen 7-10" },
-  { minQty: 4, marginUsdt: 1.3, unitPrice: 24.8, label: "Volumen 4-6" },
-  { minQty: 2, marginUsdt: 1.4, unitPrice: 24.9, label: "Volumen 2-3" },
-  { minQty: 1, marginUsdt: 1.5, unitPrice: 25, label: "Normal" },
+  { minQty: 7, marginUsdt: 1.10, unitPrice: 24.60, discountPct: 8, label: "Descuento por 7-10 equipos" },
+  { minQty: 4, marginUsdt: 1.25, unitPrice: 24.75, discountPct: 5, label: "Descuento por 4-6 equipos" },
+  { minQty: 2, marginUsdt: 1.35, unitPrice: 24.85, discountPct: 3, label: "Descuento por 2-3 equipos" },
+  { minQty: 1, marginUsdt: 1.50, unitPrice: 25.00, discountPct: 0, label: "Precio normal" },
 ];
 export const frpMonthlyTiers = [
   { minJobs: 100, unitPrice: 22, label: "Meta 100+" },

@@ -51,23 +51,31 @@ export function clampQuantityWithFlag(raw) {
 }
 
 // QUE: estimacion del cliente. Devuelve `base` (precio nominal por unidad,
-// constante FINAL §4 — paso 1 siempre lo muestra), `unit` (precio efectivo
-// con tier por volumen / monthly / VIP aplicado, usado en total) y `total`
-// (= unit * qty).
-// POR QUE: paso 1 es "precio en vivo del momento por unidad sin descuento".
-// El descuento por volumen se aplica al total del paso 2/3, no al unitario
-// del paso 1. Antes paso 1 mostraba `unit` y caia con cantidades altas.
+// constante — panel 1 siempre lo muestra), `unit` (precio efectivo con tier
+// por volumen / monthly / VIP aplicado, usado en total), `total` (= unit * qty),
+// `discountPct` (% del tier seleccionado, 0 si normal), `isVip` (flag para que
+// el panel 2 oculte badge/label/aviso) y `nextTierHint` (si qty está exactamente
+// en el límite superior de un tier no-tope, sugiere subir 1 más).
+// POR QUE: spec panel-2-solicitud.md v1.1 §8 — descuentos por volumen 0/-3/-5/-8%
+// con badge en card oscura, label descriptivo y aviso "1 más mejora tier".
 export function estimatePortalPrice(quantity) {
   const qty = Math.max(1, Math.min(50, Number.parseInt(quantity, 10) || 1));
   const service = state.catalog?.services?.[0];
   const base = Number(service?.baseUnitPrice || 25);
   const benefit = state.customer?.benefit;
+  // Sub-commit 15a.5: VIP detectado por status="VIP" o vipEffectiveUnitPrice>0.
+  // Para VIP, panel 2 NO muestra badge/label/aviso de volumen (spec §8).
+  const isVip = String(state.customer?.client?.status || "").toUpperCase() === "VIP"
+    || Number(benefit?.vipEffectiveUnitPrice || 0) > 0;
   if (!benefit?.usableNow) {
-    return { unit: base, base, total: base * qty, label: "Precio base. Beneficios bloqueados para este dispositivo." };
+    return { unit: base, base, total: base * qty, label: "Precio base. Beneficios bloqueados para este dispositivo.", discountPct: 0, isVip, nextTierHint: null };
   }
-  const quantityTier = (state.catalog?.quantityTiers || [])
-    .filter((tier) => qty >= Number(tier.minQty || 0))
-    .sort((a, b) => Number(a.unitPrice) - Number(b.unitPrice))[0];
+  const tiers = state.catalog?.quantityTiers || [];
+  // Sub-commit 15a.5: VIP saltea volume tiers — sólo VIP price aplica.
+  const quantityTier = !isVip
+    ? tiers.filter((tier) => qty >= Number(tier.minQty || 0))
+        .sort((a, b) => Number(a.unitPrice) - Number(b.unitPrice))[0]
+    : null;
   const monthlyUsage = Number(state.customer?.monthlyUsage || 0);
   const monthlyTier = (state.catalog?.monthlyTiers || [])
     .filter((tier) => monthlyUsage >= Number(tier.minJobs || 0))
@@ -76,15 +84,30 @@ export function estimatePortalPrice(quantity) {
   // y expuesto como vipEffectiveUnitPrice). Al cambiar el costo del proveedor, este
   // valor cambia automaticamente — el margen del operador se preserva.
   const vipEffective = Number(benefit.vipEffectiveUnitPrice || 0);
-  const vipTier = vipEffective > 0 ? { unitPrice: vipEffective, label: "VIP aprobado" } : null;
+  const vipTier = vipEffective > 0 ? { unitPrice: vipEffective, label: "VIP aprobado", discountPct: 0 } : null;
   const selected = [quantityTier, monthlyTier, vipTier]
     .filter(Boolean)
-    .sort((a, b) => Number(a.unitPrice) - Number(b.unitPrice))[0] || { unitPrice: base, label: "Precio base" };
+    .sort((a, b) => Number(a.unitPrice) - Number(b.unitPrice))[0] || { unitPrice: base, label: "Precio normal", discountPct: 0 };
+  // Aviso "1 más mejora tier": qty está en el límite superior de su tier (1, 3, 6).
+  // Sólo aplica si NO es VIP. Mira el catálogo para encontrar el tier siguiente
+  // (mayor minQty que aplica a qty+1).
+  let nextTierHint = null;
+  if (!isVip && tiers.length) {
+    const nextTier = tiers
+      .filter((tier) => (qty + 1) >= Number(tier.minQty || 0) && qty < Number(tier.minQty || 0))
+      .sort((a, b) => Number(b.minQty) - Number(a.minQty))[0];
+    if (nextTier && Number(nextTier.discountPct || 0) > 0) {
+      nextTierHint = { remaining: 1, nextDiscountPct: Number(nextTier.discountPct) };
+    }
+  }
   return {
     unit: Number(selected.unitPrice || base),
     base,
     total: Number(selected.unitPrice || base) * qty,
-    label: selected.label || "Precio base",
+    label: selected.label || "Precio normal",
+    discountPct: Number(selected.discountPct || 0),
+    isVip,
+    nextTierHint,
   };
 }
 
