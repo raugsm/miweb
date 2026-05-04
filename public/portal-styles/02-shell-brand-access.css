@@ -5,7 +5,13 @@
    tiene sentido mostrar marca y formulario lado a lado. La regla previa con minmax era
    bidireccional y dependia de un @media max-width 920 en 12-responsive.css. */
 .portal-shell {
-  width: min(1180px, calc(100% - clamp(24px, 4vw, 48px)));
+  /* Sub-commit 15c.3-ter: ancho máximo del shell pasa de 1180px a 1330px
+     (+150px) para que los 4 paneles del FLUJO FRP EXPRESS respiren mejor
+     (especialmente las pills del Panel 1 en grilla 3×2). El cambio aplica
+     a TODA la pantalla del portal cliente — header de sesión, summary
+     stats, FLUJO FRP EXPRESS y Mis órdenes — para mantener coherencia
+     visual. En pantallas chicas el min() sigue agarrando calc(100% - ...). */
+  width: min(1330px, calc(100% - clamp(24px, 4vw, 48px)));
   margin: clamp(18px, 3vw, 32px) auto;
   display: grid;
   grid-template-columns: 1fr;
