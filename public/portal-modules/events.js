@@ -200,20 +200,16 @@ export function wireEvents() {
     //                   await notifyEquipoConectado(order.id); ...
   });
 
-  // Sub-commit 15c.1 — Panel 4 nuevo: botones Copiar (delegación por data-attr)
-  // y botón Descargar Redirector (no-op en 15c.1; se conecta en 15c.3 con la
-  // descarga real del .exe). Spec panel-4-conexion.md v1.1 §2.4 + §5.
+  // Sub-commit 15c.1 — Panel 4 nuevo: botones Copiar (delegación por data-attr).
+  // Sub-commit 15c.3: el botón Descargar Redirector pasó de <button> no-op a
+  // <a href="/downloads/usbredirector-customer-module.exe" download> — el
+  // browser maneja la descarga directamente, sin listener JS.
+  // Spec panel-4-conexion.md v1.3 §2.4 + §5.
   $("#panel4")?.addEventListener("click", async (event) => {
     if (!(event.target instanceof Element)) return;
     const copyBtn = event.target.closest(".panel-4-copy-btn");
     if (copyBtn) {
       await handlePanel4Copy(copyBtn);
-      return;
-    }
-    const downloadBtn = event.target.closest("#panel4DownloadBtn");
-    if (downloadBtn) {
-      event.preventDefault();
-      // 15c.3 restaurará: trigger descarga de /downloads/usb-redirector-customer.exe
     }
   });
 

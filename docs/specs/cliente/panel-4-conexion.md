@@ -1,6 +1,6 @@
 # Panel 4 — Conexión
 
-**Versión:** 1.2 · **Fecha:** 4 de mayo 2026 · **Estado:** spec formal con las 8 piezas, actualizada en sesión 15c con cambios en el modelo de cards.
+**Versión:** 1.3 · **Fecha:** 4 de mayo 2026 · **Estado:** spec formal con las 8 piezas, actualizada en sesión 15c. v1.3 ajusta el nombre real del binario del Redirector (`usbredirector-customer-module.exe`) ahora que la descarga está activa en el repo.
 
 **Reemplaza a:** `panel-4-conexion.md` v1.1 (sesión 15c.1) y v1.0 (sesión 14).
 
@@ -194,7 +194,7 @@ Sin cambios respecto a v1.1.
 - Texto: "Descargar Redirector v2.5"
 - Ícono: flecha hacia abajo (⬇) a la izquierda del texto.
 - Estilo: background `--color-bg-info`, color `--color-text-info`, border 0.5px info, padding 8-10px, font-size 12-13px, weight 500.
-- Click → descarga directa del archivo `usb-redirector-customer.exe` (~9 MB) sin gating, sin pasos previos, sin login adicional.
+- Click → descarga directa del archivo `usbredirector-customer-module.exe` (~9 MB) sin gating, sin pasos previos, sin login adicional.
 - Posición: abajo de todo el panel, ocupando ancho completo.
 
 ### 2.8 Animaciones de transición
@@ -268,7 +268,7 @@ Sin cambios respecto a v1.1. Sistema de breakpoints unificado del repo (Tailwind
 |---|---|
 | Cliente se loguea | Cards Technician ID + Código aparecen. Tech ID carga vía endpoint, Código muestra placeholder. |
 | Click en "Copiar" sobre Technician ID | Copia el valor formateado al portapapeles. Botón cambia a "Copiado ✓" durante 1.5s. |
-| Click en "Descargar Redirector v2.5" | Descarga directa del archivo `usb-redirector-customer.exe`. |
+| Click en "Descargar Redirector v2.5" | Descarga directa del archivo `usbredirector-customer-module.exe`. |
 | Click en "¿Dónde pegar estos códigos?" | Abre modal con captura del Redirector + badges 1°/2° + 3 pasos. |
 | Click en "Entendido" / ✕ / fuera del modal | Cierra modal sin acción. |
 | Esc | Cierra modal si está abierto. |
@@ -327,7 +327,7 @@ El Panel 4 deriva su estado de los campos de arriba:
 **Recurso del Redirector v2.5:**
 
 ```http
-GET /downloads/usb-redirector-customer.exe
+GET /downloads/usbredirector-customer-module.exe
 ```
 
 ### 6.2 Datos que produce
@@ -464,6 +464,7 @@ Sin cambios. El sistema de 3 fases / 5 min ya está implementado en Panel 3. Pen
 
 ## Changelog
 
+- **panel-4-conexion.md v1.3** (2026-05-04, sesión 15c.3) — Descarga real del Redirector activa. El binario `usbredirector-customer-module.exe` se sube al repo en `public/downloads/` y el botón "Descargar Redirector v2.5" pasa de `<button>` no-op a `<a href="/downloads/usbredirector-customer-module.exe" download>`. Spec actualiza el nombre real del archivo en §2.7 (era `usb-redirector-customer.exe` placeholder), §5 (tabla acciones), §6.1 (recurso). Sin cambio visual del botón.
 - **panel-4-conexion.md v1.2** (2026-05-04, sesión 15c — mini-spec) — Cambio en el modelo de cards. Las dos cards (Tech ID + Código) pasan de "solo visibles en estado 4" a "siempre visibles desde login". 5 decisiones nuevas:
   - Cards visibles desde que el cliente está logueado.
   - Tech ID cambia en vivo antes de que la orden nazca, se congela al apretar "Equipo conectado".
