@@ -2,6 +2,7 @@ import { $, $$, copyText, escapeHtml, setMessage } from "./dom.js";
 import { estimatePortalPrice, syncDetectedItems } from "./frp.js";
 import { money } from "./format.js";
 import { orderNeedsPaymentProof, sortOrdersForDisplay } from "./order-state.js";
+import { updatePanel3 } from "./panel-3-account.js";
 import { state } from "./state.js";
 
 export function exchangeRateForPayment(payment = currentPayment()) {
@@ -411,7 +412,11 @@ export function updateQuote() {
     }
   }
 
-  // Legacy IDs del panel 3 (hidden hasta 15c). Mantengo updates por compatibilidad
+  // Sub-commit 15b.1: render del panel 3 (Datos de pago) — card oscura
+  // TOTAL A PAGAR + card cuenta dinámica + toggles. Spec panel-3 §1-§2.
+  updatePanel3(context);
+
+  // Legacy IDs del panel 3 (hidden hasta 15b.2). Mantengo updates por compatibilidad
   // con el modal de Cuentas y `paymentOptionAmountText` que aún leen estos nodos.
   const quoteUsdt = $("#quoteTotalUsdt");
   const quoteLocal = $("#quoteTotalLocal");

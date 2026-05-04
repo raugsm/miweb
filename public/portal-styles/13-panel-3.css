@@ -1,0 +1,223 @@
+/* ============================================================================
+   PANEL 3 — Datos de pago (sub-commit 15b.1)
+   ============================================================================
+   Spec docs/specs/cliente/panel-3-datos-de-pago.md v1.0 §1-§2.
+   Card oscura "TOTAL A PAGAR" con bandera al costado del monto, card cuenta
+   dinámica con header (logo + displayName), fields (label + valor + Copiar
+   individual), toggle de QR, link "Ver otra cuenta Yape".
+
+   La dropzone del comprobante y los estados post-subida (Subido / Validado /
+   Rechazado) NO están en este sub-commit — quedan para 15b.2. El bloque
+   .legacy-step-3 hidden en portal.html mantiene los IDs viejos activos
+   mientras tanto.
+   ============================================================================ */
+
+/* Card oscura "TOTAL A PAGAR" — comparte la base .panel-dark-card. */
+.panel-3-total-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.panel-3-total-flag {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.panel-3-total-flag svg {
+  display: block;
+}
+
+/* Card de cuenta. Header (logo + displayName) + fields + toggle QR. */
+.panel-3-account {
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-md);
+  padding: 12px;
+  background: var(--color-bg-primary);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+/* Sub-commit 15b.1-bis: el atributo HTML `hidden` setea display:none via user
+   agent stylesheet, pero un `display: flex` con specificity de selector custom
+   lo sobrescribe. Guard explícito necesario en cada nodo que el JS oculta. */
+.panel-3-account[hidden] { display: none; }
+
+.panel-3-account-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.panel-3-account-logo {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.panel-3-account-logo svg {
+  display: block;
+}
+
+.panel-3-account-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+/* QR (cuando aplica) — aparece arriba de los fields. Spec §2.4. */
+.panel-3-account-qr {
+  display: flex;
+  justify-content: center;
+  margin: 4px 0 8px;
+}
+.panel-3-account-qr[hidden] { display: none; }
+
+.panel-3-account-qr-img {
+  width: 160px;
+  height: 160px;
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-md);
+  padding: 4px;
+  background: white;
+  object-fit: contain;
+}
+
+@media (max-width: 639.98px) {
+  .panel-3-account-qr-img { width: 140px; height: 140px; }
+}
+
+/* Fields: label encima + valor (con o sin Copiar). */
+.panel-3-account-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.panel-3-account-field-label {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  margin: 0 0 3px;
+  font-weight: 400;
+}
+
+.panel-3-account-field-value {
+  font-size: 12px;
+  color: var(--color-text-primary);
+  margin: 0;
+  word-break: break-word;
+}
+
+.panel-3-account-field-value.is-copyable {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--color-bg-secondary);
+  border-radius: var(--border-radius-md);
+}
+
+.panel-3-account-field-value.is-copyable.is-monospace .panel-3-account-field-text {
+  font-family: var(--font-mono, "SFMono-Regular", Menlo, Consolas, monospace);
+  font-weight: 500;
+}
+
+.panel-3-account-field-text {
+  font-size: 12px;
+  color: var(--color-text-primary);
+}
+
+/* Botón Copiar individual por field copyable. Cada uno tiene su propio
+   feedback "Copiado ✓" 1.5s — clase .is-copied agregada por flashCopyFeedback. */
+.panel-3-copy-btn {
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  border: 0.5px solid var(--color-border-secondary);
+  background: white;
+  color: var(--color-text-primary);
+  padding: 4px 10px;
+  border-radius: var(--border-radius-md);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+  flex-shrink: 0;
+}
+
+.panel-3-copy-btn:hover {
+  background: var(--color-bg-secondary);
+}
+
+.panel-3-copy-btn.is-copied {
+  background: var(--color-bg-success);
+  color: var(--color-text-success);
+  border-color: var(--color-border-success);
+}
+
+/* Botón toggle QR — full width abajo de los fields. */
+.panel-3-qr-toggle {
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  border: 0.5px solid var(--color-border-secondary);
+  background: white;
+  color: var(--color-text-primary);
+  padding: 8px 12px;
+  border-radius: var(--border-radius-md);
+  cursor: pointer;
+  width: 100%;
+  margin-top: 4px;
+  transition: background 120ms ease;
+}
+
+.panel-3-qr-toggle:hover {
+  background: var(--color-bg-secondary);
+}
+
+/* Link "Ver otra cuenta Yape" — botón pero estilizado como link.
+   Centrado, info color, fuera de la card. Spec §2.3. */
+.panel-3-yape-alt-link {
+  display: block;
+  margin: 0 auto;
+  background: none;
+  border: 0;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-text-info);
+  cursor: pointer;
+  padding: 4px 8px;
+  text-align: center;
+}
+
+.panel-3-yape-alt-link:hover {
+  text-decoration: underline;
+}
+.panel-3-yape-alt-link[hidden] { display: none; }
+
+/* Empty state cuando no hay método elegido. Spec §2.1 + §3 edge 2. */
+.panel-3-empty-hint {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  text-align: center;
+  margin: 0;
+  padding: 12px;
+  font-style: italic;
+}
+
+/* Responsive — mobile reduce padding/sizes. Spec §4.1. */
+@media (max-width: 639.98px) {
+  .panel-3-total-flag { width: 20px; height: 20px; }
+  .panel-3-account { padding: 12px; }
+  .panel-3-account-logo { width: 22px; height: 22px; }
+  .panel-3-qr-toggle { font-size: 11px; }
+}

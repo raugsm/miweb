@@ -26,6 +26,7 @@ import {
 import { filesToProofs, hasDraggedFiles, uploadPaymentProofFromFlow, wireGlobalFileDropGuard } from "./proofs.js";
 import { renderTrackedOrder } from "./deep-links.js";
 import { hidePanelNotice, showPanelNotice } from "./panel-notices.js";
+import { flashCopyFeedback, togglePanel3AlternativeAccount, togglePanel3Qr } from "./panel-3-account.js";
 import { state } from "./state.js";
 
 // QUE: crea la orden y adjunta el comprobante en una sola request al endpoint
@@ -320,6 +321,27 @@ export function wireEvents() {
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") closePaymentModal();
   });
+
+  // Sub-commit 15b.1 — panel 3 nuevo: botones Copiar (delegación por field),
+  // toggle Mostrar/Ocultar QR, link "Ver otra cuenta Yape".
+  // Spec panel-3-datos-de-pago.md v1.0 §5.
+  $("#panel3AccountFields")?.addEventListener("click", (event) => {
+    const button = event.target instanceof Element ? event.target.closest(".panel-3-copy-btn") : null;
+    if (!button) return;
+    const value = button.dataset.copyValue || "";
+    if (!value) return;
+    copyText(value);
+    flashCopyFeedback(button);
+  });
+  $("#panel3QrToggle")?.addEventListener("click", () => {
+    togglePanel3Qr();
+    updateQuote();
+  });
+  $("#panel3YapeAltLink")?.addEventListener("click", () => {
+    togglePanel3AlternativeAccount();
+    updateQuote();
+  });
+
   const flowPaymentDropzone = $("#flowPaymentDropzone");
   const flowPaymentInput = $("#flowPaymentProofInput");
 

@@ -194,13 +194,41 @@
                 </div>
               </article>
 
-              <!-- Panel 3 — Datos de pago (placeholder, sub-commit 15c).
-                   El bloque legacy queda hidden para preservar los IDs/listeners
-                   que el JS de proofs/payments necesita en este punto del flujo
-                   (paneles 3 y 4 reales se reescriben en 15c y 15d). -->
-              <article class="panel panel-3 panel-placeholder" data-panel="3">
+              <!-- Panel 3 — Datos de pago (sub-commit 15b.1, parte estática).
+                   Spec docs/specs/cliente/panel-3-datos-de-pago.md v1.0 §1-§2.
+                   Card oscura TOTAL A PAGAR + card cuenta dinámica + botones
+                   Copiar individuales + toggle QR + link Yape alternativa.
+                   Dropzone + estados post-subida quedan para sub-commit 15b.2. -->
+              <article class="panel panel-3" data-panel="3">
                 <h3 class="panel-title">Datos de pago</h3>
-                <p class="panel-placeholder-text">Pendiente sub-commit 15c. Esta sección se reescribe en sesión próxima.</p>
+
+                <div class="panel-dark-card panel-3-total" id="panel3TotalCard">
+                  <div class="panel-dark-card-label">Total a pagar</div>
+                  <div class="panel-3-total-row">
+                    <span class="panel-3-total-flag" id="panel3TotalFlag" aria-hidden="true"></span>
+                    <div class="panel-dark-card-amount" id="panel3TotalAmount">—</div>
+                  </div>
+                </div>
+
+                <div class="panel-3-account" id="panel3AccountCard" hidden>
+                  <div class="panel-3-account-header">
+                    <span class="panel-3-account-logo" id="panel3AccountLogo" aria-hidden="true"></span>
+                    <span class="panel-3-account-name" id="panel3AccountName">—</span>
+                  </div>
+                  <div class="panel-3-account-qr" id="panel3AccountQr" hidden>
+                    <img class="panel-3-account-qr-img" id="panel3AccountQrImg" alt="QR del método de pago" />
+                  </div>
+                  <div class="panel-3-account-fields" id="panel3AccountFields"></div>
+                  <button type="button" class="panel-3-qr-toggle" id="panel3QrToggle" hidden>Mostrar QR</button>
+                </div>
+
+                <button type="button" class="panel-3-yape-alt-link" id="panel3YapeAltLink" hidden>Ver otra cuenta Yape</button>
+
+                <p class="panel-3-empty-hint" id="panel3EmptyHint" hidden>Elegí un método de pago primero</p>
+
+                <!-- Bloque legacy preservado en hidden hasta sub-commit 15b.2. Mantiene
+                     los IDs que proofs.js, events.js y payments.js leen para subir el
+                     comprobante. La dropzone real del panel 3 se migra en 15b.2. -->
                 <div class="legacy-step-3" hidden>
                   <div class="payment-chip" id="currentPaymentBadge">Método de pago</div>
                   <div class="flow-mini-quote">
