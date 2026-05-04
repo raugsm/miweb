@@ -265,20 +265,20 @@
                 </div>
               </article>
 
-              <!-- Panel 4 — Conexión (sub-commit 15c.1).
-                   Spec docs/specs/cliente/panel-4-conexion.md v1.1 §1-§7.
-                   data-state controla apariencia: 0/1/2/5 = sólo Descargar
-                   centrado, 3 = botón "Equipo conectado" prominente azul,
-                   4 = cards Tech ID + Código + botón "¿Dónde pegar?". El
-                   botón Descargar es persistente en TODOS los estados. -->
-              <article class="panel panel-4" id="panel4" data-panel="4" data-state="0">
+              <!-- Panel 4 — Conexión (sub-commit 15c.1-bis).
+                   Spec docs/specs/cliente/panel-4-conexion.md v1.2 §2.1-§2.8.
+                   Modelo de 3 estados (A/B/C):
+                     A — Inicial: Card Código en placeholder, sin Copiar Código,
+                         sin "Equipo conectado".
+                     B — Comprobante en validación o rechazado: Card Código con
+                         valor real + Copiar, sin "Equipo conectado".
+                     C — Validado pre-clic: igual que B + "Equipo conectado".
+                   Cards Tech ID + Código + botón "¿Dónde pegar?" + botón
+                   Descargar son SIEMPRE visibles desde login. -->
+              <article class="panel panel-4" id="panel4" data-panel="4" data-state="A">
                 <h3 class="panel-title">Conexión</h3>
 
                 <div class="panel-4-content" id="panel4Content">
-                  <button type="button" class="panel-4-equipo-conectado-btn" id="panel4EquipoConectado" data-flow-action="notify-connected" aria-label="Confirmar equipo conectado y crear orden">
-                    Equipo conectado
-                  </button>
-
                   <div class="panel-4-cards" id="panel4Cards">
                     <div class="panel-4-card">
                       <p class="panel-4-card-label">Technician ID</p>
@@ -291,11 +291,15 @@
                     <div class="panel-4-card">
                       <p class="panel-4-card-label">Código del proceso</p>
                       <div class="panel-4-card-row">
-                        <span class="panel-4-card-value" id="panel4OrderCodeValue">—</span>
+                        <span class="panel-4-card-value is-placeholder" id="panel4OrderCodeValue">Aparecerá cuando subas tu pago</span>
                         <button type="button" class="panel-4-copy-btn" id="panel4OrderCodeCopy" data-copy-target="order-code" aria-label="Copiar código del proceso">Copiar</button>
                       </div>
                     </div>
                   </div>
+
+                  <button type="button" class="panel-4-equipo-conectado-btn" id="panel4EquipoConectado" data-flow-action="notify-connected" aria-label="Confirmar equipo conectado y crear orden">
+                    Equipo conectado
+                  </button>
 
                   <button type="button" class="panel-4-where-paste-btn" id="panel4WherePasteBtn" data-action="open-where-paste">
                     ¿Dónde pegar estos códigos?
