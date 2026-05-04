@@ -1,6 +1,8 @@
 # Pantalla principal cliente
 
-**Versión:** 1.0 · **Fecha:** 3 de mayo 2026 · **Estado:** spec con 10/10 open questions cerradas. NO es spec lista para implementación todavía — falta convertir las decisiones en las 8 piezas formales (mockup HTML standalone, estados, edge cases, responsive, comportamiento, datos, acceptance criteria, open questions residuales). La conversión a spec implementable se hace en sesiones 13+.
+**Versión:** 1.1 · **Fecha:** 4 de mayo 2026 · **Estado:** spec base conceptual con todas las open questions cerradas. La conversión a spec implementable con las 8 piezas formales se completó en sesiones 13 y 14 a través de las specs por panel: `panel-1-metodo-de-pago.md` v2.0, `panel-2-solicitud.md` v1.0, `panel-3-datos-de-pago.md` v1.0, `panel-4-conexion.md` v1.0 y `mis-ordenes.md` v1.0.
+
+**Cambio v1.0 → v1.1:** OQ-8 (espera del técnico durante validación) reabierta en sesión 14 y cerrada con decisión nueva: el panel 4 NO muestra "Esperando validación…" + spinner durante el estado 2; queda igual al estado 0/1. La señal de validación vive en panel 3 ("Comprobante recibido ✓") + paneles 1-2-3 congelados.
 
 ---
 
@@ -49,6 +51,44 @@ Dos zonas apiladas verticalmente:
 ### Layout en mobile
 
 Los 4 paneles se apilan verticalmente como stepper. Mis órdenes va debajo, también en stack vertical.
+
+### Sistema de breakpoints del portal (decisión vigente)
+
+El grid contenedor de los 4 paneles usa el sistema de breakpoints unificado del portal. Esta decisión fue tomada en sesión anterior (rediseño responsive del portal viejo) y se mantiene vigente para la pantalla principal nueva:
+
+| Breakpoint | Rango | Layout |
+|---|---|---|
+| Mobile | <640px | 1 columna (paneles apilados verticalmente) |
+| Tablet | 640–899px | 2 columnas (2×2) |
+| Laptop | 900–1199px | 4 columnas (estrechas pero legibles) |
+| Desktop | 1200–1799px | 4 columnas cómodas |
+| Ultrawide | ≥1800px | 4 columnas con `max-width: 1400px` centrado |
+
+**Implementación esperada (mobile-first):**
+
+```css
+.pantalla-principal__paneles {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  max-width: 1400px;
+  margin-inline: auto;
+}
+
+@media (min-width: 640px) {
+  .pantalla-principal__paneles { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (min-width: 900px) {
+  .pantalla-principal__paneles { grid-template-columns: repeat(4, 1fr); }
+}
+```
+
+Los 4 paneles **no tienen ancho fijo de 400px estricto**. Cada panel ocupa el ancho que le da el grid en cada breakpoint. Las medidas tipográficas y spacings internos de cada panel sí son fijas (ver specs por panel); solo el ancho exterior es fluido dentro del breakpoint.
+
+El archivo `public/portal-styles/00-breakpoints.css` (o equivalente, según estructura del repo al momento de implementar) documenta los breakpoints como custom properties para referencia.
+
+**Mis órdenes (zona de abajo):** en TODOS los breakpoints ocupa el ancho completo del contenedor (1 columna). Las cards de Mis órdenes apiladas verticalmente — no se ponen lado a lado.
 
 ### Mockups de referencia
 
@@ -177,7 +217,7 @@ El panel 4 es el panel con más estados a lo largo del flujo. Se documentan acá
 |---|---|---|
 | 0 — Inicial / sin pedido | Cliente recién entró | Botón "Descargar Redirector v2.5" + texto explicativo breve |
 | 1 — Cliente armando pedido | Paneles 1-2-3 editables | Igual al estado 0 |
-| 2 — Comprobante subido, esperando | Paneles 1-2-3 congelados, panel 3 dice "Comprobante recibido ✓" | "Esperando validación…" + spinner + botón Descargar persistente |
+| 2 — Comprobante subido, esperando | Paneles 1-2-3 congelados, panel 3 dice "Comprobante recibido ✓" | **Igual al estado 0/1** (botón Descargar Redirector como único elemento). **Cambio v1.1 sesión 14**: se quitó "Esperando validación…" + spinner por redundancia con panel 3 que ya señala el estado del comprobante. |
 | 3 — Comprobante validado (momento A) | Paneles 1-2-3 aún congelados, panel 3 dice "Comprobante validado ✓" | Botón **"Equipo conectado"** + botón Descargar persistente |
 | 4 — Post-clic, orden activa (momento B) | Orden nació, paneles 1-2-3 descongelados | Códigos del proceso + estado del proceso del técnico + botón Descargar persistente. **Sin banner "Pago confirmado…"** |
 | 5 — Comprobante rechazado | Paneles 1-2-3 descongelados, alerta en panel 3 | Vuelve a estado 0/1. Botón "Equipo conectado" no aparece. Botón Descargar persistente |
@@ -305,7 +345,7 @@ Las 10 OQ identificadas en v0.1 fueron resueltas en sesión 12. Resumen del esta
 | OQ-5 | Transición visual al completar pedido | ✅ Cerrada (5 sub-decisiones) |
 | OQ-6 | Mecanismo de actualización en vivo | ✅ Cerrada — solo SSE, sin botón manual |
 | OQ-7 | Comprobante rechazado en detalle | ✅ Cerrada (4 sub-decisiones) |
-| OQ-8 | Espera del técnico durante validación | ✅ Cerrada (3 sub-decisiones) |
+| OQ-8 | Espera del técnico durante validación | ✅ Cerrada (3 sub-decisiones). **Reabierta y re-cerrada en sesión 14**: se quitó "Esperando validación…" del panel 4. Estado 2 = igual al 0/1. |
 | OQ-9 | Pantalla principal y login | ✅ Cerrada (3 sub-decisiones) |
 | OQ-10 | Botón Solicitar Redirector v2.5 | ✅ Cerrada — descarga directa, persistente en panel 4 |
 
@@ -366,3 +406,4 @@ Este archivo es base conceptual con OQ cerradas, **no** spec formal con las 8 pi
 
 - **v0.1** (2026-05-03) — Sesión 11. Borrador inicial del modelo de pantalla principal cliente con 4 paneles paralelos + Mis órdenes. Base para spec formal en sesión 12.
 - **v1.0** (2026-05-03) — Sesión 12. Cierre de las 10 open questions (OQ-1 a OQ-10). Decisiones del bloque A (mecánica del flujo: OQ-4, OQ-5, OQ-7, OQ-8), bloque B (Mis órdenes: OQ-1, OQ-2, OQ-3) y bloque C (integraciones: OQ-6, OQ-9, OQ-10) integradas. Descubrimientos nuevos registrados: rediseño del Redirector v2.5 (descarga directa libre), comportamiento del estado en card (solo "En proceso"/"Finalizado", aparece cuando técnico agarra), 6 estados visibles del panel 4. Sub-decisiones cruzadas trasladadas a specs futuras (panel operador, sistema de tiempos, política de reembolso).
+- **v1.1** (2026-05-04) — Sesión 14. **OQ-8 reabierta y re-cerrada con decisión nueva**: el panel 4 estado 2 ya no muestra "Esperando validación…" + spinner. Queda igual al estado 0/1. La señal de validación vive en panel 3 ("Comprobante recibido ✓") + paneles 1-2-3 congelados. Tabla de estados del panel 4 actualizada. **Sistema de breakpoints unificado documentado** (decisión heredada del rediseño responsive del portal viejo): mobile <640px (1 col) → tablet 640px (2 cols) → laptop 900px (4 cols) → ultrawide 1800px (max-width 1400px). Los paneles NO tienen ancho fijo 400px — son fluidos dentro del breakpoint. La spec formal completa del panel 4 (con las 8 piezas) vive ahora en `panel-4-conexion.md` v1.0 (entregada misma sesión 14).

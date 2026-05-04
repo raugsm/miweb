@@ -1,0 +1,1336 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AriadGSM — Pantalla principal cliente (mockup consolidado)</title>
+<style>
+:root {
+  --color-bg-primary: #FFFFFF;
+  --color-bg-secondary: #F8F7F2;
+  --color-bg-tertiary: #F1EFE8;
+  --color-bg-info: #E6F1FB;
+  --color-bg-success: #EAF3DE;
+  --color-bg-warning: #FAEEDA;
+  --color-bg-danger: #FCEBEB;
+  --color-text-primary: #2C2C2A;
+  --color-text-secondary: #5F5E5A;
+  --color-text-tertiary: #888780;
+  --color-text-info: #185FA5;
+  --color-text-success: #27500A;
+  --color-text-warning: #633806;
+  --color-text-danger: #791F1F;
+  --color-border-tertiary: rgba(44,44,42,0.15);
+  --color-border-secondary: rgba(44,44,42,0.30);
+  --color-border-info: #185FA5;
+  --color-border-success: #639922;
+  --color-border-danger: #A32D2D;
+  --border-radius-md: 8px;
+  --border-radius-lg: 12px;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'SF Mono', Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+body {
+  font-family: var(--font-sans);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+  margin: 0;
+  padding: 1.5rem;
+  line-height: 1.5;
+}
+h1 { font-size: 22px; font-weight: 500; margin: 0 0 0.5rem; }
+h2 { font-size: 18px; font-weight: 500; margin: 2.5rem 0 1rem; }
+h3 { font-size: 16px; font-weight: 500; margin: 0; }
+.subtitle { color: var(--color-text-secondary); margin: 0 0 2rem; }
+.scenario-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0 0 12px;
+}
+.screen {
+  background: var(--color-bg-secondary);
+  border-radius: var(--border-radius-lg);
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+}
+.panels-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.panel {
+  background: var(--color-bg-primary);
+  border: 0.5px solid var(--color-border-secondary);
+  border-radius: var(--border-radius-lg);
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+}
+.panel-frozen { opacity: 0.55; pointer-events: none; }
+.panel h3 { margin-bottom: 1rem; font-size: 15px; }
+.dark-card {
+  background: #2C2C2A;
+  border-radius: var(--border-radius-md);
+  padding: 12px 14px;
+  margin-bottom: 1rem;
+}
+.dark-card-label {
+  font-size: 10px;
+  color: #B4B2A9;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+.dark-card-amount {
+  font-size: 22px;
+  font-weight: 500;
+  color: white;
+  line-height: 1;
+}
+.dark-card-amount-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.dark-card-amount-row .dark-card-amount { font-size: 22px; }
+.flag {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.dot-pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #639922;
+  animation: pulse 1.4s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.pills-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.pill {
+  border: 0.5px solid var(--color-border-tertiary);
+  background: white;
+  padding: 9px 8px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.pill-selected {
+  border: 2px solid #185FA5;
+  background: #E6F1FB;
+  color: #0C447C;
+  font-weight: 500;
+}
+.pill-disabled { opacity: 0.4; cursor: not-allowed; }
+.pill-flag { width: 14px; height: 14px; border-radius: 50%; overflow: hidden; flex-shrink: 0; }
+.field-label {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  margin: 0 0 3px;
+}
+.field-value {
+  font-size: 12px;
+  margin: 0 0 8px;
+}
+.field-mono {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: var(--color-bg-secondary);
+  border-radius: var(--border-radius-md);
+  margin-bottom: 8px;
+}
+.field-mono-value {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+}
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: 0.5px solid var(--color-border-secondary);
+  background: white;
+  border-radius: var(--border-radius-md);
+  padding: 4px 10px;
+  font-size: 11px;
+  color: var(--color-text-primary);
+}
+button:hover { background: var(--color-bg-secondary); }
+.btn-primary {
+  background: #185FA5;
+  color: white;
+  border-color: #185FA5;
+  padding: 14px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  width: 100%;
+}
+.btn-info-soft {
+  background: var(--color-bg-info);
+  color: var(--color-text-info);
+  border: 0.5px solid var(--color-border-info);
+  padding: 9px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.btn-full { width: 100%; padding: 7px; }
+.account-card {
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-md);
+  padding: 12px;
+  margin-bottom: 8px;
+}
+.account-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.account-logo {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 10px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+.dropzone {
+  border: 0.5px dashed var(--color-border-secondary);
+  border-radius: var(--border-radius-md);
+  padding: 18px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+.dropzone-icon { color: var(--color-text-secondary); }
+.dropzone-title { font-size: 12px; font-weight: 500; margin: 0; }
+.dropzone-sub { font-size: 10px; color: var(--color-text-secondary); margin: 0; }
+.link-info {
+  text-align: center;
+  font-size: 11px;
+  color: var(--color-text-info);
+  cursor: pointer;
+  margin: 0 0 12px;
+  display: block;
+}
+.stepper-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+.stepper-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  background: white;
+  border: 0.5px solid var(--color-border-secondary);
+  border-radius: var(--border-radius-md);
+  cursor: pointer;
+  padding: 0;
+}
+.stepper-btn-disabled { opacity: 0.4; cursor: not-allowed; }
+.stepper-input {
+  font-size: 28px;
+  font-weight: 500;
+  border: none;
+  background: transparent;
+  text-align: center;
+  width: 50px;
+  padding: 0;
+  font-family: inherit;
+  outline: none;
+}
+.support-badge {
+  background: #EAF3DE;
+  border-radius: 999px;
+  padding: 6px 12px;
+  text-align: center;
+  font-size: 11px;
+  color: #27500A;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.input-text {
+  width: 100%;
+  padding: 9px 12px;
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-md);
+  font-size: 13px;
+  font-family: inherit;
+  margin-bottom: 8px;
+  outline: none;
+  box-sizing: border-box;
+}
+.modal-overlay {
+  background: rgba(0,0,0,0.45);
+  padding: 2rem;
+  border-radius: var(--border-radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+}
+.modal {
+  background: white;
+  border-radius: var(--border-radius-lg);
+  padding: 1.5rem;
+  width: 460px;
+  border: 0.5px solid var(--color-border-secondary);
+}
+
+/* Panel 4 estado 4 - botón equipo conectado */
+.equipo-conectado-button {
+  background: #185FA5;
+  color: white;
+  border: none;
+  border-radius: var(--border-radius-md);
+  padding: 14px 20px;
+  font-size: 15px;
+  font-weight: 500;
+  width: 100%;
+  cursor: pointer;
+  margin-bottom: 12px;
+}
+
+/* Mis órdenes */
+.orders-section {
+  background: var(--color-bg-primary);
+  border: 0.5px solid var(--color-border-secondary);
+  border-radius: var(--border-radius-lg);
+  padding: 1.5rem;
+}
+.order-card {
+  background: white;
+  border: 0.5px solid var(--color-border-secondary);
+  border-radius: var(--border-radius-lg);
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1rem;
+}
+.order-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+.order-flag {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.order-code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+.order-amount {
+  font-size: 20px;
+  font-weight: 500;
+  margin: 2px 0 0;
+}
+.order-date {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+.order-description {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  margin: 0 0 16px;
+}
+.equipment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.equipment-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--border-radius-md);
+  font-size: 13px;
+}
+.equipment-pending { background: white; border: 0.5px solid var(--color-border-tertiary); justify-content: space-between; }
+.equipment-waiting { background: var(--color-bg-secondary); }
+.equipment-progress { background: #E6F1FB; color: #0C447C; font-weight: 500; }
+.equipment-finished { background: var(--color-bg-success); color: var(--color-text-success); font-weight: 500; }
+.dot-state {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.dot-empty { border: 1.5px solid var(--color-border-secondary); background: transparent; }
+.dot-gray { background: #888780; }
+.dot-blue { background: #185FA5; animation: pulse 1.4s infinite; }
+.check-finished {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #639922;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.equipment-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.btn-cancel {
+  border: 0.5px solid var(--color-border-danger);
+  color: var(--color-border-danger);
+  background: white;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: var(--border-radius-md);
+}
+.btn-ready {
+  border: 0.5px solid var(--color-border-info);
+  color: var(--color-text-info);
+  background: white;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: var(--border-radius-md);
+}
+.order-footer {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.btn-receipt {
+  flex: 1;
+  padding: 9px 14px;
+  font-size: 12px;
+}
+.btn-menu {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  letter-spacing: 1px;
+}
+
+/* Comprobante estados */
+.proof-uploading {
+  border: 0.5px dashed var(--color-border-secondary);
+  border-radius: var(--border-radius-md);
+  padding: 20px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.proof-spinner {
+  width: 22px;
+  height: 22px;
+  border: 2.5px solid var(--color-border-tertiary);
+  border-top-color: var(--color-text-info);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.proof-uploaded {
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-md);
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.proof-thumbnail {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--border-radius-md);
+  background: var(--color-bg-info);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.proof-validated {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: var(--color-bg-success);
+  border-radius: var(--border-radius-md);
+}
+.proof-rejected-row {
+  border: 1px dashed #A32D2D;
+  border-radius: var(--border-radius-md);
+  padding: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #FFFAFA;
+  margin-bottom: 8px;
+  position: relative;
+}
+.proof-rejected-thumb {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--border-radius-md);
+  background: var(--color-bg-info);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.5;
+  position: relative;
+  flex-shrink: 0;
+}
+.proof-rejected-x {
+  position: absolute;
+  top: -5px;
+  left: -5px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #A32D2D;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 11px;
+  font-weight: 500;
+}
+.reason-card {
+  background: var(--color-bg-danger);
+  border-radius: var(--border-radius-md);
+  padding: 10px 12px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+/* Mobile preview */
+.mobile-preview {
+  background: var(--color-bg-secondary);
+  border-radius: var(--border-radius-lg);
+  padding: 1rem;
+  max-width: 360px;
+  margin-bottom: 2rem;
+}
+.mobile-preview .panel { margin-bottom: 12px; }
+
+@media (max-width: 1100px) {
+  .panels-row { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 700px) {
+  .panels-row { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<h1>AriadGSM — Pantalla principal cliente</h1>
+<p class="subtitle">Mockup HTML standalone consolidado · Sesión 14 · 4 de mayo 2026</p>
+
+<!-- ============================================ -->
+<!-- ESCENARIO 1 — ESTADO INICIAL (sin pedido) -->
+<!-- ============================================ -->
+<h2>Escenario 1 — Estado inicial (cliente Perú recién logueado, sin pedido)</h2>
+<p class="scenario-label">Paneles 1-2-3 editables · Panel 4 con botón Descargar · Mis órdenes vacío</p>
+
+<div class="screen">
+  <div class="panels-row">
+
+    <!-- Panel 1 — Método de pago -->
+    <div class="panel">
+      <h3>Método de pago</h3>
+      <div class="pills-row">
+        <div class="pill pill-selected">
+          <span class="pill-flag"><svg viewBox="0 0 14 14"><circle cx="7" cy="7" r="7" fill="#D91023"/><rect x="4.67" y="0" width="4.66" height="14" fill="white"/></svg></span>
+          Perú
+        </div>
+        <div class="pill">
+          <span class="pill-flag"><svg viewBox="0 0 14 14"><circle cx="7" cy="7" r="7" fill="#26A17B"/><text x="7" y="10" text-anchor="middle" font-size="9" font-weight="500" fill="white">T</text></svg></span>
+          USDT
+        </div>
+        <div class="pill">
+          <span class="pill-flag"><svg viewBox="0 0 14 14"><circle cx="7" cy="7" r="7" fill="#006847"/><rect x="4.67" y="0" width="4.66" height="14" fill="white"/><rect x="9.33" y="0" width="4.67" height="14" fill="#CE1126"/></svg></span>
+          México
+        </div>
+      </div>
+      <div class="pills-row" style="margin-bottom: 1rem;">
+        <div class="pill">
+          <span class="pill-flag"><svg viewBox="0 0 14 14"><circle cx="7" cy="7" r="7" fill="#FCD116"/><path d="M0 7h14v3.5H0z" fill="#003893"/><path d="M0 10.5h14V14H0z" fill="#CE1126"/></svg></span>
+          Colombia
+        </div>
+        <div class="pill">
+          <span class="pill-flag"><svg viewBox="0 0 14 14"><circle cx="7" cy="7" r="7" fill="white"/><rect x="0" y="7" width="14" height="7" fill="#D52B1E"/><rect x="0" y="0" width="7" height="7" fill="#0039A6"/></svg></span>
+          Chile
+        </div>
+        <div></div>
+      </div>
+      <div class="dark-card">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+          <span class="dot-pulse"></span>
+          <span class="dark-card-label" style="margin: 0;">Estimado · en vivo</span>
+        </div>
+        <div style="font-size: 28px; font-weight: 500; color: white; line-height: 1;">S/ 18.25</div>
+        <div style="font-size: 12px; color: #B4B2A9; margin-top: 6px;">≈ 5.00 USDT</div>
+      </div>
+    </div>
+
+    <!-- Panel 2 — Solicitud -->
+    <div class="panel">
+      <h3>Solicitud</h3>
+      <div style="margin-bottom: 1rem;">
+        <p class="field-label" style="font-weight: 500;">Equipos a desbloquear</p>
+        <div class="stepper-row">
+          <button class="stepper-btn">−</button>
+          <input type="text" class="stepper-input" value="2" inputmode="numeric"/>
+          <button class="stepper-btn">+</button>
+        </div>
+      </div>
+      <div style="margin-bottom: 1rem;">
+        <p class="field-label" style="font-weight: 500;">Modelo (opcional)</p>
+        <input type="text" class="input-text" placeholder="ej: Redmi Note 13"/>
+      </div>
+      <div class="dark-card">
+        <div class="dark-card-label">Total</div>
+        <div class="dark-card-amount">S/ 36.50</div>
+        <div style="font-size: 12px; color: #B4B2A9; margin-top: 6px;">≈ 10.00 USDT</div>
+        <div style="font-size: 11px; color: #888780; padding-top: 8px; margin-top: 8px; border-top: 0.5px solid #444;">2 equipos × S/ 18.25</div>
+      </div>
+      <div class="support-badge">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="#639922"/><path d="M7 12.5l3.5 3.5L17 9" stroke="white" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+        98% de modelos soportados
+      </div>
+    </div>
+
+    <!-- Panel 3 — Datos de pago -->
+    <div class="panel">
+      <h3>Datos de pago</h3>
+      <div class="dark-card">
+        <div class="dark-card-label">Total a pagar</div>
+        <div class="dark-card-amount-row">
+          <span class="flag"><svg viewBox="0 0 22 22"><circle cx="11" cy="11" r="11" fill="#D91023"/><rect x="7.33" y="0" width="7.34" height="22" fill="white"/></svg></span>
+          <div class="dark-card-amount">S/ 36.50</div>
+        </div>
+      </div>
+      <div class="account-card">
+        <div class="account-header">
+          <div class="account-logo" style="background: #642B73;">Y</div>
+          <span style="font-size: 13px; font-weight: 500;">Yape Perú</span>
+        </div>
+        <p class="field-label">Número</p>
+        <div class="field-mono">
+          <span class="field-mono-value">993 357 553</span>
+          <button>Copiar</button>
+        </div>
+        <p class="field-label">Titular</p>
+        <p class="field-value" style="margin-bottom: 12px;">Bryams Zuñiga</p>
+        <button class="btn-full">Mostrar QR</button>
+      </div>
+      <p class="link-info">Ver otra cuenta Yape</p>
+      <div class="dropzone">
+        <svg class="dropzone-icon" width="20" height="20" viewBox="0 0 24 24" fill="none">
+          <path d="M12 3v12m0-12l-4 4m4-4l4 4M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <p class="dropzone-title">Subí tu comprobante</p>
+        <p class="dropzone-sub">JPG, PNG o PDF · máx 5 MB</p>
+      </div>
+    </div>
+
+    <!-- Panel 4 — Conexión -->
+    <div class="panel">
+      <h3>Conexión</h3>
+      <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; padding: 2rem 0;">
+        <button class="btn-info-soft">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+            <path d="M12 3v12m0 0l-4-4m4 4l4-4M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          Descargar Redirector v2.5
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Mis órdenes - estado vacío -->
+  <div class="orders-section">
+    <p style="text-align: center; padding: 2.5rem 1.5rem; color: var(--color-text-secondary); font-size: 14px; margin: 0;">
+      Aún no tenés órdenes.<br>
+      <span style="font-size: 13px; color: var(--color-text-tertiary);">Tu primera orden aparecerá acá.</span>
+    </p>
+  </div>
+</div>
+
+<!-- ============================================ -->
+<!-- ESCENARIO 2 — COMPROBANTE EN VALIDACIÓN -->
+<!-- ============================================ -->
+<h2>Escenario 2 — Comprobante subido, esperando validación del técnico</h2>
+<p class="scenario-label">Paneles 1-2-3 congelados · Panel 3 muestra "Comprobante listo" · Panel 4 con botón Descargar (sin "Esperando validación") · Mis órdenes vacío</p>
+
+<div class="screen">
+  <div class="panels-row">
+    <!-- Panel 1 - congelado -->
+    <div class="panel panel-frozen">
+      <h3>Método de pago</h3>
+      <div class="pills-row">
+        <div class="pill pill-selected">
+          <span class="pill-flag"><svg viewBox="0 0 14 14"><circle cx="7" cy="7" r="7" fill="#D91023"/><rect x="4.67" y="0" width="4.66" height="14" fill="white"/></svg></span>
+          Perú
+        </div>
+        <div class="pill"><span class="pill-flag"><svg viewBox="0 0 14 14"><circle cx="7" cy="7" r="7" fill="#26A17B"/><text x="7" y="10" text-anchor="middle" font-size="9" font-weight="500" fill="white">T</text></svg></span> USDT</div>
+        <div class="pill"><span class="pill-flag"><svg viewBox="0 0 14 14"><circle cx="7" cy="7" r="7" fill="#006847"/><rect x="4.67" y="0" width="4.66" height="14" fill="white"/><rect x="9.33" y="0" width="4.67" height="14" fill="#CE1126"/></svg></span> México</div>
+      </div>
+      <div class="pills-row" style="margin-bottom: 1rem;">
+        <div class="pill"><span class="pill-flag"><svg viewBox="0 0 14 14"><circle cx="7" cy="7" r="7" fill="#FCD116"/><path d="M0 7h14v3.5H0z" fill="#003893"/><path d="M0 10.5h14V14H0z" fill="#CE1126"/></svg></span> Colombia</div>
+        <div class="pill"><span class="pill-flag"><svg viewBox="0 0 14 14"><circle cx="7" cy="7" r="7" fill="white"/><rect x="0" y="7" width="14" height="7" fill="#D52B1E"/><rect x="0" y="0" width="7" height="7" fill="#0039A6"/></svg></span> Chile</div>
+        <div></div>
+      </div>
+      <div class="dark-card">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+          <span class="dot-pulse"></span>
+          <span class="dark-card-label" style="margin: 0;">Estimado · en vivo</span>
+        </div>
+        <div style="font-size: 28px; font-weight: 500; color: white; line-height: 1;">S/ 18.25</div>
+      </div>
+    </div>
+
+    <!-- Panel 2 - congelado -->
+    <div class="panel panel-frozen">
+      <h3>Solicitud</h3>
+      <div style="margin-bottom: 1rem;">
+        <p class="field-label" style="font-weight: 500;">Equipos a desbloquear</p>
+        <div class="stepper-row">
+          <button class="stepper-btn">−</button>
+          <input type="text" class="stepper-input" value="2" inputmode="numeric"/>
+          <button class="stepper-btn">+</button>
+        </div>
+      </div>
+      <div style="margin-bottom: 1rem;">
+        <p class="field-label" style="font-weight: 500;">Modelo (opcional)</p>
+        <input type="text" class="input-text" value="Redmi Note 13"/>
+      </div>
+      <div class="dark-card">
+        <div class="dark-card-label">Total</div>
+        <div class="dark-card-amount">S/ 36.50</div>
+      </div>
+      <div class="support-badge">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="#639922"/><path d="M7 12.5l3.5 3.5L17 9" stroke="white" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+        98% de modelos soportados
+      </div>
+    </div>
+
+    <!-- Panel 3 - comprobante subido (esperando) -->
+    <div class="panel panel-frozen">
+      <h3>Datos de pago</h3>
+      <div class="dark-card">
+        <div class="dark-card-label">Total a pagar</div>
+        <div class="dark-card-amount-row">
+          <span class="flag"><svg viewBox="0 0 22 22"><circle cx="11" cy="11" r="11" fill="#D91023"/><rect x="7.33" y="0" width="7.34" height="22" fill="white"/></svg></span>
+          <div class="dark-card-amount">S/ 36.50</div>
+        </div>
+      </div>
+      <div class="account-card" style="opacity: 0.7;">
+        <div class="account-header">
+          <div class="account-logo" style="background: #642B73;">Y</div>
+          <span style="font-size: 13px; font-weight: 500;">Yape Perú</span>
+        </div>
+        <p class="field-label">Número</p>
+        <p style="font-family: var(--font-mono); font-size: 12px; margin: 0 0 6px; font-weight: 500;">993 357 553</p>
+      </div>
+      <div class="proof-uploaded">
+        <div class="proof-thumbnail">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <rect x="3" y="3" width="18" height="18" rx="2" stroke="var(--color-text-info)" stroke-width="1.5"/>
+            <circle cx="8.5" cy="8.5" r="1.5" fill="var(--color-text-info)"/>
+            <path d="M3 17l5-5 4 4 3-3 6 6" stroke="var(--color-text-info)" stroke-width="1.5" fill="none"/>
+          </svg>
+        </div>
+        <p style="flex: 1; font-size: 12px; margin: 0;">Comprobante listo</p>
+        <button>Reemplazar</button>
+      </div>
+    </div>
+
+    <!-- Panel 4 - estado 2 (igual a inicial) -->
+    <div class="panel">
+      <h3>Conexión</h3>
+      <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; padding: 2rem 0;">
+        <button class="btn-info-soft">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+            <path d="M12 3v12m0 0l-4-4m4 4l4-4M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          Descargar Redirector v2.5
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="orders-section">
+    <p style="text-align: center; padding: 2.5rem 1.5rem; color: var(--color-text-secondary); font-size: 14px; margin: 0;">
+      Aún no tenés órdenes.
+    </p>
+  </div>
+</div>
+
+<!-- ============================================ -->
+<!-- ESCENARIO 3 — VALIDADO, PRE-CLIC -->
+<!-- ============================================ -->
+<h2>Escenario 3 — Comprobante validado · botón "Equipo conectado" listo</h2>
+<p class="scenario-label">Paneles 1-2-3 congelados · Panel 3 muestra "Comprobante validado ✓" · Panel 4 con botón "Equipo conectado" prominente</p>
+
+<div class="screen">
+  <div class="panels-row">
+    <div class="panel panel-frozen">
+      <h3>Método de pago</h3>
+      <div class="pills-row">
+        <div class="pill pill-selected"><span class="pill-flag"><svg viewBox="0 0 14 14"><circle cx="7" cy="7" r="7" fill="#D91023"/><rect x="4.67" y="0" width="4.66" height="14" fill="white"/></svg></span> Perú</div>
+        <div class="pill"><span class="pill-flag"><svg viewBox="0 0 14 14"><circle cx="7" cy="7" r="7" fill="#26A17B"/><text x="7" y="10" text-anchor="middle" font-size="9" font-weight="500" fill="white">T</text></svg></span> USDT</div>
+        <div class="pill"><span class="pill-flag"><svg viewBox="0 0 14 14"><circle cx="7" cy="7" r="7" fill="#006847"/><rect x="4.67" y="0" width="4.66" height="14" fill="white"/><rect x="9.33" y="0" width="4.67" height="14" fill="#CE1126"/></svg></span> México</div>
+      </div>
+      <div class="pills-row" style="margin-bottom: 1rem;">
+        <div class="pill"><span class="pill-flag"><svg viewBox="0 0 14 14"><circle cx="7" cy="7" r="7" fill="#FCD116"/><path d="M0 7h14v3.5H0z" fill="#003893"/><path d="M0 10.5h14V14H0z" fill="#CE1126"/></svg></span> Colombia</div>
+        <div class="pill"><span class="pill-flag"><svg viewBox="0 0 14 14"><circle cx="7" cy="7" r="7" fill="white"/><rect x="0" y="7" width="14" height="7" fill="#D52B1E"/><rect x="0" y="0" width="7" height="7" fill="#0039A6"/></svg></span> Chile</div>
+        <div></div>
+      </div>
+      <div class="dark-card">
+        <div class="dark-card-label">Estimado · en vivo</div>
+        <div style="font-size: 28px; font-weight: 500; color: white; line-height: 1;">S/ 18.25</div>
+      </div>
+    </div>
+
+    <div class="panel panel-frozen">
+      <h3>Solicitud</h3>
+      <div style="margin-bottom: 1rem;">
+        <p class="field-label" style="font-weight: 500;">Equipos a desbloquear</p>
+        <div class="stepper-row">
+          <button class="stepper-btn">−</button>
+          <input type="text" class="stepper-input" value="2"/>
+          <button class="stepper-btn">+</button>
+        </div>
+      </div>
+      <div class="dark-card">
+        <div class="dark-card-label">Total</div>
+        <div class="dark-card-amount">S/ 36.50</div>
+      </div>
+      <div class="support-badge">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="#639922"/><path d="M7 12.5l3.5 3.5L17 9" stroke="white" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+        98% de modelos soportados
+      </div>
+    </div>
+
+    <!-- Panel 3 - validado -->
+    <div class="panel panel-frozen">
+      <h3>Datos de pago</h3>
+      <div class="dark-card">
+        <div class="dark-card-label">Total a pagar</div>
+        <div class="dark-card-amount-row">
+          <span class="flag"><svg viewBox="0 0 22 22"><circle cx="11" cy="11" r="11" fill="#D91023"/><rect x="7.33" y="0" width="7.34" height="22" fill="white"/></svg></span>
+          <div class="dark-card-amount">S/ 36.50</div>
+        </div>
+      </div>
+      <div class="account-card" style="opacity: 0.7;">
+        <div class="account-header">
+          <div class="account-logo" style="background: #642B73;">Y</div>
+          <span style="font-size: 13px; font-weight: 500;">Yape Perú</span>
+        </div>
+        <p style="font-family: var(--font-mono); font-size: 12px; margin: 0;">993 357 553</p>
+      </div>
+      <div class="proof-validated">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="10" fill="#639922"/>
+          <path d="M7 12.5l3.5 3.5L17 9" stroke="white" stroke-width="2" stroke-linecap="round" fill="none"/>
+        </svg>
+        <p style="font-size: 12px; font-weight: 500; color: var(--color-text-success); margin: 0;">Comprobante validado</p>
+      </div>
+    </div>
+
+    <!-- Panel 4 - estado 3 con botón Equipo conectado -->
+    <div class="panel">
+      <h3>Conexión</h3>
+      <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 12px;">
+        <button class="equipo-conectado-button">Equipo conectado</button>
+        <button class="btn-info-soft">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+            <path d="M12 3v12m0 0l-4-4m4 4l4-4M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          Descargar Redirector v2.5
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="orders-section">
+    <p style="text-align: center; padding: 2.5rem 1.5rem; color: var(--color-text-secondary); font-size: 14px; margin: 0;">Aún no tenés órdenes.</p>
+  </div>
+</div>
+
+<!-- ============================================ -->
+<!-- ESCENARIO 4 — ORDEN ACTIVA (post-clic) -->
+<!-- ============================================ -->
+<h2>Escenario 4 — Post-clic en "Equipo conectado" · orden activa con 3 equipos</h2>
+<p class="scenario-label">Paneles 1-2-3 descongelados · Panel 4 con datos de conexión · Mis órdenes con card nueva (3 equipos en distintos estados)</p>
+
+<div class="screen">
+  <div class="panels-row">
+    <div class="panel">
+      <h3>Método de pago</h3>
+      <div class="pills-row">
+        <div class="pill pill-selected"><span class="pill-flag"><svg viewBox="0 0 14 14"><circle cx="7" cy="7" r="7" fill="#D91023"/><rect x="4.67" y="0" width="4.66" height="14" fill="white"/></svg></span> Perú</div>
+        <div class="pill"><span class="pill-flag"><svg viewBox="0 0 14 14"><circle cx="7" cy="7" r="7" fill="#26A17B"/><text x="7" y="10" text-anchor="middle" font-size="9" font-weight="500" fill="white">T</text></svg></span> USDT</div>
+        <div class="pill"><span class="pill-flag"><svg viewBox="0 0 14 14"><circle cx="7" cy="7" r="7" fill="#006847"/><rect x="4.67" y="0" width="4.66" height="14" fill="white"/><rect x="9.33" y="0" width="4.67" height="14" fill="#CE1126"/></svg></span> México</div>
+      </div>
+      <div class="pills-row" style="margin-bottom: 1rem;">
+        <div class="pill"><span class="pill-flag"><svg viewBox="0 0 14 14"><circle cx="7" cy="7" r="7" fill="#FCD116"/><path d="M0 7h14v3.5H0z" fill="#003893"/><path d="M0 10.5h14V14H0z" fill="#CE1126"/></svg></span> Colombia</div>
+        <div class="pill"><span class="pill-flag"><svg viewBox="0 0 14 14"><circle cx="7" cy="7" r="7" fill="white"/><rect x="0" y="7" width="14" height="7" fill="#D52B1E"/><rect x="0" y="0" width="7" height="7" fill="#0039A6"/></svg></span> Chile</div>
+        <div></div>
+      </div>
+      <div class="dark-card">
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+          <span class="dot-pulse"></span>
+          <span class="dark-card-label" style="margin: 0;">Estimado · en vivo</span>
+        </div>
+        <div style="font-size: 28px; font-weight: 500; color: white; line-height: 1;">S/ 18.25</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>Solicitud</h3>
+      <div style="margin-bottom: 1rem;">
+        <p class="field-label" style="font-weight: 500;">Equipos a desbloquear</p>
+        <div class="stepper-row">
+          <button class="stepper-btn">−</button>
+          <input type="text" class="stepper-input" value="1"/>
+          <button class="stepper-btn">+</button>
+        </div>
+      </div>
+      <div style="margin-bottom: 1rem;">
+        <p class="field-label" style="font-weight: 500;">Modelo (opcional)</p>
+        <input type="text" class="input-text" placeholder="ej: Redmi Note 13"/>
+      </div>
+      <div class="dark-card">
+        <div class="dark-card-label">Total</div>
+        <div class="dark-card-amount">S/ 18.25</div>
+      </div>
+      <div class="support-badge">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="#639922"/><path d="M7 12.5l3.5 3.5L17 9" stroke="white" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+        98% de modelos soportados
+      </div>
+    </div>
+
+    <!-- Panel 3 - reset (ya descongelado, dropzone vacía, nuevo pedido posible) -->
+    <div class="panel">
+      <h3>Datos de pago</h3>
+      <div class="dark-card">
+        <div class="dark-card-label">Total a pagar</div>
+        <div class="dark-card-amount-row">
+          <span class="flag"><svg viewBox="0 0 22 22"><circle cx="11" cy="11" r="11" fill="#D91023"/><rect x="7.33" y="0" width="7.34" height="22" fill="white"/></svg></span>
+          <div class="dark-card-amount">S/ 18.25</div>
+        </div>
+      </div>
+      <div class="account-card">
+        <div class="account-header">
+          <div class="account-logo" style="background: #642B73;">Y</div>
+          <span style="font-size: 13px; font-weight: 500;">Yape Perú</span>
+        </div>
+        <p class="field-label">Número</p>
+        <div class="field-mono">
+          <span class="field-mono-value">993 357 553</span>
+          <button>Copiar</button>
+        </div>
+        <p class="field-label">Titular</p>
+        <p class="field-value" style="margin-bottom: 12px;">Bryams Zuñiga</p>
+        <button class="btn-full">Mostrar QR</button>
+      </div>
+      <p class="link-info">Ver otra cuenta Yape</p>
+      <div class="dropzone">
+        <svg class="dropzone-icon" width="20" height="20" viewBox="0 0 24 24" fill="none">
+          <path d="M12 3v12m0-12l-4 4m4-4l4 4M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <p class="dropzone-title">Subí tu comprobante</p>
+        <p class="dropzone-sub">JPG, PNG o PDF · máx 5 MB</p>
+      </div>
+    </div>
+
+    <!-- Panel 4 - estado 4 (orden activa con datos) -->
+    <div class="panel">
+      <h3>Conexión</h3>
+      <div style="margin-bottom: 8px;">
+        <p class="field-label">Technician ID</p>
+        <div class="field-mono">
+          <span class="field-mono-value">100099835478</span>
+          <button>Copiar</button>
+        </div>
+      </div>
+      <div style="margin-bottom: 12px;">
+        <p class="field-label">Código del proceso</p>
+        <div class="field-mono">
+          <span class="field-mono-value">CL-260503-001-3</span>
+          <button>Copiar</button>
+        </div>
+      </div>
+      <button class="btn-full" style="margin-bottom: 8px; padding: 8px;">¿Dónde pegar estos códigos?</button>
+      <button class="btn-info-soft">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+          <path d="M12 3v12m0 0l-4-4m4 4l4-4M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        Descargar Redirector v2.5
+      </button>
+    </div>
+  </div>
+
+  <!-- Mis órdenes con card de 3 equipos -->
+  <div class="orders-section">
+    <div class="order-card">
+      <div class="order-header">
+        <div style="display: flex; gap: 12px; align-items: center;">
+          <span class="order-flag"><svg viewBox="0 0 28 28"><circle cx="14" cy="14" r="14" fill="#D91023"/><rect x="9.33" y="0" width="9.34" height="28" fill="white"/></svg></span>
+          <div>
+            <div class="order-code">CL-20260503-001-3</div>
+            <p class="order-amount">S/ 54.75</p>
+          </div>
+        </div>
+        <div class="order-date">Hoy · 12:14</div>
+      </div>
+      <p class="order-description">3 equipos · Redmi Note 13</p>
+      <div class="equipment-list">
+        <div class="equipment-item equipment-finished">
+          <div class="check-finished">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none">
+              <path d="M5 12.5l3.5 3.5L19 7" stroke="white" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+            </svg>
+          </div>
+          <span style="flex: 1;">Equipo 1</span>
+          <span style="font-size: 12px;">Finalizado · 12:42</span>
+        </div>
+        <div class="equipment-item equipment-progress">
+          <span class="dot-state dot-blue"></span>
+          <span style="flex: 1;">Equipo 2</span>
+          <span style="font-size: 12px;">En proceso</span>
+        </div>
+        <div class="equipment-item equipment-pending">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span class="dot-state dot-empty"></span>
+            <span>Equipo 3</span>
+          </div>
+          <div class="equipment-actions">
+            <button class="btn-cancel">Cancelar este equipo</button>
+            <button class="btn-ready">Equipo listo</button>
+          </div>
+        </div>
+      </div>
+      <div class="order-footer">
+        <button class="btn-receipt" disabled style="opacity: 0.5; cursor: not-allowed;">Recibo de operación</button>
+        <button class="btn-menu">⋮</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================ -->
+<!-- ESCENARIO 5 — COMPROBANTE RECHAZADO -->
+<!-- ============================================ -->
+<h2>Escenario 5 — Comprobante rechazado por motivo "Monto incorrecto"</h2>
+<p class="scenario-label">Paneles 1-2-3 descongelados · Panel 3 muestra thumbnail con X roja + cajón rojo + opción de subir otro</p>
+
+<div class="screen">
+  <div class="panels-row">
+    <div class="panel">
+      <h3>Método de pago</h3>
+      <div class="pills-row">
+        <div class="pill pill-selected"><span class="pill-flag"><svg viewBox="0 0 14 14"><circle cx="7" cy="7" r="7" fill="#D91023"/><rect x="4.67" y="0" width="4.66" height="14" fill="white"/></svg></span> Perú</div>
+        <div class="pill"><span class="pill-flag"><svg viewBox="0 0 14 14"><circle cx="7" cy="7" r="7" fill="#26A17B"/><text x="7" y="10" text-anchor="middle" font-size="9" font-weight="500" fill="white">T</text></svg></span> USDT</div>
+        <div class="pill"><span class="pill-flag"><svg viewBox="0 0 14 14"><circle cx="7" cy="7" r="7" fill="#006847"/><rect x="4.67" y="0" width="4.66" height="14" fill="white"/><rect x="9.33" y="0" width="4.67" height="14" fill="#CE1126"/></svg></span> México</div>
+      </div>
+      <div class="pills-row" style="margin-bottom: 1rem;">
+        <div class="pill"><span class="pill-flag"><svg viewBox="0 0 14 14"><circle cx="7" cy="7" r="7" fill="#FCD116"/><path d="M0 7h14v3.5H0z" fill="#003893"/><path d="M0 10.5h14V14H0z" fill="#CE1126"/></svg></span> Colombia</div>
+        <div class="pill"><span class="pill-flag"><svg viewBox="0 0 14 14"><circle cx="7" cy="7" r="7" fill="white"/><rect x="0" y="7" width="14" height="7" fill="#D52B1E"/><rect x="0" y="0" width="7" height="7" fill="#0039A6"/></svg></span> Chile</div>
+        <div></div>
+      </div>
+      <div class="dark-card">
+        <div class="dark-card-label">Estimado · en vivo</div>
+        <div style="font-size: 28px; font-weight: 500; color: white; line-height: 1;">S/ 18.25</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>Solicitud</h3>
+      <div style="margin-bottom: 1rem;">
+        <p class="field-label" style="font-weight: 500;">Equipos a desbloquear</p>
+        <div class="stepper-row">
+          <button class="stepper-btn">−</button>
+          <input type="text" class="stepper-input" value="2"/>
+          <button class="stepper-btn">+</button>
+        </div>
+      </div>
+      <div class="dark-card">
+        <div class="dark-card-label">Total</div>
+        <div class="dark-card-amount">S/ 36.50</div>
+      </div>
+      <div class="support-badge">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" fill="#639922"/><path d="M7 12.5l3.5 3.5L17 9" stroke="white" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+        98% de modelos soportados
+      </div>
+    </div>
+
+    <!-- Panel 3 - rechazado -->
+    <div class="panel">
+      <h3>Datos de pago</h3>
+      <div class="dark-card">
+        <div class="dark-card-label">Total a pagar</div>
+        <div class="dark-card-amount-row">
+          <span class="flag"><svg viewBox="0 0 22 22"><circle cx="11" cy="11" r="11" fill="#D91023"/><rect x="7.33" y="0" width="7.34" height="22" fill="white"/></svg></span>
+          <div class="dark-card-amount">S/ 36.50</div>
+        </div>
+      </div>
+      <div class="account-card">
+        <div class="account-header">
+          <div class="account-logo" style="background: #642B73;">Y</div>
+          <span style="font-size: 13px; font-weight: 500;">Yape Perú</span>
+        </div>
+        <p style="font-family: var(--font-mono); font-size: 12px; margin: 0;">993 357 553</p>
+      </div>
+
+      <div class="proof-rejected-row">
+        <div class="proof-rejected-thumb">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <rect x="3" y="3" width="18" height="18" rx="2" stroke="var(--color-text-info)" stroke-width="1.5"/>
+            <circle cx="8.5" cy="8.5" r="1.5" fill="var(--color-text-info)"/>
+            <path d="M3 17l5-5 4 4 3-3 6 6" stroke="var(--color-text-info)" stroke-width="1.5" fill="none"/>
+          </svg>
+          <div class="proof-rejected-x">×</div>
+        </div>
+        <div style="flex: 1; min-width: 0;">
+          <p style="font-size: 11px; color: var(--color-text-secondary); margin: 0;">Comprobante</p>
+          <p style="font-size: 10px; color: #A32D2D; font-weight: 500; margin: 0;">Rechazado</p>
+        </div>
+        <button class="btn-cancel">Subir otro</button>
+      </div>
+      <p style="text-align: center; font-size: 11px; color: var(--color-text-secondary); margin: 0 0 10px; font-style: italic;">o arrastrá un archivo nuevo encima</p>
+
+      <div class="reason-card">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="flex-shrink: 0; margin-top: 1px;">
+          <circle cx="12" cy="12" r="10" stroke="#A32D2D" stroke-width="1.5"/>
+          <path d="M12 7v6" stroke="#A32D2D" stroke-width="1.5" stroke-linecap="round"/>
+          <circle cx="12" cy="16.5" r="0.8" fill="#A32D2D"/>
+        </svg>
+        <div>
+          <p style="font-size: 12px; font-weight: 500; color: var(--color-text-danger); margin: 0 0 2px;">Monto incorrecto</p>
+          <p style="font-size: 12px; color: var(--color-text-danger); margin: 0; line-height: 1.4;">El monto pagado no coincide con el total. Subí otro comprobante.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>Conexión</h3>
+      <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; padding: 2rem 0;">
+        <button class="btn-info-soft">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+            <path d="M12 3v12m0 0l-4-4m4 4l4-4M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          Descargar Redirector v2.5
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="orders-section">
+    <p style="text-align: center; padding: 2.5rem 1.5rem; color: var(--color-text-secondary); font-size: 14px; margin: 0;">Aún no tenés órdenes.</p>
+  </div>
+</div>
+
+<!-- ============================================ -->
+<!-- MOBILE PREVIEW -->
+<!-- ============================================ -->
+<h2>Vista mobile (estado inicial — 4 paneles apilados verticalmente)</h2>
+
+<div class="mobile-preview">
+  <div class="panel">
+    <h3>Método de pago</h3>
+    <div class="pills-row">
+      <div class="pill pill-selected" style="font-size: 11px;"><span class="pill-flag" style="width: 12px; height: 12px;"><svg viewBox="0 0 12 12"><circle cx="6" cy="6" r="6" fill="#D91023"/><rect x="4" y="0" width="4" height="12" fill="white"/></svg></span> Perú</div>
+      <div class="pill" style="font-size: 11px;"><span class="pill-flag" style="width: 12px; height: 12px;"><svg viewBox="0 0 12 12"><circle cx="6" cy="6" r="6" fill="#26A17B"/><text x="6" y="9" text-anchor="middle" font-size="8" font-weight="500" fill="white">T</text></svg></span> USDT</div>
+      <div class="pill" style="font-size: 11px;"><span class="pill-flag" style="width: 12px; height: 12px;"><svg viewBox="0 0 12 12"><circle cx="6" cy="6" r="6" fill="#006847"/><rect x="4" y="0" width="4" height="12" fill="white"/><rect x="8" y="0" width="4" height="12" fill="#CE1126"/></svg></span> México</div>
+    </div>
+    <div class="dark-card">
+      <div class="dark-card-label">Estimado</div>
+      <div style="font-size: 24px; font-weight: 500; color: white;">S/ 18.25</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3>Solicitud</h3>
+    <p class="field-label" style="font-weight: 500;">Equipos a desbloquear</p>
+    <div class="stepper-row">
+      <button class="stepper-btn" style="width: 34px; height: 34px;">−</button>
+      <input type="text" class="stepper-input" value="2" style="font-size: 26px; width: 50px;"/>
+      <button class="stepper-btn" style="width: 34px; height: 34px;">+</button>
+    </div>
+    <div class="dark-card" style="margin-top: 12px;">
+      <div class="dark-card-label">Total</div>
+      <div style="font-size: 24px; font-weight: 500; color: white;">S/ 36.50</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3>Datos de pago</h3>
+    <div class="dark-card">
+      <div class="dark-card-label">Total a pagar</div>
+      <div class="dark-card-amount-row">
+        <span class="flag" style="width: 20px; height: 20px;"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="10" fill="#D91023"/><rect x="6.67" y="0" width="6.66" height="20" fill="white"/></svg></span>
+        <div style="font-size: 22px; font-weight: 500; color: white;">S/ 36.50</div>
+      </div>
+    </div>
+    <div class="account-card">
+      <div class="account-header">
+        <div class="account-logo" style="background: #642B73;">Y</div>
+        <span style="font-size: 13px; font-weight: 500;">Yape Perú</span>
+      </div>
+      <p class="field-label">Número</p>
+      <div class="field-mono">
+        <span class="field-mono-value">993 357 553</span>
+        <button>Copiar</button>
+      </div>
+      <button class="btn-full">Mostrar QR</button>
+    </div>
+    <div class="dropzone">
+      <svg class="dropzone-icon" width="18" height="18" viewBox="0 0 24 24" fill="none">
+        <path d="M12 3v12m0-12l-4 4m4-4l4 4M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      <p class="dropzone-title">Subí tu comprobante</p>
+      <p class="dropzone-sub">JPG, PNG o PDF · máx 5 MB</p>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3>Conexión</h3>
+    <div style="display: flex; align-items: center; justify-content: center; padding: 1rem 0;">
+      <button class="btn-info-soft">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+          <path d="M12 3v12m0 0l-4-4m4 4l4-4M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        Descargar Redirector v2.5
+      </button>
+    </div>
+  </div>
+
+  <div class="orders-section">
+    <p style="text-align: center; padding: 2rem 1rem; color: var(--color-text-secondary); font-size: 13px; margin: 0;">
+      Aún no tenés órdenes.
+    </p>
+  </div>
+</div>
+
+<!-- ============================================ -->
+<!-- MODAL "¿Dónde pegar estos códigos?" -->
+<!-- ============================================ -->
+<h2>Modal "¿Dónde pegar estos códigos?" (se abre al apretar el botón en panel 4 estado 4)</h2>
+<p class="scenario-label">El modal usa la captura real del Redirector v2.5 (imagen aportada por Bryam en sesión 14)</p>
+
+<div class="modal-overlay">
+  <div class="modal">
+    <div style="display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 4px;">
+      <h3>¿Dónde pegar estos códigos?</h3>
+      <button style="width: 28px; height: 28px; padding: 0;">×</button>
+    </div>
+    <p style="font-size: 13px; color: var(--color-text-secondary); margin: 0 0 1rem;">Abrí el Redirector y completá estos 2 campos</p>
+
+    <!-- Frame simulado del Redirector (en producción será imagen real con badges flotantes) -->
+    <div style="border: 0.5px solid var(--color-border-tertiary); border-radius: var(--border-radius-md); overflow: hidden; margin-bottom: 1rem;">
+      <div style="background: #1f2937; padding: 8px 12px;">
+        <p style="font-size: 11px; color: white; margin: 0; font-weight: 500;">USB Redirector — Customer Module</p>
+      </div>
+      <div style="background: white; padding: 16px;">
+        <p style="font-size: 11px; font-weight: 500; color: #185FA5; margin: 0 0 6px;">Connect With Technician</p>
+
+        <div style="margin-bottom: 12px;">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+            <span style="font-size: 11px; color: var(--color-text-primary);">Technician ID:</span>
+            <span style="background: #185FA5; color: white; font-size: 9px; font-weight: 500; padding: 2px 7px; border-radius: 999px;">1° dato</span>
+          </div>
+          <div style="height: 24px; background: #f3f4f6; border: 0.5px solid #d1d5db; border-radius: 3px;"></div>
+        </div>
+
+        <div style="margin-bottom: 12px;">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+            <span style="font-size: 11px; color: var(--color-text-primary);">Additional information:</span>
+            <span style="background: #639922; color: white; font-size: 9px; font-weight: 500; padding: 2px 7px; border-radius: 999px;">2° dato</span>
+          </div>
+          <div style="height: 24px; background: #f3f4f6; border: 0.5px solid #d1d5db; border-radius: 3px;"></div>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 6px;">
+          <div style="padding: 4px 14px; background: #6b7280; color: white; font-size: 10px; font-weight: 500; border-radius: 3px;">Connect</div>
+          <div style="padding: 4px 14px; background: #e5e7eb; color: #374151; font-size: 10px; border-radius: 3px;">Cancel</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 1.25rem;">
+      <div style="display: flex; gap: 10px; align-items: flex-start;">
+        <div style="flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; background: #185FA5; color: white; font-size: 11px; font-weight: 500; display: flex; align-items: center; justify-content: center;">1</div>
+        <p style="font-size: 13px; margin: 0; line-height: 1.4; padding-top: 2px;">Pegá el <strong style="font-weight: 500;">Technician ID</strong> en el primer campo</p>
+      </div>
+      <div style="display: flex; gap: 10px; align-items: flex-start;">
+        <div style="flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; background: #639922; color: white; font-size: 11px; font-weight: 500; display: flex; align-items: center; justify-content: center;">2</div>
+        <p style="font-size: 13px; margin: 0; line-height: 1.4; padding-top: 2px;">Pegá el <strong style="font-weight: 500;">Código del proceso</strong> en el segundo campo</p>
+      </div>
+      <div style="display: flex; gap: 10px; align-items: flex-start;">
+        <div style="flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; background: var(--color-bg-secondary); color: var(--color-text-primary); font-size: 11px; font-weight: 500; display: flex; align-items: center; justify-content: center; border: 0.5px solid var(--color-border-tertiary);">3</div>
+        <p style="font-size: 13px; margin: 0; line-height: 1.4; padding-top: 2px;">Apretá <strong style="font-weight: 500;">Connect</strong> y volvé acá</p>
+      </div>
+    </div>
+
+    <div style="display: flex; justify-content: flex-end;">
+      <button style="padding: 8px 18px; font-size: 13px; background: var(--color-text-info); color: white; border: none;">Entendido</button>
+    </div>
+  </div>
+</div>
+
+<p style="margin-top: 3rem; font-size: 11px; color: var(--color-text-tertiary); text-align: center;">
+  Mockup consolidado · AriadGSM · Sesión 14 · 4 de mayo 2026<br>
+  <em>Para reemplazar la simulación del Redirector por la captura real, sustituir el bloque del frame por <code>&lt;img src="public/images/redirector-screenshot.png"&gt;</code> con badges absolute encima.</em>
+</p>
+
+</body>
+</html>

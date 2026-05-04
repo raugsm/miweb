@@ -2,7 +2,7 @@
 
 **Para Claudes futuros que retomen este trabajo.** Si abrís un chat nuevo, leé este archivo primero, después abrí los otros archivos en `docs/specs/`. Después de eso, ya sabés todo lo necesario para continuar.
 
-**Última actualización:** 3 de mayo 2026 · v1.10
+**Última actualización:** 4 de mayo 2026 · v1.11
 
 ---
 
@@ -167,9 +167,10 @@ SESIÓN 13 (cerrada)
     + Mockup HTML standalone consolidado pendiente para sesión 14
     + Decisiones cruzadas con panel operador, política de reembolso, panel 4
 
-SESIÓN 14
-└── Spec del panel 3 (incluye corrección USDT/Binance Pay vs TRC20) + spec del panel 4
-    + mockups HTML standalone de la pantalla principal completa
+SESIÓN 14 (cerrada)
+└── Spec del panel 3 ✅ + Spec del panel 4 ✅ + Mockup HTML standalone consolidado ✅
+    + Actualización pantalla-principal-cliente v1.0 → v1.1 (OQ-8 reabierta y re-cerrada)
+    + Decisiones cruzadas con Centro de configuración (Medios de pago) y panel operador
 
 SESIÓN 15
 └── Implementación de la pantalla principal completa (paneles + Mis órdenes
@@ -357,14 +358,9 @@ Durante la conversación de sesión 10, Bryam mencionó que la validación de pr
 
 ### Hallazgo sesión 10 — USDT real es Binance Pay, no transferencia TRC20 directa
 
-La spec v1.0 del paso 1 decía "USDT en red TRC20", pero los métodos reales de cobro son **Binance Pay**, NO transferencia TRC20 directa. Son cosas distintas:
+**✅ RESUELTO en sesión 14.** La spec del panel 3 (`panel-3-datos-de-pago.md` v1.0) incorpora la corrección: el método se llama "Binance Pay" (no "USDT TRC20"), solo necesita Pay ID del titular, no dirección de wallet blockchain. Pill USDT del panel 1 sin red mencionada (decidido en sesión 13). Datos reales de Bryam: Binance Pay ID `564181591` · Beneficiario `Ariadgsm`.
 
-- **Binance Pay:** transferencia interna entre cuentas de Binance, sin red blockchain de por medio. Solo necesita identificador de Binance.
-- **TRC20 / BEP20:** transferencia real por blockchain, necesita dirección de wallet.
-
-**Esto NO afecta el paso 1** (la pill solo dice "USDT" + logo Tether, sin mención de red). **Sí afecta la spec del paso 3** (donde se muestran datos para pagar). Cuando se haga la spec del paso 3 (sesión 14), corregir esto.
-
-Bryam mencionó interés futuro en agregar QR de pagos (Yape ya tiene QR, Binance Pay también). Eso vive en la futura sub-sección "Medios de pago" del Centro de configuración.
+**Lo que sigue como input crudo:** Bryam mencionó interés futuro en agregar QR de pagos (Yape ya tiene QR, Binance Pay también). En sesión 14 se confirmó que Yape Perú y Bancolombia tienen QR; México (STP) y Chile (Mercado Pago) no tienen QR todavía (Bryam investigando). Eso vive en la futura sub-sección "Medios de pago" del Centro de configuración.
 
 ### Hallazgo sesión 10 — mockup paso 1 necesita actualización antes de implementación
 
@@ -755,12 +751,14 @@ Estas piezas van a la spec del panel operador (sesión 14+).
 - **`_costos-frp-redesign-pendiente.md`** — placeholder para rediseño visual interno de Costos FRP.
 
 ### `docs/specs/cliente/`
-- **`pantalla-principal-cliente.md`** — modelo de pantalla principal cliente con 4 paneles paralelos + Mis órdenes. **Versión actual: v1.0 (sesión 12).** 10 open questions cerradas. NO es spec con las 8 piezas todavía — la spec formal con mockup HTML standalone, estados, edge cases, responsive, comportamiento, datos y acceptance criteria se desarrolla en sesiones 13-14.
+- **`pantalla-principal-cliente.md`** — modelo de pantalla principal cliente con 4 paneles paralelos + Mis órdenes. **Versión actual: v1.1 (sesión 14).** 10 OQ originales cerradas en sesión 12; OQ-8 reabierta y re-cerrada en sesión 14. Las specs por panel (1, 2, 3, 4) y Mis órdenes con las 8 piezas formales viven en archivos separados.
 - **`panel-1-metodo-de-pago.md`** — spec del panel 1 (Método de pago) dentro de la pantalla principal cliente. **Versión actual: v2.0 (sesión 13).** Reemplaza a `paso-1-precio.md` v1.1 (deprecada y eliminada del repo). 8 piezas formales completas. 3 OQ-residuales cerradas en la misma sesión.
 - **`panel-2-solicitud.md`** — spec del panel 2 (Solicitud) dentro de la pantalla principal cliente. **Versión actual: v1.0 (sesión 13).** 8 piezas formales completas. 2 OQ-residuales abiertas (comportamiento del aviso si cliente sube/baja cantidad varias veces, codenames blue/water ausentes del catálogo backend).
-- **`mis-ordenes.md`** — spec de la zona "Mis órdenes" debajo de los 4 paneles paralelos. **Versión actual: v1.0 (sesión 13).** 8 piezas formales completas. 7 OQ-residuales abiertas para sesión 14+ y para spec dedicada de política de reembolso. Cambios importantes respecto a `pantalla-principal-cliente.md` v1.0: card unificada para 1 y N equipos, 4 estados visibles por equipo, mecánica "Equipo listo" + "Cancelar este equipo" individual.
-- **`mockups/paso-1-precio.html`** — mockup HTML standalone responsive del paso 1. **Pendiente actualización** con 2 estados nuevos (pill desactivada con mensaje custom + banner amarillo de tasa cambiada). Sesión chica futura antes de implementación.
-- **`mockups/pantalla-principal-cliente.html`** — pendiente. Crear en sesión 14 a partir de los 2 mockups que Bryam aportó en sesión 11 + las decisiones de sesión 12 (Redirector descarga directa, "Equipo conectado", composición de card adaptativa, etc.).
+- **`panel-3-datos-de-pago.md`** — spec del panel 3 (Datos de pago) dentro de la pantalla principal cliente. **Versión actual: v1.0 (sesión 14).** 8 piezas formales completas. Incluye corrección USDT/Binance Pay vs TRC20. 4 OQ-residuales abiertas (imágenes QR pendientes, QR de México y Chile pendientes, comportamiento de timeout largo, lista final de motivos de rechazo).
+- **`panel-4-conexion.md`** — spec del panel 4 (Conexión) dentro de la pantalla principal cliente. **Versión actual: v1.0 (sesión 14).** 8 piezas formales completas. Incluye modal "¿Dónde pegar estos códigos?" con captura real del Redirector. 4 OQ-residuales abiertas (captura reemplazable, formato compacto del Technician ID/Código, comportamiento mobile, texto explicativo de polish).
+- **`mis-ordenes.md`** — spec de la zona "Mis órdenes" debajo de los 4 paneles paralelos. **Versión actual: v1.0 (sesión 13).** 8 piezas formales completas. 7 OQ-residuales abiertas para sesión 14+ y para spec dedicada de política de reembolso.
+- **`mockups/paso-1-precio.html`** — mockup HTML standalone responsive del paso 1. **Pendiente actualización** con 2 estados nuevos (pill desactivada con mensaje custom + banner amarillo de tasa cambiada). Sesión chica futura antes de implementación. **Probablemente deprecado** ahora que existe el mockup consolidado de la pantalla principal completa.
+- **`mockups/pantalla-principal-cliente.html`** — **CREADO en sesión 14.** Mockup HTML standalone consolidado de la pantalla principal completa con los 4 paneles + Mis órdenes. Cubre 5 escenarios visuales (estado inicial, comprobante en validación, validado pre-clic, orden activa con 3 equipos, comprobante rechazado) + vista mobile + modal "¿Dónde pegar estos códigos?". Listo para servir como referencia visual a sesión 15 de implementación. **Nota:** la captura del Redirector está simulada en SVG; reemplazar por la imagen real `1777861729916_image.png` cuando Bryam la suba al repo (sugerencia: `public/images/redirector-screenshot.png`).
 
 ### `docs/specs/operador/`
 - **`operador-frp-express.md`** — spec completo del panel FRP Express v1.2. 43 acceptance criteria, 4 open questions abiertas (futuras sesiones).
@@ -789,25 +787,19 @@ Estas piezas van a la spec del panel operador (sesión 14+).
 
 ## Pendientes y próximos pasos
 
-### Sesión 14 (próxima)
+### Sesión 15 (próxima)
 
-**Foco:** spec formal del panel 3 + spec formal del panel 4 + mockups HTML standalone consolidados de la pantalla principal completa (panel 1 + panel 2 + panel 3 + panel 4 + Mis órdenes), recogiendo todas las decisiones de sesiones 11, 12 y 13.
+**Foco:** implementación de la pantalla principal completa (paneles + Mis órdenes + congelado/descongelado + Redirector descarga directa).
 
 **Procedimiento sugerido:**
 
-1. Releer las 4 specs ya cerradas (`pantalla-principal-cliente.md` v1.0, `panel-1-metodo-de-pago.md` v2.0, `panel-2-solicitud.md` v1.0, `mis-ordenes.md` v1.0) para tener marco completo.
-2. Spec del panel 3 con las 8 piezas (incluye corrección USDT/Binance Pay vs TRC20).
-3. Spec del panel 4 con las 8 piezas (incluye sistema de tiempos/alertas solo si para entonces hay decisión formal — sino, panel 4 sin sistema de tiempos y ese queda como input crudo todavía).
-4. Mockup HTML standalone consolidado de la pantalla principal completa (`docs/specs/cliente/mockups/pantalla-principal-cliente.html`), recogiendo: Redirector v2.5 descarga directa, "Equipo conectado", card unificada de Mis órdenes con 4 estados por equipo, banderas de país, etc.
-5. Cerrar las OQ-residuales abiertas que dependen del HTML standalone (panel 2 OQ-R2 sobre cantidad sube/baja; mis-ordenes OQ-R1 a OQ-R7).
-6. Posiblemente también: spec del panel operador con la funcionalidad nueva (dropdown rechazo + abort + agarrar pedido + Recibo de operación + procesamiento por equipo individual).
-7. Si no entra todo en una sola sesión, partir en 14a y 14b.
+1. Releer las 6 specs cerradas (`pantalla-principal-cliente.md` v1.1, `panel-1-metodo-de-pago.md` v2.0, `panel-2-solicitud.md` v1.0, `panel-3-datos-de-pago.md` v1.0, `panel-4-conexion.md` v1.0, `mis-ordenes.md` v1.0) y el mockup HTML consolidado para tener marco completo.
+2. Análisis previo (Template A) con Claude Code antes de tocar código. Identificar archivos a tocar, dependencias, riesgos.
+3. Implementación en sub-commits por área (15a paneles 1-2, 15b panel 3, 15c panel 4, 15d Mis órdenes, 15e congelado/descongelado, etc.).
+4. Smoke test al cierre de cada sub-commit.
+5. Es probable que esto se parta en múltiples sesiones (15a, 15b, 15c) por tamaño.
 
-**No es:** sesión de implementación. NO mandar nada a Claude Code para tocar código en sesión 14. Implementación arranca recién en sesión 15.
-
-### Sesión 15
-
-Implementación de la pantalla principal completa (paneles + Mis órdenes + congelado/descongelado + Redirector descarga directa). Es probable que esto se parta en sub-commits (15a, 15b, 15c) por tamaño.
+**No es:** sesión de spec/diseño. Las specs ya están cerradas. Implementación pura.
 
 ### Sesión 16
 
@@ -1036,6 +1028,20 @@ Si no usa esa frase, recordásela vos antes de avanzar. Bryam puede agregar **re
   - **Aplicación correcta de trampa #11 (decisión nueva al final de sesión cansado):** al cierre, cuando Bryam abrió el flujo completo de reembolso (campo, comprobante del operador, cliente lo ve), Claude frenó el diseño UI sobre proceso no definido, ofreció dejar la opción "Pedir reembolso" registrada como pendiente y manejarla manualmente por WhatsApp en versión inicial.
   - **Trampa nueva identificada:** "iteraciones repetidas sobre un mismo componente al final de sesión = señal de que el componente necesita procesamiento en frío en sesión dedicada". Aparece como trampa #15 propuesta. La card de Mis órdenes pasó por 8 iteraciones en una sola sesión, lo que es señal de que el componente requería más tiempo de gestación que el disponible al final de sesión 13. Las iteraciones llegaron a buen puerto pero el patrón es marcador de fatiga. Quedó capturado como regla #17 nueva en "Cómo trabajamos".
   - **HANDOFF v1.10.**
+- **Sesión 14 (cerrada):**
+  - 2 specs formales con las 8 piezas entregadas: panel 3 y panel 4. Sesión enteramente de spec/diseño, sin código. Mockup HTML standalone consolidado entregado. Pantalla principal cliente actualizada a v1.1.
+  - **Panel 3 (Datos de pago):** archivo nuevo `docs/specs/cliente/panel-3-datos-de-pago.md` v1.0. Decisiones principales: header "Datos de pago" (no "Pago" — para evitar choque de nombres con panel 1 "Método de pago"). Card oscura con bandera al costado del monto. Sin conversión a USDT en card oscura (excepto cuando el método elegido es USDT). Sin breakdown "N equipos × monto unitario" (ya está en panel 2). Sin banner amarillo "Revisá pasos 1 y 2" (descartado). Una cuenta visible por método. Yape Perú con 2 cuentas (principal default + link "Ver otra cuenta Yape" para alternar). QR vía botón "Mostrar QR" — aparece arriba del número (empuja todo hacia abajo), datos visibles para que cliente compare con titular del QR escaneado. QR como imagen estática (admin la sube desde Centro de configuración). Dropzone con 6 estados (default, hover, drag-over, tipo no permitido, tamaño excedido, subiendo). Comprobante con 4 estados post-subida (subido esperando, validado, rechazado con motivo). Estado "Subido" sin nombre de archivo ni peso (decisión sesión 14 para evitar ruido visual). Estado "Validado" oculta thumbnail, muestra cajón verde. Estado "Rechazado" muestra thumbnail con X roja + botón "Subir otro" + cajón rojo con motivo + texto guía "o arrastrá un archivo nuevo encima". Cliente puede arrastrar otro archivo encima del rechazado para reemplazarlo. Tipos permitidos JPG/PNG/PDF, máximo 5 MB (verificado con fuentes externas — Canon Europe usa 4 MB para comprobantes similares). Sin límite de reintentos. Datos reales de Bryam usados como ejemplos en mockups. **Corrección USDT/Binance Pay confirmada:** USDT real es Binance Pay (no TRC20). Pill USDT panel 1 sin red mencionada. Panel 3 muestra "Binance Pay" como nombre del método con Pay ID. Esto cierra el hallazgo abierto del HANDOFF sesión 10. **Sin lock pricing 15 min y sin sistema de alertas escaladas** — la regla vieja de 15 min se desecha; la propuesta de Bryam de 5 min con 3 fases queda como input crudo en el HANDOFF, vive en spec dedicada del sistema de tiempos (sesión futura). Hoy panel 3 NO muestra contadores ni alertas. 4 OQ-residuales identificadas (imágenes de QR pendientes, QR de MX/CL pendientes, comportamiento de timeout largo, lista final de motivos de rechazo).
+  - **Panel 4 (Conexión):** archivo nuevo `docs/specs/cliente/panel-4-conexion.md` v1.0. Decisiones principales: header "Conexión" (no "Conectar equipo" ni numeración). Botón "Descargar Redirector v2.5" persistente en TODOS los estados (decisión OQ-10 sesión 12 ratificada). Botón Descargar sin texto explicativo extra (decisión sesión 14). 6 estados visibles definidos; estados 0/1/2/5 visualmente idénticos (solo botón Descargar). **OQ-8 reabierta y cerrada en sesión 14:** estado 2 NO muestra "Esperando validación…" + spinner. La señal de validación vive en panel 3 + paneles 1-2-3 congelados. Botón "Equipo conectado" como núcleo del flujo (decisión OQ-4 sesión 12 ratificada — fue una falsa contradicción de Bryam que pensó que se había reemplazado). Estado 4: cards Technician ID + Código apiladas verticalmente. Botón "¿Dónde pegar estos códigos?" debajo de las cards. Modal "¿Dónde pegar?" con captura real del Redirector v2.5 (`1777861729916_image.png` aportada por Bryam en sesión) + badges flotantes 1°/2° + 3 pasos numerados. Sin "¿Necesitás más ayuda? Contactá por WhatsApp" (descartado en sesión 14). Sin banner "Pago confirmado…" (descartado en OQ-5 sesión 12). Formato compacto vs completo del Technician ID y Código a definir según ancho del panel (visualmente compacto, al copiar formato completo). Technician ID se "freeze-a" al nacer la orden (no cambia retroactivamente si el técnico activo cambia). 4 OQ-residuales identificadas (captura reemplazable, formato compacto, comportamiento mobile, texto explicativo de polish).
+  - **Mockup HTML standalone consolidado:** archivo nuevo `docs/specs/cliente/mockups/pantalla-principal-cliente.html`. Recoge 5 escenarios: estado inicial, comprobante en validación, validado pre-clic, orden activa con 3 equipos, comprobante rechazado. Vista mobile incluida. Modal "¿Dónde pegar estos códigos?" incluido. Variables CSS del sistema. Tipografía y banderas integradas. Listo para servir como referencia visual a sesión 15 de implementación. **Nota:** la captura del Redirector está simulada en SVG; reemplazar por la imagen real `1777861729916_image.png` cuando Bryam la suba al repo (`public/images/redirector-screenshot.png`).
+  - **Pantalla principal cliente actualizada a v1.1:** OQ-8 reabierta y re-cerrada con la decisión nueva (panel 4 estado 2 sin "Esperando validación"). Tabla de estados del panel 4 actualizada. Changelog extendido.
+  - **Hallazgos del HANDOFF resueltos en sesión 14:** USDT/Binance Pay vs TRC20 (cerrado, datos reales en panel 3 spec).
+  - **Decisiones cruzadas registradas:** spec del Centro de configuración → "Medios de pago" (debe permitir cargar cuentas con QR opcional, manejar Yape doble con `alternativeAccountKey`). Spec del panel operador (debe exponer endpoints de validar/rechazar comprobante, "agarrar equipo" individual, generar Recibo de operación, cambiar técnico activo). Spec del sistema de tiempos / lock pricing sigue pausada como input crudo.
+  - **Falsas contradicciones detectadas y resueltas (regla #16 aplicada correctamente):** Bryam dijo "el botón Equipo conectado fue reemplazado, revisá el HANDOFF" — Claude verificó en HANDOFF y specs, no encontró evidencia, preguntó si era confusión con "Conexión lista" (nombre tentativo descartado). Bryam confirmó la confusión. Decisión OQ-4 sesión 12 mantenida.
+  - **Aplicación correcta de regla #11 (decisión grande al final de sesión cansado):** Bryam pidió cambiar el lock 15 min por las alertas escaladas de 5 min. Claude frenó porque las alertas escaladas requieren spec completa del sistema de tiempos (9 sub-decisiones, cruza con panel 4, Mis órdenes, política de reembolso). Acordamos: sacar la regla vieja de 15 min del panel 3, dejar placeholder explícito de que el sistema de tiempos vive en spec dedicada futura.
+  - **Iteraciones del QR abierto: 4 versiones** (acordeón cerrado → abierto empujando todo → versión limpia sin número → QR debajo → QR arriba). Activó regla #17 (4+ iteraciones = procesamiento incompleto). Llegamos a buen puerto pero queda como marcador de fatiga.
+  - **Bryam aportó datos reales de las 5+ cuentas en chat** (Yape PE × 2, México STP, Colombia Bancolombia, Chile Mercado Pago, Binance Pay, PayPal). PayPal queda como input crudo (no se trabaja en sesión 14). 2 cuentas Yape integradas en spec del panel 3.
+  - **Sistema de breakpoints unificado documentado en specs** (decisión heredada del rediseño responsive del portal viejo, no se reabre): mobile <640px (1 col) → tablet 640px (2 cols) → laptop 900px (4 cols) → desktop 1200px → ultrawide 1800px (max-width 1400px centrado). Documentado en `pantalla-principal-cliente.md` v1.1 + en sección 4 de panel 3 y panel 4. Los paneles NO tienen ancho fijo 400px estricto — son fluidos dentro del breakpoint. Las medidas tipográficas y spacings internos sí están fijos.
+  - **HANDOFF v1.11.**
 
 ---
 
