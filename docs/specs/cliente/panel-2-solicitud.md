@@ -264,15 +264,15 @@ Si `selectedPill` es null, el panel 2 muestra "Elegí un método de pago primero
 
 ```json
 [
-  { "commercialName": "A3",                "codenames": ["..."] },
-  { "commercialName": "A3X",               "codenames": ["..."] },
-  { "commercialName": "A2",                "codenames": ["..."] },
-  { "commercialName": "Redmi Note 12S",    "codenames": ["..."] },
-  { "commercialName": "A5",                "codenames": ["..."] }
+  { "commercialName": "A3",                "codenames": ["blue"] },
+  { "commercialName": "A3X",               "codenames": ["klein"] },
+  { "commercialName": "A2",                "codenames": ["water"] },
+  { "commercialName": "Redmi Note 12S",    "codenames": ["sea", "ocean"] },
+  { "commercialName": "A5",                "codenames": ["serenity"] }
 ]
 ```
 
-Los codenames están en el código actualmente. Claude Code los extrae al cierre de sesión 13 y los registra acá.
+Codenames confirmados por Bryam según conocimiento del producto. Estado actual del backend: `klein` (A3X), `serenity` (A5), `sea` y `ocean` (Note 12S) ya están registrados como aliases en `server/config/catalog.js#frpEligibilityCatalog`. Los codenames `blue` (A3) y `water` (A2) NO están registrados en el código todavía — ver OQ-R3 en §8.
 
 ### 6.2 Datos que produce
 
@@ -374,17 +374,21 @@ Estado compartido que el panel 2 expone:
 
 ## 8. Open questions
 
-**Estado al cierre de sesión 13:** las decisiones principales del panel 2 quedaron cerradas. Quedan 2 OQ-residuales chicas:
+**Estado al cierre de sesión 13:** las decisiones principales del panel 2 quedaron cerradas. OQ-R1 cerrada con los codenames documentados en §6.1. Quedan 2 OQ-residuales abiertas (OQ-R2 y OQ-R3):
 
 ### OQ-residuales (sesión 13)
 
-**OQ-R1 — Lista exacta de codenames de los 5 modelos no soportados.**
+**OQ-R1 — Lista exacta de codenames de los 5 modelos no soportados.** ✅ CERRADA
 
-Los nombres comerciales están confirmados (A3, A3X, A2, Redmi Note 12S, A5). Los codenames internos están en el código actual pero no documentados. Pendiente: Claude Code los extrae al cierre de sesión 13 y los registra en este archivo en §6.1.
+Los nombres comerciales están confirmados (A3, A3X, A2, Redmi Note 12S, A5). Codenames confirmados por Bryam: `blue` (A3), `klein` (A3X), `water` (A2), `serenity` (A5), `sea` y `ocean` (Note 12S). Documentados en §6.1.
 
 **OQ-R2 — Comportamiento del aviso verde de WhatsApp si el cliente sube y baja la cantidad varias veces.**
 
 Hoy el aviso aparece cuando cliente tipea > 10. Si baja a 10 antes de los 15 segundos, el aviso desaparece. Pero ¿qué pasa si el cliente sube y baja varias veces seguidas? Decisión provisional: cada vez que se dispara, se reinicia el contador de 15 segundos. Pendiente confirmar comportamiento exacto cuando se haga el HTML standalone (sesión 14).
+
+**OQ-R3 — Codenames `blue` (A3) y `water` (A2) ausentes del catálogo backend.**
+
+El catálogo backend (`server/config/catalog.js#frpEligibilityCatalog`) hoy NO incluye los codenames `blue` (A3) ni `water` (A2). Solo tiene los aliases comerciales (`"redmi a3"`, `"a3"`, `"redmi a2"`, `"a2"`). Esto significa que un cliente que escriba "blue" o "water" en el input modelo del panel 2 no dispara hoy el match de "no soportado" — el helper `frpEligibilityResult` los clasifica como ambiguos/no reconocidos. Pendiente: agregar `"blue"` al array `aliases` de la entrada `redmi-a3` y `"water"` al array `aliases` de la entrada `redmi-a2` en `server/config/catalog.js`. Tarea de implementación dedicada (no de spec), a tomar antes del lanzamiento o en sesión específica de cleanup del catálogo de modelos.
 
 ### OQ heredadas
 
