@@ -1,5 +1,9 @@
 .frp-flow-card {
-  padding: 20px;
+  /* Sub-commit 15c.3-bis: padding reducido de 20px a 10px (mitad) para dar
+     más ancho disponible a los 4 paneles del .panels-row sin que toquen el
+     borde del contenedor. No toca padding interno de los panels ni del
+     section-head. */
+  padding: 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.92);
