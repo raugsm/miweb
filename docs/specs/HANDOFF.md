@@ -789,26 +789,21 @@ Estas piezas van a la spec del panel operador (sesión 14+).
 
 ## Pendientes y próximos pasos
 
-### Sesión 13 (próxima)
+### Sesión 14 (próxima)
 
-**Foco:** spec formal del panel 1 (a partir de `panel-1-metodo-de-pago.md` v2.0, que reemplaza a `paso-1-precio.md` v1.1, deprecada) + spec del panel 2 (cantidad de equipos + modelo opcional) + spec de Mis órdenes (cards, modal de historial, abortar proceso).
+**Foco:** spec formal del panel 3 + spec formal del panel 4 + mockups HTML standalone consolidados de la pantalla principal completa (panel 1 + panel 2 + panel 3 + panel 4 + Mis órdenes), recogiendo todas las decisiones de sesiones 11, 12 y 13.
 
 **Procedimiento sugerido:**
 
-1. Releer `pantalla-principal-cliente.md` v1.0 y validar que sigue reflejando el modelo mental de Bryam.
-2. Reescribir el panel 1 → `panel-1-metodo-de-pago.md` v2.0 (que reemplaza a `paso-1-precio.md` v1.1, deprecada) con las 8 piezas formales (mockup, estados, edge cases, responsive, comportamiento, datos, acceptance criteria, open questions).
-3. Spec del panel 2 con las 8 piezas.
-4. Spec de Mis órdenes con las 8 piezas (incluye comportamiento del modal de historial, búsqueda interna, abortar proceso).
-5. Esbozar al menos en formato de placeholder las sub-secciones del Centro de configuración que el panel 1 consume: "Tasa de cambio manual", "Métodos de pago", "Costo del servicio".
-6. Si no entra todo en una sola sesión, partir en 13a y 13b.
+1. Releer las 4 specs ya cerradas (`pantalla-principal-cliente.md` v1.0, `panel-1-metodo-de-pago.md` v2.0, `panel-2-solicitud.md` v1.0, `mis-ordenes.md` v1.0) para tener marco completo.
+2. Spec del panel 3 con las 8 piezas (incluye corrección USDT/Binance Pay vs TRC20).
+3. Spec del panel 4 con las 8 piezas (incluye sistema de tiempos/alertas solo si para entonces hay decisión formal — sino, panel 4 sin sistema de tiempos y ese queda como input crudo todavía).
+4. Mockup HTML standalone consolidado de la pantalla principal completa (`docs/specs/cliente/mockups/pantalla-principal-cliente.html`), recogiendo: Redirector v2.5 descarga directa, "Equipo conectado", card unificada de Mis órdenes con 4 estados por equipo, banderas de país, etc.
+5. Cerrar las OQ-residuales abiertas que dependen del HTML standalone (panel 2 OQ-R2 sobre cantidad sube/baja; mis-ordenes OQ-R1 a OQ-R7).
+6. Posiblemente también: spec del panel operador con la funcionalidad nueva (dropdown rechazo + abort + agarrar pedido + Recibo de operación + procesamiento por equipo individual).
+7. Si no entra todo en una sola sesión, partir en 14a y 14b.
 
-**No es:** sesión de implementación. NO mandar nada a Claude Code para tocar código en sesión 13.
-
-### Sesión 14
-
-Spec del panel 3 (incluye corrección USDT/Binance Pay vs TRC20) + spec del panel 4 (incluye sistema de tiempos/alertas si para entonces hay decisión formal — sino, panel 4 spec sin sistema de tiempos y este queda como input crudo todavía) + **mockups HTML standalone** de la pantalla principal completa con todas las decisiones de sesión 12 (Redirector descarga directa, "Equipo conectado", composición adaptativa de cards).
-
-Posiblemente también: spec del panel operador con la funcionalidad nueva (dropdown rechazo + abort + agarrar pedido + Recibo de operación).
+**No es:** sesión de implementación. NO mandar nada a Claude Code para tocar código en sesión 14. Implementación arranca recién en sesión 15.
 
 ### Sesión 15
 
