@@ -247,6 +247,8 @@
   outline: none;
 }
 
+.panel-3-dropzone[hidden] { display: none; }
+
 .panel-3-dropzone:hover {
   border-color: var(--color-border-secondary);
   background: var(--color-bg-secondary);
