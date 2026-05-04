@@ -2,7 +2,7 @@
 
 **Para Claudes futuros que retomen este trabajo.** Si abrís un chat nuevo, leé este archivo primero, después abrí los otros archivos en `docs/specs/`. Después de eso, ya sabés todo lo necesario para continuar.
 
-**Última actualización:** 3 de mayo 2026 · v1.9
+**Última actualización:** 3 de mayo 2026 · v1.10
 
 ---
 
@@ -162,9 +162,10 @@ SESIÓN 12 (cerrada)
     + sub-decisiones cruzadas trasladadas a specs futuras
       (panel operador, sistema de tiempos, política de reembolso) ✅
 
-SESIÓN 13 (próxima)
-└── Spec formal del panel 1 (a partir de paso-1-precio.md v1.1) + spec del panel 2
-    + spec de Mis órdenes (cards, modal de historial, abortar) — las 8 piezas en cada uno
+SESIÓN 13 (cerrada)
+└── 3 specs formales con las 8 piezas: panel 1 + panel 2 + Mis órdenes ✅
+    + Mockup HTML standalone consolidado pendiente para sesión 14
+    + Decisiones cruzadas con panel operador, política de reembolso, panel 4
 
 SESIÓN 14
 └── Spec del panel 3 (incluye corrección USDT/Binance Pay vs TRC20) + spec del panel 4
@@ -265,7 +266,7 @@ SESIÓN 16
 
 **Nada nuevo en código.** Sesión exclusivamente de spec/diseño:
 - Cierre de 7 de 8 open questions del paso 1 cliente
-- Spec `paso-1-precio.md` actualizada a v1.1
+- Spec `paso-1-precio.md` actualizada a v1.1 (reemplazada en sesión 13 por `panel-1-metodo-de-pago.md` v2.0)
 - Descubrimientos registrados como inputs crudos
 - Hallazgos abiertos nuevos identificados
 
@@ -400,7 +401,7 @@ El mockup actual `paso-1-precio.html` cubre el estado "todo bien" pero no incluy
 - Timer paso 4 de 2 min: sigue firme.
 - Lock pricing 15 min: sigue firme.
 
-### Política de reembolso (sesión 9, ampliado en sesión 12)
+### Política de reembolso (sesión 9, ampliado en sesión 12 y 13)
 
 *Pendiente de spec dedicada.*
 
@@ -413,6 +414,15 @@ El mockup actual `paso-1-precio.html` cubre el estado "todo bien" pero no incluy
   - ¿Hay diferencia entre abortar antes de que el técnico agarre vs durante "En proceso"?
   - ¿Hay tiempo límite o costo de cancelación?
   - ¿El abort dispara reembolso automático o requiere aprobación del operador?
+
+**Ampliación sesión 13:** durante el diseño de Mis órdenes aparecieron decisiones cruzadas nuevas que la spec dedicada de política de reembolso debe responder:
+- Cancelación individual de un equipo (cliente aprieta "Cancelar este equipo" en estado Pendiente): ¿reembolso parcial automático? ¿Crédito interno? ¿Manual por WhatsApp?
+- Diferencia entre cancelar antes de "Esperando técnico" vs en cualquier otro estado.
+- Modal "Pedir reembolso" post-finalización: ¿existe como segunda opción del menú 3 puntitos cuando la orden está finalizada?
+- Campo del cliente para emitir el reembolso (datos bancarios, Yape, etc.): a definir.
+- Subida del comprobante de reembolso desde el panel operador: a definir.
+- El cliente ve el comprobante del reembolso en alguna parte: a definir.
+- Bryam reconoció en sesión 13 que la mayoría de clientes maneja reembolsos por WhatsApp con él manualmente, lo que justifica diferir el flujo formal a sesión dedicada.
 
 ### Modo express sin login (sesión 10)
 
@@ -526,6 +536,9 @@ Si durante una sesión Claude usa una palabra (ej: "orden", "paso", "candado") y
 ### 16. Aclarar vocabulario ambiguo antes de aplicar regla #13
 Sesión 12 trajo una variante de la regla #15: cuando Bryam usa un término que **podría** ser un descubrimiento conceptual nuevo o **podría** ser un malentendido de vocabulario, primero pedir aclaración con preguntas concretas (ej: "¿es X componente nuevo, o te referís a Y elemento existente?"), no aplicar regla #13 inmediatamente. Aplicar regla #13 sin aclarar genera **falsa contradicción**: pausar decisiones que en realidad estaban bien. Caso real sesión 12: Bryam dijo "barra de procesados", Claude lo interpretó como componente nuevo, declaró "regla #13 → pausar". En realidad era un elemento dentro de la card que ya existía con otro nombre. Bastaba con preguntar.
 
+### 17. Iteraciones repetidas = señal de procesamiento incompleto en frío
+Si un componente necesita 6+ iteraciones de mockup en una sola sesión para llegar a estilo aprobado, eso es señal de que el componente requiere procesamiento en frío en sesión dedicada. La card de Mis órdenes pasó por 8 iteraciones en sesión 13. Llegamos a buen puerto pero el patrón es marcador de fatiga. En sesiones futuras: si una card o componente importante lleva 4+ iteraciones, frenar y proponer corte para retomar con cabeza fresca, en lugar de seguir iterando hasta cerrar a fuerza de voluntad.
+
 ---
 
 ## Decisiones de producto firmes (no se reabren)
@@ -603,7 +616,7 @@ Sesión 12 trajo una variante de la regla #15: cuando Bryam usa un término que 
 
 ### Paso 1 cliente — decisiones de sesión 10 + actualización sesión 11
 
-**8 de 8 open questions cerradas (la #5 cerrada en concepto en sesión 11).** Spec `paso-1-precio.md` v1.1 sigue en vigencia para el contenido de pills, card estimado y decisiones #1-#8. Lo que cambia en sesión 13 (no 12 como se planeó originalmente) es su "envoltorio": pasa de ser "spec de la pantalla paso 1" a ser "spec del panel 1 dentro de la pantalla principal" con las 8 piezas formales.
+**8 de 8 open questions cerradas (la #5 cerrada en concepto en sesión 11).** El contenido (pills, card estimado, decisiones #1-#8) se trasladó en sesión 13 a `docs/specs/cliente/panel-1-metodo-de-pago.md` v2.0 (reemplaza a `paso-1-precio.md` v1.1, deprecada y eliminada del repo). El "envoltorio" cambió: pasa de ser "spec de la pantalla paso 1" a ser "spec del panel 1 dentro de la pantalla principal" con las 8 piezas formales.
 
 - **#1 Detección de país:** preselección desde **perfil del cliente registrado**. NO se usa IP en el modo con login. Cloudflare `cf-ipcountry` queda reservado para el "modo express sin login" futuro (input crudo separado).
 - **#2 Tasa de cambio USDT → moneda local:** **manual desde Centro de configuración** (sub-sección "Tasa de cambio manual"). NO se usa fuente externa (CoinGecko, Binance API, etc. descartadas). Cuando admin actualiza la tasa, el cliente que está mirando paso 1 ve el monto cambiar en vivo.
@@ -640,6 +653,42 @@ Las decisiones detalladas viven en `docs/specs/cliente/pantalla-principal-client
 - Actualización en vivo: solo SSE automático, sin botón manual.
 - Login previo confirmado, sin onboarding, mensaje vacío simple para clientes sin órdenes.
 - **Redirector v2.5 rediseñado:** descarga directa, instalador genérico, descarga libre, persistente en panel 4 en TODOS los estados. Texto del botón: "Descargar Redirector v2.5". Reemplaza al modelo viejo de "envío por WhatsApp".
+
+### Pantalla principal cliente — decisiones de sesión 13 (specs panel 1, panel 2, Mis órdenes)
+
+Las decisiones detalladas viven en los 3 archivos nuevos. Resumen ejecutivo:
+
+**Panel 1 (Método de pago):**
+- Reescribe `paso-1-precio.md` v1.1 como spec de panel dentro de pantalla principal.
+- Sin botón Continuar.
+- Pills con banderas circulares y border-radius completo.
+- Orden nuevo: Perú · USDT · México (fila 1), Colombia · Chile (fila 2).
+- Tooltip pill desactivada → cajón amarillo dentro de la card oscura, solo al click.
+- Cajones amarillos: cambio de tasa dura 15s, USDT pausado dura 4s.
+- Si dos cajones se cruzan: prevalece el primero.
+- Panel congelado: pierde clicks sin cambio visual.
+
+**Panel 2 (Solicitud):**
+- Cantidad por defecto 2, mínimo 1, máximo 10.
+- Stepper editable a mano (cliente puede tipear).
+- Cap automático a 10 + aviso verde de WhatsApp si supera, dura 15s.
+- 5 modelos no soportados: A3, A3X, A2, Redmi Note 12S, A5 + codenames.
+- Validación de modelo nunca bloquea.
+
+**Mis órdenes:**
+- Card unificada para 1 y N equipos (mismo patrón siempre).
+- Sin barra de procesados general; en su lugar lista de equipos individuales.
+- 4 estados por equipo: Pendiente, Esperando técnico, En proceso, Finalizado.
+- Botón "Equipo listo" en cada equipo Pendiente.
+- Botón "Cancelar este equipo" enmarcado en cada equipo Pendiente.
+- Sin botón "Abortar proceso" general; menú 3 puntitos al pie con "Abortar pedido".
+- Cuando todo finaliza: 3 puntitos desaparecen + Recibo se activa.
+- Bandera del país en header como decoración.
+- Sin conversión a USDT en el header.
+- Modal de abortar: "Te contactamos por WhatsApp para procesar el reembolso. No es reversible."
+- Modal de historial: search + paginación + cards compactas.
+- Estado vacío: "Aún no tenés órdenes. Tu primera orden aparecerá acá."
+- Banner ámbar arriba si SSE se cae.
 
 ### Centro de configuración (panel admin) — spec futura sesión 10, ampliada sesión 12
 
@@ -699,7 +748,7 @@ Estas piezas van a la spec del panel operador (sesión 14+).
 
 ### `docs/specs/`
 - **`PLAN.md`** — plan estratégico de 7 specs en 3 fases. Versión actual: v1.1.
-- **`HANDOFF.md`** — este archivo. Bridge entre sesiones. **Versión actual: v1.9.**
+- **`HANDOFF.md`** — este archivo. Bridge entre sesiones. **Versión actual: v1.10.**
 - **`audit-template.md`** — template para auditar el repo con Claude Code.
 - **`_template-prompt-claude-code.md`** — templates obligatorios para prompts a Claude Code.
 - **`_brand-tokens-pendiente.md`** — placeholder para sesión de polish visual con logo.
@@ -707,7 +756,9 @@ Estas piezas van a la spec del panel operador (sesión 14+).
 
 ### `docs/specs/cliente/`
 - **`pantalla-principal-cliente.md`** — modelo de pantalla principal cliente con 4 paneles paralelos + Mis órdenes. **Versión actual: v1.0 (sesión 12).** 10 open questions cerradas. NO es spec con las 8 piezas todavía — la spec formal con mockup HTML standalone, estados, edge cases, responsive, comportamiento, datos y acceptance criteria se desarrolla en sesiones 13-14.
-- **`paso-1-precio.md`** — spec original del paso 1 cliente. **Versión actual: v1.1.** 8 de 8 open questions cerradas. **Pendiente reescribirla en sesión 13** como "spec del panel 1" dentro de la pantalla principal con las 8 piezas formales. El contenido (pills, card estimado, decisiones #1-#8) sigue siendo válido; cambia el envoltorio.
+- **`panel-1-metodo-de-pago.md`** — spec del panel 1 (Método de pago) dentro de la pantalla principal cliente. **Versión actual: v2.0 (sesión 13).** Reemplaza a `paso-1-precio.md` v1.1 (deprecada y eliminada del repo). 8 piezas formales completas. 3 OQ-residuales cerradas en la misma sesión.
+- **`panel-2-solicitud.md`** — spec del panel 2 (Solicitud) dentro de la pantalla principal cliente. **Versión actual: v1.0 (sesión 13).** 8 piezas formales completas. 2 OQ-residuales abiertas (comportamiento del aviso si cliente sube/baja cantidad varias veces, codenames blue/water ausentes del catálogo backend).
+- **`mis-ordenes.md`** — spec de la zona "Mis órdenes" debajo de los 4 paneles paralelos. **Versión actual: v1.0 (sesión 13).** 8 piezas formales completas. 7 OQ-residuales abiertas para sesión 14+ y para spec dedicada de política de reembolso. Cambios importantes respecto a `pantalla-principal-cliente.md` v1.0: card unificada para 1 y N equipos, 4 estados visibles por equipo, mecánica "Equipo listo" + "Cancelar este equipo" individual.
 - **`mockups/paso-1-precio.html`** — mockup HTML standalone responsive del paso 1. **Pendiente actualización** con 2 estados nuevos (pill desactivada con mensaje custom + banner amarillo de tasa cambiada). Sesión chica futura antes de implementación.
 - **`mockups/pantalla-principal-cliente.html`** — pendiente. Crear en sesión 14 a partir de los 2 mockups que Bryam aportó en sesión 11 + las decisiones de sesión 12 (Redirector descarga directa, "Equipo conectado", composición de card adaptativa, etc.).
 
@@ -740,12 +791,12 @@ Estas piezas van a la spec del panel operador (sesión 14+).
 
 ### Sesión 13 (próxima)
 
-**Foco:** spec formal del panel 1 (a partir de `paso-1-precio.md` v1.1, ajustada al marco de pantalla principal con las 8 piezas) + spec del panel 2 (cantidad de equipos + modelo opcional) + spec de Mis órdenes (cards, modal de historial, abortar proceso).
+**Foco:** spec formal del panel 1 (a partir de `panel-1-metodo-de-pago.md` v2.0, que reemplaza a `paso-1-precio.md` v1.1, deprecada) + spec del panel 2 (cantidad de equipos + modelo opcional) + spec de Mis órdenes (cards, modal de historial, abortar proceso).
 
 **Procedimiento sugerido:**
 
 1. Releer `pantalla-principal-cliente.md` v1.0 y validar que sigue reflejando el modelo mental de Bryam.
-2. Reescribir `paso-1-precio.md` v1.1 → spec del panel 1 v1.2 con las 8 piezas formales (mockup, estados, edge cases, responsive, comportamiento, datos, acceptance criteria, open questions).
+2. Reescribir el panel 1 → `panel-1-metodo-de-pago.md` v2.0 (que reemplaza a `paso-1-precio.md` v1.1, deprecada) con las 8 piezas formales (mockup, estados, edge cases, responsive, comportamiento, datos, acceptance criteria, open questions).
 3. Spec del panel 2 con las 8 piezas.
 4. Spec de Mis órdenes con las 8 piezas (incluye comportamiento del modal de historial, búsqueda interna, abortar proceso).
 5. Esbozar al menos en formato de placeholder las sub-secciones del Centro de configuración que el panel 1 consume: "Tasa de cambio manual", "Métodos de pago", "Costo del servicio".
@@ -980,6 +1031,16 @@ Si no usa esa frase, recordásela vos antes de avanzar. Bryam puede agregar **re
   - **Reglas y trampas nuevas:** trampa #14 (interpretar de menos antes de aplicar regla de pausa), regla #16 (aclarar vocabulario ambiguo antes de aplicar regla #13).
   - **Archivo actualizado:** `docs/specs/cliente/pantalla-principal-cliente.md` **v1.0** con todas las decisiones integradas.
   - **HANDOFF v1.9.**
+- **Sesión 13 (cerrada):**
+  - 3 specs formales con las 8 piezas entregadas: panel 1, panel 2 y Mis órdenes. Sesión enteramente de spec/diseño, sin código.
+  - **Panel 1 (Método de pago):** archivo nuevo `docs/specs/cliente/panel-1-metodo-de-pago.md` v2.0 que reemplaza al viejo `paso-1-precio.md` v1.1. Cambios principales: sin botón Continuar, sin numeración del header, pills con banderas circulares, pills con border-radius completo, orden nuevo (Perú/USDT/México arriba, Colombia/Chile abajo), sin candado visible, tooltip de pill desactivada se mueve a cajón amarillo dentro de la card oscura (mismo lugar que cambio de tasa), tooltip aparece solo al click (no al hover), banner cambio de tasa dura 15s, banner USDT pausado dura 4s. 3 OQ-residuales cerradas en la misma sesión: prevalece el primer cajón amarillo cuando dos coinciden, panel congelado pierde clicks sin cambio visual, mensaje default "No disponible temporalmente" se mantiene.
+  - **Panel 2 (Solicitud):** archivo nuevo `docs/specs/cliente/panel-2-solicitud.md` v1.0. Decisiones nuevas: cantidad por defecto 2, mínimo 1, máximo 10. Stepper -/n/+ con input numérico editable a mano (cliente puede tipear directo, no solo botones). Si cliente tipea >10, sistema lo cap a 10 + muestra aviso verde "Para más de 10 equipos, contactanos por WhatsApp" con ícono WhatsApp, dura 15s o desaparece si baja a 10. Si tipea <1 o vacío, sistema lo lleva a 1. Botón + se desactiva al llegar a 10. Solo dígitos aceptados. Validación de modelo opcional con 3 estados (apto: borde verde + check; no soportado: borde rojo + cajón amarillo "Este modelo no es soportado"; no reconocido: borde rojo + cajón amarillo "No reconocemos el modelo, revisalo o dejalo vacío"). 5 modelos no soportados: A3, A3X, A2, Redmi Note 12S, A5 (más sus codenames internos: blue, klein, water, serenity, sea/ocean — los dos primeros pendientes de agregar al catálogo backend, OQ-R3 del panel 2). Validación nunca bloquea. Cajones duran 15s o desaparecen si cliente corrige. 2 OQ-residuales abiertas: comportamiento si cliente sube/baja cantidad varias veces, codenames blue/water ausentes del catálogo backend.
+  - **Mis órdenes:** archivo nuevo `docs/specs/cliente/mis-ordenes.md` v1.0. Cambios importantes respecto a sesión 12 (`pantalla-principal-cliente.md`): card unificada para 1 y N equipos (no más adaptativa), sin barra de procesados general, sin Registro de actividad expandible, lista de equipos individuales con 4 estados visibles por equipo (Pendiente, Esperando técnico, En proceso, Finalizado). Mecánica nueva: el equipo 1 se asume conectado al apretar "Equipo conectado" del panel 4; los equipos 2..N empiezan en Pendiente y el cliente debe apretar "Equipo listo" después de conectar físicamente cada uno. Botón "Cancelar este equipo" enmarcado en cada equipo Pendiente para cancelación individual. Sin botón "Abortar proceso" general cuando hay 2+ equipos. Menú 3 puntitos al pie con la opción "Abortar pedido" (que internamente solicita reembolso). Bandera del país en el header como decoración visual. Sin conversión a USDT en el header (redundante). Cuando toda la orden finaliza, los 3 puntitos desaparecen y el botón "Recibo de operación" se activa. 7 OQ-residuales abiertas para sesión 14+ y para spec dedicada de política de reembolso.
+  - **Decisiones cruzadas registradas:** spec del panel 4 sin cambios (botón "Equipo conectado" sigue creando la orden); spec del panel operador con cambio importante (debe procesar equipos individuales dentro del pedido, no el pedido como block); spec de política de reembolso sigue pausada con preguntas ampliadas (cancelación individual de equipo, reembolso parcial, datos bancarios del cliente, comprobante del operador subido, etc.).
+  - **Aplicaciones correctas de regla #13 (descubrimientos conceptuales):** durante el diseño de Mis órdenes aparecieron tres descubrimientos grandes (lista de equipos en lugar de barra, mecánica de "Equipo listo" + "Cancelar este equipo" individual, flujo completo de reembolso). Los dos primeros se procesaron en sesión integrando las decisiones; el tercero se frenó explícitamente con regla #13 + trampa #12 ("mockup conceptual = spec lista") porque la política de reembolso está pausada.
+  - **Aplicación correcta de trampa #11 (decisión nueva al final de sesión cansado):** al cierre, cuando Bryam abrió el flujo completo de reembolso (campo, comprobante del operador, cliente lo ve), Claude frenó el diseño UI sobre proceso no definido, ofreció dejar la opción "Pedir reembolso" registrada como pendiente y manejarla manualmente por WhatsApp en versión inicial.
+  - **Trampa nueva identificada:** "iteraciones repetidas sobre un mismo componente al final de sesión = señal de que el componente necesita procesamiento en frío en sesión dedicada". Aparece como trampa #15 propuesta. La card de Mis órdenes pasó por 8 iteraciones en una sola sesión, lo que es señal de que el componente requería más tiempo de gestación que el disponible al final de sesión 13. Las iteraciones llegaron a buen puerto pero el patrón es marcador de fatiga. Quedó capturado como regla #17 nueva en "Cómo trabajamos".
+  - **HANDOFF v1.10.**
 
 ---
 
