@@ -82,7 +82,7 @@
 }
 
 .panel-dark-card-amount {
-  font-size: 28px;
+  font-size: 22px;
   font-weight: 500;
   color: white;
   line-height: 1;
@@ -163,7 +163,7 @@
 .flow-payment-pill {
   border: 0.5px solid var(--color-border-tertiary);
   background: white;
-  padding: 9px 8px;
+  padding: 10px 14px;
   border-radius: 999px;
   display: inline-flex;
   align-items: center;
