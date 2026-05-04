@@ -187,6 +187,8 @@ Después del estado "Subiendo", la dropzone se reemplaza por una vista del compr
 
 **Botón "Reemplazar":** mismo comportamiento que "Subir otro" — abre el selector de archivos del SO.
 
+**Estado "Rechazado" descongela los paneles 1-2-3.** En estado "Rechazado", los paneles 1, 2 y 3 quedan DESCONGELADOS. El cliente puede cambiar método de pago (pill) y cantidad de equipos antes de subir el nuevo comprobante. Los paneles se vuelven a congelar cuando el nuevo comprobante entra al estado "Subiendo" (consistente con spec §3 edge 11).
+
 ---
 
 ## 3. Edge cases

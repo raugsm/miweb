@@ -379,6 +379,15 @@
   color: var(--color-text-primary);
   flex: 1;
   min-width: 0;
+  /* Sub-commit 15b.2-ter Bug B: 02-shell-brand-access.css aplica
+     overflow-wrap: anywhere a .request-card (ancestor del panel 3). Sin
+     anular esa herencia, el texto del label rompe carácter por carácter
+     cuando el espacio es reducido. Forzamos nowrap + ellipsis por seguridad. */
+  overflow-wrap: normal;
+  word-break: normal;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .panel-3-proof-action {

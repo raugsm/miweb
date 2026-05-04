@@ -372,8 +372,11 @@ export function wireEvents() {
       } else {
         await submitOrderWithProofs(fileList);
       }
-      // El render reactivo de updatePanel3 (vía SSE/updateQuote) reasigna
-      // state="uploaded" según la orden recién creada/actualizada.
+      // Sub-commit 15b.2-ter Bug A: limpiar el "uploading" transitorio para
+      // que renderProofBlock pueda pintar el estado lógico (uploaded/rejected)
+      // según la orden ya actualizada en state.customer.orders.
+      setPanel3ProofState("default");
+      updateQuote();
     } catch (error) {
       // Errores de validación (tipo/tamaño) muestran cajón inline 4s y
       // vuelven a default. Otros errores (red/backend) usan flow de #orderMessage.

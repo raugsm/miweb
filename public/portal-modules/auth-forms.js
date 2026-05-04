@@ -253,7 +253,11 @@ function renderFlowCta(flowState) {
 }
 
 function applyStepLocks(flowState) {
-  const lock = flowState !== "draft";
+  // Sub-commit 15b.2-ter Bug C: estado "rejected" desbloquea paneles 1-2-3.
+  // Spec panel-3 §3 edge 11: "Paneles 1-2-3 se vuelven a congelar [cuando el
+  // nuevo comprobante entra a uploading]" → durante el rechazo NO están
+  // congelados, el cliente puede cambiar pill/cantidad antes de re-subir.
+  const lock = flowState !== "draft" && flowState !== "rejected";
   // Sub-commit 15a.1: selectores actualizados a paneles nuevos. Paneles 1-2-3
   // se congelan cuando hay orden in-flight (mismo comportamiento que antes —
   // mecánica congelar/descongelar de la spec pantalla-principal-cliente.md
