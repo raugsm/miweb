@@ -1,6 +1,6 @@
 # Panel 4 — Conexión
 
-**Versión:** 1.0 · **Fecha:** 4 de mayo 2026 · **Estado:** spec formal con las 8 piezas. Lista para implementación pendiente solo del archivo HTML standalone consolidado de la pantalla principal (entregado en la misma sesión 14) y de la captura real del Redirector que ya fue compartida por Bryam en sesión 14 y queda registrada para uso en el modal "¿Dónde pegar estos códigos?".
+**Versión:** 1.1 · **Fecha:** 4 de mayo 2026 · **Estado:** spec formal con las 8 piezas. v1.1 alinea el botón "Equipo conectado" con la decisión D1 del sub-commit 15b.2 (la orden nace en Panel 3 al subir comprobante, no al apretar este botón). Sin cambio visual para el cliente.
 
 **Reemplaza a:** no había spec previa formal. Hereda decisiones del HANDOFF línea 594 ("paso 4: SIN banner pago aprobado, mini-Redirector NO inline, va en bottom sheet por botón ¿Dónde pego estos datos?, datos con badges 1° azul / 2° verde matcheando los campos del Redirector") y del modelo de pantalla principal (sesiones 11-12-13).
 
@@ -88,6 +88,8 @@ Los 4 estados se ven idénticos visualmente. Cambia el contexto en otros paneles
 4. Panel 4 transiciona al estado 4 (orden activa).
 
 **Por qué este botón es el corazón del flujo:** el HANDOFF y las specs tienen una decisión conceptual firme (sesión 11, ratificada sesión 12 en OQ-4): *"Una orden nace recién cuando el cliente aprieta el botón 'Equipo conectado' del panel 4 con comprobante validado."* Antes de eso lo que existe es un "pedido en armado". Esto define que la sección Mis órdenes muestra solo entidades que cruzaron ese umbral.
+
+> **Decisión 15c.1:** el botón "Equipo conectado" usa el endpoint existente `POST /api/portal/orders/:id/notify-connected` (la orden ya nace en Panel 3 al subir comprobante, decisión D1 de sub-commit 15b.2). El endpoint `POST /api/portal/orders/create-from-validated-payment` mencionado en v1.0 NO se implementa. Visualmente el efecto para el cliente es el mismo: la card aparece en Mis órdenes recién al apretar "Equipo conectado".
 
 ### 2.4 Estado 4 — Orden activa (post-clic)
 
@@ -418,6 +420,8 @@ Descarga directa, sin POST. Si querés tracking, agregar evento de analytics opc
 
 La captura `1777861729916_image.png` fue aportada por Bryam en sesión 14. Cuando salga una versión nueva del Redirector (v2.6, v2.7, etc.), la captura debe actualizarse. Pendiente: definir si la imagen vive en el repo (estática) o vive en Centro de configuración (admin la sube/reemplaza). Decisión provisional: vive en repo en `public/images/redirector-screenshot.png`. Cambia con cada versión del Redirector vía PR del repo.
 
+**Estado en sub-commit 15c.1:** la imagen real `1777861729916_image.png` NO está subida al repo todavía. El modal `#wherePasteDialog` usa una recreación SVG aproximada del Redirector v2.5.0.3540 (ver `public/portal.html` y `.where-paste-mock-*` en `05-frp-flow.css`). La imagen real se sube en sub-commit 15c.2 cuando Bryam la aporte; el mock SVG se reemplaza por `<img src="/images/redirector-screenshot.png">` sin tocar el resto del modal.
+
 **OQ-R2 — Formato compacto vs completo del Technician ID y Código.**
 
 Decisión sesión 14: visualmente puede mostrarse compacto (sin espacios / año abreviado) si el ancho del panel lo requiere; al copiar, se copia el formato completo. **Pendiente:** definir umbral exacto de ancho a partir del cual se compacta (ej: <380px panel → compacto, ≥380px → completo). Confirmar en HTML standalone (sesión 14 mockup consolidado).
@@ -482,6 +486,7 @@ Esta spec del panel 4 cierra el estado 2 reabierto en sesión 14 (OQ-8). La spec
 
 ## Changelog
 
+- **panel-4-conexion.md v1.1** (2026-05-04, sesión 15c.1) — el botón "Equipo conectado" usa endpoint existente `POST /api/portal/orders/:id/notify-connected` en lugar de crear endpoint nuevo `create-from-validated-payment`. Reflejo de decisión D1 de 15b.2 (orden nace en Panel 3, no en Panel 4). El efecto visual para el cliente NO cambia. Sub-commit 15c.1 también deja al Panel 4 SIEMPRE visible en la pantalla principal (antes el `<article>` se ocultaba hasta que la orden estuviera validada — ahora muestra como mínimo el botón Descargar Redirector). Ver §2.3 (estado 3) y OQ-R1 (estado de la captura del Redirector) para detalles.
 - **panel-4-conexion.md v1.0** (2026-05-04, sesión 14) — Spec inicial completa con las 8 piezas. Decisiones principales:
   - Header "Conexión" (no "Conectar equipo" ni numeración).
   - Botón "Descargar Redirector v2.5" persistente en TODOS los estados (decisión OQ-10 sesión 12 ratificada).

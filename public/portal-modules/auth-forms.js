@@ -7,24 +7,15 @@ import {
   renderPaymentPills,
   updateQuote,
 } from "./payments.js";
-import { stepGuideMarkup } from "./connection.js";
-import { startTechnicianPolling, stopTechnicianPolling, wireCopyButtonsWithin } from "./technician.js";
-import { activeOrderForFlow, deriveFlowState } from "./flow-state.js";
+import { startTechnicianPolling, stopTechnicianPolling } from "./technician.js";
+import { deriveFlowState } from "./flow-state.js";
 import { resetPaso2InactivityTimer } from "./paso2-timer.js";
-import { refreshPaso4Banner, startPaso4ReadyMonitor, stopPaso4ReadyMonitor, wirePaso4BannerActions } from "./paso4-timer.js";
 import { state } from "./state.js";
 
-export function renderStaticStepGuide() {
-  const container = document.querySelector("#stepGuide");
-  if (!container) return;
-  container.innerHTML = stepGuideMarkup({
-    order: activeOrderForFlow(state.customer),
-    technicianState: state.activeTechnician,
-    customerName: state.customer?.client?.name || "",
-    customerModuleUrl: state.catalog?.customerModuleUrl || state.customerModuleUrl || "",
-  });
-  wireCopyButtonsWithin(container);
-}
+// Sub-commit 15c.1: renderStaticStepGuide eliminado (vivía sobre #stepGuide
+// que era el contenedor del Panel 4 viejo). El Panel 4 nuevo tiene su propio
+// HTML estático en portal.html y se rellena dinámicamente vía updatePanel4()
+// desde panel-4-connection.js.
 
 export function setTab(tab) {
   state.activeTab = tab;
@@ -177,8 +168,6 @@ export function renderCustomer() {
   if (!logged) {
     stopOrdersLive();
     stopTechnicianPolling();
-    stopPaso4ReadyMonitor();
-    renderStaticStepGuide();
     return;
   }
   $("#clientTitle").textContent = `${customer.client.name}`;
@@ -201,15 +190,12 @@ export function renderCustomer() {
   // PR-2a-final.bundle2 item 2: arrancar/refrescar el timer de inactividad
   // paso 2. Auto-stop interno cuando hay orden in-flight (paso 3+).
   resetPaso2InactivityTimer();
-  // PR-2a-final.bundle2 item 3: monitor del banner "¿Listo para conectar?"
-  // (2 min post-aprobacion sin customerConnectedAt).
-  refreshPaso4Banner();
-  startPaso4ReadyMonitor();
+  // Sub-commit 15c.1: el banner "¿Listo para conectar?" 2 min post-aprobación
+  // (paso4-timer.js) fue eliminado. Sustituido por el sistema de 3 fases / 5
+  // min implementado en sesiones 15a/15b dentro del Panel 3.
   renderOrders(customer.orders || []);
   startOrdersLive();
-  renderStaticStepGuide();
   startTechnicianPolling(() => {
-    renderStaticStepGuide();
     renderOrders(state.customer?.orders || []);
   });
 }
@@ -227,29 +213,13 @@ function applyFlowState(customer) {
   }
   state.lastFlowState = flowState;
 
-  renderFlowCta(flowState);
   applyStepLocks(flowState);
-  applyStep4Visibility(customer);
-}
-
-// QUE: pinta el CTA del paso 4 (boton "Equipo conectado") cuando el cliente entra
-// al paso 4 con orden en preparacion/lista. En estados previos no hay CTA — el
-// dropzone del paso 3 es la unica accion pendiente, y el paso 4 mismo esta oculto
-// (ver applyStep4Visibility).
-// POR QUE: FINAL §15 elimina el boton "Crear solicitud" — la orden se crea al
-// subir comprobante. La verificacion de email vive en el dropzone (paso 3).
-function renderFlowCta(flowState) {
-  const cta = document.querySelector("#orderForm .connection-actions");
-  if (!cta) return;
-  // PR-2a-final.fase4 / fix BUG B: el boton "Equipo conectado" aparece SOLO
-  // cuando flowState === "awaiting_connection" (orden en EN_PREPARACION sin
-  // customerConnectedAt). Antes se pintaba en "connected" generico, pero la
-  // taxonomia anterior no diferenciaba pre/post-aprobacion.
-  if (flowState === "awaiting_connection") {
-    cta.innerHTML = '<button id="orderSubmitButton" class="flow-cta-connected" type="button" data-flow-action="notify-connected">Equipo conectado</button>';
-    return;
-  }
-  cta.innerHTML = "";
+  // Sub-commit 15c.1: applyStep4Visibility y renderFlowCta eliminadas. El
+  // botón "Equipo conectado" ahora vive estático dentro del Panel 4 nuevo
+  // (#panel4EquipoConectado) y su visibilidad se controla via [data-state]
+  // del Panel 4 desde panel-4-connection.js#updatePanel4. El Panel 4 ya no
+  // se oculta en estados previos al validado — siempre visible mostrando
+  // como mínimo el botón Descargar Redirector.
 }
 
 function applyStepLocks(flowState) {
@@ -268,16 +238,7 @@ function applyStepLocks(flowState) {
   });
 }
 
-// QUE: muestra el paso 4 (Conexion) solo cuando el pago fue VALIDADO por un
-// operador, no apenas se subio el comprobante.
-// POR QUE: FINAL §7 / bug 3 del PR-0 — antes el paso 4 estaba siempre visible con
-// datos pre-llenados antes de pagar. Lo correcto es ocultarlo hasta EN_PREPARACION
-// (operador aprobo) y hasta que la orden quede dentro de la ventana de conexion.
-function applyStep4Visibility(customer) {
-  const article = document.querySelector(".flow-connect-card");
-  if (!article) return;
-  const validatedOrder = (customer?.orders || []).find((order) => (
-    ["EN_PREPARACION", "LISTO_PARA_CONEXION", "EN_PROCESO"].includes(order.publicStatus)
-  ));
-  article.hidden = !validatedOrder;
-}
+// Sub-commit 15c.1: applyStep4Visibility eliminada. El Panel 4 nuevo es
+// SIEMPRE visible (como cualquier otro panel del .panels-row) y muestra
+// distinto contenido según data-state. La transición a estado "validado"
+// que antes activaba el panel ahora se traduce en data-state="3".

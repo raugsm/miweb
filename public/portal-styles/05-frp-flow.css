@@ -765,115 +765,14 @@
   color: #78350f;
 }
 
-/* PR-2a-final.fase4 — Paso 4 al spec FINAL §7. Banner verde + Redirector
-   download + Technician ID + Código del proceso + boton "¿Dónde pegar?". */
-.paso4-confirm-banner {
-  padding: 10px 12px;
-  border-radius: 8px;
-  background: #ecfdf5;
-  border-left: 3px solid #10b981;
-  color: #065f46;
-  font-size: 13px;
-  margin-bottom: 12px;
-}
-.paso4-download {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 4px;
-  margin-bottom: 12px;
-}
-.redirector-download-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 12px 16px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #2563eb, #1d4ed8);
-  color: #fff;
-  font-weight: 800;
-  font-size: 14px;
-  text-decoration: none;
-  box-shadow: 0 8px 22px rgba(29, 78, 216, 0.28);
-}
-.redirector-download-btn:hover { filter: brightness(1.05); }
-.redirector-download-meta {
-  text-align: center;
-  font-size: 11px;
-  color: #6b7280;
-}
-.paso4-credentials { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
-.paso4-cred-row {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-}
-.paso4-cred-row > small {
-  font-size: 11px;
-  font-weight: 700;
-  color: #475569;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-.paso4-where-paste-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 8px 14px;
-  border: 1px dashed #93c5fd;
-  background: #fff;
-  border-radius: 8px;
-  color: #1d4ed8;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  margin-bottom: 12px;
-}
-.paso4-where-paste-btn:hover { background: #eef4fd; }
-.paso4-help-link { margin: 0; text-align: center; font-size: 11px; }
-.paso4-help-link a { color: #1d4ed8; text-decoration: none; }
-.paso4-help-link a:hover { text-decoration: underline; }
-
-/* PR-2a-final.bundle2 item 3 — banner "¿Listo para conectar?" 2min post-aprobacion. */
-.flow-paso4-ready-banner {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 10px 0;
-  padding: 12px 14px;
-  border-radius: 8px;
-  background: #eff6ff;
-  border-left: 3px solid #1d4ed8;
-  color: #1e3a8a;
-  font-size: 13px;
-  line-height: 1.45;
-}
-.flow-paso4-ready-banner[hidden] { display: none; }
-.flow-paso4-ready-banner strong { font-size: 13px; font-weight: 700; }
-.flow-paso4-ready-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 4px;
-}
-.flow-paso4-ready-actions .ghost {
-  display: inline-flex;
-  align-items: center;
-  padding: 6px 12px;
-  border: 1px solid #93c5fd;
-  background: #fff;
-  color: #1d4ed8;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  text-decoration: none;
-}
-.flow-paso4-ready-actions .ghost:hover { background: #eef4fd; }
+/* Sub-commit 15c.1: Paso 4 viejo eliminado. Selectores que vivían en
+   .legacy-step-4 / connection.js#stepGuideMarkup (HTML eliminado en 15c.1)
+   y ya no aplican: .paso4-confirm-banner, .paso4-download,
+   .redirector-download-btn (+ :hover, .redirector-download-meta),
+   .paso4-credentials, .paso4-cred-row (+ > small), .paso4-where-paste-btn
+   (+ :hover), .paso4-help-link (+ a, a:hover), .flow-paso4-ready-banner
+   (+ [hidden], strong), .flow-paso4-ready-actions (+ .ghost, :hover).
+   Todos reemplazados por .panel-4-* en 14-panel-4.css. */
 
 /* Modal "¿Dónde pegar?" — recreación aproximada SVG hasta que el usuario
    suba el screenshot real del Redirector v2.5.0.3540. */
@@ -1027,42 +926,9 @@
   grid-column: 1;
 }
 
-.step-guide {
-  display: grid;
-  gap: 12px;
-  padding: 12px;
-  margin-top: 8px;
-  border: 1px solid #d5dfef;
-  border-radius: 10px;
-  background: #fbfdff;
-}
-
-.step-row {
-  display: grid;
-  grid-template-columns: 32px 1fr;
-  gap: 10px;
-  align-items: start;
-}
-
-.step-row-number {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--accent, #2177f2);
-  color: #ffffff;
-  font-weight: 900;
-  font-size: 0.92rem;
-}
-
-.step-row-content {
-  display: grid;
-  gap: 6px;
-  color: var(--ink);
-  font-size: 0.92rem;
-  line-height: 1.4;
-}
+/* Sub-commit 15c.1: .step-guide, .step-row, .step-row-number, .step-row-content
+   eliminados — vivían en connection.js#stepGuideMarkup (legacy paso 4),
+   eliminado en 15c.1. Sin uso en HTML/JS actual. */
 
 .step-row-content strong {
   font-weight: 900;
@@ -1255,34 +1121,12 @@
    §1: "No hay banner amarillo 'Revisá pasos 1 y 2'". El nodo HTML y la
    función toggleProofWarning de auth-forms.js fueron eliminados. */
 
-/* QUE: estados del CTA del paso 4 cuando el flujo no esta en draft.
-   POR QUE: el boton Crear solicitud se reemplaza por un mensaje de espera (awaiting_proof)
-   o por un boton Equipo conectado (connected). Estilos discretos pero diferenciados. */
-.flow-cta-waiting {
-  display: grid;
-  place-items: center;
-  min-height: 40px;
-  padding: 10px 12px;
-  border: 1px solid #d5dfef;
-  border-radius: 8px;
-  background: #f6f8fc;
-  color: var(--muted);
-  font-weight: 800;
-  font-size: 0.92rem;
-  text-align: center;
-}
+/* Sub-commit 15c.1: .flow-cta-waiting eliminada — vivía dentro del paso 4
+   viejo y representaba el estado "awaiting_proof" como mensaje. El Panel 4
+   nuevo no lo usa; spec v1.1 dice que estados 0/1/2/5 sólo muestran botón
+   Descargar (sin mensaje de espera). */
 
-.flow-cta-connected {
-  min-height: 40px;
-  padding: 10px 16px;
-  border: 0;
-  border-radius: 8px;
-  background: #0f9f6e;
-  color: #ffffff;
-  font-weight: 900;
-  cursor: pointer;
-}
-
-.flow-cta-connected:hover {
-  filter: brightness(1.05);
-}
+/* Sub-commit 15c.1: .flow-cta-connected eliminada — el botón "Equipo conectado"
+   ahora vive en el Panel 4 nuevo como .panel-4-equipo-conectado-btn (estilos
+   en 14-panel-4.css). El selector legacy era inyectado por renderFlowCta()
+   que también fue eliminada. */

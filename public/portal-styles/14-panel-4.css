@@ -1,0 +1,216 @@
+/* ============================================================================
+   PANEL 4 — Conexión (sub-commit 15c.1)
+   ============================================================================
+   Spec docs/specs/cliente/panel-4-conexion.md v1.1 §1-§7.
+
+   El contenedor #panel4 usa data-state para controlar visibilidad y apariencia:
+     "0" / "1" / "2" / "5" : sólo botón Descargar centrado (estados idénticos).
+     "3"                   : botón "Equipo conectado" prominente azul + Descargar abajo.
+     "4"                   : cards Tech ID + Código + botón "¿Dónde pegar?" + Descargar abajo.
+
+   Sub-commit 15c.1 NO conecta SSE / descarga real / modal / POST. Eso va en
+   15c.2 / 15c.3 / 15c.4. Acá sólo estructura visual + Copiar.
+   ============================================================================ */
+
+.panel-4-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Botón "Descargar Redirector v2.5" — persistente en TODOS los estados.
+   Spec §2.1: background info, color info, border 0.5px info, ícono ⬇ izq. */
+.panel-4-download-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: var(--border-radius-md);
+  border: 0.5px solid var(--color-border-info);
+  background: var(--color-bg-info);
+  color: var(--color-text-info);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: filter 120ms ease;
+}
+.panel-4-download-btn:hover {
+  filter: brightness(0.97);
+}
+.panel-4-download-btn:focus-visible {
+  outline: 2px solid var(--color-border-info);
+  outline-offset: 2px;
+}
+.panel-4-download-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+}
+.panel-4-download-icon svg {
+  display: block;
+}
+
+/* Layout por estado — los sub-bloques se muestran/ocultan con [hidden] +
+   guards explícitos para evitar que display:flex sobrescriba (mismo patrón
+   profiláctico de 15b.1-bis / 15b.2-bis). */
+
+/* Estados 0/1/2/5: sólo botón Descargar centrado. El download-btn vive como
+   único hijo del .panel-4-content; flex column lo deja arriba pero el panel
+   tiene align-items via .panel base. Usamos justify-content para centrarlo
+   verticalmente en el alto disponible. */
+.panel-4-content[data-empty="true"] {
+  justify-content: center;
+  align-items: center;
+}
+.panel-4-content[data-empty="true"] .panel-4-download-btn {
+  width: auto;
+  min-width: 220px;
+}
+
+/* Estado 3 — botón "Equipo conectado" prominente azul.
+   Spec §2.3: background #185FA5, color blanco, padding 14-16px, font 14-16px. */
+.panel-4-equipo-conectado-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 16px 20px;
+  border-radius: var(--border-radius-md);
+  border: 0;
+  background: #185FA5;
+  color: #FFFFFF;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 120ms ease, transform 100ms ease;
+}
+.panel-4-equipo-conectado-btn:hover {
+  background: #1A6BBE;
+}
+.panel-4-equipo-conectado-btn:active {
+  transform: scale(0.99);
+}
+.panel-4-equipo-conectado-btn:focus-visible {
+  outline: 2px solid #185FA5;
+  outline-offset: 2px;
+}
+.panel-4-equipo-conectado-btn[hidden] { display: none; }
+
+/* Estado 4 — cards apiladas verticalmente con label + valor sombreado +
+   botón Copiar. Spec §2.4 + acceptance 17-20. */
+.panel-4-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.panel-4-cards[hidden] { display: none; }
+
+.panel-4-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.panel-4-card-label {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  font-weight: 400;
+  margin: 0;
+}
+
+.panel-4-card-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--color-bg-secondary);
+  border-radius: var(--border-radius-md);
+}
+
+.panel-4-card-value {
+  font-family: var(--font-mono, "SFMono-Regular", Menlo, Consolas, monospace);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: normal;
+  word-break: normal;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.panel-4-copy-btn {
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  border: 0.5px solid var(--color-border-secondary);
+  background: white;
+  color: var(--color-text-primary);
+  padding: 4px 10px;
+  border-radius: var(--border-radius-md);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 120ms ease;
+}
+.panel-4-copy-btn:hover {
+  background: var(--color-bg-secondary);
+}
+.panel-4-copy-btn.is-copied {
+  background: var(--color-bg-success);
+  color: var(--color-text-success);
+  border-color: var(--color-border-success);
+}
+
+/* Botón "¿Dónde pegar estos códigos?" — debajo de las cards en estado 4.
+   Spec §2.4 + §2.5 (botón secundario, abre el modal #wherePasteDialog). */
+.panel-4-where-paste-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: var(--border-radius-md);
+  border: 0.5px solid var(--color-border-secondary);
+  background: white;
+  color: var(--color-text-primary);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+.panel-4-where-paste-btn:hover {
+  background: var(--color-bg-secondary);
+}
+.panel-4-where-paste-btn[hidden] { display: none; }
+
+/* Visibilidad por data-state: el HTML mantiene todos los sub-bloques en el DOM
+   y los oculta/muestra según el estado. */
+.panel.panel-4 .panel-4-equipo-conectado-btn,
+.panel.panel-4 .panel-4-cards,
+.panel.panel-4 .panel-4-where-paste-btn {
+  display: none;
+}
+.panel.panel-4[data-state="3"] .panel-4-equipo-conectado-btn {
+  display: inline-flex;
+}
+.panel.panel-4[data-state="4"] .panel-4-cards,
+.panel.panel-4[data-state="4"] .panel-4-where-paste-btn {
+  display: flex;
+}
+
+/* Responsive — mobile reduce padding/sizes. Spec §4.1. */
+@media (max-width: 639.98px) {
+  .panel-4-equipo-conectado-btn { padding: 14px 16px; font-size: 14px; }
+  .panel-4-card-value { font-size: 12px; }
+  .panel-4-where-paste-btn { padding: 8px 10px; font-size: 12px; }
+  .panel-4-download-btn { padding: 9px 12px; font-size: 12px; }
+}

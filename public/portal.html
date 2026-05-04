@@ -265,23 +265,48 @@
                 </div>
               </article>
 
-              <!-- Panel 4 — Conexión (placeholder, sub-commit 15d). -->
-              <article class="panel panel-4 panel-placeholder flow-connect-card" data-panel="4" hidden>
+              <!-- Panel 4 — Conexión (sub-commit 15c.1).
+                   Spec docs/specs/cliente/panel-4-conexion.md v1.1 §1-§7.
+                   data-state controla apariencia: 0/1/2/5 = sólo Descargar
+                   centrado, 3 = botón "Equipo conectado" prominente azul,
+                   4 = cards Tech ID + Código + botón "¿Dónde pegar?". El
+                   botón Descargar es persistente en TODOS los estados. -->
+              <article class="panel panel-4" id="panel4" data-panel="4" data-state="0">
                 <h3 class="panel-title">Conexión</h3>
-                <p class="panel-placeholder-text">Pendiente sub-commit 15d.</p>
-                <div class="legacy-step-4">
-                  <div id="stepGuide" class="step-guide" data-step-guide-root="true" aria-label="Guia paso a paso de conexion">
-                    <div class="step-guide-empty">Cargando datos del tecnico activo...</div>
-                  </div>
-                  <div id="flowPaso4ReadyBanner" class="flow-paso4-ready-banner" hidden>
-                    <strong>🔧 ¿Listo para conectar?</strong>
-                    <span data-paso4-message></span>
-                    <div class="flow-paso4-ready-actions">
-                      <button type="button" class="ghost" data-paso4-action="dismiss">Ya estoy listo</button>
-                      <a class="ghost" data-paso4-action="whatsapp" target="_blank" rel="noopener">Necesito ayuda por WhatsApp</a>
+
+                <div class="panel-4-content" id="panel4Content">
+                  <button type="button" class="panel-4-equipo-conectado-btn" id="panel4EquipoConectado" data-flow-action="notify-connected" aria-label="Confirmar equipo conectado y crear orden">
+                    Equipo conectado
+                  </button>
+
+                  <div class="panel-4-cards" id="panel4Cards">
+                    <div class="panel-4-card">
+                      <p class="panel-4-card-label">Technician ID</p>
+                      <div class="panel-4-card-row">
+                        <span class="panel-4-card-value" id="panel4TechIdValue">—</span>
+                        <button type="button" class="panel-4-copy-btn" id="panel4TechIdCopy" data-copy-target="technician-id" aria-label="Copiar Technician ID">Copiar</button>
+                      </div>
+                    </div>
+
+                    <div class="panel-4-card">
+                      <p class="panel-4-card-label">Código del proceso</p>
+                      <div class="panel-4-card-row">
+                        <span class="panel-4-card-value" id="panel4OrderCodeValue">—</span>
+                        <button type="button" class="panel-4-copy-btn" id="panel4OrderCodeCopy" data-copy-target="order-code" aria-label="Copiar código del proceso">Copiar</button>
+                      </div>
                     </div>
                   </div>
-                  <div class="connection-actions"></div>
+
+                  <button type="button" class="panel-4-where-paste-btn" id="panel4WherePasteBtn" data-action="open-where-paste">
+                    ¿Dónde pegar estos códigos?
+                  </button>
+
+                  <button type="button" class="panel-4-download-btn" id="panel4DownloadBtn" aria-label="Descargar Redirector v2.5">
+                    <span class="panel-4-download-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" width="14" height="14"><path d="M12 4v12m0 0l-5-5m5 5l5-5M4 20h16" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </span>
+                    Descargar Redirector v2.5
+                  </button>
                 </div>
               </article>
             </div>

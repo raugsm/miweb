@@ -3,6 +3,7 @@ import { estimatePortalPrice, syncDetectedItems } from "./frp.js";
 import { money } from "./format.js";
 import { orderNeedsPaymentProof, sortOrdersForDisplay } from "./order-state.js";
 import { updatePanel3 } from "./panel-3-account.js";
+import { updatePanel4 } from "./panel-4-connection.js";
 import { state } from "./state.js";
 
 export function exchangeRateForPayment(payment = currentPayment()) {
@@ -416,6 +417,11 @@ export function updateQuote() {
   // card cuenta dinámica con toggles, dropzone + estados post-subida.
   // Spec panel-3-datos-de-pago.md v1.0 §1-§7.
   updatePanel3(context);
+
+  // Sub-commit 15c.1: render del panel 4 (Conexión) — botón Descargar
+  // persistente + estados 0-5 (idénticos en 0/1/2/5, prominente en 3,
+  // cards Tech ID + Código en 4). Spec panel-4-conexion.md v1.1 §1-§7.
+  updatePanel4(context);
 }
 
 export function paymentSelectedInDropdown(paymentCode) {

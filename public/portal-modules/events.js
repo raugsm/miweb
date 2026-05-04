@@ -32,6 +32,7 @@ import {
   togglePanel3AlternativeAccount,
   togglePanel3Qr,
 } from "./panel-3-account.js";
+import { handlePanel4Copy } from "./panel-4-connection.js";
 import { state } from "./state.js";
 
 // QUE: crea la orden y adjunta el comprobante en una sola request al endpoint
@@ -184,25 +185,35 @@ export function wireEvents() {
     event.preventDefault();
   });
 
-  // Click delegado para el CTA "Equipo conectado" del paso 4.
-  // applyFlowState() reemplaza el innerHTML de .connection-actions en cada render,
-  // asi que un listener directo se perderia; delegamos al form que es estable.
-  $("#orderForm")?.addEventListener("click", async (event) => {
+  // Click delegado para el botón "Equipo conectado" (#panel4EquipoConectado).
+  // Sub-commit 15c.1: el click es NO-OP por decisión explícita — la llamada a
+  // notifyEquipoConectado() se reconecta en 15c.4 cuando se cierre el wiring
+  // backend del Panel 4. El selector y data-flow-action quedan intactos para
+  // que la reactivación sea trivial. El listener delega al #orderForm que
+  // envuelve la .panels-row (el botón está dentro de .panel.panel-4 que es
+  // descendiente del form).
+  $("#orderForm")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-flow-action='notify-connected']");
     if (!button) return;
     event.preventDefault();
-    const order = activeOrderForFlow(state.customer);
-    if (!order) return;
-    const message = $("#orderMessage");
-    button.disabled = true;
-    setMessage(message, "Avisando al equipo tecnico...");
-    try {
-      await notifyEquipoConectado(order.id);
-      setMessage(message, "Aviso enviado al equipo tecnico.", "success");
-      renderCustomer();
-    } catch (error) {
-      setMessage(message, error.message, "error");
-      button.disabled = false;
+    // 15c.4 restaurará: const order = activeOrderForFlow(state.customer);
+    //                   await notifyEquipoConectado(order.id); ...
+  });
+
+  // Sub-commit 15c.1 — Panel 4 nuevo: botones Copiar (delegación por data-attr)
+  // y botón Descargar Redirector (no-op en 15c.1; se conecta en 15c.3 con la
+  // descarga real del .exe). Spec panel-4-conexion.md v1.1 §2.4 + §5.
+  $("#panel4")?.addEventListener("click", async (event) => {
+    if (!(event.target instanceof Element)) return;
+    const copyBtn = event.target.closest(".panel-4-copy-btn");
+    if (copyBtn) {
+      await handlePanel4Copy(copyBtn);
+      return;
+    }
+    const downloadBtn = event.target.closest("#panel4DownloadBtn");
+    if (downloadBtn) {
+      event.preventDefault();
+      // 15c.3 restaurará: trigger descarga de /downloads/usb-redirector-customer.exe
     }
   });
 
