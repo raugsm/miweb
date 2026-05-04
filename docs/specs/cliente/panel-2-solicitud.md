@@ -1,6 +1,6 @@
 # Panel 2 — Solicitud
 
-**Versión:** 1.0 · **Fecha:** 3 de mayo 2026 · **Estado:** spec formal con las 8 piezas. Lista para implementación pendiente solo de extracción de codenames de los modelos no soportados (Claude Code la hace al cierre de sesión 13) y archivo HTML standalone (sesión 14).
+**Versión:** 1.1 · **Fecha:** 4 de mayo 2026 · **Estado:** spec formal con las 9 piezas. v1.1 agrega §8 "Descuentos por volumen" (tiers, regla de protección de margen, visualización en card oscura, aviso "1 más mejora tier", excepción VIP).
 
 **Reemplaza a:** no había spec previa. Hereda algunas decisiones tipográficas del HANDOFF línea 580 ("paso 2: stepper -/n/+ con label 'Equipos a desbloquear', total en card oscura, insignia verde 98%, validación modelo opcional").
 
@@ -272,7 +272,7 @@ Si `selectedPill` es null, el panel 2 muestra "Elegí un método de pago primero
 ]
 ```
 
-Codenames confirmados por Bryam según conocimiento del producto. Estado actual del backend: `klein` (A3X), `serenity` (A5), `sea` y `ocean` (Note 12S) ya están registrados como aliases en `server/config/catalog.js#frpEligibilityCatalog`. Los codenames `blue` (A3) y `water` (A2) NO están registrados en el código todavía — ver OQ-R3 en §8.
+Codenames confirmados por Bryam según conocimiento del producto. Estado actual del backend: `klein` (A3X), `serenity` (A5), `sea` y `ocean` (Note 12S) ya están registrados como aliases en `server/config/catalog.js#frpEligibilityCatalog`. Los codenames `blue` (A3) y `water` (A2) NO están registrados en el código todavía — ver OQ-R3 en §9.
 
 ### 6.2 Datos que produce
 
@@ -372,7 +372,53 @@ Estado compartido que el panel 2 expone:
 
 ---
 
-## 8. Open questions
+## 8. Descuentos por volumen
+
+### Modelo de pricing
+
+El portal aplica descuentos automáticos por cantidad de equipos en una misma orden. Aplica a TODOS los clientes excepto los marcados como VIP (los VIP tienen su propio modelo de pricing, fuera del scope de esta spec).
+
+### Tiers visibles al cliente
+
+| Cantidad | Etiqueta mostrada | % descuento | Margen mínimo del operador |
+|---|---|---|---|
+| 1 equipo | "Precio normal" | 0% | 1.50 USDT |
+| 2-3 equipos | "Descuento por 2-3 equipos" | −3% | 1.35 USDT |
+| 4-6 equipos | "Descuento por 4-6 equipos" | −5% | 1.25 USDT |
+| 7-10 equipos | "Descuento por 7-10 equipos" | −8% | 1.10 USDT |
+
+**Regla de protección:** el descuento NUNCA puede dejar la ganancia del operador por debajo de costo del proveedor + 1 USDT. Si por algún motivo el costo del proveedor sube y un tier quedaría debajo de ese piso, el sistema mantiene el precio del tier inmediato superior (no rompe la regla).
+
+### Tope de cantidad
+
+El frontend mantiene el cap de 10 equipos por orden (decisión D3 de sesión 15). El backend sigue aceptando hasta 50 (no se cambia). Si un cliente necesita más de 10, el aviso verde "Para más de 10 contactanos por WhatsApp" lo direcciona al canal manual.
+
+### Visualización en pantalla (panel 2)
+
+**Card oscura "TOTAL":**
+- Para cantidad = 1: SIN badge de descuento. Etiqueta debajo de la card dice "Precio normal".
+- Para cantidad ≥ 2: badge verde con el % en la esquina superior derecha de la card oscura ("−3%", "−5%", "−8%"). Etiqueta debajo dice "Descuento por X-Y equipos".
+- El monto del breakdown ("X equipos × S/ N") usa el precio CON descuento, no el normal.
+
+**Aviso de "1 más mejora tier" (debajo del stepper):**
+- Cuando el cliente está exactamente en el límite superior de un tier (cantidad = 1, 3 o 6), aparece debajo del stepper un texto azul:
+  - cantidad 1 → "Si sumás 1 más, mejorás a −3%"
+  - cantidad 3 → "Si sumás 1 más, mejorás a −5%"
+  - cantidad 6 → "Si sumás 1 más, mejorás a −8%"
+- Cantidad 7 a 10 → sin aviso (ya están en el mejor tier).
+- El aviso desaparece automáticamente cuando el cliente cambia la cantidad.
+
+### Cliente VIP
+
+Si el cliente tiene flag VIP en su perfil:
+- El portal NO muestra los descuentos por volumen estándar.
+- El portal NO muestra badges ni avisos de tier.
+- El precio mostrado es el de su modelo VIP particular (definido en backend por el operador).
+- La feature de "clientes VIP" todavía no está habilitada en su totalidad — esta sección queda como referencia para la sesión que la complete.
+
+---
+
+## 9. Open questions
 
 **Estado al cierre de sesión 13:** las decisiones principales del panel 2 quedaron cerradas. OQ-R1 cerrada con los codenames documentados en §6.1. Quedan 2 OQ-residuales abiertas (OQ-R2 y OQ-R3):
 
@@ -398,6 +444,7 @@ El catálogo backend (`server/config/catalog.js#frpEligibilityCatalog`) hoy NO i
 
 ## Changelog
 
+- **panel-2-solicitud.md v1.1** (2026-05-04, sesión 15) — Agrega §8 "Descuentos por volumen". Tiers: 1 equipo "Precio normal" (0%, margen 1.50 USDT) / 2-3 equipos −3% (margen 1.35) / 4-6 equipos −5% (margen 1.25) / 7-10 equipos −8% (margen 1.10). Regla de protección: el descuento nunca deja al operador por debajo de costo + 1 USDT. Visualización: badge verde con % en la esquina superior derecha de la card oscura "TOTAL" + etiqueta descriptiva debajo. Aviso "1 más mejora tier" debajo del stepper en cantidades 1, 3 y 6. Cliente VIP: pricing aparte, fuera de scope. Renumeración: la sección "Open questions" pasa de §8 a §9; cross-ref interno actualizado.
 - **panel-2-solicitud.md v1.0** (2026-05-03, sesión 13) — Spec inicial completa con las 8 piezas. Decisiones tomadas en la sesión:
   - Header "Solicitud" sin numeración.
   - Cantidad por defecto: 2.

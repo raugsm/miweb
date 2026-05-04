@@ -2,7 +2,7 @@
 
 **Para Claudes futuros que retomen este trabajo.** Si abrís un chat nuevo, leé este archivo primero, después abrí los otros archivos en `docs/specs/`. Después de eso, ya sabés todo lo necesario para continuar.
 
-**Última actualización:** 4 de mayo 2026 · v1.11
+**Última actualización:** 4 de mayo 2026 · v1.12
 
 ---
 
@@ -753,7 +753,7 @@ Estas piezas van a la spec del panel operador (sesión 14+).
 ### `docs/specs/cliente/`
 - **`pantalla-principal-cliente.md`** — modelo de pantalla principal cliente con 4 paneles paralelos + Mis órdenes. **Versión actual: v1.1 (sesión 14).** 10 OQ originales cerradas en sesión 12; OQ-8 reabierta y re-cerrada en sesión 14. Las specs por panel (1, 2, 3, 4) y Mis órdenes con las 8 piezas formales viven en archivos separados.
 - **`panel-1-metodo-de-pago.md`** — spec del panel 1 (Método de pago) dentro de la pantalla principal cliente. **Versión actual: v2.0 (sesión 13).** Reemplaza a `paso-1-precio.md` v1.1 (deprecada y eliminada del repo). 8 piezas formales completas. 3 OQ-residuales cerradas en la misma sesión.
-- **`panel-2-solicitud.md`** — spec del panel 2 (Solicitud) dentro de la pantalla principal cliente. **Versión actual: v1.0 (sesión 13).** 8 piezas formales completas. 2 OQ-residuales abiertas (comportamiento del aviso si cliente sube/baja cantidad varias veces, codenames blue/water ausentes del catálogo backend).
+- **`panel-2-solicitud.md`** — spec del panel 2 (Solicitud) dentro de la pantalla principal cliente. **Versión actual: v1.1 (sesión 15).** 9 piezas formales completas (v1.1 agrega §8 "Descuentos por volumen"). 2 OQ-residuales abiertas (comportamiento del aviso si cliente sube/baja cantidad varias veces, codenames blue/water ausentes del catálogo backend).
 - **`panel-3-datos-de-pago.md`** — spec del panel 3 (Datos de pago) dentro de la pantalla principal cliente. **Versión actual: v1.0 (sesión 14).** 8 piezas formales completas. Incluye corrección USDT/Binance Pay vs TRC20. 4 OQ-residuales abiertas (imágenes QR pendientes, QR de México y Chile pendientes, comportamiento de timeout largo, lista final de motivos de rechazo).
 - **`panel-4-conexion.md`** — spec del panel 4 (Conexión) dentro de la pantalla principal cliente. **Versión actual: v1.0 (sesión 14).** 8 piezas formales completas. Incluye modal "¿Dónde pegar estos códigos?" con captura real del Redirector. 4 OQ-residuales abiertas (captura reemplazable, formato compacto del Technician ID/Código, comportamiento mobile, texto explicativo de polish).
 - **`mis-ordenes.md`** — spec de la zona "Mis órdenes" debajo de los 4 paneles paralelos. **Versión actual: v1.0 (sesión 13).** 8 piezas formales completas. 7 OQ-residuales abiertas para sesión 14+ y para spec dedicada de política de reembolso.
@@ -1042,6 +1042,9 @@ Si no usa esa frase, recordásela vos antes de avanzar. Bryam puede agregar **re
   - **Bryam aportó datos reales de las 5+ cuentas en chat** (Yape PE × 2, México STP, Colombia Bancolombia, Chile Mercado Pago, Binance Pay, PayPal). PayPal queda como input crudo (no se trabaja en sesión 14). 2 cuentas Yape integradas en spec del panel 3.
   - **Sistema de breakpoints unificado documentado en specs** (decisión heredada del rediseño responsive del portal viejo, no se reabre): mobile <640px (1 col) → tablet 640px (2 cols) → laptop 900px (4 cols) → desktop 1200px → ultrawide 1800px (max-width 1400px centrado). Documentado en `pantalla-principal-cliente.md` v1.1 + en sección 4 de panel 3 y panel 4. Los paneles NO tienen ancho fijo 400px estricto — son fluidos dentro del breakpoint. Las medidas tipográficas y spacings internos sí están fijos.
   - **HANDOFF v1.11.**
+- **Sesión 15 (en curso):**
+  - panel-2-solicitud.md v1.0 → v1.1 (descuentos por volumen documentados).
+  - **HANDOFF v1.12.**
 
 ---
 
