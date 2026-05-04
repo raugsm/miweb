@@ -106,6 +106,18 @@ export function writeLastSelectedPill(code) {
   }
 }
 
+// Sub-commit 15a.2: limpieza del localStorage cuando admin desactiva la pill
+// recordada. Si no limpiáramos, en el próximo reload `renderPaymentPills`
+// intentaría seleccionar una pill desactivada y caería al fallback igual,
+// pero la entrada queda como ruido. Mejor limpio.
+export function clearLastSelectedPill() {
+  try {
+    localStorage.removeItem(LAST_PILL_KEY);
+  } catch {
+    // ídem.
+  }
+}
+
 // QUE: para el slot del panel 1, encontrar el método pill (preferido por
 // `primaryCode`) y caer al primer método del país si el primary no está en el
 // catálogo. Devuelve `null` si el país no tiene método activo configurado.
@@ -158,7 +170,7 @@ export function renderPaymentPills() {
       return '<span class="flow-payment-pill flow-payment-pill-empty" aria-hidden="true"></span>';
     }
     const isSelected = slot.payment.code === selectedCode;
-    const isDisabled = slot.payment.disabled === true;
+    const isDisabled = slot.payment.active === false;
     return `
       <button type="button" role="radio" class="flow-payment-pill${isSelected ? " is-selected" : ""}"
               data-payment-pill="${slot.payment.code}"

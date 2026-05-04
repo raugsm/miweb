@@ -1,5 +1,7 @@
 export function createPortalRoutes({
+  addAdminConfigStream,
   addPortalOrderStream,
+  adminConfigSseHeartbeatMs,
   audit,
   authorizeCustomerDevice,
   cleanText,
@@ -53,6 +55,7 @@ export function createPortalRoutes({
   readDb,
   renderOrderComprobantePdf,
   reconcilePortalClientLink,
+  removeAdminConfigStream,
   removePortalOrderStream,
   requireCustomer,
   resolvePortalPaymentForClient,
@@ -408,6 +411,40 @@ export function createPortalRoutes({
     return;
   }
 
+  // Sub-commit 15a.2: SSE broadcast del canal admin-config. Sin requireCustomer
+  // (los datos —cambio de tasa, toggle de método de pago— son públicos por
+  // igual a todos los visitantes). Heartbeat 25s. Cleanup en disconnect.
+  if (req.method === "GET" && pathname === "/api/portal/admin-config/events") {
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-store, no-transform",
+      "Connection": "keep-alive",
+      "X-Accel-Buffering": "no",
+    });
+    res.write("retry: 5000\n\n");
+    const stream = {
+      id: crypto.randomUUID(),
+      res,
+      startedAtMs: Date.now(),
+      closed: false,
+    };
+    addAdminConfigStream(stream);
+    sendSseEvent(res, "connected", { updatedAt: nowIso() }, `${Date.now()}`);
+    const heartbeat = setInterval(() => {
+      if (stream.closed || res.destroyed || res.writableEnded) return;
+      res.write(`: heartbeat ${Date.now()}\n\n`);
+    }, adminConfigSseHeartbeatMs);
+    const cleanup = () => {
+      if (stream.closed) return;
+      stream.closed = true;
+      clearInterval(heartbeat);
+      removeAdminConfigStream(stream);
+    };
+    req.on("close", cleanup);
+    res.on("error", cleanup);
+    return;
+  }
+
   if (req.method === "POST" && pathname === "/api/portal/orders/frp") {
     const context = await getCurrentCustomerContext(req);
     if (!requireCustomer(context, res)) return;
@@ -444,7 +481,7 @@ export function createPortalRoutes({
     const quantity = Math.max(1, Math.min(50, Number.parseInt(input.quantity, 10) || 1));
     const service = portalPublicServices.find((candidate) => candidate.code === "PORTAL-XIAOMI-FRP" && candidate.enabled);
     const requestedPaymentCode = cleanText(input.paymentMethod, 60);
-    const payment = resolvePortalPaymentForClient(requestedPaymentCode, context.client);
+    const payment = resolvePortalPaymentForClient(requestedPaymentCode, context.client, db);
     if (!service) return sendJson(res, 503, { error: "Xiaomi FRP no esta disponible en el portal." });
     if (!payment) return sendJson(res, 400, { error: "Metodo de pago invalido para tu pais." });
     reconcilePortalClientLink(db, context.client, context.user.id);

@@ -22,6 +22,7 @@ export function createPortalSerializers({
   normalizeCustomerStatus,
   normalizePricingConfig,
   paymentMethods,
+  paymentMethodsWithOverrides,
   portalFrpPriceSuggestion,
   portalPhoneCountryHints,
   portalPublicServices,
@@ -334,27 +335,42 @@ export function createPortalSerializers({
     };
   }
 
-  function allowedPortalPaymentMethods() {
+  // Sub-commit 15a.2: parámetro db opcional. Cuando está presente, mergea
+  // overrides admin (active/customMessage) sobre los defaults de catalog.js.
+  // Sin db (callers viejos), comportamiento idéntico al pre-15a.2.
+  function allowedPortalPaymentMethods(db = null) {
+    if (db) {
+      return paymentMethodsWithOverrides(db).filter((payment) => payment.ticketOption);
+    }
     return allowedTicketPaymentMethods();
   }
 
-  function allowedPortalPaymentMethodsForCountry(country) {
+  function allowedPortalPaymentMethodsForCountry(country, db = null) {
     const normalizedCountry = normalizeCountryInput(country);
-    const methods = allowedPortalPaymentMethods();
+    const methods = allowedPortalPaymentMethods(db);
     const localMethods = methods.filter((payment) => payment.country === normalizedCountry);
     const globalMethods = methods.filter((payment) => payment.globalOption);
     return localMethods.concat(globalMethods);
   }
 
-  function defaultPortalPaymentForCountry(country) {
-    const compatible = allowedPortalPaymentMethodsForCountry(country);
-    return compatible.find((payment) => !payment.globalOption) || compatible[0] || allowedPortalPaymentMethods()[0] || null;
+  function defaultPortalPaymentForCountry(country, db = null) {
+    const compatible = allowedPortalPaymentMethodsForCountry(country, db);
+    return compatible.find((payment) => !payment.globalOption) || compatible[0] || allowedPortalPaymentMethods(db)[0] || null;
   }
 
-  function resolvePortalPaymentForClient(paymentCode, client) {
+  // Sub-commit 15a.2: si el método solicitado está desactivado (override admin),
+  // se rechaza acá — no caemos al default de país, devolvemos null y la ruta
+  // emite 400 "Método de pago invalido para tu pais." (mismo error que antes
+  // para método inexistente). Llamadas legacy sin db preservan comportamiento.
+  function resolvePortalPaymentForClient(paymentCode, client, db = null) {
     const code = cleanText(paymentCode, 60);
-    const allowed = allowedPortalPaymentMethods();
-    return allowed.find((payment) => payment.code === code) || defaultPortalPaymentForCountry(client?.country);
+    const allowed = allowedPortalPaymentMethods(db);
+    const found = allowed.find((payment) => payment.code === code);
+    if (found) {
+      if (db && found.active === false) return null;
+      return found;
+    }
+    return defaultPortalPaymentForCountry(client?.country, db);
   }
 
   function publicPortalCatalog(db = null) {
@@ -378,7 +394,9 @@ export function createPortalSerializers({
         : service);
     return {
       services: servicesForPortal,
-      paymentMethods: allowedPortalPaymentMethods(),
+      // Sub-commit 15a.2: pasamos db para que `paymentMethods` salga al frontend
+      // con los campos `active` y `customMessage` aplicados desde overrides.
+      paymentMethods: allowedPortalPaymentMethods(db),
       countries: countries.map(([, country]) => country),
       statuses: publicOrderStatuses,
       quantityTiers: pricing?.available ? frpDynamicQuantityTiers(pricing) : frpQuantityTiers,

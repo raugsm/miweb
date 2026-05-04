@@ -25,41 +25,8 @@ import {
 } from "./payments.js";
 import { filesToProofs, hasDraggedFiles, uploadPaymentProofFromFlow, wireGlobalFileDropGuard } from "./proofs.js";
 import { renderTrackedOrder } from "./deep-links.js";
+import { hidePanelNotice, showPanelNotice } from "./panel-notices.js";
 import { state } from "./state.js";
-
-// Sub-commit 15a.1: helpers para mostrar/ocultar cajones (notices) en los
-// paneles 1 y 2 con duración configurable. Cada panel tiene UN solo cajón a la
-// vez; si llega un segundo evento mientras el primero está visible, el segundo
-// reemplaza al primero (decisión spec panel-1 §3 edge 10: "prevalece el primero
-// que se disparó" se interpreta acá como "el último click del cliente reemplaza
-// el cajón visible" — los cajones admin-driven en vivo viven en sub-commit
-// 15a.2 con SSE admin-config).
-const noticeTimers = new Map();
-
-function showPanelNotice(nodeId, content, { durationMs = 15000, variant = "warning" } = {}) {
-  const node = document.getElementById(nodeId);
-  if (!node) return;
-  if (noticeTimers.has(nodeId)) clearTimeout(noticeTimers.get(nodeId));
-  node.textContent = content;
-  node.dataset.variant = variant;
-  node.hidden = false;
-  if (durationMs > 0) {
-    noticeTimers.set(nodeId, setTimeout(() => hidePanelNotice(nodeId), durationMs));
-  }
-}
-
-function hidePanelNotice(nodeId) {
-  const node = document.getElementById(nodeId);
-  if (noticeTimers.has(nodeId)) {
-    clearTimeout(noticeTimers.get(nodeId));
-    noticeTimers.delete(nodeId);
-  }
-  if (node) {
-    node.hidden = true;
-    node.textContent = "";
-    node.removeAttribute("data-variant");
-  }
-}
 
 // QUE: crea la orden y adjunta el comprobante en una sola request al endpoint
 // existente /api/portal/orders/frp con `paymentProofs` en el body. El backend

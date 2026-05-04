@@ -27,6 +27,7 @@ export const maxPortalVerificationEmailRequestsPerWindow = 3;
 export const customerEmailVerificationExpiresMs = 24 * 60 * 60 * 1000;
 export const productionCustomerPortalBaseUrl = "https://ariadgsm.com";
 export const portalOrdersSseHeartbeatMs = 25 * 1000;
+export const adminConfigSseHeartbeatMs = 25 * 1000;
 export const turnstileSiteKey = process.env.ARIAD_TURNSTILE_SITE_KEY || "";
 export const turnstileSecret = process.env.ARIAD_TURNSTILE_SECRET || "";
 export const customerModuleUrl = process.env.ARIAD_CUSTOMER_MODULE_URL || "";

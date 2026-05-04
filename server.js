@@ -25,6 +25,7 @@ import {
   maxPortalRegisterRequestsPerWindow,
   maxPortalVerificationEmailRequestsPerWindow,
   maxResetRequestsPerWindow,
+  adminConfigSseHeartbeatMs,
   portalOrdersSseHeartbeatMs,
   portalRateLimitWindowMs,
   presenceWindowMs,
@@ -131,6 +132,12 @@ const portalOrderStreams = new Map();
 // Spec operador-frp-express.md §5.2 + AC #9, #13, #36. Patron clonado del
 // SSE del cliente (portalOrderStreams) para mantener consistencia.
 const frpOpsStreams = new Map();
+// Sub-commit 15a.2: streams SSE del canal admin-config (broadcast). A diferencia
+// de portalOrderStreams (per-client) y frpOpsStreams (per-user), este Set es
+// GLOBAL — los datos que viajan (cambio de tasa, toggle de método de pago)
+// son públicos por igual a todos los clientes online. Sin filtrado per-client.
+// Spec: docs/specs/cliente/panel-1-metodo-de-pago.md §5 (cajones en vivo).
+const adminConfigStreams = new Set();
 
 const cloudflareTurnstileOrigin = "https://challenges.cloudflare.com";
 const turnstileEnabled = Boolean(turnstileSiteKey && turnstileSecret);
@@ -199,7 +206,26 @@ function defaultPricingConfig() {
     })),
     serviceRules: services.map(defaultServicePricingRule),
     frpPricing: defaultFrpPricingConfig(),
+    // Sub-commit 15a.2: overrides admin de los métodos de pago. Sólo entradas
+    // explícitamente modificadas (active=false o customMessage no vacío). Mergea
+    // en runtime con los defaults de paymentMethods (catalog.js) vía el helper
+    // paymentMethodsWithOverrides(db). Si admin no tocó nada, el array está vacío.
+    paymentMethodOverrides: [],
   };
+}
+
+function normalizePaymentMethodOverrides(rawOverrides = []) {
+  const list = Array.isArray(rawOverrides) ? rawOverrides : [];
+  const validCodes = new Set(paymentMethods.map((m) => m.code));
+  return list
+    .filter((entry) => entry && typeof entry.code === "string" && validCodes.has(entry.code))
+    .map((entry) => ({
+      code: String(entry.code),
+      active: entry.active === false ? false : true,
+      customMessage: typeof entry.customMessage === "string" ? entry.customMessage.slice(0, 240) : "",
+      updatedAt: String(entry.updatedAt || ""),
+      updatedBy: String(entry.updatedBy || ""),
+    }));
 }
 
 function normalizePricingConfig(config = {}) {
@@ -236,7 +262,26 @@ function normalizePricingConfig(config = {}) {
       };
     }),
     frpPricing: normalizeFrpPricingConfig(config.frpPricing || defaults.frpPricing),
+    paymentMethodOverrides: normalizePaymentMethodOverrides(config.paymentMethodOverrides),
   };
+}
+
+// Sub-commit 15a.2: helper que mergea los `paymentMethods` (defaults catalog.js)
+// con los overrides admin persistidos en `db.pricingConfig.paymentMethodOverrides`.
+// Devuelve un array nuevo con cada método extendido con `active` (default true)
+// y `customMessage` (default ""). Sin mutar las constantes.
+function paymentMethodsWithOverrides(db) {
+  const overrides = Array.isArray(db?.pricingConfig?.paymentMethodOverrides)
+    ? db.pricingConfig.paymentMethodOverrides
+    : [];
+  return paymentMethods.map((method) => {
+    const override = overrides.find((entry) => entry.code === method.code);
+    return {
+      ...method,
+      active: override?.active === false ? false : true,
+      customMessage: typeof override?.customMessage === "string" ? override.customMessage : "",
+    };
+  });
 }
 
 async function ensureDb() {
@@ -668,6 +713,7 @@ const {
   normalizeCustomerStatus,
   normalizePricingConfig,
   paymentMethods,
+  paymentMethodsWithOverrides,
   portalFrpPriceSuggestion,
   portalPhoneCountryHints,
   portalPublicServices,
@@ -2553,6 +2599,34 @@ function publishFrpOps(db, reason = "frp_updated", opts = {}) {
   }
 }
 
+// Sub-commit 15a.2: helpers del canal SSE admin-config (broadcast).
+// El stream lo abre cualquier visitante del portal vía GET /api/portal/admin-config/events.
+// publishAdminConfig emite a TODOS los streams sin filtrar por session.
+function addAdminConfigStream(stream) {
+  adminConfigStreams.add(stream);
+}
+
+function removeAdminConfigStream(stream) {
+  adminConfigStreams.delete(stream);
+}
+
+function publishAdminConfig(eventType, data) {
+  if (!adminConfigStreams.size) return;
+  const id = `${Date.now()}`;
+  for (const stream of [...adminConfigStreams]) {
+    if (stream.closed || stream.res.destroyed || stream.res.writableEnded) {
+      removeAdminConfigStream(stream);
+      continue;
+    }
+    try {
+      sendSseEvent(stream.res, eventType, data, id);
+    } catch (error) {
+      console.warn("[publishAdminConfig] write failed:", error?.message || error);
+      removeAdminConfigStream(stream);
+    }
+  }
+}
+
 // QUE: re-publica el listado de ordenes a TODOS los clientes con stream activo.
 // PR-2a.3 lo usa cuando el operador cambia pricing config — cada cliente conectado
 // recibe sus ordenes con currentUnitPrice recalculado para detectar price-up
@@ -3293,7 +3367,9 @@ function publicTicket(ticket, db) {
 }
 
 const handlePortalApi = createPortalRoutes({
+  addAdminConfigStream,
   addPortalOrderStream,
+  adminConfigSseHeartbeatMs,
   audit,
   authorizeCustomerDevice,
   cleanText,
@@ -3347,6 +3423,7 @@ const handlePortalApi = createPortalRoutes({
   readDb,
   renderOrderComprobantePdf,
   reconcilePortalClientLink,
+  removeAdminConfigStream,
   removePortalOrderStream,
   requireCustomer,
   resolvePortalPaymentForClient,
@@ -4136,7 +4213,59 @@ async function handleApi(req, res, pathname) {
       to: rate.ratePerUsdt,
     });
     await writeDb(db);
+    // Sub-commit 15a.2: SSE broadcast a clientes online para que actualicen
+    // su monto en panel 1 sin recargar (decisión spec panel-1 §3 edge 9).
+    publishAdminConfig("exchange_rate_changed", {
+      currency: rate.currency,
+      ratePerUsdt: rate.ratePerUsdt,
+      updatedAt: rate.updatedAt,
+    });
     return sendJson(res, 200, { pricingConfig: publicPricingConfig(db.pricingConfig, db) });
+  }
+
+  // Sub-commit 15a.2: PATCH admin para togglear active/customMessage de un método.
+  // Persiste como override en `db.pricingConfig.paymentMethodOverrides`. Sin UI
+  // admin (modalidad B-MÍNIMA) — admin edita data/users.json a mano o llama vía
+  // curl. Cuando exista la spec del Centro de configuración → "Métodos de pago",
+  // se agrega UI dedicada que consume este endpoint.
+  const pricingPaymentMethodMatch = pathname.match(/^\/api\/pricing\/payment-methods\/([^/]+)$/);
+  if (req.method === "PATCH" && pricingPaymentMethodMatch) {
+    if (!requireUser(user, res)) return;
+    const db = await readDb();
+    const code = pricingPaymentMethodMatch[1];
+    if (!(await requireAdminWithAudit(user, res, db, "PAYMENT_METHOD_TOGGLED_DENIED", code, { route: pathname }, "Solo administrador puede modificar metodos de pago."))) return;
+    const method = paymentMethods.find((candidate) => candidate.code === code);
+    if (!method) return sendJson(res, 404, { error: "Metodo de pago no encontrado." });
+    const input = await parseJson(req);
+    db.pricingConfig = normalizePricingConfig(db.pricingConfig);
+    db.pricingConfig.paymentMethodOverrides = Array.isArray(db.pricingConfig.paymentMethodOverrides)
+      ? db.pricingConfig.paymentMethodOverrides
+      : [];
+    let entry = db.pricingConfig.paymentMethodOverrides.find((candidate) => candidate.code === code);
+    const previousActive = entry ? (entry.active === false ? false : true) : true;
+    const previousMessage = entry ? String(entry.customMessage || "") : "";
+    if (!entry) {
+      entry = { code, active: true, customMessage: "", updatedAt: "", updatedBy: "" };
+      db.pricingConfig.paymentMethodOverrides.push(entry);
+    }
+    if (typeof input.active === "boolean") entry.active = input.active;
+    if (typeof input.customMessage === "string") entry.customMessage = input.customMessage.slice(0, 240);
+    entry.updatedAt = nowIso();
+    entry.updatedBy = user.id;
+    audit(db, user.id, "PAYMENT_METHOD_TOGGLED", code, {
+      country: method.country,
+      activeFrom: previousActive,
+      activeTo: entry.active,
+      messageFrom: previousMessage,
+      messageTo: entry.customMessage,
+    });
+    await writeDb(db);
+    publishAdminConfig("payment_method_toggled", {
+      code: entry.code,
+      active: entry.active,
+      customMessage: entry.customMessage,
+    });
+    return sendJson(res, 200, { paymentMethods: paymentMethodsWithOverrides(db) });
   }
 
   const pricingRuleMatch = pathname.match(/^\/api\/pricing\/service-rules\/([^/]+)$/);
