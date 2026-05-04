@@ -2,7 +2,7 @@
 
 **Para Claudes futuros que retomen este trabajo.** Si abrís un chat nuevo, leé este archivo primero, después abrí los otros archivos en `docs/specs/`. Después de eso, ya sabés todo lo necesario para continuar.
 
-**Última actualización:** 4 de mayo 2026 · v1.12
+**Última actualización:** 4 de mayo 2026 · v1.13
 
 ---
 
@@ -311,11 +311,11 @@ SESIÓN 16
 
 - **B-001 (paso 4 código real)** — ✅ ARREGLADO sesión 8 (commit 964413b), validado sesión 9 escenario 2.
 - **B-002 (pills "Perú" duplicadas en paso 1)** — UX, requiere decisión de producto. Bundle 3.
-- **B-003** `wirePaso4BannerActions` import muerto en `auth-forms.js:15` — Bundle 3
-- **B-004** `operationCode` sin callers en `connection.js:3-7` — Bundle 3
-- **B-005** `customerName` ignorado en `stepGuideMarkup` (`auth-forms.js:25` lo envía pero `connection.js:81` no lo recibe) — Bundle 3
-- **B-006** `liveRing` animación 1.8s vs spec 1.4s en `05-frp-flow.css:321` — Bundle 3
-- **H-008** copy "pasos 1, 2 y 3" en paso 3 (debería decir "1 y 2") en `portal.html:210` — Bundle 3
+- **B-003** ✅ RESUELTO en 15c.1 (commit 3097e59). `paso4-timer.js` eliminado entero; `wirePaso4BannerActions` import muerto desapareció con el archivo.
+- **B-004** ✅ RESUELTO en 15c.1 (commit 3097e59). `connection.js` eliminado entero (incluyendo `operationCode`, `stepGuideMarkup`, etc.).
+- **B-005** ✅ RESUELTO en 15c.1 (commit 3097e59). `connection.js#stepGuideMarkup` y `auth-forms.js#renderStaticStepGuide` eliminados; el flujo nuevo del Panel 4 no usa `customerName`.
+- **B-006** `liveRing` animación 1.8s vs spec 1.4s en `05-frp-flow.css` — Bundle 3 (sigue abierto, no tocado en 15a/b/c).
+- **H-008** ✅ RESUELTO en 15b.2 (commit 6be5fc1). El bloque `.legacy-step-3` con el texto "pasos 1, 2 y 3" fue eliminado; el panel 3 nuevo no muestra ese banner (descartado por spec panel-3 §1).
 - **B-008 (comprobante bloqueado)** — ✅ ARREGLADO sesión 9 (commit 21e1790). ⏸️ Escenario 4 pausado sesión 10 (control de no-regresión, requiere flujo cliente↔panel operador resuelto).
 
 **Otros pendientes Bundle 3:**
@@ -376,6 +376,16 @@ El mockup actual `paso-1-precio.html` cubre el estado "todo bien" pero no incluy
 ## Inputs crudos para spec futura
 
 **Esta sección registra ideas y propuestas que Bryam compartió en chat pero NO son decisiones tomadas.** Quedan registradas para ser convertidas en spec formal en una sesión dedicada con cabeza fresca, mockups, fuentes externas e investigación. **NO implementar basándose en esta sección.** Si un Claude futuro va a trabajar en cualquiera de estos temas, primero debe abrir sesión dedicada para escribir spec con las 8 piezas.
+
+### Polish del cliente (sesión 15c — pendiente sesión 15e o post-lanzamiento)
+
+Durante 15c salieron varios ajustes visuales menores que no se procesan ahora. Quedan como input crudo:
+
+- **Sacar el header de sesión cliente** (eyebrow "Portal cliente" + título "Xiaomi FRP Express con seguimiento en linea." + lead). Bryam comentó que en el portal real el cliente entra por SSO/login y no necesita ese marketing repetido en cada vista.
+- **Sacar las stats arriba** (`.summary-grid` con 3 tarjetas: estado del cliente, equipos del mes, dispositivo). Información útil para Bryam mientras testeaba pero el cliente final no la necesita.
+- **Grilla de pills del Panel 1** — confirmar visualmente que las 5 pills (Perú · USDT · México arriba, Colombia · Chile abajo) se ven en grilla 3×2 cómoda con tamaño parejo en el ancho actual del shell (1330px tras 15c.3-ter). Si todavía se ven apretadas, ajustar.
+
+Estos cambios son cosméticos puros, sin impacto en flow ni en backend. Sesión dedicada para procesarlos juntos en 15e o post-lanzamiento.
 
 ### Modelo de órdenes paralelas y "liberación" del flujo (sesión 10) — ✅ PROCESADO en sesiones 11 y 12
 
@@ -534,6 +544,9 @@ Sesión 12 trajo una variante de la regla #15: cuando Bryam usa un término que 
 
 ### 17. Iteraciones repetidas = señal de procesamiento incompleto en frío
 Si un componente necesita 6+ iteraciones de mockup en una sola sesión para llegar a estilo aprobado, eso es señal de que el componente requiere procesamiento en frío en sesión dedicada. La card de Mis órdenes pasó por 8 iteraciones en sesión 13. Llegamos a buen puerto pero el patrón es marcador de fatiga. En sesiones futuras: si una card o componente importante lleva 4+ iteraciones, frenar y proponer corte para retomar con cabeza fresca, en lugar de seguir iterando hasta cerrar a fuerza de voluntad.
+
+### 18. Mini-spec rápida en lugar de improvisar cambios
+Sesión 15c trajo este patrón: durante 15c.1 ya implementado, Bryam abrió 5 decisiones nuevas sobre el modelo de cards del Panel 4 (cards siempre visibles desde login, Tech ID en vivo, Código aparece al subir comprobante, placeholder, botón Copiar oculto). En lugar de improvisarlos en el código directamente y dejar la spec desactualizada, paramos el flow de implementación y escribimos una **mini-spec** (`panel-4-conexion.md` v1.2) consolidando las 5 decisiones antes de tocar código. Después de aprobar la mini-spec, 15c.1-bis implementó los cambios alineados a esa nueva versión. Resultado: spec ↔ código sincronizados, decisiones explícitas y reviewables, futuros Claudes no se confunden. Aplicar este patrón siempre que aparezcan 3+ decisiones agrupadas a mitad de implementación: parar, escribir mini-spec (vN.M+1), aprobar, y recién después tocar código. La mini-spec no requiere las 8 piezas formales — sólo las decisiones nuevas y su impacto en el modelo existente.
 
 ---
 
@@ -744,7 +757,7 @@ Estas piezas van a la spec del panel operador (sesión 14+).
 
 ### `docs/specs/`
 - **`PLAN.md`** — plan estratégico de 7 specs en 3 fases. Versión actual: v1.1.
-- **`HANDOFF.md`** — este archivo. Bridge entre sesiones. **Versión actual: v1.10.**
+- **`HANDOFF.md`** — este archivo. Bridge entre sesiones. **Versión actual: v1.13.**
 - **`audit-template.md`** — template para auditar el repo con Claude Code.
 - **`_template-prompt-claude-code.md`** — templates obligatorios para prompts a Claude Code.
 - **`_brand-tokens-pendiente.md`** — placeholder para sesión de polish visual con logo.
@@ -754,9 +767,9 @@ Estas piezas van a la spec del panel operador (sesión 14+).
 - **`pantalla-principal-cliente.md`** — modelo de pantalla principal cliente con 4 paneles paralelos + Mis órdenes. **Versión actual: v1.1 (sesión 14).** 10 OQ originales cerradas en sesión 12; OQ-8 reabierta y re-cerrada en sesión 14. Las specs por panel (1, 2, 3, 4) y Mis órdenes con las 8 piezas formales viven en archivos separados.
 - **`panel-1-metodo-de-pago.md`** — spec del panel 1 (Método de pago) dentro de la pantalla principal cliente. **Versión actual: v2.0 (sesión 13).** Reemplaza a `paso-1-precio.md` v1.1 (deprecada y eliminada del repo). 8 piezas formales completas. 3 OQ-residuales cerradas en la misma sesión.
 - **`panel-2-solicitud.md`** — spec del panel 2 (Solicitud) dentro de la pantalla principal cliente. **Versión actual: v1.1 (sesión 15).** 9 piezas formales completas (v1.1 agrega §8 "Descuentos por volumen"). 2 OQ-residuales abiertas (comportamiento del aviso si cliente sube/baja cantidad varias veces, codenames blue/water ausentes del catálogo backend).
-- **`panel-3-datos-de-pago.md`** — spec del panel 3 (Datos de pago) dentro de la pantalla principal cliente. **Versión actual: v1.0 (sesión 14).** 8 piezas formales completas. Incluye corrección USDT/Binance Pay vs TRC20. 4 OQ-residuales abiertas (imágenes QR pendientes, QR de México y Chile pendientes, comportamiento de timeout largo, lista final de motivos de rechazo).
-- **`panel-4-conexion.md`** — spec del panel 4 (Conexión) dentro de la pantalla principal cliente. **Versión actual: v1.0 (sesión 14).** 8 piezas formales completas. Incluye modal "¿Dónde pegar estos códigos?" con captura real del Redirector. 4 OQ-residuales abiertas (captura reemplazable, formato compacto del Technician ID/Código, comportamiento mobile, texto explicativo de polish).
-- **`mis-ordenes.md`** — spec de la zona "Mis órdenes" debajo de los 4 paneles paralelos. **Versión actual: v1.0 (sesión 13).** 8 piezas formales completas. 7 OQ-residuales abiertas para sesión 14+ y para spec dedicada de política de reembolso.
+- **`panel-3-datos-de-pago.md`** — spec del panel 3 (Datos de pago) dentro de la pantalla principal cliente. **Versión actual: v1.0 (sesión 14)** + nota in-place agregada en 15b.2-ter (§2.6) sobre "estado Rechazado descongela paneles 1-2-3". 8 piezas formales completas. Incluye corrección USDT/Binance Pay vs TRC20. 4 OQ-residuales abiertas (imágenes QR pendientes, QR de México y Chile pendientes, comportamiento de timeout largo, lista final de motivos de rechazo).
+- **`panel-4-conexion.md`** — spec del panel 4 (Conexión) dentro de la pantalla principal cliente. **Versión actual: v1.3 (sesión 15c.3).** Trayectoria: v1.0 (sesión 14, estructura inicial 6 estados) → v1.1 (sesión 15c.1, alinea con D1 — usa endpoint existente `notify-connected` en lugar de inventar `create-from-validated-payment`) → v1.2 (mini-spec sesión 15c, cards Tech ID + Código siempre visibles desde login, modelo de 3 estados A/B/C) → v1.3 (sesión 15c.3, nombre real del binario `usbredirector-customer-module.exe`). 8 piezas formales completas. OQ-R1 (captura del Redirector) cerrada en 15c.2 — `redirector-screenshot.jpg` real subida al repo.
+- **`mis-ordenes.md`** — spec de la zona "Mis órdenes" debajo de los 4 paneles paralelos. **Versión actual: v1.0 (sesión 13)** + nota in-place agregada en 15b.2 (línea 13) sobre D1 (orden nace en Panel 3 al subir comprobante). Las referencias a "Equipo conectado" como momento de creación quedan obsoletas y se reescriben formalmente cuando se implemente la UI de Mis órdenes. 8 piezas formales completas. 7 OQ-residuales abiertas para sesión 14+ y para spec dedicada de política de reembolso.
 - **`mockups/paso-1-precio.html`** — mockup HTML standalone responsive del paso 1. **Pendiente actualización** con 2 estados nuevos (pill desactivada con mensaje custom + banner amarillo de tasa cambiada). Sesión chica futura antes de implementación. **Probablemente deprecado** ahora que existe el mockup consolidado de la pantalla principal completa.
 - **`mockups/pantalla-principal-cliente.html`** — **CREADO en sesión 14.** Mockup HTML standalone consolidado de la pantalla principal completa con los 4 paneles + Mis órdenes. Cubre 5 escenarios visuales (estado inicial, comprobante en validación, validado pre-clic, orden activa con 3 equipos, comprobante rechazado) + vista mobile + modal "¿Dónde pegar estos códigos?". Listo para servir como referencia visual a sesión 15 de implementación. **Nota:** la captura del Redirector está simulada en SVG; reemplazar por la imagen real `1777861729916_image.png` cuando Bryam la suba al repo (sugerencia: `public/images/redirector-screenshot.png`).
 
@@ -787,23 +800,30 @@ Estas piezas van a la spec del panel operador (sesión 14+).
 
 ## Pendientes y próximos pasos
 
-### Sesión 15 (próxima)
+### Sesión 15 (en curso, sub-fases parcialmente cerradas)
 
-**Foco:** implementación de la pantalla principal completa (paneles + Mis órdenes + congelado/descongelado + Redirector descarga directa).
+- **15a (cerrada):** paneles 1 y 2 + descuentos por volumen end-to-end. Ver "Sesión 15a" en bitácora abajo.
+- **15b (cerrada):** panel 3 entero + decisión D1 (orden nace en Panel 3). Ver "Sesión 15b".
+- **15c (en curso, parcialmente cerrada):** panel 4 estructura visual + descarga real del Redirector + ajustes visuales del shell. **15c.4 (wireup real del botón "Equipo conectado" + Tech ID en vivo via SSE) PAUSADO** — pasa a sesión 17+. Ver "Sesión 15c".
 
-**Procedimiento sugerido:**
+### Sesión 16 (próxima — cambio de foco)
 
-1. Releer las 6 specs cerradas (`pantalla-principal-cliente.md` v1.1, `panel-1-metodo-de-pago.md` v2.0, `panel-2-solicitud.md` v1.0, `panel-3-datos-de-pago.md` v1.0, `panel-4-conexion.md` v1.0, `mis-ordenes.md` v1.0) y el mockup HTML consolidado para tener marco completo.
-2. Análisis previo (Template A) con Claude Code antes de tocar código. Identificar archivos a tocar, dependencias, riesgos.
-3. Implementación en sub-commits por área (15a paneles 1-2, 15b panel 3, 15c panel 4, 15d Mis órdenes, 15e congelado/descongelado, etc.).
-4. Smoke test al cierre de cada sub-commit.
-5. Es probable que esto se parta en múltiples sesiones (15a, 15b, 15c) por tamaño.
+**Foco:** conectar el panel técnico (operador) con el portal cliente recién rediseñado + **subir online**.
 
-**No es:** sesión de spec/diseño. Las specs ya están cerradas. Implementación pura.
+El cliente rediseñado (paneles 1-2-3-4 visuales + descuentos por volumen + descarga real del Redirector) ya está implementado y testeable localmente. Lo que falta para que el flujo end-to-end funcione es:
 
-### Sesión 16
+1. **Verificar que la pantalla operador "Pagos por revisar"** (FRP Express → sección de validación de comprobantes) funciona con el nuevo flujo del cliente. SSE entre cliente↔operador ya existe — confirmar que aprobar/rechazar desde operador refleja en cliente en vivo.
+2. **Reintento del escenario 4 de B-008** (comprobante bloqueado) ahora que el flujo cliente↔operador está implementado.
+3. **Subir online** (deploy a producción Render) y smoke con cliente real.
+4. Este sub-commit incluye QA exhaustivo end-to-end con Bryam usando ambos lados (operador + cliente) en el mismo browser.
 
-QA final del cliente rediseñado. **Reintento del escenario 4 de B-008** una vez que el flujo cliente↔panel operador esté implementado.
+**No es:** completar 15c.4 (eso queda explícitamente para sesión 17+). El flujo cliente actual usa el botón "Equipo conectado" como no-op en 15c.1 — la versión wired vendrá después de validar que el resto del flujo es sólido.
+
+### Sesión 17+ (futuro inmediato)
+
+- **15c.4** — wireup real del botón "Equipo conectado" del Panel 4 con `POST /api/portal/orders/:id/notify-connected` + Tech ID en vivo desde `GET /api/portal/active-technician` + SSE para refrescar Tech ID antes que la orden nazca + freeze del Tech ID al apretar el botón.
+- **15d** — UI de Mis órdenes (la zona inferior de la pantalla principal cliente). Spec `mis-ordenes.md` v1.0 ya tiene las 8 piezas; falta implementación.
+- **15e** — pulido visual del cliente (input crudo registrado en sección dedicada abajo).
 
 ### Post-lanzamiento (Bundle 3 + futuro)
 
@@ -931,6 +951,12 @@ Esta sección documenta cuando una sesión salteó pasos del proceso. Sirve para
 - **Cómo se manejó:** Claude pausó la sub-2 con justificación clara, registró las preguntas a resolver en la spec dedicada (¿reembolso automático? ¿crédito interno? ¿diferencia por estado?), y siguió con sub-3 y sub-4. Resultado: OQ-3 cerrada parcialmente, dinero queda como solicitud manual procesada por operador hasta que la política se defina.
 - **Lección:** Aplicación correcta y limpia de regla #14, igual que con "precio asegurado". Las specs futuras heredan pendientes.
 
+### Sesión 15c — cambio visual aparente al pasar (trampa nueva)
+- **Qué pasó:** durante 15c.3-ter, Bryam pidió "ensanchar el contenedor FLUJO FRP EXPRESS +150px". Asumió que `.frp-flow-card` tenía un `max-width` propio que se podía ajustar quirúrgicamente sin afectar otras secciones. Realidad: `.frp-flow-card` no tiene `max-width` — el ancho lo determina su ancestor `.portal-shell` (root del portal) que envuelve TODAS las secciones (header sesión, stats, FLUJO FRP EXPRESS, Mis órdenes). La única forma de ensanchar "FLUJO FRP EXPRESS" era ensanchar el shell entero — lo cual contradecía la instrucción inicial "NO toques Mis órdenes ni stats arriba".
+- **Cómo se manejó:** Claude frenó después del primer grep y reportó las 3 opciones reales (ensanchar el shell entero, romper la jerarquía con offset, o no hacer nada). Bryam evaluó y eligió la opción A (ensanchar el shell entero) — confirmando que la instrucción inicial era equivocada y que la coherencia visual entre todas las secciones era preferible al cambio quirúrgico imposible.
+- **Lección:** **Trampa nueva — supuesto del prompt no verificado contra el código.** Cuando el prompt asume una estructura específica del código (ej: "este selector tiene tal max-width", "el archivo del escritorio tiene tales marcas"), el primer paso es **verificar el supuesto** antes de avanzar. Si el supuesto falla, frenar y reportar antes de tocar nada — no improvisar una interpretación. Esta trampa también apareció en 15c.2 (imagen del Redirector que Bryam asumió correcta pero era de la pantalla del Technician) y en 15c.HANDOFF (archivo del escritorio asumido actualizado pero era versión vieja).
+- **Patrón asociado:** validar 1-2 supuestos críticos del prompt con grep/Read/Test-Path al inicio. Si fallan, freno + reporto. Si pasan, procedo con el plan.
+
 ---
 
 ## Cómo arrancar próxima sesión
@@ -1042,9 +1068,31 @@ Si no usa esa frase, recordásela vos antes de avanzar. Bryam puede agregar **re
   - **Bryam aportó datos reales de las 5+ cuentas en chat** (Yape PE × 2, México STP, Colombia Bancolombia, Chile Mercado Pago, Binance Pay, PayPal). PayPal queda como input crudo (no se trabaja en sesión 14). 2 cuentas Yape integradas en spec del panel 3.
   - **Sistema de breakpoints unificado documentado en specs** (decisión heredada del rediseño responsive del portal viejo, no se reabre): mobile <640px (1 col) → tablet 640px (2 cols) → laptop 900px (4 cols) → desktop 1200px → ultrawide 1800px (max-width 1400px centrado). Documentado en `pantalla-principal-cliente.md` v1.1 + en sección 4 de panel 3 y panel 4. Los paneles NO tienen ancho fijo 400px estricto — son fluidos dentro del breakpoint. Las medidas tipográficas y spacings internos sí están fijos.
   - **HANDOFF v1.11.**
-- **Sesión 15 (en curso):**
-  - panel-2-solicitud.md v1.0 → v1.1 (descuentos por volumen documentados).
+- **Sesión 15a (cerrada) — paneles 1 y 2 + descuentos por volumen:**
+  - `3e90f9c` 15a.1 — paneles 1 y 2 frontend de pantalla principal nueva.
+  - `be088b4` 15a.2 — backend SSE admin-config + cajones en vivo panel 1. **Endpoint nuevo:** `GET /api/portal/admin-config/events` (SSE público para cambios de tasa y toggle de método de pago, heartbeat 25s, broadcast a todos los visitantes sin auth).
+  - `7f7cd59` 15a.3 — pills del panel 1 no se cortan en desktop (scope CSS legacy a `.flow-payment-pills` para no pisar el panel 1 nuevo).
+  - `b48f076` 15a.4 — pills del panel 1 sin wrap multi-línea (`white-space: nowrap`).
+  - `a0a73b1` 15a.4-bis — ajustes visuales panel 1 (pills padding 9px 8px → 10px 14px, monto 28px → 22px alineado al mockup).
+  - `5507ced` 15a.5 — **descuentos por volumen end-to-end.** 4 tiers (1/2-3/4-6/7-10) con margins 1.50/1.35/1.25/1.10. Clamp protección "costo + 1 USDT" silencioso. Gating VIP (status="VIP" o vipUnitMargin>0 saltea volume tier). Frontend: badge verde con %, label tier, aviso "1 más mejora tier". Test contract actualizado (12/12).
+  - `2d899a6` docs(specs): panel-2 v1.1 — descuentos por volumen documentados (5 decisiones del modelo de pricing — tiers, regla protección margen, visualización badge + aviso, exclusión VIP).
   - **HANDOFF v1.12.**
+- **Sesión 15b (cerrada) — panel 3 + decisión D1 (orden nace en Panel 3):**
+  - `722d3ae` 15b.1 — Panel 3 estructura estática. Catálogo extendido: `displayName`, `logo`, `fields[]`, `qrImageUrl`, `alternativeAccountKey` por método de pago. Yape doble (PE_YAPE_BRYAMS principal + PE_YAPE_PEREGRINA alternativa). Card oscura TOTAL A PAGAR + card cuenta dinámica + botones Copiar individuales + toggle Mostrar/Ocultar QR + link Yape alternativa. Modal "Cuentas" viejo intacto.
+  - `cecda31` 15b.2-bis — dropzone respeta atributo `[hidden]` (CSS guard, mismo patrón que 15b.1-bis del QR).
+  - `6be5fc1` 15b.2 — **Panel 3 parte interactiva.** Backend: `sanitizeImageAttachments` acepta PDF + cap 5 MB (constante nueva `maxPaymentProofBytes = 5 * 1024 * 1024`). Frontend: dropzone nueva en panel 3 con 6 estados visuales, 4 estados post-subida (Subido/Validado/Rechazado/cajón motivo), render reactivo a SSE existente. Eliminado `.legacy-step-3` completo + JS asociado + CSS huérfano que conflicta. Eliminado dead code: `toggleProofWarning` + `updateFlowPaymentDropzone`. **Decisión D1:** la orden nace en backend al subir comprobante en Panel 3 (`POST /api/portal/orders/frp` ya hace eso); el botón "Equipo conectado" del Panel 4 NO crea la orden, sólo confirma conexión vía endpoint existente `POST /api/portal/orders/:id/notify-connected`. Endpoint `POST /api/portal/orders/create-from-validated-payment` mencionado en panel-4 v1.0 NO se implementa. `mis-ordenes.md` línea 13 actualizada con nota de migración.
+  - `bccfa2e` 15b.2-ter — bugs post-15b.2: (A) limpiar `data-state="uploading"` tras upload exitoso para que `renderProofBlock` pinte el estado lógico sin necesidad de F5; (B) anular `overflow-wrap: anywhere` heredado en `.panel-3-proof-label` para evitar que el texto rompa carácter por carácter; (C) descongelar paneles 1-2-3 cuando `flowState === "rejected"` (cliente atrapado sin poder re-subir). Spec panel-3 §2.6 actualizada con nota explícita sobre descongelado en estado "Rechazado".
+  - **HANDOFF v1.12** (heredado, sin bump en 15b).
+- **Sesión 15c (en curso, parcialmente cerrada) — panel 4 + cleanup viejo + ajustes visuales del shell:**
+  - `3097e59` 15c.1 — Panel 4 estructura visual + cleanup viejo. `article#panel4` con 6 estados controlados por `data-state` (modelo v1.0/v1.1: 0/1/2/5 = sólo Descargar; 3 = Equipo conectado; 4 = cards Tech ID + Código). Módulo nuevo `panel-4-connection.js` + CSS `14-panel-4.css`. Debug `window.__panel4DebugState`. Eliminados `connection.js` (~110 LOC), `paso4-timer.js` (~120 LOC), `applyStep4Visibility`, `renderStaticStepGuide`, `renderFlowCta`. Cleanup one-time del `localStorage` `ariad.paso4ReadyDismissed.*`. CSS huérfano del Paso 4 viejo limpiado en `05-frp-flow.css` (`.paso4-*`, `.flow-cta-*`, `.flow-paso4-*`, `.redirector-download-*`, `.step-guide`, `.step-row*`). Spec panel-4 v1.0 → v1.1 (alinea D1, usa `notify-connected` existente). **Resuelve B-003, B-004, B-005, H-008** como side-effect.
+  - `a5a8a4c` panel-4 v1.2 — mini-spec sesión 15c con 5 decisiones nuevas (cards siempre visibles desde login, Tech ID en vivo antes de nacer la orden y se freeze-a al "Equipo conectado", Código aparece al subir comprobante y se queda aunque rechacen, placeholder card Código "Aparecerá cuando subas tu pago", botón Copiar de Código oculto en estado A). Modelo de 6 estados v1.0/v1.1 reorganizado en 3 estados (A, B, C).
+  - `18b4581` 15c.1-bis — adaptar Panel 4 al modelo de 3 estados de la spec v1.2. `deriveState()` reescrito A/B/C. Cards Tech ID + Código siempre visibles. Placeholder con `is-placeholder` class. Botón Copiar de Código oculto en estado A. Botón "Equipo conectado" sólo en estado C. Animación `panel4FadeIn` 200ms.
+  - `71c8211` 15c.2 — imagen real del Redirector. `public/images/redirector-screenshot.jpg` agregada al repo. SVG mock del modal "¿Dónde pegar?" reemplazado por `<img>` real. Badges 1° azul y 2° verde reposicionados con porcentajes (`top: 33%/53%, right: 6%`) sobre la imagen real del Customer Module v2.5.0.3540. Eliminados `.where-paste-mock-*`. **Cierra OQ-R1** del panel 4.
+  - `c02d9dd` 15c.3 — descarga real del Redirector. `public/downloads/usbredirector-customer-module.exe` agregado al repo (~9 MB). Botón Descargar reemplazado de `<button>` no-op por `<a href download>`. Spec panel-4 v1.2 → v1.3 (nombre real del archivo).
+  - `b554028` 15c.3-bis — padding del contenedor `.frp-flow-card` de 20px a 10px (mitad).
+  - `7f14b33` 15c.3-ter — `.portal-shell` width de 1180px a 1330px (+150px). Toda la pantalla del portal cliente se ensancha para que los 4 paneles + Mis órdenes respiren mejor.
+  - **15c.4 PAUSADO** — pasa a sesión 17+. El botón "Equipo conectado" sigue siendo no-op en producción local; el Tech ID + Código del proceso son hardcoded de prueba (`1000 9983 5478` + `CL-20260504-001-2`) hasta que se wire el SSE real con `GET /api/portal/active-technician` y el `POST notify-connected`.
+  - **HANDOFF v1.13** (este commit).
 
 ---
 
