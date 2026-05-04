@@ -1,50 +1,56 @@
 import { api } from "./api.js";
 import { $, setMessage } from "./dom.js";
-import { paymentUploadTargetOrder, updateFlowPaymentDropzone } from "./payments.js";
+import { paymentUploadTargetOrder } from "./payments.js";
 import { state } from "./state.js";
+
+// Sub-commit 15b.2: tipos y tamaño max alineados con backend (server.js
+// sanitizeImageAttachments + maxPaymentProofBytes). Spec panel-3 v1.0 §6.3.
+export const PROOF_ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
+export const PROOF_MAX_BYTES = 5 * 1024 * 1024;
+
+export class ProofValidationError extends Error {
+  constructor(message, code) {
+    super(message);
+    this.name = "ProofValidationError";
+    this.code = code;
+  }
+}
 
 export async function filesToProofs(fileList) {
   const files = Array.from(fileList || []).slice(0, 4);
-  if (!files.length) throw new Error("Selecciona al menos una imagen.");
+  if (!files.length) throw new ProofValidationError("Seleccioná al menos un archivo.", "EMPTY");
   return Promise.all(files.map((file) => new Promise((resolve, reject) => {
-    if (!file.type.startsWith("image/")) {
-      reject(new Error("Solo se aceptan imagenes."));
+    if (!PROOF_ALLOWED_TYPES.includes(file.type)) {
+      reject(new ProofValidationError("Tipo no permitido. Solo JPG, PNG o PDF.", "TYPE"));
+      return;
+    }
+    if (Number(file.size || 0) > PROOF_MAX_BYTES) {
+      reject(new ProofValidationError("Archivo muy grande. Máximo 5 MB.", "SIZE"));
       return;
     }
     const reader = new FileReader();
     reader.onload = () => resolve({ name: file.name, type: file.type, size: file.size, dataUrl: reader.result });
-    reader.onerror = () => reject(new Error("No se pudo leer la imagen."));
+    reader.onerror = () => reject(new ProofValidationError("No se pudo leer el archivo.", "READ"));
     reader.readAsDataURL(file);
   })));
 }
 
 export async function uploadPaymentProofFromFlow(files, onCustomerUpdate = () => {}) {
   const message = $("#orderMessage");
-  const dropzone = $("#flowPaymentDropzone");
-  const input = $("#flowPaymentProofInput");
   const order = paymentUploadTargetOrder();
   if (!order) {
     setMessage(message, "Primero crea una solicitud pendiente de pago.", "error");
-    if (input) input.value = "";
     return;
   }
   setMessage(message, `Subiendo comprobante para ${order.code}...`);
-  try {
-    const proofs = await filesToProofs(files);
-    const payload = await api(`/api/portal/orders/${order.id}/payment-proof`, {
-      method: "PATCH",
-      body: JSON.stringify({ paymentProofs: proofs }),
-    });
-    state.customer = payload.customer;
-    setMessage(message, `Comprobante recibido para ${order.code}. Queda en revision.`, "success");
-    onCustomerUpdate();
-  } catch (error) {
-    setMessage(message, error.message, "error");
-  } finally {
-    if (input) input.value = "";
-    dropzone?.classList.remove("drag-active");
-    updateFlowPaymentDropzone();
-  }
+  const proofs = await filesToProofs(files);
+  const payload = await api(`/api/portal/orders/${order.id}/payment-proof`, {
+    method: "PATCH",
+    body: JSON.stringify({ paymentProofs: proofs }),
+  });
+  state.customer = payload.customer;
+  setMessage(message, `Comprobante recibido para ${order.code}. Queda en revision.`, "success");
+  onCustomerUpdate();
 }
 
 export function hasDraggedFiles(event) {

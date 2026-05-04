@@ -19,6 +19,10 @@ export const maxJsonBodyBytes = 12 * 1024 * 1024;
 export const maxFinalLogImages = 4;
 export const maxPaymentProofImages = 4;
 export const maxFinalLogImageBytes = 2 * 1024 * 1024;
+// Sub-commit 15b.2 (spec panel-3-datos-de-pago.md v1.0 §6.3): comprobantes
+// del cliente pueden ser JPG/PNG/WebP/PDF hasta 5 MB. Constante separada de
+// maxFinalLogImageBytes (2 MB para logs internos) — distinto caso de uso.
+export const maxPaymentProofBytes = 5 * 1024 * 1024;
 export const portalRateLimitWindowMs = 15 * 60 * 1000;
 export const maxPortalRegisterRequestsPerWindow = 5;
 export const maxPortalOrderRequestsPerWindow = 12;

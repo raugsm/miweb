@@ -19,14 +19,19 @@ import {
   closePaymentModal,
   paymentSelectedInDropdown,
   paymentUploadTargetOrder,
-  renderPaymentModal,
   setSelectedPayment,
   updateQuote,
 } from "./payments.js";
 import { filesToProofs, hasDraggedFiles, uploadPaymentProofFromFlow, wireGlobalFileDropGuard } from "./proofs.js";
 import { renderTrackedOrder } from "./deep-links.js";
 import { hidePanelNotice, showPanelNotice } from "./panel-notices.js";
-import { flashCopyFeedback, togglePanel3AlternativeAccount, togglePanel3Qr } from "./panel-3-account.js";
+import {
+  flashCopyFeedback,
+  flashPanel3DropzoneError,
+  setPanel3ProofState,
+  togglePanel3AlternativeAccount,
+  togglePanel3Qr,
+} from "./panel-3-account.js";
 import { state } from "./state.js";
 
 // QUE: crea la orden y adjunta el comprobante en una sola request al endpoint
@@ -313,7 +318,10 @@ export function wireEvents() {
       document.querySelector("#wherePasteDialog")?.close();
     }
   });
-  $("#copyPaymentButton").addEventListener("click", () => renderPaymentModal());
+  // Sub-commit 15b.2: el botón "Cuentas" (#copyPaymentButton) vivía en
+  // .legacy-step-3 y ya no existe — eliminado del DOM al migrar la dropzone
+  // al panel 3 nuevo. Los listeners del modal Cuentas (cerrar, click outside,
+  // Escape) quedan vivos por si algún caller futuro vuelve a abrirlo.
   $("#closePaymentModal")?.addEventListener("click", closePaymentModal);
   $("#paymentModal")?.addEventListener("click", (event) => {
     if (event.target?.id === "paymentModal") closePaymentModal();
@@ -342,64 +350,106 @@ export function wireEvents() {
     updateQuote();
   });
 
-  const flowPaymentDropzone = $("#flowPaymentDropzone");
-  const flowPaymentInput = $("#flowPaymentProofInput");
+  // Sub-commit 15b.2 — dropzone nueva en panel 3. Spec panel-3-datos-de-pago.md
+  // v1.0 §2.5 + §5. Bifurcación POST/PATCH preservada (E.5 sesión 16):
+  // - sin orden activa → POST /api/portal/orders/frp (crea + adjunta).
+  // - con orden esperando → PATCH /api/portal/orders/:id/payment-proof.
+  const panel3Proof = $("#panel3Proof");
+  const panel3Dropzone = $("#panel3Dropzone");
+  const panel3ProofInput = $("#panel3ProofInput");
+  const panel3ProofAction = $("#panel3ProofAction");
 
-  // QUE: cuando el cliente sube un comprobante sin orden activa, creamos la orden +
-  // adjuntamos el comprobante en un solo POST. Si ya hay orden esperando pago, solo
-  // adjuntamos al endpoint PATCH existente.
-  // POR QUE: FINAL §15 — la orden se crea automaticamente al subir comprobante en
-  // paso 3. La decision endpoint vs flag esta documentada en el commit message.
+  const dropzoneIsDisabled = () => panel3Proof?.dataset.locked === "true"
+    || ["uploading", "validated"].includes(panel3Proof?.dataset.state || "");
+
   const handleProofFiles = async (files) => {
     const fileList = Array.from(files || []);
     if (!fileList.length) return;
-    if (paymentUploadTargetOrder()) {
-      await uploadPaymentProofFromFlow(fileList, renderCustomer);
-      return;
+    setPanel3ProofState("uploading");
+    try {
+      if (paymentUploadTargetOrder()) {
+        await uploadPaymentProofFromFlow(fileList, renderCustomer);
+      } else {
+        await submitOrderWithProofs(fileList);
+      }
+      // El render reactivo de updatePanel3 (vía SSE/updateQuote) reasigna
+      // state="uploaded" según la orden recién creada/actualizada.
+    } catch (error) {
+      // Errores de validación (tipo/tamaño) muestran cajón inline 4s y
+      // vuelven a default. Otros errores (red/backend) usan flow de #orderMessage.
+      if (error?.code === "TYPE") {
+        flashPanel3DropzoneError("error-type", "Tipo no permitido. Solo JPG, PNG o PDF.");
+      } else if (error?.code === "SIZE") {
+        flashPanel3DropzoneError("error-size", "Archivo muy grande. Máximo 5 MB.");
+      } else {
+        setPanel3ProofState("default");
+        setMessage($("#orderMessage"), error.message || "No se pudo subir el comprobante.", "error");
+      }
     }
-    await submitOrderWithProofs(fileList);
   };
 
-  flowPaymentDropzone?.addEventListener("click", (event) => {
-    // Si el dropzone esta deshabilitado, su hint interno ya explica el motivo
-    // (auth, verificacion, orden en revision). Solo bloqueamos el file picker.
-    if (flowPaymentDropzone.dataset.disabled === "true") event.preventDefault();
+  panel3Dropzone?.addEventListener("click", (event) => {
+    if (dropzoneIsDisabled()) {
+      event.preventDefault();
+    }
   });
-  flowPaymentInput?.addEventListener("change", async () => {
-    const files = flowPaymentInput.files;
+  panel3Dropzone?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      if (dropzoneIsDisabled()) return;
+      event.preventDefault();
+      panel3ProofInput?.click();
+    }
+  });
+  panel3ProofInput?.addEventListener("change", async () => {
+    const files = panel3ProofInput.files;
     try {
       await handleProofFiles(files);
     } finally {
-      if (flowPaymentInput) flowPaymentInput.value = "";
+      if (panel3ProofInput) panel3ProofInput.value = "";
     }
   });
-  ["dragenter", "dragover"].forEach((eventName) => {
-    flowPaymentDropzone?.addEventListener(eventName, (event) => {
+
+  // Drag-over visual + drop en la dropzone Y sobre el thumbnail rechazado
+  // (spec §5: "Drop de archivo encima del thumbnail rechazado lo reemplaza").
+  const proofDropTargets = [panel3Dropzone, $("#panel3ProofCard")].filter(Boolean);
+  proofDropTargets.forEach((target) => {
+    ["dragenter", "dragover"].forEach((eventName) => {
+      target.addEventListener(eventName, (event) => {
+        if (!hasDraggedFiles(event)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (dropzoneIsDisabled()) {
+          if (event.dataTransfer) event.dataTransfer.dropEffect = "none";
+          return;
+        }
+        if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+        if (panel3Proof) panel3Proof.dataset.state = "dragover";
+      });
+    });
+    ["dragleave", "dragend"].forEach((eventName) => {
+      target.addEventListener(eventName, (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        // Sólo limpiamos dragover si el cursor sale del bloque entero.
+        if (panel3Proof?.dataset.state === "dragover") {
+          // Restaurar al estado lógico (uploaded/rejected/default) según la orden.
+          updateQuote();
+        }
+      });
+    });
+    target.addEventListener("drop", async (event) => {
       if (!hasDraggedFiles(event)) return;
       event.preventDefault();
       event.stopPropagation();
-      if (flowPaymentDropzone.dataset.disabled === "true") {
-        if (event.dataTransfer) event.dataTransfer.dropEffect = "none";
-        return;
-      }
-      if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
-      flowPaymentDropzone.classList.add("drag-active");
+      if (dropzoneIsDisabled()) return;
+      await handleProofFiles(event.dataTransfer?.files || []);
     });
   });
-  ["dragleave", "dragend"].forEach((eventName) => {
-    flowPaymentDropzone?.addEventListener(eventName, (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      flowPaymentDropzone.classList.remove("drag-active");
-    });
-  });
-  flowPaymentDropzone?.addEventListener("drop", async (event) => {
-    if (!hasDraggedFiles(event)) return;
-    event.preventDefault();
-    event.stopPropagation();
-    flowPaymentDropzone.classList.remove("drag-active");
-    if (flowPaymentDropzone.dataset.disabled === "true") return;
-    await handleProofFiles(event.dataTransfer?.files || []);
+
+  // Botón Reemplazar / Subir otro (mismo nodo, label dinámico según estado).
+  panel3ProofAction?.addEventListener("click", () => {
+    if (dropzoneIsDisabled()) return;
+    panel3ProofInput?.click();
   });
   $("#refreshButton").addEventListener("click", async () => {
     await refreshOrdersSilently();

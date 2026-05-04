@@ -160,11 +160,17 @@ function renderPriceDecisionBanner(card, order) {
         if (payload?.customer) state.customer = payload.customer;
         customerUpdateHandler();
         if (action === "second_proof") {
-          const dropzone = document.querySelector("#flowPaymentDropzone");
-          if (dropzone) {
+          // Sub-commit 15b.2: la dropzone migró de #flowPaymentDropzone a
+          // #panel3Dropzone (panel 3 nuevo). El estado de bloqueo ahora vive
+          // en data-state del contenedor padre #panel3Proof.
+          const dropzone = document.querySelector("#panel3Dropzone");
+          const proofBlock = document.querySelector("#panel3Proof");
+          if (dropzone && proofBlock) {
             dropzone.scrollIntoView({ behavior: "smooth", block: "center" });
             setTimeout(() => {
-              if (dropzone.dataset.disabled !== "true") dropzone.click();
+              const blocked = proofBlock.dataset.locked === "true"
+                || ["uploading", "validated"].includes(proofBlock.dataset.state || "");
+              if (!blocked) dropzone.click();
             }, 350);
           }
         }

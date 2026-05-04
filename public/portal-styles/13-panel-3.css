@@ -214,10 +214,296 @@
   font-style: italic;
 }
 
+/* ============================================================================
+   PANEL 3 — Bloque comprobante (sub-commit 15b.2)
+   ============================================================================
+   Spec docs/specs/cliente/panel-3-datos-de-pago.md v1.0 §2.5 + §2.6.
+   El contenedor #panel3Proof usa data-state para controlar visibilidad y
+   apariencia: default | dragover | error-type | error-size | uploading |
+   uploaded | validated | rejected.
+   ============================================================================ */
+
+.panel-3-proof {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+/* Dropzone — estado default */
+.panel-3-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 18px 12px;
+  border: 0.5px dashed var(--color-border-tertiary);
+  border-radius: var(--border-radius-md);
+  background: white;
+  cursor: pointer;
+  position: relative;
+  transition: background 120ms ease, border-color 120ms ease;
+  outline: none;
+}
+
+.panel-3-dropzone:hover {
+  border-color: var(--color-border-secondary);
+  background: var(--color-bg-secondary);
+}
+
+.panel-3-dropzone:focus-visible {
+  outline: 2px solid var(--color-border-info);
+  outline-offset: 2px;
+}
+
+.panel-3-dropzone-icon {
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+
+.panel-3-dropzone-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.panel-3-dropzone-sub {
+  font-size: 10px;
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.panel-3-dropzone-error {
+  font-size: 11px;
+  color: #A32D2D;
+  font-weight: 500;
+  text-align: center;
+  margin-top: 4px;
+}
+
+/* Spinner del estado "Subiendo" — oculto por defecto, visible sólo cuando
+   data-state="uploading". Spec §2.5 estado "Subiendo". */
+.panel-3-dropzone-spinner {
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--color-bg-secondary);
+  border-top-color: var(--color-text-info);
+  border-radius: 50%;
+  animation: panel3SpinnerSpin 1s linear infinite;
+  display: none;
+}
+
+.panel-3-dropzone-uploading-text {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  display: none;
+}
+
+@keyframes panel3SpinnerSpin {
+  to { transform: rotate(360deg); }
+}
+
+/* Estados controlados por data-state en #panel3Proof.
+   Cuando uploading: ocultamos icon/title/sub/error y mostramos spinner+texto. */
+.panel-3-proof[data-state="uploading"] .panel-3-dropzone {
+  cursor: wait;
+}
+.panel-3-proof[data-state="uploading"] .panel-3-dropzone-icon,
+.panel-3-proof[data-state="uploading"] .panel-3-dropzone-title,
+.panel-3-proof[data-state="uploading"] .panel-3-dropzone-sub,
+.panel-3-proof[data-state="uploading"] .panel-3-dropzone-error {
+  display: none;
+}
+.panel-3-proof[data-state="uploading"] .panel-3-dropzone-spinner,
+.panel-3-proof[data-state="uploading"] .panel-3-dropzone-uploading-text {
+  display: block;
+}
+
+/* Drag-over: spec §2.5 — border 1px sólido info + fondo info suave. */
+.panel-3-proof[data-state="dragover"] .panel-3-dropzone {
+  border: 1px solid var(--color-border-info);
+  background: var(--color-bg-info);
+}
+
+/* Errores tipo / tamaño: border rojo + texto rojo + mensaje inline 4s. */
+.panel-3-proof[data-state="error-type"] .panel-3-dropzone,
+.panel-3-proof[data-state="error-size"] .panel-3-dropzone {
+  border: 1px solid #A32D2D;
+  background: #FFFAFA;
+}
+.panel-3-proof[data-state="error-type"] .panel-3-dropzone-title,
+.panel-3-proof[data-state="error-size"] .panel-3-dropzone-title,
+.panel-3-proof[data-state="error-type"] .panel-3-dropzone-icon,
+.panel-3-proof[data-state="error-size"] .panel-3-dropzone-icon {
+  color: #A32D2D;
+}
+
+/* Locked (cliente no auth o sin email verificado o panel-3 step-locked). */
+.panel-3-proof[data-locked="true"] .panel-3-dropzone {
+  cursor: not-allowed;
+  opacity: 0.6;
+  border-color: #cbd8ea;
+}
+.panel-3-proof[data-locked="true"] .panel-3-dropzone:hover {
+  background: white;
+}
+
+/* Card del comprobante post-subida (estado uploaded / rejected). */
+.panel-3-proof-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-md);
+  background: white;
+}
+.panel-3-proof-card[hidden] { display: none; }
+
+.panel-3-proof-thumb {
+  width: 48px;
+  height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.panel-3-proof-label {
+  font-size: 13px;
+  color: var(--color-text-primary);
+  flex: 1;
+  min-width: 0;
+}
+
+.panel-3-proof-action {
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  border: 0.5px solid var(--color-border-secondary);
+  background: white;
+  color: var(--color-text-primary);
+  padding: 6px 12px;
+  border-radius: var(--border-radius-md);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 120ms ease;
+}
+.panel-3-proof-action:hover {
+  background: var(--color-bg-secondary);
+}
+
+/* Estado rejected: thumbnail con opacity + X roja + label rojo + botón rojo. */
+.panel-3-proof[data-state="rejected"] .panel-3-proof-card {
+  border: 1px dashed #A32D2D;
+  background: #FFFAFA;
+}
+.panel-3-proof[data-state="rejected"] .panel-3-proof-thumb::after {
+  content: "✕";
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #A32D2D;
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.panel-3-proof[data-state="rejected"] .panel-3-proof-label {
+  color: #A32D2D;
+  font-weight: 500;
+}
+.panel-3-proof[data-state="rejected"] .panel-3-proof-action {
+  border-color: #A32D2D;
+  color: #A32D2D;
+}
+.panel-3-proof[data-state="rejected"] .panel-3-proof-action:hover {
+  background: #FCEBEB;
+}
+
+/* Cajón verde "Comprobante validado". Spec §2.6. */
+.panel-3-proof-validated {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #EAF3DE;
+  border-radius: var(--border-radius-md);
+  font-size: 12px;
+  font-weight: 500;
+  color: #27500A;
+}
+.panel-3-proof-validated[hidden] { display: none; }
+.panel-3-proof-check {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Cajón rojo con motivo de rechazo. Spec §2.6. */
+.panel-3-proof-rejected-reason {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #FCEBEB;
+  border-radius: var(--border-radius-md);
+}
+.panel-3-proof-rejected-reason[hidden] { display: none; }
+.panel-3-proof-rejected-icon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #A32D2D;
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  font-style: italic;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: serif;
+}
+.panel-3-proof-rejected-text {
+  font-size: 12px;
+  color: #791F1F;
+  line-height: 1.4;
+}
+
+/* Texto centrado abajo "o arrastrá un archivo nuevo encima" (estado rejected). */
+.panel-3-proof-drop-hint {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  font-style: italic;
+  text-align: center;
+  margin: 0;
+}
+.panel-3-proof-drop-hint[hidden] { display: none; }
+
+/* Panel 3 congelado (.step-locked) — dropzone disabled visualmente.
+   Spec §5: "panel 3 también pierde la capacidad". */
+.panel.panel-3.step-locked .panel-3-proof[data-state="default"] .panel-3-dropzone,
+.panel.panel-3.step-locked .panel-3-proof[data-state="rejected"] .panel-3-proof-action {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 /* Responsive — mobile reduce padding/sizes. Spec §4.1. */
 @media (max-width: 639.98px) {
   .panel-3-total-flag { width: 20px; height: 20px; }
   .panel-3-account { padding: 12px; }
   .panel-3-account-logo { width: 22px; height: 22px; }
   .panel-3-qr-toggle { font-size: 11px; }
+  .panel-3-dropzone { padding: 18px 12px; }
+  .panel-3-proof-thumb { width: 40px; height: 40px; }
+  .panel-3-proof-action { padding: 4px 10px; }
 }

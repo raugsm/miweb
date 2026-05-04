@@ -1,15 +1,21 @@
-// Sub-commit 15b.1 — render del panel 3 (Datos de pago) parte estática.
-// Spec: docs/specs/cliente/panel-3-datos-de-pago.md v1.0 §1-§2.
+// Sub-commit 15b.1 + 15b.2 — render del panel 3 (Datos de pago) entero.
+// Spec: docs/specs/cliente/panel-3-datos-de-pago.md v1.0 §1-§7.
 //
-// QUE: dado el método elegido en panel 1 + el total calculado en panel 2,
-// renderiza la card oscura "TOTAL A PAGAR" (bandera + monto), la card de
-// cuenta del método (avatar/logo + nombre + fields dinámicos) y los toggles
-// de QR / Yape alternativo.
+// QUE: dado el método elegido en panel 1 + el total calculado en panel 2 +
+// la lista de órdenes del cliente, renderiza:
+//   - Card oscura "TOTAL A PAGAR" (bandera + monto local).
+//   - Card cuenta del método (logo + displayName + fields + Copiar individual + toggle QR).
+//   - Link "Ver otra cuenta Yape" cuando aplique.
+//   - Bloque del comprobante con 6 estados de dropzone + 4 estados post-subida
+//     (Subiendo, Subido, Validado, Rechazado con motivo).
 //
-// NO INCLUYE (queda para 15b.2): dropzone del comprobante + estados post-subida.
+// El bloque del comprobante reacciona a `state.customer.orders[]` — el SSE
+// existente (live-orders.js) dispara updateQuote() ante cualquier cambio de
+// orden, lo cual re-ejecuta updatePanel3 con el contexto actualizado.
 
 import { $ } from "./dom.js";
 import { paymentAmountText, paymentByCode, paymentFlagSvg } from "./payments.js";
+import { state } from "./state.js";
 
 // Estado in-memory del panel. Se resetea cuando cambia la pill (panel 1) o
 // cuando el método deja de tener alternativa.
@@ -167,6 +173,156 @@ export function updatePanel3(context = {}) {
       yapeAltLink.hidden = true;
     }
   }
+
+  // Bloque del comprobante — sub-commit 15b.2. Spec §2.5 + §2.6.
+  renderProofBlock();
+}
+
+// QUE: pinta el bloque #panel3Proof según el estado de la orden activa
+// (state.customer.orders[]) o el estado transitorio (uploading / error).
+// El estado transitorio (uploading, error-type, error-size, dragover) se
+// preserva si está en curso — los timers de error se manejan en
+// flashPanel3DropzoneError. El estado lógico (default/uploaded/validated/
+// rejected) se deriva de la orden y siempre prevalece tras la transición.
+function renderProofBlock() {
+  const proof = $("#panel3Proof");
+  if (!proof) return;
+
+  // Estados transitorios mantienen su data-state hasta que su timer expire
+  // o el upload termine. NO los pisamos en este re-render.
+  const transitional = ["uploading", "error-type", "error-size", "dragover"];
+  if (transitional.includes(proof.dataset.state)) return;
+
+  const customer = state.customer;
+  const orders = customer?.orders || [];
+  const orderInReview = orders.find((order) => order.publicStatus === "PAGO_EN_REVISION") || null;
+  const orderRejected = orders.find((order) => order.publicStatus === "PAGO_RECHAZADO") || null;
+  const orderValidated = orders.find((order) => (
+    ["EN_PREPARACION", "LISTO_PARA_CONEXION", "EN_PROCESO"].includes(order.publicStatus)
+  )) || null;
+  const authenticated = Boolean(customer?.user && customer?.client);
+  const emailVerified = Boolean(customer?.client?.emailVerified);
+  const lock = !authenticated || !emailVerified;
+  proof.dataset.locked = lock ? "true" : "false";
+
+  const dropzone = $("#panel3Dropzone");
+  const proofCard = $("#panel3ProofCard");
+  const proofThumb = $("#panel3ProofThumb");
+  const proofLabel = $("#panel3ProofLabel");
+  const proofAction = $("#panel3ProofAction");
+  const validated = $("#panel3ProofValidated");
+  const rejectedReason = $("#panel3ProofRejectedReason");
+  const rejectedText = $("#panel3ProofRejectedText");
+  const dropHint = $("#panel3ProofDropHint");
+
+  // Helper: oculta todos los sub-bloques antes de mostrar el correspondiente.
+  const hideAll = () => {
+    if (proofCard) proofCard.hidden = true;
+    if (validated) validated.hidden = true;
+    if (rejectedReason) rejectedReason.hidden = true;
+    if (dropHint) dropHint.hidden = true;
+    if (dropzone) dropzone.hidden = false;
+  };
+
+  if (orderValidated) {
+    // Cajón verde "Comprobante validado". Thumbnail oculto (spec §2.6).
+    proof.dataset.state = "validated";
+    hideAll();
+    if (dropzone) dropzone.hidden = true;
+    if (validated) validated.hidden = false;
+    return;
+  }
+
+  if (orderInReview) {
+    // Estado "Subido (esperando validación)" — thumbnail + Reemplazar.
+    proof.dataset.state = "uploaded";
+    hideAll();
+    if (dropzone) dropzone.hidden = true;
+    if (proofCard) {
+      proofCard.hidden = false;
+      const proofs = orderInReview.paymentProofs || [];
+      const lastProof = proofs[proofs.length - 1];
+      if (proofThumb) proofThumb.innerHTML = proofThumbSvg(lastProof);
+      if (proofLabel) proofLabel.textContent = "Comprobante listo";
+      if (proofAction) {
+        proofAction.textContent = "Reemplazar";
+        proofAction.setAttribute("aria-label", "Reemplazar comprobante");
+      }
+    }
+    return;
+  }
+
+  if (orderRejected) {
+    // Thumbnail con X roja + botón Subir otro + cajón rojo con motivo
+    // + texto "o arrastrá un archivo nuevo encima". Spec §2.6 + §3 edge 11.
+    proof.dataset.state = "rejected";
+    hideAll();
+    if (dropzone) dropzone.hidden = true;
+    if (proofCard) {
+      proofCard.hidden = false;
+      const proofs = orderRejected.paymentProofs || [];
+      const lastProof = proofs[proofs.length - 1];
+      if (proofThumb) proofThumb.innerHTML = proofThumbSvg(lastProof, true);
+      if (proofLabel) proofLabel.textContent = "Comprobante · Rechazado";
+      if (proofAction) {
+        proofAction.textContent = "Subir otro";
+        proofAction.setAttribute("aria-label", "Subir otro comprobante");
+      }
+    }
+    if (rejectedReason && rejectedText) {
+      // Spec §2.6 + decisión E.3 sesión 16: el operador escribe texto libre
+      // (no dropdown). Mostramos el string entero sin parsing title/detail.
+      const reason = String(orderRejected.paymentRejectedReason || "").trim()
+        || "Comprobante rechazado.";
+      rejectedText.textContent = reason;
+      rejectedReason.hidden = false;
+    }
+    if (dropHint) dropHint.hidden = false;
+    return;
+  }
+
+  // Estado default — sin orden activa o sin comprobante en flujo. Spec §2.5.
+  proof.dataset.state = "default";
+  hideAll();
+}
+
+// Devuelve un SVG simple según el tipo de archivo del proof. Si no hay proof,
+// devuelve el ícono genérico de imagen.
+function proofThumbSvg(proof, rejected = false) {
+  const isPdf = String(proof?.type || "").toLowerCase() === "application/pdf";
+  const opacity = rejected ? "0.5" : "1";
+  if (isPdf) {
+    return `<svg viewBox="0 0 24 24" width="48" height="48" aria-hidden="true" style="opacity:${opacity}"><rect x="4" y="2" width="16" height="20" rx="2" fill="#A32D2D"/><text x="12" y="16" text-anchor="middle" font-size="7" font-weight="700" fill="#FFFFFF" font-family="Arial,sans-serif">PDF</text></svg>`;
+  }
+  return `<svg viewBox="0 0 24 24" width="48" height="48" aria-hidden="true" style="opacity:${opacity}"><rect x="3" y="4" width="18" height="16" rx="2" fill="#E8EDF5" stroke="#314660" stroke-width="0.5"/><circle cx="9" cy="10" r="1.5" fill="#314660"/><path d="M3 18l5-5 4 4 3-3 6 6H3z" fill="#314660"/></svg>`;
+}
+
+// Setea el estado transitorio del bloque proof (uploading/dragover/etc.).
+// Llamado desde events.js cuando arranca un upload o cambia el visual de drag.
+export function setPanel3ProofState(stateName) {
+  const proof = $("#panel3Proof");
+  if (!proof) return;
+  proof.dataset.state = stateName;
+}
+
+// Muestra el cajón rojo inline con el mensaje de error de validación durante
+// 4 segundos, después vuelve a default. Spec §2.5 (estados error-type / error-size).
+let dropzoneErrorTimer = null;
+export function flashPanel3DropzoneError(stateName, message) {
+  const proof = $("#panel3Proof");
+  const errorNode = $("#panel3DropzoneError");
+  if (!proof || !errorNode) return;
+  proof.dataset.state = stateName;
+  errorNode.textContent = message;
+  errorNode.hidden = false;
+  if (dropzoneErrorTimer) clearTimeout(dropzoneErrorTimer);
+  dropzoneErrorTimer = setTimeout(() => {
+    errorNode.hidden = true;
+    errorNode.textContent = "";
+    proof.dataset.state = "default";
+    renderProofBlock();
+    dropzoneErrorTimer = null;
+  }, 4000);
 }
 
 // Toggle del QR — invocado desde events.js. Sólo muta estado; quien llama

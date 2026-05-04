@@ -4,13 +4,15 @@
 
 **Reemplaza a:** no había spec previa. Hereda decisiones conceptuales de sesión 12 sobre composición de card, comportamiento del estado, modal de historial, abortar proceso, etc. Pero la composición de la card cambió mucho durante sesión 13, ver changelog.
 
+> **Nota (sub-commit 15b.2):** la decisión "orden nace en panel 4" fue invertida — ahora la orden nace cuando el cliente sube comprobante en panel 3 (POST `/api/portal/orders/frp` crea orden + adjunta proof en una sola llamada). Las referencias a "Equipo conectado" como momento de creación de la orden quedan obsoletas y se reescriben en sub-commit 15d/15e cuando se implemente la UI de Mis órdenes y panel 4.
+
 ---
 
 ## Contexto
 
 Es la **zona inferior** de la pantalla principal cliente, debajo de los 4 paneles paralelos. Muestra todas las órdenes que el cliente ya tiene en seguimiento (las que cruzaron el umbral de "haber apretado el botón Equipo conectado en panel 4 con comprobante validado").
 
-**Decisión clave heredada:** una orden **nace** recién cuando el cliente aprieta "Equipo conectado" en panel 4. Antes de eso, lo que existe es un "pedido en armado" que vive en los paneles 1-2-3, no acá.
+**Decisión clave heredada:** una orden **nace** cuando el cliente sube el comprobante en el panel 3 (sub-commit 15b.2 — invierte la decisión previa "nace al apretar Equipo conectado"). Antes de subir el comprobante, lo que existe es un "pedido en armado" que vive en los paneles 1-2-3, sin persistir en backend.
 
 **Audiencia:** técnico de tienda. Para 1 equipo es seguimiento simple. Para N equipos (mayoría experimentada del rubro), tiene control granular sobre cada equipo individual.
 

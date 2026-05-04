@@ -412,77 +412,10 @@ export function updateQuote() {
     }
   }
 
-  // Sub-commit 15b.1: render del panel 3 (Datos de pago) — card oscura
-  // TOTAL A PAGAR + card cuenta dinámica + toggles. Spec panel-3 §1-§2.
+  // Sub-commit 15b.1 + 15b.2: render del panel 3 entero — card oscura TOTAL,
+  // card cuenta dinámica con toggles, dropzone + estados post-subida.
+  // Spec panel-3-datos-de-pago.md v1.0 §1-§7.
   updatePanel3(context);
-
-  // Legacy IDs del panel 3 (hidden hasta 15b.2). Mantengo updates por compatibilidad
-  // con el modal de Cuentas y `paymentOptionAmountText` que aún leen estos nodos.
-  const quoteUsdt = $("#quoteTotalUsdt");
-  const quoteLocal = $("#quoteTotalLocal");
-  const quoteCurrencyLabel = $("#quoteCurrencyLabel");
-  const paymentBadge = $("#currentPaymentBadge");
-  if (quoteUsdt) quoteUsdt.textContent = money(context.totalUsdt);
-  if (quoteLocal) quoteLocal.textContent = paymentAmountText(context.totalUsdt, payment);
-  if (quoteCurrencyLabel) quoteCurrencyLabel.textContent = `${paymentFlag(payment)} ${payment?.currency || "Tu moneda"}`;
-  if (paymentBadge) paymentBadge.textContent = paymentOptionLabel(payment);
-
-  updateFlowPaymentDropzone();
-}
-
-export function updateFlowPaymentDropzone() {
-  const dropzone = $("#flowPaymentDropzone");
-  const hint = $("#flowPaymentDropzoneHint");
-  const statusBanner = $("#flowProofStatusBanner");
-  const rejectionBanner = $("#flowProofRejectionBanner");
-  if (!dropzone || !hint) return;
-  // QUE: paso 3 visual segun estado de la orden activa:
-  //  - PAGO_EN_REVISION: dropzone OCULTO, banner azul "Comprobante recibido..." VISIBLE.
-  //  - PAGO_RECHAZADO:   dropzone VISIBLE habilitado, banner rojo con motivo arriba.
-  //  - ESPERANDO_PAGO o sin orden: dropzone VISIBLE habilitado o disabled segun auth+verif.
-  //  - Otros (in-flight): dropzone visible-pero-disabled. step-locked CSS lo grisea igual.
-  // POR QUE: ajuste post PR-0.5 — el banner azul no es notificacion, es estado del paso
-  // (reemplaza al dropzone mientras esta en revision). El banner rojo es feedback de
-  // rechazo + invitacion a re-subir, no notificacion tampoco.
-  const customer = state.customer;
-  const orders = customer?.orders || [];
-  const orderInReview = orders.find((order) => order.publicStatus === "PAGO_EN_REVISION") || null;
-  const orderRejected = orders.find((order) => order.publicStatus === "PAGO_RECHAZADO") || null;
-  const targetOrder = paymentUploadTargetOrder();
-  const authenticated = Boolean(customer?.user && customer?.client);
-  const emailVerified = Boolean(customer?.client?.emailVerified);
-  const hasInFlightOrder = orders.some((order) => (
-    ["PAGO_EN_REVISION", "EN_PREPARACION", "LISTO_PARA_CONEXION", "EN_PROCESO", "REVISION_COMPATIBILIDAD"].includes(order.publicStatus)
-  ));
-
-  if (statusBanner) statusBanner.hidden = !orderInReview;
-  if (rejectionBanner) {
-    rejectionBanner.hidden = !orderRejected;
-    if (orderRejected) {
-      const reasonNode = rejectionBanner.querySelector("[data-flow-rejection-reason]");
-      const reason = String(orderRejected.paymentRejectedReason || "").trim() || "Comprobante rechazado.";
-      if (reasonNode) reasonNode.textContent = `Motivo: ${reason} Subí un nuevo comprobante.`;
-    }
-  }
-  dropzone.hidden = Boolean(orderInReview);
-
-  const enabled = authenticated && emailVerified && (Boolean(targetOrder) || !hasInFlightOrder);
-  dropzone.dataset.disabled = enabled ? "false" : "true";
-  dropzone.classList.toggle("is-disabled", !enabled);
-  dropzone.dataset.orderId = targetOrder?.id || "";
-  if (!authenticated) {
-    hint.textContent = "Inicia sesion para subir tu comprobante";
-  } else if (!emailVerified) {
-    hint.textContent = "Verifica tu correo para subir tu comprobante";
-  } else if (orderRejected) {
-    hint.textContent = `Subir nuevo comprobante para ${orderRejected.code}`;
-  } else if (targetOrder) {
-    hint.textContent = `Pago de ${targetOrder.code}`;
-  } else if (hasInFlightOrder) {
-    hint.textContent = "Tu solicitud esta avanzando. No subas otro comprobante.";
-  } else {
-    hint.textContent = "Sube tu comprobante (foto o PDF)";
-  }
 }
 
 export function paymentSelectedInDropdown(paymentCode) {

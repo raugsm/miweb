@@ -19,6 +19,7 @@ import {
   deviceMaxAgeSeconds,
   maxFinalLogImageBytes,
   maxFinalLogImages,
+  maxPaymentProofBytes,
   maxPaymentProofImages,
   maxPortalOrderRequestsPerWindow,
   maxPortalProofRequestsPerWindow,
@@ -3169,22 +3170,31 @@ function normalizePhone(value) {
   return cleanText(value, 40).replace(/[^\d+]/g, "");
 }
 
-function sanitizeImageAttachments(value, maxImages, errorLabel) {
+// Sub-commit 15b.2: parametrizado con `opts` para soportar el caso del comprobante
+// del cliente (acepta PDF + cap 5 MB) sin afectar logs finales (image-only + 2 MB).
+// Defaults preservan el comportamiento previo image-only para callers existentes.
+const IMAGE_ONLY_DATAURL_RE = /^data:image\/(png|jpe?g|webp);base64,[a-z0-9+/=]+$/i;
+const IMAGE_OR_PDF_DATAURL_RE = /^data:(image\/(png|jpe?g|webp)|application\/pdf);base64,[a-z0-9+/=]+$/i;
+function sanitizeImageAttachments(value, maxImages, errorLabel, opts = {}) {
   if (!Array.isArray(value)) return [];
   if (value.length > maxImages) {
     const error = new Error(`Maximo ${maxImages} imagenes por ${errorLabel}.`);
     error.status = 400;
     throw error;
   }
+  const validTypes = opts.validTypes || ["image/png", "image/jpeg", "image/webp"];
+  const dataUrlPattern = opts.dataUrlPattern || IMAGE_ONLY_DATAURL_RE;
+  const maxBytes = Number.isFinite(opts.maxBytes) ? opts.maxBytes : maxFinalLogImageBytes;
+  const errorMessage = opts.invalidMessage || "Imagen de log invalida o demasiado pesada.";
   return value.map((image) => {
     const name = cleanText(image?.name || "log-final.png", 90);
     const type = cleanText(image?.type || "", 30);
     const dataUrl = String(image?.dataUrl || "");
     const size = Number(image?.size || 0);
-    const validType = ["image/png", "image/jpeg", "image/webp"].includes(type);
-    const validDataUrl = /^data:image\/(png|jpe?g|webp);base64,[a-z0-9+/=]+$/i.test(dataUrl);
-    if (!validType || !validDataUrl || !Number.isFinite(size) || size <= 0 || size > maxFinalLogImageBytes) {
-      const error = new Error("Imagen de log invalida o demasiado pesada.");
+    const validType = validTypes.includes(type);
+    const validDataUrl = dataUrlPattern.test(dataUrl);
+    if (!validType || !validDataUrl || !Number.isFinite(size) || size <= 0 || size > maxBytes) {
+      const error = new Error(errorMessage);
       error.status = 400;
       throw error;
     }
@@ -3198,7 +3208,12 @@ function sanitizeFinalLogImages(value) {
 }
 
 function sanitizePaymentProofImages(value) {
-  return sanitizeImageAttachments(value, maxPaymentProofImages, "comprobante");
+  return sanitizeImageAttachments(value, maxPaymentProofImages, "comprobante", {
+    validTypes: ["image/png", "image/jpeg", "image/webp", "application/pdf"],
+    dataUrlPattern: IMAGE_OR_PDF_DATAURL_RE,
+    maxBytes: maxPaymentProofBytes,
+    invalidMessage: "Comprobante invalido o demasiado pesado (max 5 MB, JPG/PNG/PDF).",
+  });
 }
 
 function phoneKey(value) {

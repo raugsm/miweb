@@ -5,7 +5,6 @@ import { startOrdersLive, stopOrdersLive } from "./live-orders.js";
 import { renderOrders } from "./orders.js";
 import {
   renderPaymentPills,
-  updateFlowPaymentDropzone,
   updateQuote,
 } from "./payments.js";
 import { stepGuideMarkup } from "./connection.js";
@@ -187,7 +186,6 @@ export function renderCustomer() {
   $("#monthlyUsage").textContent = String(customer.monthlyUsage || 0);
   $("#deviceStatus").textContent = customer.device?.authorizedForBenefits ? "Autorizado" : "Sin beneficios";
   $("#verificationCard").classList.toggle("hidden", customer.client.emailVerified);
-  $("#copyPaymentButton").disabled = !customer.client.emailVerified;
   // PR-2a.4: banner deuda VIP pendiente del cierre anterior. Bloquea creacion
   // de nuevas ordenes desde el backend (POST /api/portal/orders/frp → 403).
   const debtBanner = $("#vipDebtBanner");
@@ -198,7 +196,8 @@ export function renderCustomer() {
     if (amountNode) amountNode.textContent = debt.toFixed(2);
   }
   applyFlowState(customer);
-  updateFlowPaymentDropzone();
+  // Sub-commit 15b.2: el render de la dropzone del panel 3 se hace dentro de
+  // updatePanel3() (llamado desde updateQuote en applyFlowState → renderCustomer).
   // PR-2a-final.bundle2 item 2: arrancar/refrescar el timer de inactividad
   // paso 2. Auto-stop interno cuando hay orden in-flight (paso 3+).
   resetPaso2InactivityTimer();
@@ -230,7 +229,6 @@ function applyFlowState(customer) {
 
   renderFlowCta(flowState);
   applyStepLocks(flowState);
-  toggleProofWarning(flowState);
   applyStep4Visibility(customer);
 }
 
@@ -264,12 +262,6 @@ function applyStepLocks(flowState) {
   [".panel-1", ".panel-2", ".panel-3"].forEach((selector) => {
     document.querySelector(selector)?.classList.toggle("step-locked", lock);
   });
-}
-
-function toggleProofWarning(flowState) {
-  const warning = document.querySelector("#flowProofWarning");
-  if (!warning) return;
-  warning.classList.toggle("hidden", flowState !== "awaiting_proof");
 }
 
 // QUE: muestra el paso 4 (Conexion) solo cuando el pago fue VALIDADO por un
