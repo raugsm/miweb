@@ -1,125 +1,166 @@
 # Panel 4 — Conexión
 
-**Versión:** 1.1 · **Fecha:** 4 de mayo 2026 · **Estado:** spec formal con las 8 piezas. v1.1 alinea el botón "Equipo conectado" con la decisión D1 del sub-commit 15b.2 (la orden nace en Panel 3 al subir comprobante, no al apretar este botón). Sin cambio visual para el cliente.
+**Versión:** 1.2 · **Fecha:** 4 de mayo 2026 · **Estado:** spec formal con las 8 piezas, actualizada en sesión 15c con cambios en el modelo de cards.
 
-**Reemplaza a:** no había spec previa formal. Hereda decisiones del HANDOFF línea 594 ("paso 4: SIN banner pago aprobado, mini-Redirector NO inline, va en bottom sheet por botón ¿Dónde pego estos datos?, datos con badges 1° azul / 2° verde matcheando los campos del Redirector") y del modelo de pantalla principal (sesiones 11-12-13).
+**Reemplaza a:** `panel-4-conexion.md` v1.1 (sesión 15c.1) y v1.0 (sesión 14).
+
+---
+
+## Cambios en v1.2 (sesión 15c — mini-spec)
+
+Esta versión modifica el modelo de visibilidad de las cards Technician ID + Código del proceso. Hasta v1.1 las cards solo se mostraban en estado 4 (orden activa). En v1.2, las cards están **siempre visibles** desde que el cliente está logueado, con comportamiento de carga progresivo.
+
+**Las 5 decisiones de la mini-spec:**
+
+1. **Cards siempre visibles desde login.** Las cards Technician ID + Código aparecen no bien el cliente entra al portal logueado, sin importar si tiene orden, si subió comprobante, o si está apenas mirando.
+2. **Technician ID cambia en vivo antes de que nazca la orden.** Si Jack y Angelo se cambian de turno mientras el cliente está mirando el panel, la card del Tech ID actualiza al ID nuevo automáticamente vía SSE. Cuando el cliente aprieta "Equipo conectado", el ID se "freeze-a" en la orden recién nacida y ya no cambia retroactivamente.
+3. **Código del proceso aparece al subir el comprobante** (Escenario A). En el momento que el cliente sube el comprobante de pago en Panel 3, la card del Código pasa de placeholder a mostrar el código real (`CL-YYYYMMDD-NNN-Q`). El código se queda visible aunque el técnico rechace el comprobante.
+4. **Texto placeholder de la card Código:** *"Aparecerá cuando subas tu pago"*. Se muestra mientras no haya código real generado.
+5. **Botón Copiar de la card Código:** oculto mientras se muestra el placeholder. Aparece cuando aparece el código real.
+
+**Implicación principal:** los 6 estados visuales de v1.1 se reorganizan. Ya no se diferencian por "qué cards se ven" sino por "si el botón 'Equipo conectado' aparece o no" y "si el Código del proceso está en placeholder o tiene valor real". Ver §2 actualizada.
 
 ---
 
 ## Contexto
 
-Es el **panel 4 de los 4 paneles paralelos** que componen la pantalla principal cliente. Es el panel que más estados tiene a lo largo del flujo (6 estados visibles).
+Es el **panel 4 de los 4 paneles paralelos** que componen la pantalla principal cliente.
 
 Cumple 3 funciones clave:
 
-1. **Descarga del Redirector v2.5 siempre disponible** — desde el momento inicial, sin gating. Cliente nuevo o experto, con orden o sin orden.
-2. **Botón "Equipo conectado" post-validación** — el clic de este botón es el que **hace nacer la orden** y la mueve a la sección Mis órdenes.
-3. **Datos de conexión cuando hay orden activa** — Technician ID + Código del proceso, que el cliente pega en el Redirector para que el técnico procese sus equipos.
+1. **Descarga del Redirector v2.5 siempre disponible** — desde el momento inicial, sin gating.
+2. **Botón "Equipo conectado" post-validación** — el clic confirma que el equipo físico está conectado al PC y dispara los siguientes pasos del lado operador.
+3. **Datos de conexión visibles desde login** — Technician ID + Código del proceso, que el cliente pega en el Redirector.
 
 **Audiencia:** técnico de tienda. Familiar con la mecánica de bypass FRP. Repetidor de alta frecuencia.
 
 **Posición en el flow:** columna 4 de la fila horizontal de paneles paralelos (desktop) o cuarto panel del stack vertical (mobile). El panel 4 tiene una particularidad: a diferencia de paneles 1-2-3, **NO se congela**. El cliente siempre puede descargar el Redirector y, en momentos apropiados, apretar "Equipo conectado".
 
+**Decisión heredada de 15b.2 (D1):** la orden nace en Panel 3 cuando el cliente sube el comprobante. El botón "Equipo conectado" del Panel 4 NO crea la orden — usa el endpoint existente `POST /api/portal/orders/:id/notify-connected` para confirmar conexión física del equipo.
+
 ---
 
 ## 1. Mockup visual
 
-**Estado del mockup:** decisiones visuales validadas en sesión 14 con mockups en chat (estado 4 con cards apiladas + modal "¿Dónde pegar estos códigos?" con captura real del Redirector). Archivo HTML standalone se entrega en la misma sesión 14 como parte de los mockups consolidados de la pantalla principal completa.
+**Estado del mockup:** decisiones visuales validadas en sesión 14 + sesión 15c. La estructura de los 6 estados (v1.0) cambia en v1.2 a 3 estados visuales reales (ver §2). El mockup HTML standalone consolidado (`docs/specs/cliente/mockups/pantalla-principal-cliente.html`) debe actualizarse para reflejar el nuevo modelo de cards siempre visibles.
 
 ### Estructura visual (desktop ~400px de ancho, mobile ~340px)
 
 De arriba hacia abajo, dentro del panel:
 
 1. **Header:** título "Conexión" en 16px, weight 500. Sin numeración delante.
-2. **Contenido central** (varía drásticamente según los 6 estados — ver §2).
-3. **Botón "Descargar Redirector v2.5"** persistente — siempre visible, en TODOS los estados. Botón con estilo destacado (background `--color-background-info`, color `--color-text-info`, border 0.5px info, padding ~8-10px, font-size 12-13px, ícono ⬇ a la izquierda).
-
-### Estados generales (resumen — detalle en §2)
-
-| Estado | Cuándo | Contenido central |
-|---|---|---|
-| 0 — Inicial | Cliente recién entró, sin pedido | (vacío — solo botón Descargar Redirector) |
-| 1 — Armando pedido | Paneles 1-2-3 editables, comprobante no subido | Igual al estado 0 |
-| 2 — Validación en curso | Comprobante subido, técnico aún no validó | Igual al estado 0 (decisión sesión 14: sin "Esperando validación…" en panel 4 — la señal de validación vive en panel 3 + paneles 1-2-3 congelados) |
-| 3 — Validado, pre-clic | Comprobante validado, cliente aún no apretó | Botón **"Equipo conectado"** + (botón Descargar abajo) |
-| 4 — Orden activa | Cliente apretó "Equipo conectado", orden nació | Cards Technician ID + Código del proceso + botón "¿Dónde pegar estos códigos?" + (botón Descargar abajo) |
-| 5 — Comprobante rechazado | Técnico rechazó | Igual al estado 0 |
+2. **Card "Technician ID":** label arriba (11px secondary), valor en monospace (12-14px weight 500) sobre fondo `--color-bg-secondary`, botón "Copiar" a la derecha. **Visible siempre.**
+3. **Card "Código del proceso":** mismo formato. Muestra placeholder *"Aparecerá cuando subas tu pago"* o el código real según el estado. **Visible siempre.** Botón "Copiar" oculto cuando muestra placeholder.
+4. **Botón "Equipo conectado" (condicional):** aparece cuando `paymentProof.status === 'validated'`. Estilo prominente azul.
+5. **Botón "¿Dónde pegar estos códigos?":** ancho completo, estilo secundario. Click → abre modal (§2.5). **Visible siempre** desde que las cards están visibles.
+6. **Botón "Descargar Redirector v2.5":** persistente, abajo de todo. **Visible siempre.**
 
 ---
 
-## 2. Componentes y estados
+## 2. Componentes y estados (v1.2)
 
-### 2.1 Botón "Descargar Redirector v2.5" — persistente
+### 2.1 Modelo de estados rediseñado
 
-Botón presente en TODOS los estados. Decisión firme sesión 12 (OQ-10):
+A diferencia de v1.0/v1.1 (6 estados visuales), v1.2 tiene **3 estados visuales reales** definidos por dos variables:
 
-- Texto: "Descargar Redirector v2.5"
-- Ícono: flecha hacia abajo (⬇) a la izquierda del texto.
-- Estilo: background `--color-background-info`, color `--color-text-info`, border 0.5px info, padding 8-10px, font-size 12-13px, weight 500.
-- Click → descarga directa del archivo `usb-redirector-customer.exe` (~9 MB) sin gating, sin pasos previos, sin login adicional.
-- Posición: en estados 0/1/2/5 ocupa el centro del panel como elemento principal. En estados 3 y 4 vive abajo del contenido, ocupando ancho completo.
+- **¿Hay código del proceso?** Sí (existe orden creada en backend) / No (placeholder).
+- **¿Está validado el comprobante?** Sí (botón "Equipo conectado" visible) / No (botón oculto).
 
-**Sin texto explicativo extra** (decisión sesión 14 OQ-1: solo el botón, sin frase guía).
+Combinaciones:
 
-### 2.2 Estados 0/1/2/5 — Inicial / Armando / Validando / Rechazado
+| Estado | Código aparece | Botón "Equipo conectado" | Cuándo se da |
+|---|---|---|---|
+| **A — Inicial** | Placeholder | No | Cliente recién logueado, sin haber subido comprobante. |
+| **B — Comprobante en validación** | Código real | No | Cliente subió comprobante, técnico aún no validó (o rechazó). |
+| **C — Validado, pre-clic** | Código real | Sí | Técnico validó, cliente aún no apretó "Equipo conectado". |
 
-Los 4 estados se ven idénticos visualmente. Cambia el contexto en otros paneles (panel 3 mostrando "Comprobante recibido ✓", "Comprobante validado ✓", o "Comprobante rechazado"), pero el panel 4 muestra solo el botón de descarga.
+**Equivalencia con los 6 estados antiguos (referencia para transición):**
 
-**Decisión sesión 14 (OQ-8 reabierta):** estado 2 NO muestra "Esperando validación…" + spinner. Se quita por redundancia con panel 3 que ya señala el estado del comprobante.
+- Estado 0/1 antiguo (sin pedido / armando) → **Estado A**.
+- Estado 2 antiguo (validación en curso) → **Estado B**.
+- Estado 3 antiguo (validado pre-clic) → **Estado C**.
+- Estado 4 antiguo (orden activa post-clic) → ya no existe como estado del Panel 4 — la orden activa vive en Mis órdenes. El Panel 4 vuelve a Estado A (con el código de la última orden si todavía está activa, o placeholder si la orden finalizó).
+- Estado 5 antiguo (rechazado) → **Estado B** (el código se queda, el rechazo se comunica en Panel 3).
 
-**Layout:** botón centrado vertical y horizontalmente en el panel. Sin texto extra. El botón es el único elemento.
+### 2.2 Card "Technician ID" (siempre visible)
 
-### 2.3 Estado 3 — Comprobante validado, pre-clic del cliente
+**Layout:**
 
-**Trigger:** técnico valida el comprobante. Vía SSE, panel 3 cambia a "Comprobante validado ✓" y panel 4 cambia al estado 3.
+- Label: *"Technician ID"* (11px secondary).
+- Valor: ID del técnico activo en formato `1000 9983 5478` (12 dígitos espaciados de 4 en 4). Visualmente puede mostrarse compacto sin espacios (`100099835478`) si el ancho del panel lo requiere; al copiar, se copia el formato CON espacios.
+- Botón "Copiar" a la derecha. **Siempre funcional.**
 
-**Contenido:**
+**Carga del ID:**
 
-- Botón **"Equipo conectado"** centrado, ocupando la mayor parte del panel.
-  - Estilo: background azul primario `#185FA5`, color blanco, border-radius `--border-radius-md`, padding ~14-16px, font-size 14-16px, weight 500. Es el botón más visualmente prominente del flujo.
-  - Sin texto guía arriba ni abajo (decisión sesión 14).
-- Botón "Descargar Redirector v2.5" debajo (mismo estilo persistente).
+- Apenas el cliente entra al portal logueado, se llama a `GET /api/portal/active-technician`.
+- Mientras el ID está cargando, la card muestra el label + un placeholder de carga discreto (ej: skeleton gris) en lugar del valor.
+- Cuando responde el endpoint, la card muestra el ID real.
 
-**Click en "Equipo conectado":** dispara la creación de la orden:
+**Comportamiento dinámico (decisión 2 de la mini-spec):**
 
-1. La orden **nace** en backend con `globalStatus: in_progress`, equipo 1 en estado `waiting_technician`, equipos 2..N en estado `pending`.
-2. La card aparece en Mis órdenes con animación slide-in (~300-500ms).
-3. Paneles 1-2-3 se descongelan instantáneamente. Panel 1 mantiene última pill, panel 2 vuelve a 1, panel 3 se limpia.
-4. Panel 4 transiciona al estado 4 (orden activa).
+- Si el técnico activo cambia (Jack ↔ Angelo) mientras el cliente está mirando el panel y **la orden todavía no nació**: la card actualiza el ID en vivo vía SSE (mismo canal `/api/portal/orders/events` o el de admin-config implementado en 15a.2). Sin animación brusca — fade rápido entre el ID viejo y el nuevo.
+- Cuando el cliente aprieta "Equipo conectado" (orden nace, ya estaba creada en Panel 3 pero acá se confirma conexión): el ID que estaba en pantalla en ese momento se "freeze-a" en la orden. Si el técnico activo cambia después, la card sigue mostrando el ID congelado de esa orden.
 
-**Por qué este botón es el corazón del flujo:** el HANDOFF y las specs tienen una decisión conceptual firme (sesión 11, ratificada sesión 12 en OQ-4): *"Una orden nace recién cuando el cliente aprieta el botón 'Equipo conectado' del panel 4 con comprobante validado."* Antes de eso lo que existe es un "pedido en armado". Esto define que la sección Mis órdenes muestra solo entidades que cruzaron ese umbral.
+**Estado especial — sin orden activa:** la card muestra el ID del técnico activo en vivo (sin congelar), porque no hay orden a la cual asociarlo todavía.
 
-> **Decisión 15c.1:** el botón "Equipo conectado" usa el endpoint existente `POST /api/portal/orders/:id/notify-connected` (la orden ya nace en Panel 3 al subir comprobante, decisión D1 de sub-commit 15b.2). El endpoint `POST /api/portal/orders/create-from-validated-payment` mencionado en v1.0 NO se implementa. Visualmente el efecto para el cliente es el mismo: la card aparece en Mis órdenes recién al apretar "Equipo conectado".
+**Estado especial — con orden activa (después de "Equipo conectado"):** la card muestra el ID congelado de esa orden. Si esa orden finaliza, la card vuelve a mostrar el ID del técnico activo en vivo.
 
-### 2.4 Estado 4 — Orden activa (post-clic)
+### 2.3 Card "Código del proceso" (siempre visible)
 
-**Trigger:** cliente apretó "Equipo conectado". Orden nacida.
+**Layout:**
 
-**Contenido (decisión sesión 14):**
+- Label: *"Código del proceso"* o *"Código"* (versión corta) (11px secondary).
+- Valor: muestra dos cosas según estado:
+  - **Estado placeholder** (sin haber subido comprobante): texto *"Aparecerá cuando subas tu pago"* (12-13px secondary, sin monospace, sin botón Copiar).
+  - **Estado con código real** (post-subida de comprobante): valor en monospace `CL-YYYYMMDD-NNN-Q` (12-14px weight 500), con botón Copiar a la derecha.
 
-- **Cards apiladas** verticalmente (no en columnas):
+**Transición placeholder → código real (decisión 3 de la mini-spec):**
 
-  - **Card "Technician ID":** label arriba (11px secondary), valor en monospace (12-14px weight 500) sobre fondo `--color-background-secondary`, botón "Copiar" a la derecha.
-  - **Card "Código":** mismo formato. Label "Código del proceso" o solo "Código" (versión corta).
+- Trigger: cliente sube comprobante en Panel 3 (la orden nace en backend, decisión D1 de 15b.2).
+- Vía SSE, el Panel 4 detecta que `state.customer.orders` tiene una orden nueva con `paymentProof.status === 'uploading' | 'validating'` o más avanzado.
+- La card cambia de placeholder a código real con fade-in suave (~200ms).
+- El botón Copiar aparece junto con el código.
 
-- **Botón "¿Dónde pegar estos códigos?":** debajo de las dos cards, ocupa ancho completo. Estilo botón secundario (border 0.5px secondary, background blanco, color primary). Click → abre modal (§2.5).
+**El código se queda aunque el comprobante sea rechazado** (decisión 3 de la mini-spec, Escenario A):
 
-- **Botón "Descargar Redirector v2.5":** persistente, abajo de todo.
+- Si el técnico rechaza el comprobante, la card del Código sigue mostrando `CL-20260504-001-2`.
+- El rechazo se comunica en Panel 3 con sus propios mensajes (cajón rojo + motivo, implementado en 15b.2).
+- Cliente sube otro comprobante → mismo código (la orden ya existe en backend).
+- Cliente sube comprobante para pedido nuevo (después de finalizar el actual y descongelar paneles 1-2-3) → código nuevo.
 
-**Datos visibles:**
+**Riesgo de comunicación registrado:** el cliente puede ver el código y pensar "todo OK" antes de que el técnico valide. El Panel 3 cubre la comunicación del estado real del comprobante.
 
-- **Technician ID:** formato `1000 9983 5478` (12 dígitos espaciados de 4 en 4). Visualmente puede mostrarse compacto sin espacios (`100099835478`) si el ancho del panel lo requiere; al copiar, se copia el formato CON espacios que entiende el Redirector.
-- **Código del proceso:** formato `CL-YYYYMMDD-NNN-Q` donde Q es la cantidad de equipos del pedido. Visualmente puede acortar el año a `YYMMDD` si hace falta espacio (ej: `CL-260503-001-2`); al copiar, se copia el formato completo con año de 4 dígitos.
+### 2.4 Botón "Equipo conectado" (condicional)
 
-**Generación automática:** ambos datos se generan en backend al nacer la orden. Technician ID viene del endpoint `GET /api/portal/active-technician` (devuelve el técnico activo del momento — Jack o Angelo). Código del proceso se genera con la fecha actual + correlativo + cantidad.
+**Cuándo aparece:** solo cuando `paymentProof.status === 'validated'`.
 
-**Persistencia:** mientras la orden esté activa (`globalStatus: in_progress`), el panel 4 muestra estos datos. Cuando la orden termina (todos los equipos finalizados, `globalStatus: finished`), el panel 4 vuelve al estado 0/1 (botón Descargar como único elemento).
+**Estilo:** background azul primario `#185FA5`, color blanco, border-radius `--border-radius-md`, padding ~14-16px, font-size 14-16px, weight 500.
 
-**Comportamiento durante "En proceso":** mientras el técnico está procesando equipos, el panel 4 NO muestra estados intermedios (eso vive en Mis órdenes con sus 4 estados por equipo). El panel 4 solo muestra los datos de conexión, fijos.
+**Posición:** entre la card del Código y el botón "¿Dónde pegar?".
 
-### 2.5 Modal "¿Dónde pegar estos códigos?"
+**Click:** llama al endpoint existente `POST /api/portal/orders/:id/notify-connected` (decisión 15c.1, hereda D1 de 15b.2). Esto:
 
-**Trigger:** click en el botón homónimo del estado 4.
+1. Marca la orden con `customerConnectedAt`.
+2. La orden cambia a estado `LISTO_PARA_CONEXION`.
+3. Vía SSE, la card de Mis órdenes aparece con animación slide-in (si no estaba ya por estar la orden creada en Panel 3 — en ese caso solo cambia de estado).
+4. Se "freeze-a" el Technician ID actual en la orden.
+5. Paneles 1-2-3 se descongelan instantáneamente.
+
+**Sin texto guía arriba ni abajo del botón** (decisión sesión 14).
+
+**Por qué este botón importa:** representa el momento físico en que el equipo está conectado al PC del cliente y listo para que el técnico empiece el bypass. Aunque la orden ya nace en Panel 3 (decisión D1 de 15b.2), el "Equipo conectado" es la señal operativa real para el técnico.
+
+### 2.5 Botón "¿Dónde pegar estos códigos?" (siempre visible)
+
+**Visible siempre** desde que las cards están visibles (decisión derivada del modelo nuevo de cards).
+
+**Cuando el cliente está en estado A (Código en placeholder):** el botón funciona y abre el modal igual. El cliente puede leer las instrucciones de uso del Redirector incluso antes de tener un código real.
+
+**Click → abre modal (ver §2.6).**
+
+### 2.6 Modal "¿Dónde pegar estos códigos?"
+
+**Trigger:** click en el botón homónimo.
 
 **Layout (decisión sesión 14):**
 
@@ -130,7 +171,7 @@ Los 4 estados se ven idénticos visualmente. Cambia el contexto en otros paneles
   - Botón ✕ cuadrado 28×28 alineado a la derecha.
   - Subtítulo: "Abrí el Redirector y completá estos 2 campos" (13px, color secondary).
 - **Cuerpo principal:**
-  - **Captura real del Redirector v2.5** — imagen `1777861729916_image.png` aportada por Bryam en sesión 14, contenida dentro de un marco simulando la ventana del Redirector (header oscuro `#1f2937` con texto "USB Redirector — Customer Module", body blanco con la imagen).
+  - **Captura real del Redirector v2.5** — imagen `redirector-screenshot.png` (sube Bryam en 15c.2). Hasta entonces, mock SVG simulado del Redirector que ya existe en el repo.
   - **Badges flotantes encima de la captura:**
     - Badge azul `#185FA5` con texto blanco "1° dato", al lado del label "Technician ID:".
     - Badge verde `#639922` con texto blanco "2° dato", al lado del label "Additional information".
@@ -146,90 +187,78 @@ Los 4 estados se ven idénticos visualmente. Cambia el contexto en otros paneles
 - Click en "Entendido" o ✕ o fuera del modal → cierra sin acción.
 - Esc cierra el modal.
 
-**Nota técnica:** la imagen de la captura del Redirector (`1777861729916_image.png`) se incluye en el repo en `public/images/redirector-screenshot.png` o ubicación equivalente. Los badges flotantes se posicionan via CSS absoluto sobre la imagen.
+### 2.7 Botón "Descargar Redirector v2.5" (siempre visible)
 
-### 2.6 Animación de transición entre estados
+Sin cambios respecto a v1.1.
 
-- **Estado 2 → Estado 3** (validado): el botón "Equipo conectado" aparece con fade-in suave (~200ms).
-- **Estado 3 → Estado 4** (clic en "Equipo conectado"): cambio instantáneo (no animación), porque la animación principal vive en Mis órdenes (slide-in de la card nueva).
-- **Estado 5 → Estado 0/1** (rechazo): el botón "Equipo conectado" desaparece con fade-out, vuelve al botón Descargar único.
+- Texto: "Descargar Redirector v2.5"
+- Ícono: flecha hacia abajo (⬇) a la izquierda del texto.
+- Estilo: background `--color-bg-info`, color `--color-text-info`, border 0.5px info, padding 8-10px, font-size 12-13px, weight 500.
+- Click → descarga directa del archivo `usb-redirector-customer.exe` (~9 MB) sin gating, sin pasos previos, sin login adicional.
+- Posición: abajo de todo el panel, ocupando ancho completo.
+
+### 2.8 Animaciones de transición
+
+- **Cambio de Technician ID en vivo (sin orden):** fade rápido (~150ms) entre ID viejo y nuevo.
+- **Aparición del código real (placeholder → real):** fade-in del valor + botón Copiar (~200ms).
+- **Aparición del botón "Equipo conectado":** fade-in suave (~200ms).
+- **Click en "Equipo conectado":** botón desaparece con fade-out, paneles 1-2-3 se descongelan instantáneamente.
 
 ---
 
 ## 3. Edge cases
 
-1. **Cliente entra al portal sin estar logueado.** Login es previo a la pantalla principal (decisión OQ-9 sesión 12). Cliente sin login redirige al login, no ve el panel 4.
+1. **Cliente entra al portal sin estar logueado.** Login es previo a la pantalla principal. Cliente sin login no ve el Panel 4.
 
-2. **Cliente recién logueado, sin órdenes ni pedido en armado.** Panel 4 en estado 0/1: solo botón Descargar Redirector. Cliente puede descargar libremente sin haber pagado nada.
+2. **Cliente recién logueado, sin órdenes ni pedido en armado.** Panel 4 muestra:
+   - Card "Technician ID" con el ID del técnico activo (cargado vía endpoint).
+   - Card "Código del proceso" con placeholder *"Aparecerá cuando subas tu pago"*, sin botón Copiar.
+   - Botón "¿Dónde pegar estos códigos?" funcional.
+   - Botón "Descargar Redirector" funcional.
 
-3. **Cliente descarga Redirector pero nunca arma pedido.** No hay consecuencia. El Redirector es libre. Lo guarda para usarlo más tarde.
+3. **Cliente descarga Redirector pero nunca arma pedido.** No hay consecuencia. El Redirector es libre.
 
-4. **Cliente arma pedido (paneles 1-2-3 editables), sube comprobante.** Panel 4 sigue en estado 0/1 → 2 (visualmente idénticos). Botón Descargar visible.
+4. **Técnico activo cambia mientras cliente mira el panel sin orden.** Card del Tech ID actualiza en vivo vía SSE. El cliente puede ver el ID cambiar de Jack a Angelo en tiempo real.
 
-5. **Técnico valida el comprobante.** Vía SSE, panel 4 transiciona a estado 3 con fade-in del botón "Equipo conectado". Cliente lo aprieta cuando esté listo.
+5. **Cliente sube comprobante en Panel 3.** Card del Código pasa de placeholder a código real con fade-in. Botón Copiar aparece.
 
-6. **Cliente aprieta "Equipo conectado" sin haber descargado Redirector.** Permitido — el clic crea la orden de todos modos. Pero el cliente NO va a poder pegar los códigos en ningún lado. Solución: el botón Descargar sigue visible en estado 4, el cliente puede descargar y configurar después. Lógicamente, la orden ya está en Mis órdenes y el técnico va a esperar conexión. Si el cliente no conecta nunca, la orden queda colgada (caso "técnico desconectado" cubierto por sistema de tiempos pendiente).
+6. **Técnico valida el comprobante.** Vía SSE, panel 4 muestra el botón "Equipo conectado" con fade-in.
 
-7. **Cliente aprieta "Equipo conectado" sin haber comprado equipo físicamente conectado al PC.** Igual al edge 6: la orden se crea, el técnico va a esperar. Cliente debe conectar después. Mecánica de "Equipo listo" en Mis órdenes (decisión sesión 13) cubre los equipos 2..N — pero para el equipo 1, la conexión se asume al apretar "Equipo conectado".
+7. **Técnico rechaza el comprobante.** Card del Código sigue mostrando el código real (no vuelve a placeholder). Panel 3 comunica el rechazo. Botón "Equipo conectado" no aparece. Cliente puede subir otro comprobante.
 
-8. **Cliente cambia de técnico mientras tiene panel 4 abierto en estado 4.** Vía SSE, el endpoint `GET /api/portal/active-technician` devuelve el nuevo técnico. **Pero la orden ya nacida mantiene su Technician ID original** — no cambia retroactivamente. Esto es decisión del backend: el ID del técnico se "freeze-ea" al nacer la orden.
+8. **Cliente aprieta "Equipo conectado".** Tech ID se congela en esa orden. Card del Tech ID sigue mostrando ese ID. Si el técnico activo cambia después, la card sigue con el ID congelado. Cuando la orden finaliza, la card vuelve a mostrar el ID del técnico activo en vivo.
 
-9. **Cliente recarga la página estando en estado 4.** El panel 4 se reconstruye desde el backend. La orden está en Mis órdenes (no se duplica), y los códigos siguen siendo los mismos.
+9. **Cliente recarga la página estando con orden activa.** El panel 4 se reconstruye desde el backend. Tech ID sigue siendo el de la orden (congelado). Código sigue siendo el de la orden.
 
-10. **Cliente abre el panel en mobile con orden activa.** Panel 4 ocupa el cuarto bloque del stack vertical. Las dos cards (Technician ID, Código) siguen apiladas (ya estaban así en desktop). El modal "¿Dónde pegar?" ocupa ancho casi completo (`calc(100vw - 32px)`).
+10. **Cliente abre el panel en mobile con orden activa.** Cards Technician ID + Código apiladas (ya estaban así en desktop). Modal "¿Dónde pegar?" ocupa ancho casi completo.
 
-11. **Comprobante rechazado.** Vía SSE, panel 4 transiciona del estado 2 al 5 (visualmente idénticos al estado 0/1). Mientras tanto, panel 3 muestra el motivo de rechazo y permite reintento.
+11. **Click en "¿Dónde pegar?" antes de subir comprobante.** Modal se abre normal. Cliente puede leer las instrucciones aunque no tenga código todavía.
 
-12. **Cliente apreta "Descargar Redirector" mientras está en estado 4.** Permitido — descarga el archivo otra vez. No afecta nada (es idempotente). Útil si cliente cambió de PC y necesita reinstalar.
+12. **Cliente apreta "Descargar Redirector" en cualquier estado.** Permitido — descarga el archivo. Idempotente.
 
-13. **Click en el modal "¿Dónde pegar?" durante la subida del comprobante.** Permitido — el modal puede abrirse en cualquier estado donde el botón sea visible (solo estado 4). Mientras el botón esté visible, se puede abrir.
+13. **Multiple clicks rápidos en "Equipo conectado".** Solo el primer click cuenta (debounce backend).
 
-14. **Multiple clicks rápidos en "Equipo conectado".** Solo el primer click cuenta (debounce 1s en backend). Los siguientes se ignoran.
+14. **Cliente quiere conectar más equipos después de haber apretado "Equipo conectado".** No puede agregar al pedido actual. Tiene que usar Mis órdenes ("Equipo listo" para los equipos 2..N) o crear orden nueva (paneles 1-2-3 ya descongelados).
 
-15. **Cliente quiere conectar más equipos después de haber apretado "Equipo conectado".** No puede agregar al pedido actual. Tiene que usar Mis órdenes ("Equipo listo" para los equipos 2..N que ya están en estado Pendiente) o crear una orden nueva (paneles 1-2-3 ya descongelados).
+15. **Cliente ve código en card pero técnico rechazó.** Riesgo de comunicación: el cliente puede pensar "todo OK" porque ve el código. Mitigación: Panel 3 comunica el rechazo claramente con cajón rojo + motivo. Si en producción aparece confusión, considerar agregar un indicador visual en la card del Código (ej: borde rojo discreto) — pendiente para polish post-lanzamiento, no para 15c.2.
 
 ---
 
 ## 4. Responsive
 
-**Sistema de breakpoints del portal (decisión vigente, NO se reabre):**
-
-| Breakpoint | Rango | Layout de los 4 paneles |
-|---|---|---|
-| Mobile | <640px | 1 columna (paneles apilados) |
-| Tablet | 640–899px | 2 columnas (2×2) |
-| Laptop | 900–1199px | 4 columnas (estrechas pero legibles) |
-| Desktop | 1200–1799px | 4 columnas cómodas |
-| Ultrawide | ≥1800px | 4 columnas con `max-width: 1400px` centrado |
-
-**El ancho del panel 4 NO es fijo 400px estricto.** El panel ocupa el ancho que le da el grid contenedor de la pantalla principal en cada breakpoint. Las medidas tipográficas y los spacings internos sí están fijos; solo el ancho exterior es fluido dentro del breakpoint.
-
-Ver `public/portal-styles/00-breakpoints.css` (o equivalente). El sistema es el mismo para los 4 paneles — vive en la spec de `pantalla-principal-cliente.md`.
+Sin cambios respecto a v1.1. Sistema de breakpoints unificado del repo (Tailwind: 640 / 768 / 1024 / 1280 con max-width 1400px). Decisión D1 sesión 15: usar Tailwind del repo, ignorar números de spec hasta que las specs sean actualizadas en commit aparte.
 
 ### 4.1 Mobile (<640px)
 
-- Panel ocupa el ancho disponible del stack vertical de paneles. Ancho típico ~340px.
-- Padding interno: `1.25rem 1rem`.
-- Header 16px (igual a desktop).
-- Botón Descargar: padding 9-10px, font-size 12-13px.
-- Estado 3 botón "Equipo conectado": padding 14px, font-size 14px.
-- Estado 4 cards Technician ID + Código: padding 8px, valores en monospace 11-12px.
-- Estado 4 botón "¿Dónde pegar?": padding 8px, font-size 12px.
-- Modal: ancho `calc(100vw - 32px)` máx 460px, captura del Redirector ajustada al ancho.
+- Cards Technician ID + Código apiladas (idéntico a desktop).
+- Botón "¿Dónde pegar?" ancho completo.
+- Botón Descargar ancho completo.
+- Modal: ancho `calc(100vw - 32px)` máx 460px.
 
-### 4.2 Tablet (640–899px)
+### 4.2 Tablet / Laptop / Desktop (≥640px)
 
-- 2 paneles por fila (2×2). El panel 4 ocupa la mitad del ancho menos el gap.
-- Mismos spacings y tipografía que desktop.
-
-### 4.3 Laptop / Desktop / Ultrawide (≥900px)
-
-- 4 paneles por fila. Ancho efectivo del panel 4 varía de ~280px (laptop estrecho) a ~340px (ultrawide topado en max-width).
-- Padding interno: `1.25rem 1.5rem`.
-- Botón Descargar: padding 10px, font-size 13px.
-- Estado 3 botón "Equipo conectado": padding 16px, font-size 16px.
-- Estado 4 cards: padding 10-12px, valores 12-13px.
-- Modal: 480px ancho, captura del Redirector tamaño natural.
+- 2 / 4 columnas según breakpoint del grid de paneles.
+- Cards apiladas dentro del panel (no hay diferencia visual interna).
 
 ---
 
@@ -237,26 +266,24 @@ Ver `public/portal-styles/00-breakpoints.css` (o equivalente). El sistema es el 
 
 | Acción | Resultado |
 |---|---|
-| Click en "Descargar Redirector v2.5" | Descarga directa del archivo `usb-redirector-customer.exe`. Sin pasos previos, sin login adicional. Disponible en todos los estados. |
-| Click en "Equipo conectado" (estado 3) | Crea la orden en backend. Vía SSE, Mis órdenes recibe la card nueva con animación slide-in. Panel 4 transiciona a estado 4. Paneles 1-2-3 se descongelan. |
-| Click en "Copiar" sobre Technician ID o Código | Copia el valor formateado al portapapeles. Botón cambia a "Copiado ✓" durante 1.5s. |
-| Click en "¿Dónde pegar estos códigos?" | Abre modal con captura real del Redirector + badges 1°/2° + 3 pasos. |
+| Cliente se loguea | Cards Technician ID + Código aparecen. Tech ID carga vía endpoint, Código muestra placeholder. |
+| Click en "Copiar" sobre Technician ID | Copia el valor formateado al portapapeles. Botón cambia a "Copiado ✓" durante 1.5s. |
+| Click en "Descargar Redirector v2.5" | Descarga directa del archivo `usb-redirector-customer.exe`. |
+| Click en "¿Dónde pegar estos códigos?" | Abre modal con captura del Redirector + badges 1°/2° + 3 pasos. |
 | Click en "Entendido" / ✕ / fuera del modal | Cierra modal sin acción. |
 | Esc | Cierra modal si está abierto. |
-| Comprobante validado por técnico (vía SSE) | Panel 4 transiciona a estado 3 con fade-in del botón. |
-| Comprobante rechazado por técnico (vía SSE) | Panel 4 transiciona a estado 5 (visualmente idéntico al 0/1). |
-| Orden finaliza (todos los equipos `finished`) | Panel 4 vuelve al estado 0/1. Cliente queda listo para nuevo pedido. |
-| Tab keyboard nav en estado 0/1/2/5 | Tab order: botón Descargar. |
-| Tab keyboard nav en estado 3 | Tab order: botón "Equipo conectado" → botón Descargar. |
-| Tab keyboard nav en estado 4 | Tab order: botón Copiar Technician ID → botón Copiar Código → botón "¿Dónde pegar?" → botón Descargar. |
+| Técnico activo cambia (sin orden) | Card Tech ID actualiza en vivo vía SSE con fade rápido. |
+| Cliente sube comprobante en Panel 3 | Card del Código pasa de placeholder a código real con fade-in. Botón Copiar aparece. |
+| Técnico valida comprobante | Aparece botón "Equipo conectado" con fade-in. |
+| Técnico rechaza comprobante | Card del Código sigue mostrando el código. Botón "Equipo conectado" no aparece. Panel 3 comunica el rechazo. |
+| Click en "Equipo conectado" | Llama a `notify-connected`. Tech ID se congela. Paneles 1-2-3 se descongelan. |
+| Click en "Copiar" sobre Código | Copia el valor formateado. Botón cambia a "Copiado ✓" durante 1.5s. (Solo disponible si hay código real). |
+| Orden finaliza | Tech ID vuelve a mostrar el técnico activo en vivo. Código vuelve a placeholder cuando ya no hay orden activa (al cabo de transición — definir en implementación). |
 | Recarga de página | Estado se reconstruye desde el backend. Sin pérdida de datos. |
 
-**Sincronización en vivo:**
+**Sincronización en vivo:** vía SSE `/api/portal/orders/events`. Eventos relevantes para Panel 4: validación/rechazo de comprobante, cambio de técnico activo, finalización de orden.
 
-- Validación/rechazo del comprobante: vía SSE `/api/portal/orders/events`.
-- Cambio de técnico activo: vía SSE en el endpoint `/api/portal/active-technician`. NO afecta órdenes ya nacidas.
-
-**Comportamiento del panel 4 NO se congela** (a diferencia de paneles 1-2-3). Botón Descargar siempre clickable. Botón "Equipo conectado" solo aparece en estado 3 y solo es clickable mientras el comprobante esté validado.
+**Comportamiento del panel 4 NO se congela** (a diferencia de paneles 1-2-3).
 
 ---
 
@@ -264,30 +291,7 @@ Ver `public/portal-styles/00-breakpoints.css` (o equivalente). El sistema es el 
 
 ### 6.1 Datos que necesita (inputs)
 
-**Estado del panel 3** (para saber en qué estado del panel 4 estamos):
-
-```json
-{
-  "paymentProof": {
-    "status": "uploading" | "uploaded" | "validating" | "validated" | "rejected" | null
-  }
-}
-```
-
-**Estado de orden activa** (si existe, ya nacida):
-
-```json
-{
-  "activeOrder": {
-    "id": "PE-20260503-012",
-    "code": "CL-20260503-012-2",
-    "technicianId": "1000 9983 5478",
-    "globalStatus": "in_progress" | "finished"
-  }
-}
-```
-
-**Endpoint de técnico activo** (para mostrar el ID antes que la orden nazca, no — solo después):
+**Endpoint del técnico activo** (consumido al login y on SSE de cambio de técnico):
 
 ```http
 GET /api/portal/active-technician
@@ -302,148 +306,138 @@ Devuelve:
 }
 ```
 
-Solo se consume al momento de crear la orden (al apretar "Equipo conectado") para "freeze-ar" el ID en la orden.
+**Estado de la orden activa** (si existe en `state.customer.orders`):
 
-**Recurso del Redirector v2.5** (para descarga):
+```json
+{
+  "id": "PE-20260503-012",
+  "code": "CL-20260503-012-2",
+  "technicianId": "1000 9983 5478",
+  "publicStatus": "PAGO_EN_REVISION" | "EN_PREPARACION" | "LISTO_PARA_CONEXION" | "EN_PROCESO" | "FINALIZADO" | "PAGO_RECHAZADO"
+}
+```
+
+El Panel 4 deriva su estado de los campos de arriba:
+
+- Si no hay orden activa → Estado A (placeholder).
+- Si hay orden con `publicStatus` en `[PAGO_EN_REVISION, PAGO_RECHAZADO]` → Estado B (código real, sin botón "Equipo conectado").
+- Si hay orden con `publicStatus === EN_PREPARACION` y `paymentProof.status === 'validated'` → Estado C (código real + botón "Equipo conectado").
+- Si hay orden con `publicStatus` en `[LISTO_PARA_CONEXION, EN_PROCESO]` → Estado A para nueva interacción + Tech ID congelado de esa orden.
+
+**Recurso del Redirector v2.5:**
 
 ```http
 GET /downloads/usb-redirector-customer.exe
 ```
-
-~9 MB. Servido directamente, sin auth.
 
 ### 6.2 Datos que produce
 
 **Click en "Equipo conectado":**
 
 ```http
-POST /api/portal/orders/create-from-validated-payment
+POST /api/portal/orders/:id/notify-connected
 ```
 
-Body: vacío (el backend tiene todo lo necesario en sesión: comprobante validado + estado de paneles 1, 2, 3).
+Body: vacío. Backend marca `customerConnectedAt`, mueve la orden a `LISTO_PARA_CONEXION`, "freeze-a" el Tech ID, dispara SSE.
 
-Backend crea la orden, asigna el técnico activo, genera el código `CL-YYYYMMDD-NNN-Q`, devuelve los datos. Frontend transiciona al estado 4 y emite SSE para Mis órdenes.
-
-**Click en "Descargar Redirector":**
-
-Descarga directa, sin POST. Si querés tracking, agregar evento de analytics opcional (no bloquea la descarga).
+**Click en "Descargar Redirector":** descarga directa, sin POST.
 
 ### 6.3 Validaciones
 
 **Frontend:**
 
-- Botón "Equipo conectado" solo aparece y es clickable si `paymentProof.status === 'validated'`.
-- Botón "¿Dónde pegar?" solo aparece si hay orden activa (`activeOrder` no null).
-- Cards Technician ID + Código solo se muestran si `activeOrder` no null.
+- Card del Código muestra placeholder si no hay orden con código generado.
+- Botón Copiar de la card del Código solo se renderiza si hay código real.
+- Botón "Equipo conectado" solo aparece si `paymentProof.status === 'validated'`.
+- Tech ID se carga inicialmente y luego se actualiza en vivo si SSE indica cambio de técnico activo (mientras no haya orden congelada).
 
 **Backend:**
 
-- Re-validar al recibir POST: que haya comprobante validado, que panel 1, 2, 3 tengan datos coherentes, que el cliente esté logueado.
-- Generar código `CL-YYYYMMDD-NNN-Q` correlativo único.
-- "Freeze-ar" el Technician ID actual en la orden — no se actualiza si el técnico activo cambia después.
+- `notify-connected`: validar que la orden exista, que el comprobante esté validado, que el cliente sea el dueño de la orden.
+- "Freeze-ar" el Technician ID en `notify-connected` si todavía no está freeze-ado.
 
 ---
 
-## 7. Acceptance criteria
+## 7. Acceptance criteria (v1.2)
+
+**Cards siempre visibles:**
+
+1. Cliente recién logueado ve las dos cards (Tech ID + Código) y los botones (¿Dónde pegar?, Descargar).
+2. Card Tech ID muestra el ID del técnico activo cargado vía endpoint.
+3. Card Código muestra texto *"Aparecerá cuando subas tu pago"* sin botón Copiar.
+4. Botón "Copiar" de la card Tech ID es siempre funcional.
+
+**Comportamiento dinámico:**
+
+5. Si el técnico activo cambia (sin orden), card Tech ID actualiza en vivo vía SSE.
+6. Cuando cliente sube comprobante, card Código pasa de placeholder a código real con fade-in. Botón Copiar aparece.
+7. Si técnico rechaza comprobante, card Código sigue mostrando el código (no vuelve a placeholder).
+8. Si comprobante es validado, aparece botón "Equipo conectado" con fade-in.
+9. Click en "Equipo conectado" llama a `notify-connected`, congela Tech ID, descongela paneles 1-2-3.
+
+**Botones siempre visibles:**
+
+10. Botón "¿Dónde pegar?" abre modal en cualquier estado.
+11. Modal muestra captura real del Redirector (cuando se suba) o mock SVG actual.
+12. Modal cierra con ✕, Esc, click fuera, o "Entendido".
+13. Botón "Descargar Redirector" descarga `.exe` en cualquier estado.
 
 **Layout y estilo:**
 
-1. Header dice "Conexión" sin numeración delante.
-2. Botón "Descargar Redirector v2.5" visible en TODOS los estados.
-3. Botón "Descargar Redirector" tiene ícono ⬇ a la izquierda y color info.
-4. Estado 3 muestra botón "Equipo conectado" prominente azul + botón Descargar abajo.
-5. Estado 4 muestra cards Technician ID + Código apiladas verticalmente (no en columnas).
-6. Estado 4 muestra botón "¿Dónde pegar estos códigos?" debajo de las cards.
-7. Estados 0, 1, 2 y 5 son visualmente idénticos (solo botón Descargar centrado).
-8. Estado 2 NO muestra "Esperando validación…" + spinner (decisión sesión 14 OQ-8 reabierta).
-
-**Comportamiento — descarga:**
-
-9. Click en "Descargar Redirector" descarga `usb-redirector-customer.exe`.
-10. Botón clickable en TODOS los estados.
-11. Sin gating de pago, sin login adicional.
-
-**Comportamiento — Equipo conectado:**
-
-12. Botón "Equipo conectado" solo visible cuando `paymentProof.status === 'validated'`.
-13. Click crea la orden en backend, dispara SSE a Mis órdenes, transiciona panel 4 al estado 4.
-14. Después del clic, paneles 1-2-3 se descongelan instantáneamente.
-15. Card en Mis órdenes aparece con animación slide-in.
-16. Multiple clicks rápidos: solo el primero cuenta (debounce backend).
-
-**Comportamiento — datos en estado 4:**
-
-17. Card "Technician ID" muestra el ID con formato `1000 9983 5478` (al copiar) y posiblemente compacto `100099835478` (visualmente, si el ancho lo requiere).
-18. Card "Código" muestra el código con formato `CL-YYYYMMDD-NNN-Q` (al copiar) y posiblemente abreviado `CL-YYMMDD-NNN-Q` (visualmente, si el ancho lo requiere).
-19. Click en "Copiar" copia el valor con formato completo.
-20. Botón "Copiado ✓" durante 1.5s después de cada click.
-21. Cuando la orden finaliza, panel 4 vuelve al estado 0/1.
-
-**Comportamiento — modal "¿Dónde pegar?":**
-
-22. Click en el botón abre modal centrado.
-23. Modal muestra captura real del Redirector v2.5 (imagen `1777861729916_image.png`).
-24. Badges azul "1° dato" al lado de label "Technician ID:" y verde "2° dato" al lado de "Additional information:".
-25. 3 pasos numerados con círculos de color (azul, verde, gris).
-26. Botón "Entendido" cierra el modal.
-27. ✕ cierra el modal.
-28. Esc cierra el modal.
-29. Click fuera del modal cierra el modal.
-
-**Comportamiento — sincronización:**
-
-30. Validación del comprobante (vía SSE): panel 4 transiciona a estado 3 con fade-in.
-31. Rechazo del comprobante (vía SSE): panel 4 transiciona a estado 5 (idéntico al 0/1).
-32. Cambio de técnico activo NO afecta órdenes ya nacidas (Technician ID se freeze-a al nacer).
+14. Header dice "Conexión" sin numeración.
+15. Cards apiladas verticalmente (no en columnas).
+16. Tech ID formato `1000 9983 5478` al copiar (con o sin espacios visualmente según ancho).
+17. Código formato `CL-YYYYMMDD-NNN-Q` al copiar.
+18. Botón "Copiado ✓" durante 1.5s después de cada copia.
 
 **Resiliencia:**
 
-33. Recarga: estado del panel 4 se reconstruye desde el backend.
-34. SSE caído: panel sigue funcional con datos cargados, banner ámbar en Mis órdenes.
+19. Recarga: estado se reconstruye desde el backend. Sin pérdida de datos.
+20. SSE caído: panel sigue funcional con datos cargados, banner ámbar en Mis órdenes.
 
 **Accesibilidad:**
 
-35. Botón "Equipo conectado" tiene `aria-label="Confirmar equipo conectado y crear orden"`.
-36. Botón "Descargar Redirector" tiene `aria-label="Descargar Redirector v2.5"` y `download` attribute en el HTML.
-37. Modal tiene `role="dialog"` y `aria-modal="true"`.
-38. Tab order coherente en cada estado.
+21. Botón "Equipo conectado" tiene `aria-label="Confirmar equipo conectado"`.
+22. Botón "Descargar Redirector" tiene `aria-label="Descargar Redirector v2.5"` y `download` attribute.
+23. Modal tiene `role="dialog"` y `aria-modal="true"`.
+24. Tab order coherente.
 
 ---
 
 ## 8. Open questions
 
-**Estado al cierre de sesión 14:** las decisiones principales del panel 4 quedaron cerradas. Quedan OQ-residuales para refinar en sesiones siguientes.
-
-### OQ-residuales (sesión 14)
+### OQ-residuales (sesión 15c, mini-spec)
 
 **OQ-R1 — Captura del Redirector reemplazable.**
 
-La captura `1777861729916_image.png` fue aportada por Bryam en sesión 14. Cuando salga una versión nueva del Redirector (v2.6, v2.7, etc.), la captura debe actualizarse. Pendiente: definir si la imagen vive en el repo (estática) o vive en Centro de configuración (admin la sube/reemplaza). Decisión provisional: vive en repo en `public/images/redirector-screenshot.png`. Cambia con cada versión del Redirector vía PR del repo.
+Sin cambios respecto a v1.1. Sigue pendiente la subida de la imagen real `redirector-screenshot.png` (sube Bryam en 15c.2). Hasta entonces, mock SVG actual.
 
-**Estado en sub-commit 15c.1:** la imagen real `1777861729916_image.png` NO está subida al repo todavía. El modal `#wherePasteDialog` usa una recreación SVG aproximada del Redirector v2.5.0.3540 (ver `public/portal.html` y `.where-paste-mock-*` en `05-frp-flow.css`). La imagen real se sube en sub-commit 15c.2 cuando Bryam la aporte; el mock SVG se reemplaza por `<img src="/images/redirector-screenshot.png">` sin tocar el resto del modal.
+**OQ-R2 — Formato compacto vs completo del Tech ID y Código.**
 
-**OQ-R2 — Formato compacto vs completo del Technician ID y Código.**
-
-Decisión sesión 14: visualmente puede mostrarse compacto (sin espacios / año abreviado) si el ancho del panel lo requiere; al copiar, se copia el formato completo. **Pendiente:** definir umbral exacto de ancho a partir del cual se compacta (ej: <380px panel → compacto, ≥380px → completo). Confirmar en HTML standalone (sesión 14 mockup consolidado).
+Sin cambios. Pendiente definir umbral exacto de ancho.
 
 **OQ-R3 — Comportamiento de "Descargar Redirector" en mobile/tablet.**
 
-El archivo `.exe` solo corre en Windows. ¿Cliente con celular Android/iPhone qué ve? Opciones:
+Sin cambios. Decisión provisional: botón igual en todas las plataformas.
 
-- (a) Botón Descargar igual, descarga el .exe (cliente lo guarda para PC).
-- (b) Botón Descargar oculto en mobile (detecta UA).
-- (c) Botón Descargar con texto distinto en mobile ("Descargar para Windows").
+**OQ-R4 — Indicador visual de comprobante rechazado en card del Código.**
 
-Decisión provisional: (a) — el botón es igual en todas las plataformas, el cliente B2B sabe que el Redirector solo corre en Windows. **No bloquea esta spec.**
+Nueva en v1.2. Riesgo de comunicación identificado: cliente puede ver el código y pensar "todo OK" cuando el comprobante está rechazado. ¿Agregar borde rojo discreto a la card del Código mientras el comprobante esté en `rejected`? Postergado a polish post-lanzamiento. No bloquea 15c.2.
 
-**OQ-R4 — Texto explicativo arriba del estado 4.**
+**OQ-R5 — Qué pasa con la card del Código cuando la orden finaliza.**
 
-Hoy el estado 4 muestra cards + botón sin texto explicativo. Si en producción se ve que clientes nuevos no entienden qué hacer con los códigos, se puede agregar texto ("Pegá estos datos en el Redirector"). Postergado a polish post-lanzamiento.
+Nueva en v1.2. Cuando la orden pasa a `FINALIZADO`, ¿la card del Código:
 
-### OQ heredadas (cierran en otras specs)
+- (a) Vuelve a placeholder *"Aparecerá cuando subas tu pago"* — listo para próximo pedido.
+- (b) Se queda mostrando el código de la última orden hasta que el cliente arme un pedido nuevo.
+- (c) Otra cosa.
 
-- **OQ-H1 — Sistema de tiempos / lock pricing / alertas escaladas.** Cuando se haga la spec del sistema de tiempos, podrá agregar elementos al panel 4 (ej: timer de 2 min sin apretar "Equipo conectado", alertas escaladas, mecánica de cambio de precio post-X min). Hoy panel 4 NO tiene timers.
-- **OQ-H2 — Caso "técnico desconectado" durante validación.** Si el técnico está offline y el comprobante queda colgado mucho tiempo, ¿panel 4 muestra alerta? Vive en spec del sistema de tiempos.
+Decisión provisional: (a). Coherente con la lógica de "el código aparece al subir comprobante" — sin comprobante actual, no hay código. Confirmar en implementación 15c.2.
+
+### OQ heredadas
+
+- **OQ-H1 — Sistema de tiempos / lock pricing / alertas escaladas.** El sistema de 3 fases / 5 min implementado en 15a-15b para Panel 3 ya cubre lo que en v1.0 se proponía como "timer 2 min" en Panel 4. Banner "🔧 ¿Listo para conectar?" eliminado en 15c.1. La spec del sistema de tiempos sigue pendiente para formalizar las 3 fases completas.
+- **OQ-H2 — Caso "técnico desconectado" durante validación.** Vive en spec del sistema de tiempos.
 
 ---
 
@@ -451,56 +445,44 @@ Hoy el estado 4 muestra cards + botón sin texto explicativo. Si en producción 
 
 ### Spec del panel operador (sesión futura)
 
-El panel operador necesita exponer:
+Sin cambios respecto a v1.1. Necesita exponer endpoints de validar/rechazar comprobante, agarrar pedido, finalizar equipo individual, generar Recibo de operación, cambiar técnico activo.
 
-- Endpoint de validar/rechazar comprobante.
-- Mecanismo de "agarrar pedido" (que cambia equipo individual de `waiting_technician` a `in_progress` en Mis órdenes).
-- Mecanismo de finalizar equipo individual.
-- Generación del Recibo de operación.
-- Cambio de técnico activo (que afecta el endpoint `/api/portal/active-technician`).
+### Spec de pantalla-principal-cliente.md (actualización pendiente)
 
-### Spec del Centro de configuración → "Catálogo de equipos" / "Modelos no soportados" (sesión futura)
+La spec `pantalla-principal-cliente.md` v1.1 debe actualizarse a v1.2 para reflejar el nuevo modelo de cards siempre visibles del Panel 4. Cambios concretos:
 
-Si admin quiere actualizar la versión del Redirector (v2.5 → v2.6), debe haber:
+- Tabla de estados del Panel 4: pasar de 6 estados a 3.
+- Mockup HTML standalone consolidado: actualizar la representación visual del Panel 4 (cards siempre visibles).
 
-- Endpoint o sub-sección de admin para subir el nuevo `.exe`.
-- Update automático del texto del botón ("Descargar Redirector vX.Y").
-- Reemplazo de la captura del Redirector en el modal.
+Esto se hace cuando se cierre 15c completo (15c.1 + 15c.2 + 15c.3 + 15c.4), en una sesión chica de actualización de specs.
 
-**Por ahora la versión v2.5 vive hardcoded** en el frontend y el archivo `.exe` vive en `public/downloads/`.
+### Spec del sistema de tiempos (input crudo HANDOFF, parcialmente implementada en 15a-15b)
 
-### Spec del sistema de tiempos (input crudo HANDOFF, pausada)
-
-Cuando se haga, define:
-
-- Timer de 2 min sin apretar "Equipo conectado" (decisión vieja del HANDOFF, tentativa).
-- Reemplazo del timer por alertas escaladas 1.5/3/5 min (propuesta de Bryam sesión 9, no aprobada).
-- Caso "técnico desconectado" durante validación.
-- Mecánica de cambio de precio post-X min.
-
-### Spec de pantalla-principal-cliente.md (actualización en sesión 14)
-
-Esta spec del panel 4 cierra el estado 2 reabierto en sesión 14 (OQ-8). La spec `pantalla-principal-cliente.md` v1.0 debe actualizarse a v1.1 reflejando la nueva decisión: panel 4 estado 2 = igual al 0/1 (sin "Esperando validación…").
+Sin cambios. El sistema de 3 fases / 5 min ya está implementado en Panel 3. Pendiente formalizar la spec.
 
 ---
 
 ## Changelog
 
-- **panel-4-conexion.md v1.1** (2026-05-04, sesión 15c.1) — el botón "Equipo conectado" usa endpoint existente `POST /api/portal/orders/:id/notify-connected` en lugar de crear endpoint nuevo `create-from-validated-payment`. Reflejo de decisión D1 de 15b.2 (orden nace en Panel 3, no en Panel 4). El efecto visual para el cliente NO cambia. Sub-commit 15c.1 también deja al Panel 4 SIEMPRE visible en la pantalla principal (antes el `<article>` se ocultaba hasta que la orden estuviera validada — ahora muestra como mínimo el botón Descargar Redirector). Ver §2.3 (estado 3) y OQ-R1 (estado de la captura del Redirector) para detalles.
-- **panel-4-conexion.md v1.0** (2026-05-04, sesión 14) — Spec inicial completa con las 8 piezas. Decisiones principales:
-  - Header "Conexión" (no "Conectar equipo" ni numeración).
-  - Botón "Descargar Redirector v2.5" persistente en TODOS los estados (decisión OQ-10 sesión 12 ratificada).
-  - Botón Descargar sin texto explicativo extra (decisión sesión 14).
-  - 6 estados visibles definidos; estados 0/1/2/5 visualmente idénticos.
-  - **OQ-8 reabierta y cerrada en sesión 14:** estado 2 NO muestra "Esperando validación…" + spinner. La señal de validación vive en panel 3 + paneles 1-2-3 congelados.
-  - Botón "Equipo conectado" como núcleo del flujo (decisión OQ-4 sesión 12 ratificada). Apretarlo crea la orden y la mueve a Mis órdenes.
-  - Sin texto guía arriba/abajo del botón "Equipo conectado" (decisión sesión 14).
-  - Estado 4: cards Technician ID + Código apiladas verticalmente (no en columnas — decisión sesión 14).
-  - Estado 4: botón "¿Dónde pegar estos códigos?" debajo de las cards.
-  - Modal "¿Dónde pegar?" con captura real del Redirector v2.5 (`1777861729916_image.png` aportada por Bryam) + badges flotantes 1°/2° + 3 pasos numerados.
-  - Sin "¿Necesitás más ayuda? Contactá por WhatsApp" (descartado en sesión 14).
-  - Sin banner "Pago confirmado…" (descartado en OQ-5 sesión 12).
-  - Formato compacto vs completo del Technician ID y Código a definir según ancho del panel.
-  - Technician ID se "freeze-a" al nacer la orden (no cambia retroactivamente si el técnico activo cambia).
-  - **Sistema de breakpoints unificado documentado:** mobile <640px (1 col) → tablet 640px (2 cols) → laptop 900px (4 cols) → desktop 1200px → ultrawide 1800px con max-width 1400px. Decisión heredada del rediseño responsive del portal viejo. El ancho del panel 4 NO es fijo 400px — es fluido dentro del breakpoint.
-  - 4 OQ-residuales identificadas (OQ-R1 a OQ-R4): captura reemplazable, formato compacto, comportamiento mobile, texto explicativo de polish.
+- **panel-4-conexion.md v1.2** (2026-05-04, sesión 15c — mini-spec) — Cambio en el modelo de cards. Las dos cards (Tech ID + Código) pasan de "solo visibles en estado 4" a "siempre visibles desde login". 5 decisiones nuevas:
+  - Cards visibles desde que el cliente está logueado.
+  - Tech ID cambia en vivo antes de que la orden nazca, se congela al apretar "Equipo conectado".
+  - Código aparece al subir comprobante, se queda aunque rechacen.
+  - Texto placeholder de la card Código: *"Aparecerá cuando subas tu pago"*.
+  - Botón Copiar de la card Código: oculto mientras se muestra placeholder.
+  - Modelo de 6 estados visuales (v1.0/v1.1) reorganizado en 3 estados visuales reales (A, B, C).
+  - 2 OQ-residuales nuevas (R4: indicador visual de rechazo, R5: comportamiento al finalizar orden).
+  - Riesgo de comunicación registrado: cliente puede ver código antes de validación.
+
+- **panel-4-conexion.md v1.1** (2026-05-04, sesión 15c.1) — El botón "Equipo conectado" usa endpoint existente `notify-connected` en lugar de crear endpoint nuevo `create-from-validated-payment`. Reflejo de decisión D1 de 15b.2 (orden nace en Panel 3, no en Panel 4). El efecto visual para el cliente NO cambia.
+
+- **panel-4-conexion.md v1.0** (2026-05-04, sesión 14) — Spec inicial completa con las 8 piezas. Decisiones principales heredadas:
+  - Header "Conexión" sin numeración.
+  - Botón "Descargar Redirector v2.5" persistente en todos los estados.
+  - 6 estados visibles definidos (reorganizados en v1.2).
+  - OQ-8 reabierta y cerrada en sesión 14: estado 2 NO muestra "Esperando validación…".
+  - Botón "Equipo conectado" como núcleo del flujo.
+  - Modal "¿Dónde pegar estos códigos?" con captura real del Redirector + badges 1°/2° + 3 pasos.
+  - Sin "¿Necesitás más ayuda? WhatsApp" (descartado).
+  - Sin banner "Pago confirmado…" (descartado).
+  - 4 OQ-residuales identificadas.
