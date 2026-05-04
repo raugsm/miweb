@@ -137,113 +137,121 @@
             <span class="channel-pill">WhatsApp 3</span>
           </div>
           <form id="orderForm" class="flow-order-form">
-            <input name="quantity" type="hidden" value="1" />
-            <div class="flow-steps compact" aria-label="Etapas Xiaomi FRP Express">
-              <article class="flow-step-card flow-price-card">
-                <div class="flow-price-head">
-                  <div class="flow-price-head-title">
-                    <span>1</span>
-                    <strong>Método de pago</strong>
-                  </div>
-                  <span class="flow-live-pill" aria-label="Precio en vivo">
-                    <span class="flow-live-dot" aria-hidden="true"></span>
-                    Estimado en vivo
-                  </span>
-                </div>
-                <div class="flow-payment-pills" id="flowPaymentPills" role="radiogroup" aria-label="País de pago"></div>
+            <input name="quantity" type="hidden" value="2" />
+            <div class="panels-row" aria-label="Pantalla principal cliente">
+
+              <!-- Panel 1 — Método de pago (sub-commit 15a.1) -->
+              <article class="panel panel-1" data-panel="1">
+                <h3 class="panel-title">Método de pago</h3>
+                <div class="panel-1-pills" id="flowPaymentPills" role="radiogroup" aria-label="País de pago"></div>
                 <input type="hidden" name="paymentMethod" id="paymentSelect" />
-                <div class="flow-price-amount">
-                  <b id="currentUnitPrice">-</b>
-                  <span class="flow-price-conversion">
-                    <span>≈ <b id="currentUnitPriceUsdt">-</b> USDT</span>
-                    <svg class="flow-tether-icon" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-                      <circle cx="12" cy="12" r="11" fill="#26A17B"></circle>
-                      <text x="12" y="16" fill="#fff" font-size="13" font-weight="700" text-anchor="middle" font-family="Arial,sans-serif">₮</text>
-                    </svg>
-                  </span>
-                </div>
-              </article>
-
-              <article class="flow-step-card flow-request-card">
-                <div class="flow-request-head">
-                  <div class="flow-request-head-title">
-                    <span>2</span>
-                    <strong>Solicitud</strong>
+                <div class="panel-dark-card panel-1-estimate" id="panel1EstimateCard">
+                  <div class="panel-1-estimate-notice" id="panel1EstimateNotice" hidden role="status"></div>
+                  <div class="panel-dark-card-header">
+                    <span class="panel-dark-dot" id="panel1EstimateDot" aria-hidden="true"></span>
+                    <span class="panel-dark-card-label" id="panel1EstimateLabel">Estimado · en vivo</span>
                   </div>
-                  <span class="flow-coverage-badge" title="98% de modelos Xiaomi/Redmi/Poco compatibles">98% modelos soportados</span>
-                </div>
-                <div class="flow-quantity-row">
-                  <button class="flow-quantity-btn" type="button" data-quantity-action="dec" aria-label="Restar equipo">−</button>
-                  <span class="flow-quantity-display" id="flowQuantityDisplay">1</span>
-                  <button class="flow-quantity-btn" type="button" data-quantity-action="inc" aria-label="Sumar equipo">+</button>
-                  <span class="flow-quantity-unit-label" id="flowQuantityUnitLabel"><b id="flowQuantityCount">1</b> equipo · <b id="flowQuantityUnitPrice">-</b> c/u</span>
-                </div>
-                <div class="flow-quantity-total">
-                  Total: <b id="flowQuantityTotal">-</b>
-                </div>
-                <label class="flow-eligibility-search">
-                  ¿Tu modelo aplica?
-                  <input type="text" id="flowEligibilityInput" placeholder="Ej: Redmi Note 12, Poco X5 (opcional)" autocomplete="off" maxlength="60" />
-                </label>
-                <p id="flowEligibilityFeedback" class="flow-eligibility-feedback" hidden></p>
-                <div id="flowPaso2InactivityBanner" class="flow-paso2-inactivity" data-level="info" hidden>
-                  <strong data-paso2-title></strong>
-                  <span data-paso2-message></span>
+                  <div class="panel-dark-card-amount" id="panel1EstimateAmount">—</div>
+                  <div class="panel-dark-card-sub" id="panel1EstimateSubAmount" hidden></div>
                 </div>
               </article>
 
-              <article class="flow-step-card flow-payment-card">
-                <span>3</span>
-                <strong>Pago</strong>
-                <div class="payment-chip" id="currentPaymentBadge">Método de pago</div>
-                <div class="flow-mini-quote">
-                  <div>
-                    <em>Total estimado</em>
-                    <div class="quote-total-lines">
-                      <span><em>USDT</em><b id="quoteTotalUsdt">-</b></span>
-                      <span><em id="quoteCurrencyLabel">Tu moneda</em><b id="quoteTotalLocal">-</b></span>
+              <!-- Panel 2 — Solicitud (sub-commit 15a.1) -->
+              <article class="panel panel-2" data-panel="2">
+                <h3 class="panel-title">Solicitud</h3>
+
+                <div class="panel-2-field">
+                  <p class="panel-field-label">Equipos a desbloquear</p>
+                  <div class="panel-2-stepper" id="panel2Stepper">
+                    <button type="button" class="panel-2-stepper-btn" id="panel2QuantityDecrement" data-quantity-action="dec" aria-label="Restar equipo">−</button>
+                    <input type="text" inputmode="numeric" class="panel-2-stepper-input" id="panel2QuantityInput" value="2" maxlength="2" aria-label="Cantidad de equipos" />
+                    <button type="button" class="panel-2-stepper-btn" id="panel2QuantityIncrement" data-quantity-action="inc" aria-label="Sumar equipo">+</button>
+                  </div>
+                </div>
+
+                <div class="panel-2-field">
+                  <p class="panel-field-label">Modelo (opcional)</p>
+                  <input type="text" id="panel2ModelInput" class="panel-2-model-input" placeholder="ej: Redmi Note 13" autocomplete="off" maxlength="60" data-eligibility-state="" />
+                </div>
+
+                <div class="panel-dark-card panel-2-total" id="panel2TotalCard">
+                  <div class="panel-2-notice" id="panel2Notice" hidden role="status"></div>
+                  <div class="panel-dark-card-label">Total</div>
+                  <div class="panel-dark-card-amount" id="panel2TotalAmount">—</div>
+                  <div class="panel-dark-card-sub" id="panel2TotalSubAmount" hidden></div>
+                  <div class="panel-dark-card-breakdown" id="panel2TotalBreakdown" hidden></div>
+                </div>
+
+                <div class="panel-2-coverage-badge" title="98% de modelos Xiaomi/Redmi/Poco compatibles">
+                  <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="12" cy="12" r="10" fill="#639922"></circle>
+                    <path d="M7 12.5l3.5 3.5L17 9" stroke="white" stroke-width="2" fill="none" stroke-linecap="round"></path>
+                  </svg>
+                  98% de modelos soportados
+                </div>
+              </article>
+
+              <!-- Panel 3 — Datos de pago (placeholder, sub-commit 15c).
+                   El bloque legacy queda hidden para preservar los IDs/listeners
+                   que el JS de proofs/payments necesita en este punto del flujo
+                   (paneles 3 y 4 reales se reescriben en 15c y 15d). -->
+              <article class="panel panel-3 panel-placeholder" data-panel="3">
+                <h3 class="panel-title">Datos de pago</h3>
+                <p class="panel-placeholder-text">Pendiente sub-commit 15c. Esta sección se reescribe en sesión próxima.</p>
+                <div class="legacy-step-3" hidden>
+                  <div class="payment-chip" id="currentPaymentBadge">Método de pago</div>
+                  <div class="flow-mini-quote">
+                    <div>
+                      <em>Total estimado</em>
+                      <div class="quote-total-lines">
+                        <span><em>USDT</em><b id="quoteTotalUsdt">-</b></span>
+                        <span><em id="quoteCurrencyLabel">Tu moneda</em><b id="quoteTotalLocal">-</b></span>
+                      </div>
+                    </div>
+                    <button id="copyPaymentButton" class="ghost" type="button">Cuentas</button>
+                  </div>
+                  <p id="flowProofWarning" class="flow-proof-warning hidden">
+                    Revisa los datos de los pasos 1, 2 y 3 antes de subir. Una vez subido el comprobante no podrás editarlos.
+                  </p>
+                  <p class="flow-lock-info-tip">
+                    💡 El precio mostrado se asegura por 15 minutos después de aprobado tu pago. Recomendamos procesar todos tus equipos en una sola sesión.
+                  </p>
+                  <div id="flowProofRejectionBanner" class="flow-proof-rejection-banner" role="alert" hidden>
+                    <strong>Tu pago fue rechazado.</strong>
+                    <span data-flow-rejection-reason></span>
+                  </div>
+                  <label id="flowPaymentDropzone" class="upload-button proof-dropzone flow-proof-dropzone" data-disabled="true">Subir o arrastrar comprobante
+                    <span id="flowPaymentDropzoneHint">Sube tu comprobante (foto o PDF)</span>
+                    <input id="flowPaymentProofInput" type="file" accept="image/*,application/pdf" hidden />
+                  </label>
+                  <div id="flowProofStatusBanner" class="flow-proof-status-banner" role="status" hidden>
+                    <span class="flow-proof-status-pulse" aria-hidden="true"></span>
+                    <div>
+                      <strong>Comprobante recibido.</strong>
+                      <span>Lo estamos validando en breve. No cierres el portal.</span>
                     </div>
                   </div>
-                  <button id="copyPaymentButton" class="ghost" type="button">Cuentas</button>
-                </div>
-                <p id="flowProofWarning" class="flow-proof-warning hidden">
-                  Revisa los datos de los pasos 1, 2 y 3 antes de subir. Una vez subido el comprobante no podrás editarlos.
-                </p>
-                <p class="flow-lock-info-tip">
-                  💡 El precio mostrado se asegura por 15 minutos después de aprobado tu pago. Recomendamos procesar todos tus equipos en una sola sesión.
-                </p>
-                <div id="flowProofRejectionBanner" class="flow-proof-rejection-banner" role="alert" hidden>
-                  <strong>Tu pago fue rechazado.</strong>
-                  <span data-flow-rejection-reason></span>
-                </div>
-                <label id="flowPaymentDropzone" class="upload-button proof-dropzone flow-proof-dropzone" data-disabled="true">Subir o arrastrar comprobante
-                  <span id="flowPaymentDropzoneHint">Sube tu comprobante (foto o PDF)</span>
-                  <input id="flowPaymentProofInput" type="file" accept="image/*,application/pdf" hidden />
-                </label>
-                <div id="flowProofStatusBanner" class="flow-proof-status-banner" role="status" hidden>
-                  <span class="flow-proof-status-pulse" aria-hidden="true"></span>
-                  <div>
-                    <strong>Comprobante recibido.</strong>
-                    <span>Lo estamos validando en breve. No cierres el portal.</span>
-                  </div>
                 </div>
               </article>
 
-              <article class="flow-step-card flow-connect-card" hidden>
-                <span>4</span>
-                <strong>Conexion</strong>
-                <div id="stepGuide" class="step-guide" data-step-guide-root="true" aria-label="Guia paso a paso de conexion">
-                  <div class="step-guide-empty">Cargando datos del tecnico activo...</div>
-                </div>
-                <div id="flowPaso4ReadyBanner" class="flow-paso4-ready-banner" hidden>
-                  <strong>🔧 ¿Listo para conectar?</strong>
-                  <span data-paso4-message></span>
-                  <div class="flow-paso4-ready-actions">
-                    <button type="button" class="ghost" data-paso4-action="dismiss">Ya estoy listo</button>
-                    <a class="ghost" data-paso4-action="whatsapp" target="_blank" rel="noopener">Necesito ayuda por WhatsApp</a>
+              <!-- Panel 4 — Conexión (placeholder, sub-commit 15d). -->
+              <article class="panel panel-4 panel-placeholder flow-connect-card" data-panel="4" hidden>
+                <h3 class="panel-title">Conexión</h3>
+                <p class="panel-placeholder-text">Pendiente sub-commit 15d.</p>
+                <div class="legacy-step-4">
+                  <div id="stepGuide" class="step-guide" data-step-guide-root="true" aria-label="Guia paso a paso de conexion">
+                    <div class="step-guide-empty">Cargando datos del tecnico activo...</div>
                   </div>
+                  <div id="flowPaso4ReadyBanner" class="flow-paso4-ready-banner" hidden>
+                    <strong>🔧 ¿Listo para conectar?</strong>
+                    <span data-paso4-message></span>
+                    <div class="flow-paso4-ready-actions">
+                      <button type="button" class="ghost" data-paso4-action="dismiss">Ya estoy listo</button>
+                      <a class="ghost" data-paso4-action="whatsapp" target="_blank" rel="noopener">Necesito ayuda por WhatsApp</a>
+                    </div>
+                  </div>
+                  <div class="connection-actions"></div>
                 </div>
-                <div class="connection-actions"></div>
               </article>
             </div>
 

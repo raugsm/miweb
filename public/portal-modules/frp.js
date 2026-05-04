@@ -2,32 +2,52 @@ import { $ } from "./dom.js";
 import { normalizeForMatch } from "./format.js";
 import { state } from "./state.js";
 
-// PR-2a-final.fase2: paso 2 reescrito al spec FINAL §5 — sin textarea.
-// detectedItemCount lee del stepper (#flowQuantityDisplay) y respeta el rango
-// 1-50. syncDetectedItems refleja al hidden input que se manda en el body.
+// Sub-commit 15a.1: stepper del panel 2 reescrito al spec panel-2-solicitud.md
+// v1.0 §2.1 — input numérico EDITABLE A MANO (no más span). Cap frontend 1-10
+// (decisión D3 sesión 15). Si cliente tipea >10, events.js lo cap a 10 + dispara
+// cajón verde "Para más de 10 equipos, contactanos por WhatsApp" (15s).
+//
+// Backend sigue aceptando hasta 50 (server/portal/portal-routes.js#444 mantiene
+// `Math.max(1, Math.min(50, ...))`) — NO se reduce en 15a.1, decisión D3.
+const QUANTITY_MIN = 1;
+const QUANTITY_MAX_FRONTEND = 10;
+
 export function detectedItemCount() {
-  const display = $("#flowQuantityDisplay");
-  const raw = display?.textContent || $("#orderForm input[name='quantity']")?.value || "1";
+  const input = $("#panel2QuantityInput");
+  const raw = input?.value || $("#orderForm input[name='quantity']")?.value || String(QUANTITY_MIN);
   const parsed = Number.parseInt(raw, 10);
-  return Math.max(1, Math.min(50, Number.isFinite(parsed) && parsed > 0 ? parsed : 1));
+  return Math.max(QUANTITY_MIN, Math.min(QUANTITY_MAX_FRONTEND, Number.isFinite(parsed) && parsed > 0 ? parsed : QUANTITY_MIN));
 }
 
 export function syncDetectedItems() {
   const count = detectedItemCount();
-  const display = $("#flowQuantityDisplay");
-  if (display) display.textContent = String(count);
-  const quantityInput = $("#orderForm input[name='quantity']");
-  if (quantityInput) quantityInput.value = String(count);
+  const input = $("#panel2QuantityInput");
+  if (input && input.value !== String(count)) input.value = String(count);
+  const quantityHidden = $("#orderForm input[name='quantity']");
+  if (quantityHidden) quantityHidden.value = String(count);
   return count;
 }
 
 export function setQuantity(next) {
-  const safe = Math.max(1, Math.min(50, Number.parseInt(next, 10) || 1));
-  const display = $("#flowQuantityDisplay");
-  if (display) display.textContent = String(safe);
-  const quantityInput = $("#orderForm input[name='quantity']");
-  if (quantityInput) quantityInput.value = String(safe);
+  const safe = Math.max(QUANTITY_MIN, Math.min(QUANTITY_MAX_FRONTEND, Number.parseInt(next, 10) || QUANTITY_MIN));
+  const input = $("#panel2QuantityInput");
+  if (input) input.value = String(safe);
+  const quantityHidden = $("#orderForm input[name='quantity']");
+  if (quantityHidden) quantityHidden.value = String(safe);
   return safe;
+}
+
+// QUE: equivalente a setQuantity pero PERMITE valores fuera del rango — útil
+// para detectar el caso "cliente tipeó >10" antes del cap. events.js lo usa
+// para disparar el cajón verde de WhatsApp.
+// Devuelve `{ value, capped }` donde `capped` es true si el valor excedió el
+// rango y fue ajustado.
+export function clampQuantityWithFlag(raw) {
+  const parsed = Number.parseInt(String(raw || "").replace(/[^\d]/g, ""), 10);
+  if (!Number.isFinite(parsed)) return { value: QUANTITY_MIN, capped: false };
+  if (parsed > QUANTITY_MAX_FRONTEND) return { value: QUANTITY_MAX_FRONTEND, capped: true };
+  if (parsed < QUANTITY_MIN) return { value: QUANTITY_MIN, capped: false };
+  return { value: parsed, capped: false };
 }
 
 // QUE: estimacion del cliente. Devuelve `base` (precio nominal por unidad,

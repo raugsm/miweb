@@ -256,7 +256,12 @@ function renderFlowCta(flowState) {
 
 function applyStepLocks(flowState) {
   const lock = flowState !== "draft";
-  [".flow-price-card", ".flow-request-card", ".flow-payment-card"].forEach((selector) => {
+  // Sub-commit 15a.1: selectores actualizados a paneles nuevos. Paneles 1-2-3
+  // se congelan cuando hay orden in-flight (mismo comportamiento que antes —
+  // mecánica congelar/descongelar de la spec pantalla-principal-cliente.md
+  // v1.1 § "Concepto clave"). Panel 4 NO se congela (decisión spec v1.0 §1
+  // contexto: "a diferencia de paneles 1-2-3, NO se congela").
+  [".panel-1", ".panel-2", ".panel-3"].forEach((selector) => {
     document.querySelector(selector)?.classList.toggle("step-locked", lock);
   });
 }

@@ -1,11 +1,18 @@
-// PR-2a-final.bundle2 item 2 — timer de inactividad paso 2.
-// Empieza al renderCustomer cuando el cliente esta autenticado/verificado y
-// no hay orden in-flight. 30s sin tocar stepper/pills/buscador → banner azul
-// info. 90s sin tocar → banner amarillo (warn) con el precio actual.
-// Cualquier interaccion resetea desde 0. Banner se oculta al avanzar a paso 3
-// (subir comprobante mueve la orden a PAGO_EN_REVISION+).
+// PR-2a-final.bundle2 item 2 — timer de inactividad paso 2 (DESHABILITADO en
+// sub-commit 15a.1).
 //
-// Modulo separado para evitar ciclos de import entre auth-forms y events.
+// HISTORIA: empezaba al renderCustomer cuando el cliente estaba autenticado/
+// verificado y no había orden in-flight. 30s sin tocar stepper/pills/buscador
+// → banner azul info. 90s sin tocar → banner amarillo (warn) con el precio
+// actual. Banner DOM (#flowPaso2InactivityBanner) ya no existe en portal.html
+// post sub-commit 15a.1.
+//
+// PAUSA (sesión 15, decisión D6): el sistema completo de tiempos (alertas
+// escaladas, lock pricing, banners de inactividad) se está rediseñando como
+// spec dedicada — ver HANDOFF "Inputs crudos para spec futura" → "Sistema de
+// tiempo y alertas". Cuando esa spec esté lista, este módulo se reescribe o
+// elimina. Mientras tanto las funciones quedan como no-op para que callers
+// existentes (auth-forms.js#renderCustomer) sigan compilando.
 
 import { state } from "./state.js";
 
@@ -61,20 +68,15 @@ function clearTimers() {
 }
 
 export function resetPaso2InactivityTimer() {
+  // Dormante en sub-commit 15a.1 — ver comentario al inicio del archivo.
+  // No-op intencional: callers (auth-forms.js#renderCustomer) la siguen
+  // invocando, y mantenemos la firma para no romper imports.
   clearTimers();
   hidePaso2Banner();
-  if (!paso2BannerActive()) return;
-  paso2InactivityState.timer1 = setTimeout(() => {
-    if (!paso2BannerActive()) return;
-    showPaso2Banner("info");
-    paso2InactivityState.timer2 = setTimeout(() => {
-      if (!paso2BannerActive()) return;
-      showPaso2Banner("warn");
-    }, 60 * 1000);
-  }, 30 * 1000);
 }
 
 export function stopPaso2InactivityTimer() {
+  // Dormante en sub-commit 15a.1 — ver comentario al inicio del archivo.
   clearTimers();
   hidePaso2Banner();
 }

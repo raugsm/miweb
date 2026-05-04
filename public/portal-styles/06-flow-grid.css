@@ -1,4 +1,5 @@
-/* QUE: grid principal del flujo FRP (4 pasos: Precio, Solicitud, Pago, Conexion).
+/* QUE: grid principal de la pantalla principal cliente (4 paneles paralelos:
+   Método de pago, Solicitud, Datos de pago, Conexión).
    Mobile-first siguiendo breakpoints Tailwind documentados en 00-breakpoints.css:
      - mobile (default, <640px) ........ 1 columna apilada
      - sm (>=640px) .................... 1 columna todavia (tarjeta full ancho)
@@ -7,25 +8,35 @@
      - xl (>=1280px) ................... 4 columnas comodas, max-width 1400px centrado
    POR QUE: el approach anterior con repeat(auto-fit, minmax(...)) era impredecible y
    producia bugs visuales en rangos intermedios de viewport. El sistema explicito
-   mobile-first hace cada breakpoint visible y testeable. */
-.flow-steps.compact {
+   mobile-first hace cada breakpoint visible y testeable.
+
+   NOTA sub-commit 15a.1: la clase pasa de `.flow-steps.compact` (modelo viejo
+   de 4 pasos secuenciales) a `.panels-row` (modelo nuevo de paneles paralelos).
+   Las specs panel-1/panel-2/panel-3/panel-4 documentan otro set de breakpoints
+   (640/900/1200/1800); ver decisión D1 sesión 15 — usamos el sistema vigente
+   del repo (Tailwind) hasta que las specs sean actualizadas en commit aparte. */
+.panels-row {
+  display: grid;
   grid-template-columns: 1fr;
+  gap: 12px;
+  margin-top: 16px;
+  align-items: start;
 }
 
 @media (min-width: 768px) {
-  .flow-steps.compact {
+  .panels-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (min-width: 1024px) {
-  .flow-steps.compact {
+  .panels-row {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 
 @media (min-width: 1280px) {
-  .flow-steps.compact {
+  .panels-row {
     max-width: 1400px;
     margin-inline: auto;
   }

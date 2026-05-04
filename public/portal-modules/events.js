@@ -12,7 +12,7 @@ import {
 } from "./auth-forms.js";
 import { $, $$, copyText, setMessage } from "./dom.js";
 import { activeOrderForFlow, notifyEquipoConectado } from "./flow-state.js";
-import { checkEligibilityHint, parseItems, setQuantity, syncDetectedItems } from "./frp.js";
+import { checkEligibilityHint, clampQuantityWithFlag, parseItems, setQuantity, syncDetectedItems } from "./frp.js";
 import { refreshOrdersSilently, setOrdersLiveStatus, stopOrdersLive } from "./live-orders.js";
 import { orderNeedsPaymentProof } from "./order-state.js";
 import {
@@ -24,9 +24,42 @@ import {
   updateQuote,
 } from "./payments.js";
 import { filesToProofs, hasDraggedFiles, uploadPaymentProofFromFlow, wireGlobalFileDropGuard } from "./proofs.js";
-import { resetPaso2InactivityTimer } from "./paso2-timer.js";
 import { renderTrackedOrder } from "./deep-links.js";
 import { state } from "./state.js";
+
+// Sub-commit 15a.1: helpers para mostrar/ocultar cajones (notices) en los
+// paneles 1 y 2 con duración configurable. Cada panel tiene UN solo cajón a la
+// vez; si llega un segundo evento mientras el primero está visible, el segundo
+// reemplaza al primero (decisión spec panel-1 §3 edge 10: "prevalece el primero
+// que se disparó" se interpreta acá como "el último click del cliente reemplaza
+// el cajón visible" — los cajones admin-driven en vivo viven en sub-commit
+// 15a.2 con SSE admin-config).
+const noticeTimers = new Map();
+
+function showPanelNotice(nodeId, content, { durationMs = 15000, variant = "warning" } = {}) {
+  const node = document.getElementById(nodeId);
+  if (!node) return;
+  if (noticeTimers.has(nodeId)) clearTimeout(noticeTimers.get(nodeId));
+  node.textContent = content;
+  node.dataset.variant = variant;
+  node.hidden = false;
+  if (durationMs > 0) {
+    noticeTimers.set(nodeId, setTimeout(() => hidePanelNotice(nodeId), durationMs));
+  }
+}
+
+function hidePanelNotice(nodeId) {
+  const node = document.getElementById(nodeId);
+  if (noticeTimers.has(nodeId)) {
+    clearTimeout(noticeTimers.get(nodeId));
+    noticeTimers.delete(nodeId);
+  }
+  if (node) {
+    node.hidden = true;
+    node.textContent = "";
+    node.removeAttribute("data-variant");
+  }
+}
 
 // QUE: crea la orden y adjunta el comprobante en una sola request al endpoint
 // existente /api/portal/orders/frp con `paymentProofs` en el body. El backend
@@ -200,44 +233,104 @@ export function wireEvents() {
     }
   });
 
-  // PR-2a-final.fase2: stepper +/- en paso 2 reemplaza al textarea de items.
+  // Sub-commit 15a.1: stepper +/- del panel 2. setQuantity() ya cap interno a
+  // 1-10. El cajón verde "Para más de 10..." NO se dispara desde botones (no
+  // permitimos al usuario ir más allá de 10 con +); se dispara solo cuando el
+  // usuario tipea directo en el input un número >10 (handler abajo).
   $("#orderForm")?.addEventListener("click", (event) => {
     const btn = event.target.closest("[data-quantity-action]");
     if (!btn) return;
     event.preventDefault();
-    const current = Number($("#flowQuantityDisplay")?.textContent || "1") || 1;
+    const input = $("#panel2QuantityInput");
+    const current = Number(input?.value || "1") || 1;
     const next = btn.dataset.quantityAction === "inc" ? current + 1 : current - 1;
     setQuantity(next);
     syncDetectedItems();
     updateQuote();
-    resetPaso2InactivityTimer();
   });
-  // PR-2a-final.fase2: buscador inverso — chequeo client-side contra
-  // catalog.eligibilityHints. Sin round-trip al backend (FINAL §5: lógica
-  // invertida, solo verifica NO soportados).
-  $("#flowEligibilityInput")?.addEventListener("input", (event) => {
-    const feedback = $("#flowEligibilityFeedback");
-    if (!feedback) return;
-    const result = checkEligibilityHint(event.currentTarget.value);
-    if (result.status === "EMPTY") {
-      feedback.hidden = true;
-      feedback.textContent = "";
-      feedback.dataset.eligibility = "";
-    } else {
-      feedback.hidden = false;
-      feedback.textContent = result.message;
-      feedback.dataset.eligibility = result.status.toLowerCase();
+
+  // Sub-commit 15a.1: input directo en stepper. Filtro no-dígitos en `input`
+  // event; cap + cajón verde en `change` (Enter o blur).
+  const panel2QuantityInput = $("#panel2QuantityInput");
+  panel2QuantityInput?.addEventListener("input", (event) => {
+    const cleaned = String(event.currentTarget.value || "").replace(/[^\d]/g, "");
+    if (cleaned !== event.currentTarget.value) {
+      event.currentTarget.value = cleaned;
     }
-    resetPaso2InactivityTimer();
   });
-  // PR-2a-final.fase3: pills de paso 1 reemplazan el select. Click delegado
-  // en el container actualiza hidden input + recalcula precio en moneda nueva.
+  panel2QuantityInput?.addEventListener("change", (event) => {
+    const { value, capped } = clampQuantityWithFlag(event.currentTarget.value);
+    setQuantity(value);
+    syncDetectedItems();
+    updateQuote();
+    if (capped) {
+      showPanelNotice("panel2Notice", "Para más de 10 equipos, contactanos por WhatsApp", {
+        durationMs: 15000,
+        variant: "success",
+      });
+    } else {
+      // Si el usuario bajó la cantidad por debajo de 10 antes de que se cierre
+      // el cajón verde, lo escondemos. Si el cajón actual es de modelo (warning),
+      // lo dejamos vivo — no es del mismo trigger.
+      const notice = document.getElementById("panel2Notice");
+      if (notice && notice.dataset.variant === "success") hidePanelNotice("panel2Notice");
+    }
+  });
+
+  // Sub-commit 15a.1: input modelo del panel 2. Debounce 300ms, 3 estados
+  // visuales (apto / no-supported / not-recognized) + cajón amarillo dentro
+  // de la card oscura del panel 2. Cajón dura 15s o se cierra al corregir.
+  const panel2ModelInput = $("#panel2ModelInput");
+  let modelDebounceTimer = null;
+  panel2ModelInput?.addEventListener("input", (event) => {
+    if (modelDebounceTimer) clearTimeout(modelDebounceTimer);
+    const value = event.currentTarget.value;
+    modelDebounceTimer = setTimeout(() => {
+      const result = checkEligibilityHint(value);
+      if (result.status === "EMPTY") {
+        panel2ModelInput.dataset.eligibilityState = "";
+        const notice = document.getElementById("panel2Notice");
+        if (notice && notice.dataset.variant === "warning") hidePanelNotice("panel2Notice");
+        return;
+      }
+      if (result.status === "ASSUMED_OK") {
+        panel2ModelInput.dataset.eligibilityState = "apto";
+        const notice = document.getElementById("panel2Notice");
+        if (notice && notice.dataset.variant === "warning") hidePanelNotice("panel2Notice");
+        return;
+      }
+      // NO_APTO_MODO o REQUIERE_REVISION → border rojo + cajón amarillo.
+      // Spec panel-2 §2.2 distingue 3 estados visuales: NO_APTO_MODO mapea a
+      // "not-supported"; REQUIERE_REVISION mapea a "not-recognized" en la spec
+      // (modelo "no reconocido"), aunque en backend sea otro flag — la UX para
+      // el cliente es la misma intención (border rojo + cajón amarillo informando).
+      const isNotSupported = result.status === "NO_APTO_MODO";
+      panel2ModelInput.dataset.eligibilityState = isNotSupported ? "not-supported" : "not-recognized";
+      const message = isNotSupported
+        ? "Este modelo no es soportado"
+        : "No reconocemos el modelo, revisalo o dejalo vacío";
+      showPanelNotice("panel2Notice", message, { durationMs: 15000, variant: "warning" });
+    }, 300);
+  });
+
+  // Sub-commit 15a.1: pills delegado del panel 1. Click en pill desactivada
+  // dispara cajón amarillo en `#panel1EstimateNotice` (4s, decisión spec v2.0
+  // §2.2). Click en pill activa setea + persiste en localStorage + recalcula.
   $("#flowPaymentPills")?.addEventListener("click", (event) => {
     const pill = event.target.closest("[data-payment-pill]");
     if (!pill) return;
+    if (pill.dataset.disabled === "true") {
+      // El mensaje "USDT pausado por mantenimiento" / equivalente vendrá del
+      // catálogo backend (`payment.customMessage`) cuando el Centro de
+      // configuración exista (sub-commit 15a.2). Por ahora usamos el default.
+      showPanelNotice("panel1EstimateNotice", "No disponible temporalmente", {
+        durationMs: 4000,
+        variant: "warning",
+      });
+      return;
+    }
     setSelectedPayment(pill.dataset.paymentPill);
     updateQuote();
-    resetPaso2InactivityTimer();
   });
   // PR-2a-final.fase4: modal "¿Dónde pegar?" — abrir desde paso 4.
   $("#orderForm")?.addEventListener("click", (event) => {

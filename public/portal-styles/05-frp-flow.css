@@ -6,6 +6,375 @@
   box-shadow: none;
 }
 
+/* ============================================================================
+   PANTALLA PRINCIPAL CLIENTE — sub-commit 15a.1
+   ============================================================================
+   Reescritura visual de los paneles 1 y 2 (Método de pago, Solicitud) según
+   docs/specs/cliente/panel-1-metodo-de-pago.md v2.0 y panel-2-solicitud.md v1.0,
+   alineada al mockup consolidado mockups/pantalla-principal-cliente.html.
+
+   Paneles 3 y 4 quedan como placeholders en este sub-commit; sus clases
+   antiguas (.flow-payment-card, .flow-connect-card, .flow-proof-*, etc.) viven
+   más abajo y siguen rigiendo el HTML legacy (oculto en .legacy-step-3 /
+   .legacy-step-4) hasta los sub-commits 15c/15d.
+   ============================================================================ */
+
+/* Panel base. Cada panel ocupa una columna del grid .panels-row. */
+.panel {
+  background: var(--color-bg-primary);
+  border: 0.5px solid var(--color-border-secondary);
+  border-radius: var(--border-radius-lg);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+/* Mecánica congelar/descongelar (auth-forms.js#applyStepLocks): mientras los
+   paneles 1-2-3 estén congelados, pierden capacidad de recibir clicks. Sin
+   cambio visual fuerte para alinearse con la decisión de spec panel-1 §2.1
+   ("panel congelado pierde clicks sin cambio visual"). Solo opacity sutil
+   para que no se confunda con un panel apagado. */
+.panel.step-locked {
+  pointer-events: none;
+}
+
+.panel-title {
+  font-size: 16px;
+  font-weight: 500;
+  margin: 0;
+  color: var(--color-text-primary);
+}
+
+.panel-field-label {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  margin: 0 0 8px;
+}
+
+/* ---------------------------------------------------------------------------
+   Card oscura compartida entre panel 1 (ESTIMADO) y panel 2 (TOTAL).
+   --------------------------------------------------------------------------- */
+.panel-dark-card {
+  background: #2C2C2A;
+  border-radius: var(--border-radius-md);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: relative;
+}
+
+.panel-dark-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.panel-dark-card-label {
+  font-size: 10px;
+  color: #B4B2A9;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0;
+}
+
+.panel-dark-card-amount {
+  font-size: 28px;
+  font-weight: 500;
+  color: white;
+  line-height: 1;
+}
+
+.panel-dark-card-sub {
+  font-size: 12px;
+  color: #B4B2A9;
+}
+
+.panel-dark-card-breakdown {
+  font-size: 11px;
+  color: #888780;
+  padding-top: 8px;
+  margin-top: 4px;
+  border-top: 0.5px solid #444;
+}
+
+/* Dot pulsante panel 1 (verde) — se apaga gris cuando "Cargando" o tasa N/A. */
+.panel-dark-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #639922;
+  flex-shrink: 0;
+  animation: panelDotPulse 1.4s infinite;
+}
+
+.panel-dark-dot[data-state="loading"] {
+  background: #888780;
+  animation: none;
+}
+
+.panel-dark-dot[data-state="error"] {
+  background: #A32D2D;
+  animation: none;
+}
+
+@keyframes panelDotPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* Cajón amarillo INTERNO de la card oscura. Se usa en panel 1 (cambio de tasa,
+   USDT pausado) y panel 2 (modelo no soportado, no reconocido, cantidad >10).
+   Aparece arriba del label/monto y desaparece automáticamente con timer del
+   módulo events.js. */
+.panel-1-estimate-notice,
+.panel-2-notice {
+  background: var(--color-bg-warning);
+  color: var(--color-text-warning);
+  border-radius: var(--border-radius-md);
+  padding: 8px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+/* Variante verde (cantidad >10 → "contactanos por WhatsApp"). */
+.panel-2-notice[data-variant="success"] {
+  background: var(--color-bg-success);
+  color: var(--color-text-success);
+}
+
+/* ---------------------------------------------------------------------------
+   Panel 1 — Pills de método de pago
+   --------------------------------------------------------------------------- */
+.panel-1-pills {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.flow-payment-pill {
+  border: 0.5px solid var(--color-border-tertiary);
+  background: white;
+  padding: 9px 8px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 120ms ease, transform 100ms ease;
+}
+
+.flow-payment-pill:hover {
+  background: var(--color-bg-secondary);
+}
+
+.flow-payment-pill:focus-visible {
+  outline: 2px solid var(--color-border-info);
+  outline-offset: 2px;
+}
+
+.flow-payment-pill:active {
+  transform: scale(0.97);
+}
+
+.flow-payment-pill.is-selected {
+  border: 2px solid var(--color-text-info);
+  background: var(--color-bg-info);
+  color: #0C447C;
+  font-weight: 500;
+}
+
+.flow-payment-pill[data-disabled="true"] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.flow-payment-pill[data-disabled="true"]:hover {
+  background: white;
+  transform: none;
+}
+
+.flow-payment-pill-flag {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.flow-payment-pill-label {
+  display: inline-block;
+}
+
+/* Pill placeholder (slot vacío en fila 2 según spec — Perú · USDT · México
+   arriba, Colombia · Chile · vacío abajo). Mantiene la grilla 3-col. */
+.flow-payment-pill-empty {
+  visibility: hidden;
+}
+
+@media (max-width: 639.98px) {
+  .panel-1-pills { gap: 6px; }
+  .flow-payment-pill { padding: 8px 6px; font-size: 12px; }
+  .flow-payment-pill-flag { width: 12px; height: 12px; }
+}
+
+/* ---------------------------------------------------------------------------
+   Panel 2 — Stepper editable + input modelo
+   --------------------------------------------------------------------------- */
+.panel-2-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-2-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.panel-2-stepper-btn {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  background: white;
+  border: 0.5px solid var(--color-border-secondary);
+  border-radius: var(--border-radius-md);
+  cursor: pointer;
+  padding: 0;
+  font-family: inherit;
+  color: var(--color-text-primary);
+  transition: background 120ms ease, transform 100ms ease;
+}
+
+.panel-2-stepper-btn:hover {
+  background: var(--color-bg-secondary);
+}
+
+.panel-2-stepper-btn:active {
+  transform: scale(0.97);
+}
+
+.panel-2-stepper-btn:disabled,
+.panel-2-stepper-btn[aria-disabled="true"] {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: white;
+  transform: none;
+}
+
+.panel-2-stepper-input {
+  font-size: 32px;
+  font-weight: 500;
+  border: none;
+  background: transparent;
+  text-align: center;
+  width: 56px;
+  padding: 0;
+  font-family: inherit;
+  outline: none;
+  color: var(--color-text-primary);
+  -moz-appearance: textfield;
+}
+
+.panel-2-stepper-input::-webkit-outer-spin-button,
+.panel-2-stepper-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+@media (max-width: 639.98px) {
+  .panel-2-stepper { gap: 14px; }
+  .panel-2-stepper-btn { width: 34px; height: 34px; font-size: 16px; }
+  .panel-2-stepper-input { font-size: 28px; width: 50px; }
+}
+
+.panel-2-model-input {
+  width: 100%;
+  padding: 9px 36px 9px 12px;
+  border: 0.5px solid var(--color-border-tertiary);
+  border-radius: var(--border-radius-md);
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  box-sizing: border-box;
+  background: white url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none'><circle cx='12' cy='12' r='10' fill='%23639922'/><path d='M7 12.5l3.5 3.5L17 9' stroke='white' stroke-width='2' fill='none' stroke-linecap='round'/></svg>") no-repeat right 10px center;
+  background-size: 0;
+  transition: border-color 150ms ease, background-size 150ms ease;
+}
+
+.panel-2-model-input:focus {
+  border-color: var(--color-border-info);
+}
+
+.panel-2-model-input[data-eligibility-state="apto"] {
+  border: 0.5px solid var(--color-border-success);
+  background-size: 18px;
+}
+
+.panel-2-model-input[data-eligibility-state="not-supported"],
+.panel-2-model-input[data-eligibility-state="not-recognized"] {
+  border: 0.5px solid var(--color-border-danger);
+  background-size: 0;
+}
+
+.panel-2-coverage-badge {
+  background: var(--color-bg-success);
+  border-radius: 999px;
+  padding: 6px 12px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--color-text-success);
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  align-self: stretch;
+}
+
+/* ---------------------------------------------------------------------------
+   Paneles 3 y 4 — placeholders (sub-commits 15c/15d).
+   --------------------------------------------------------------------------- */
+.panel.panel-placeholder {
+  border-style: dashed;
+  border-color: var(--color-border-tertiary);
+  background: var(--color-bg-secondary);
+}
+
+.panel-placeholder-text {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  font-style: italic;
+  margin: 0;
+}
+
+.legacy-step-3,
+.legacy-step-4 {
+  display: none;
+}
+
+
+
 /* QUE: contenedor base del flujo FRP. Solo aporta display, gap y margin; las
    columnas las define .flow-steps.compact en el archivo
    06-flow-grid.css con sistema mobile-first.

@@ -13,4 +13,39 @@
   --motion-fast: 160ms ease;
   --motion-medium: 220ms ease;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+  /* Tokens nuevos para pantalla principal cliente (sub-commit 15a.1).
+     Naming alineado con docs/specs/cliente/mockups/pantalla-principal-cliente.html.
+     Los tokens viejos arriba quedan intactos — los usan archivos fuera del
+     scope de pantalla principal (auth, brand, app-layout, etc.). */
+
+  /* Backgrounds */
+  --color-bg-primary: #FFFFFF;
+  --color-bg-secondary: #F8F7F2;
+  --color-bg-tertiary: #F1EFE8;
+  --color-bg-info: #E6F1FB;
+  --color-bg-success: #EAF3DE;
+  --color-bg-warning: #FAEEDA;
+  --color-bg-danger: #FCEBEB;
+
+  /* Texts */
+  --color-text-primary: #2C2C2A;
+  --color-text-secondary: #5F5E5A;
+  --color-text-tertiary: #888780;
+  --color-text-info: #185FA5;
+  --color-text-success: #27500A;
+  --color-text-warning: #633806;
+  --color-text-danger: #791F1F;
+
+  /* Borders */
+  --color-border-tertiary: rgba(44, 44, 42, 0.15);
+  --color-border-secondary: rgba(44, 44, 42, 0.30);
+  --color-border-info: #185FA5;
+  --color-border-success: #639922;
+  --color-border-danger: #A32D2D;
+
+  /* Misc */
+  --border-radius-md: 8px;
+  --border-radius-lg: 12px;
+  --font-mono: "SF Mono", Menlo, Consolas, monospace;
 }
