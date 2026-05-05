@@ -713,7 +713,6 @@ export function createPortalRoutes({
     const order = {
       id: orderId,
       code: orderCode,
-      accessCode: crypto.randomBytes(8).toString("base64url"),
       requestId: request.id,
       clientId: context.client.id,
       masterClientId: context.client.masterClientId || benefit.masterClientId || "",
@@ -967,9 +966,6 @@ export function createPortalRoutes({
     });
   }
 
-  // PR-2a-final.bundle2 item 4C — descarga del PDF del comprobante. Auth via
-  // sesion del cliente o accessCode en query string (mismo patron que track).
-  // Solo cuando publicStatus = FINALIZADO — antes no hay servicio que certificar.
   const portalItemReadyMatch = pathname.match(/^\/api\/portal\/orders\/([^/]+)\/items\/([^/]+)\/ready$/);
   if (req.method === "POST" && portalItemReadyMatch) {
     const context = await getCurrentCustomerContext(req);
@@ -1204,12 +1200,10 @@ export function createPortalRoutes({
     const context = await getCurrentCustomerContext(req);
     const db = context.db;
     const codeOrId = cleanText(decodeURIComponent(portalComprobanteMatch[1]), 80);
-    const accessCode = cleanText(new URL(req.url || "/", `http://${req.headers.host || "localhost"}`).searchParams.get("accessCode") || "", 80);
     const order = db.customerOrders.find((candidate) => candidate.id === codeOrId || candidate.code === codeOrId);
     if (!order) return sendJson(res, 404, { error: "Orden no encontrada." });
     const ownsOrder = context.user && context.client && order.clientId === context.client.id;
-    const hasAccessCode = accessCode && order.accessCode === accessCode;
-    if (!ownsOrder && !hasAccessCode) return sendJson(res, 403, { error: "Acceso no autorizado al comprobante." });
+    if (!ownsOrder) return sendJson(res, 403, { error: "Acceso no autorizado al comprobante." });
     // PR-2a-final.bundle2 item 4C bugfix: order.publicStatus es el stored del
     // schema (legacy, set en creacion), no el derivado que ve el cliente. El
     // serializer publicCustomerOrder lo recomputa desde frpOrder + jobs. Para

@@ -225,7 +225,6 @@ export function createPortalSerializers({
     return {
       id: order.id,
       code: order.code,
-      accessCode: order.accessCode,
       serviceCode: order.serviceCode,
       serviceName: order.serviceName,
       quantity: order.quantity,

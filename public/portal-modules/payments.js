@@ -20,10 +20,20 @@ export function paymentCurrencyAmount(value, payment = currentPayment()) {
   return rate > 0 ? amount * rate : null;
 }
 
+export function roundFinalPaymentAmount(value, payment = currentPayment()) {
+  const amount = Number(value || 0);
+  if (!Number.isFinite(amount) || amount <= 0) return 0;
+  if (payment?.amountMode === "thousands") {
+    return Math.round(amount / 100) * 100;
+  }
+  return Math.round((amount + Number.EPSILON) * 10) / 10;
+}
+
 export function paymentAmountText(value, payment = currentPayment()) {
-  const amount = paymentCurrencyAmount(value, payment);
-  if (amount === null) return `Tasa pendiente ${payment?.currency || ""}`.trim();
-  if (!Number.isFinite(amount)) return "";
+  const rawAmount = paymentCurrencyAmount(value, payment);
+  if (rawAmount === null) return `Tasa pendiente ${payment?.currency || ""}`.trim();
+  if (!Number.isFinite(rawAmount)) return "";
+  const amount = roundFinalPaymentAmount(rawAmount, payment);
   if (payment?.amountMode === "thousands") {
     return `${new Intl.NumberFormat("es-CO", { maximumFractionDigits: 0 }).format(Math.round(amount))} ${payment.currency}`;
   }

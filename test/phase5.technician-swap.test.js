@@ -11,6 +11,44 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
 const SWAP_MS = 200;
 
+test("phase 5: operator login throttles repeated failed attempts", { timeout: 30_000 }, async () => {
+  const server = await startIsolatedServer({ swapMs: SWAP_MS });
+  try {
+    const jar = new CookieJar();
+    const http = createHttpClient(server.baseUrl, jar);
+    const email = `phase5-throttle-${Date.now()}@example.com`;
+    const password = "Throttle12345!";
+
+    let response = await http.request("POST", "/api/register", {
+      name: "Throttle Admin",
+      email,
+      password,
+      workChannel: "WhatsApp 3",
+      setupToken: server.setupToken,
+    });
+    assert.equal(response.status, 201);
+
+    for (let index = 0; index < 5; index += 1) {
+      response = await http.request("POST", "/api/login", {
+        email,
+        password: `wrong-${index}`,
+      });
+      assert.equal(response.status, 401);
+    }
+
+    response = await http.request("POST", "/api/login", {
+      email,
+      password: "wrong-final",
+    });
+    assert.equal(response.status, 429);
+
+    const db = JSON.parse(await readFile(path.join(server.dataDir, "users.json"), "utf8"));
+    assert.ok(db.audit.some((event) => event.action === "LOGIN_RATE_LIMITED"));
+  } finally {
+    await server.stop();
+  }
+});
+
 test("phase 5: technician switch with swap window and auto-revert", { timeout: 30_000 }, async () => {
   const server = await startIsolatedServer({ swapMs: SWAP_MS });
   try {

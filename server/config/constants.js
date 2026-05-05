@@ -15,6 +15,7 @@ export const presenceWriteIntervalMs = 10 * 1000;
 export const resetTokenExpiresMs = 15 * 60 * 1000;
 export const resetRequestWindowMs = 15 * 60 * 1000;
 export const maxResetRequestsPerWindow = 5;
+export const maxOperatorLoginFailuresPerWindow = 5;
 export const maxJsonBodyBytes = 12 * 1024 * 1024;
 export const maxFinalLogImages = 4;
 export const maxPaymentProofImages = 4;

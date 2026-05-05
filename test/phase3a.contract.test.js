@@ -6,6 +6,7 @@ import { limaDateStamp, limaMonthStamp } from "../server/core/dates.js";
 import { sendSseEvent } from "../server/core/http.js";
 import { classifyCostChange, computeProviderBaseline, defaultFrpPricingConfig, frpCurrentPricing, frpDynamicQuantityTiers, frpDynamicTier } from "../server/frp/pricing.js";
 import { frpEligibilityResult, summarizeFrpEligibility } from "../server/frp/eligibility.js";
+import { roundFinalPaymentAmount } from "../public/portal-modules/payments.js";
 
 test("portal Xiaomi FRP keeps its internal service and WhatsApp 3 mapping", () => {
   const portalFrp = portalPublicServices.find((service) => service.code === "PORTAL-XIAOMI-FRP");
@@ -59,6 +60,14 @@ test("FRP volume discounts apply only over target margin and protect public floo
   assert.equal(frpDynamicTier(legacyUnitTier, pricing).unitPrice, 4.1);
   assert.equal(frpDynamicTier(narrowMarginTier, { available: true, internalCostUsdt: 3.5, unitPrice: 4.0 }).unitPrice, 4.0);
   assert.equal(frpDynamicTier(narrowMarginTier, { available: true, internalCostUsdt: 3.5, unitPrice: 4.0 }).discountPct, 0);
+});
+
+test("portal final payment amounts round only at display/cobro boundary", () => {
+  assert.equal(roundFinalPaymentAmount(16.43, { amountMode: "decimal", currency: "PEN" }), 16.4);
+  assert.equal(roundFinalPaymentAmount(16.45, { amountMode: "decimal", currency: "PEN" }), 16.5);
+  assert.equal(roundFinalPaymentAmount(16.46, { amountMode: "decimal", currency: "MXN" }), 16.5);
+  assert.equal(roundFinalPaymentAmount(16620, { amountMode: "thousands", currency: "COP" }), 16600);
+  assert.equal(roundFinalPaymentAmount(16650, { amountMode: "thousands", currency: "COP" }), 16700);
 });
 
 test("classifyCostChange enforces 5-level validation (PR-2a.6)", () => {

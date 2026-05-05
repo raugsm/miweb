@@ -124,8 +124,7 @@ export async function renderOrderComprobantePdf({ order, items, baseUrl }) {
 
 // QUE: HTML mínimo para la pagina publica /v/:orderId. Quien escanee el QR
 // debe poder verificar el monto, código y hash directamente desde un
-// navegador. Render plano sin auth porque el código de orden + accessCode
-// (vía hash) es el secreto. FINAL §9 menciona "version web del comprobante".
+// navegador. SEC-002 cerro el token publico del PDF; /v/:code queda como SEC-003.
 export function renderOrderVerifyHtml({ order, items, hash }) {
   if (!order) {
     return `<!doctype html><meta charset="utf-8"><title>Orden no encontrada</title><body style="font-family:system-ui;padding:40px;text-align:center"><h1>Orden no encontrada</h1><p>El código no corresponde a ninguna orden registrada.</p></body>`;

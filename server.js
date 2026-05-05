@@ -25,6 +25,7 @@ import {
   maxPortalProofRequestsPerWindow,
   maxPortalRegisterRequestsPerWindow,
   maxPortalVerificationEmailRequestsPerWindow,
+  maxOperatorLoginFailuresPerWindow,
   maxResetRequestsPerWindow,
   adminConfigSseHeartbeatMs,
   portalOrdersSseHeartbeatMs,
@@ -2926,7 +2927,7 @@ async function requireFrpPaymentReviewer(user, res, db, targetId) {
   return false;
 }
 
-function enforcePortalRateLimit(db, req, bucket, key, maxAttempts, windowMs = portalRateLimitWindowMs) {
+function portalRateLimitState(db, req, bucket, key, windowMs = portalRateLimitWindowMs) {
   const now = Date.now();
   const ipHash = hashToken(clientIp(req));
   const keyHash = key ? hashToken(key) : "";
@@ -2935,15 +2936,24 @@ function enforcePortalRateLimit(db, req, bucket, key, maxAttempts, windowMs = po
     if (item.bucket !== bucket) return false;
     return item.ipHash === ipHash || (keyHash && item.keyHash === keyHash);
   }).length;
+  return { now, ipHash, keyHash, attempts };
+}
+
+function recordPortalRateLimitAttempt(db, bucket, state) {
   db.portalRateLimits.push({
     id: crypto.randomUUID(),
     bucket,
-    ipHash,
-    keyHash,
+    ipHash: state.ipHash,
+    keyHash: state.keyHash,
     createdAt: nowIso(),
-    createdAtMs: now,
+    createdAtMs: state.now || Date.now(),
   });
-  return attempts < maxAttempts;
+}
+
+function enforcePortalRateLimit(db, req, bucket, key, maxAttempts, windowMs = portalRateLimitWindowMs) {
+  const state = portalRateLimitState(db, req, bucket, key, windowMs);
+  recordPortalRateLimitAttempt(db, bucket, state);
+  return state.attempts < maxAttempts;
 }
 
 async function validateTurnstileIfConfigured(req, input, action) {
@@ -3289,16 +3299,30 @@ function formatPaymentAmount(value, payment) {
   return `$${amount.toFixed(2)} ${payment?.currency || "USD"}`;
 }
 
+function roundPortalFinalPaymentAmount(value, payment) {
+  const amount = Number(value || 0);
+  if (!Number.isFinite(amount) || amount <= 0) return 0;
+  if (payment?.amountMode === "thousands") {
+    return Math.round(amount / 100) * 100;
+  }
+  return Math.round((amount + Number.EPSILON) * 10) / 10;
+}
+
+function formatPortalFinalPaymentAmount(value, payment) {
+  const amount = roundPortalFinalPaymentAmount(value, payment);
+  if (payment?.amountMode === "thousands") {
+    return `${new Intl.NumberFormat("es-CO", { maximumFractionDigits: 0 }).format(Math.round(amount))} ${payment.currency}`;
+  }
+  return formatPaymentAmount(amount, { ...payment, amountMode: "" });
+}
+
 function formatPortalPaymentAmountFromUsdt(db, valueUsdt, payment) {
   const amountUsdt = moneyNumber(valueUsdt);
-  if (!payment || payment.currency === "USDT") return formatPaymentAmount(amountUsdt, payment);
+  if (!payment || payment.currency === "USDT") return formatPortalFinalPaymentAmount(amountUsdt, payment);
   const exchange = exchangeRateForCurrency(db, payment.currency);
   if (!exchange.ratePerUsdt) return `Monto pendiente ${payment.currency}`;
   const localAmount = moneyNumber(amountUsdt * exchange.ratePerUsdt);
-  if (payment.amountMode === "thousands") {
-    return `${new Intl.NumberFormat("es-CO", { maximumFractionDigits: 0 }).format(Math.round(localAmount))} ${payment.currency}`;
-  }
-  return formatPaymentAmount(localAmount, { ...payment, amountMode: "" });
+  return formatPortalFinalPaymentAmount(localAmount, payment);
 }
 
 function parseClientText(value) {
@@ -3801,9 +3825,22 @@ async function handleApi(req, res, pathname) {
     const email = normalizeEmail(input.email);
     const password = String(input.password || "");
     const db = await readDb();
+    const loginRate = portalRateLimitState(db, req, "operator_login", email);
     const existing = db.users.find((candidate) => candidate.email === email);
+    if (loginRate.attempts >= maxOperatorLoginFailuresPerWindow) {
+      audit(db, null, "LOGIN_RATE_LIMITED", existing?.id || null, {
+        emailHash: hashToken(email),
+        ipHash: loginRate.ipHash,
+      });
+      await writeDb(db);
+      return sendJson(res, 429, { error: "Demasiados intentos. Intenta mas tarde." });
+    }
     if (!existing || !(await verifyPassword(password, existing.passwordHash))) {
-      audit(db, null, "LOGIN_FAILED", existing?.id || null, { email });
+      recordPortalRateLimitAttempt(db, "operator_login", loginRate);
+      audit(db, null, "LOGIN_FAILED", existing?.id || null, {
+        emailHash: hashToken(email),
+        ipHash: loginRate.ipHash,
+      });
       await writeDb(db);
       return sendJson(res, 401, { error: "Credenciales invalidas." });
     }
@@ -3820,6 +3857,7 @@ async function handleApi(req, res, pathname) {
       const trustedDeviceExists = hasTrustedAdminDevice(db, existing.id);
       if (!trustedDeviceExists) {
         if (!setupTokenIsValid) {
+          recordPortalRateLimitAttempt(db, "operator_login", loginRate);
           audit(db, existing.id, "ADMIN_DEVICE_SETUP_REQUIRED", existing.id, { deviceId: device.id });
           await writeDb(db);
           res.setHeader("Set-Cookie", cookieHeader(deviceCookieName, deviceToken, deviceMaxAgeSeconds, { sameSite: "Strict" }));
@@ -3833,6 +3871,7 @@ async function handleApi(req, res, pathname) {
         audit(db, existing.id, "ADMIN_DEVICE_AUTHORIZED", existing.id, { deviceId: device.id, firstTrustedDevice: true });
       } else {
         if (!pinIsValid) {
+          recordPortalRateLimitAttempt(db, "operator_login", loginRate);
           audit(db, existing.id, "ADMIN_DEVICE_PIN_REQUIRED", existing.id, {
             deviceId: device.id,
           });

@@ -194,7 +194,7 @@ function orderMenuHtml(order) {
 function renderOrderCard(order) {
   const card = document.createElement("article");
   const receiptEnabled = allProcessableItemsFinalized(order);
-  const receiptHref = `/api/portal/orders/${encodeURIComponent(order.id)}/comprobante.pdf?accessCode=${encodeURIComponent(order.accessCode || "")}`;
+  const receiptHref = `/api/portal/orders/${encodeURIComponent(order.id)}/comprobante.pdf`;
   card.className = "order-card order-card-v1";
   card.dataset.orderId = order.id;
   card.dataset.publicStatus = order.publicStatus || "";

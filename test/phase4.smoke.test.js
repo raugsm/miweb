@@ -62,8 +62,9 @@ async function runSmoke({ baseUrl, dataDir, setupToken }) {
   });
   assert.equal(response.status, 201);
   const portalOrder = response.data.order;
+  assert.equal(Object.hasOwn(portalOrder, "accessCode"), false, "la API cliente no debe exponer accessCode");
   assert.equal(portalOrder.totalPrice, 73.05);
-  assert.match(portalOrder.priceFormatted || "", /S\/\s*273\.94/);
+  assert.match(portalOrder.priceFormatted || "", /S\/\s*273\.90/);
   assert.equal(portalOrder.items.length, 3);
 
   response = await http.request("PATCH", `/api/portal/orders/${encodeURIComponent(portalOrder.id)}/payment-proof`, {
@@ -422,6 +423,30 @@ async function runSmoke({ baseUrl, dataDir, setupToken }) {
   assert.equal(readyPortalJobs.length, 2, "el panel operador debe recibir dos equipos listos sin desaparecer la orden");
   const canceledPortalJobs = (response.data.frp?.jobs || []).filter((job) => job.orderId === portalFrpOrder.id && job.status === "CANCELADO");
   assert.equal(canceledPortalJobs.length, 1, "el panel operador debe ver el equipo cancelado para trazabilidad");
+
+  for (let index = 0; index < readyPortalJobs.length; index += 1) {
+    response = await technicianHttp.request("POST", "/api/frp/jobs/take-next");
+    assert.equal(response.status, 200, "tecnico activo debe tomar el siguiente equipo portal");
+    assert.equal(response.data.job.orderId, portalFrpOrder.id);
+    response = await technicianHttp.request("PATCH", `/api/frp/jobs/${encodeURIComponent(response.data.job.id)}/finalize`, {
+      finalLog: `Portal finalizado ${index + 1}`,
+    });
+    assert.equal(response.status, 200, "tecnico activo debe finalizar equipo portal");
+    assert.equal(response.data.job.status, "FINALIZADO");
+  }
+
+  response = await http.request("GET", `/api/portal/orders/${encodeURIComponent(portalOrder.id)}`);
+  assert.equal(response.status, 200);
+  assert.equal(response.data.order.publicStatus, "FINALIZADO");
+  assert.equal(Object.hasOwn(response.data.order, "accessCode"), false, "la orden finalizada tampoco debe exponer accessCode");
+
+  response = await http.request("GET", `/api/portal/orders/${encodeURIComponent(portalOrder.id)}/comprobante.pdf`);
+  assert.equal(response.status, 200, "cliente dueño logueado debe descargar recibo PDF");
+  assert.match(response.headers.get("content-type") || "", /application\/pdf/);
+
+  const anonymousReceiptHttp = createHttpClient(baseUrl, new CookieJar());
+  response = await anonymousReceiptHttp.request("GET", `/api/portal/orders/${encodeURIComponent(portalOrder.id)}/comprobante.pdf?accessCode=legacy-token`);
+  assert.equal(response.status, 403, "accessCode en URL no debe autorizar recibo PDF");
 
   response = await http.request("POST", `/api/portal/orders/${encodeURIComponent(noActiveTechOrder.id)}/abort`, {
     reason: "CUSTOMER_ORDER_ABORT",
