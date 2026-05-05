@@ -2642,6 +2642,15 @@ function publishAdminConfig(eventType, data) {
   }
 }
 
+function publishPortalCatalogChanged(reason = "catalog_updated", scope = "frp_pricing") {
+  publishAdminConfig("portal_catalog_changed", {
+    scope,
+    reason,
+    updatedAt: nowIso(),
+    requiresSessionRefresh: true,
+  });
+}
+
 // QUE: re-publica el listado de ordenes a TODOS los clientes con stream activo.
 // PR-2a.3 lo usa cuando el operador cambia pricing config — cada cliente conectado
 // recibe sus ordenes con currentUnitPrice recalculado para detectar price-up
@@ -2658,6 +2667,7 @@ function publishPortalOrdersForAll(db, reason = "pricing_config_updated") {
   if (renewed) {
     writeDb(db).catch((err) => console.warn("[publishPortalOrdersForAll] writeDb failed:", err?.message || err));
   }
+  publishPortalCatalogChanged(reason, "frp_pricing");
   for (const clientId of [...portalOrderStreams.keys()]) {
     publishPortalOrders(db, clientId, reason);
   }

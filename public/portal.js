@@ -1,4 +1,4 @@
-import { startAdminConfigStream } from "./portal-modules/admin-config-stream.js?v=s16-fix007";
+import { startAdminConfigStream } from "./portal-modules/admin-config-stream.js?v=s16-fix008";
 import { renderCustomer } from "./portal-modules/auth-forms.js?v=s16-fix007";
 import { applyEmailVerification, applyQueryTracking } from "./portal-modules/deep-links.js?v=s16-fix007";
 import { setMessage, $ } from "./portal-modules/dom.js?v=s16-fix007";

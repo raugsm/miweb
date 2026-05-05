@@ -1,5 +1,4 @@
 import { api } from "./api.js";
-import { $, setMessage } from "./dom.js";
 import { paymentUploadTargetOrder } from "./payments.js";
 import { state } from "./state.js";
 
@@ -36,21 +35,18 @@ export async function filesToProofs(fileList) {
 }
 
 export async function uploadPaymentProofFromFlow(files, onCustomerUpdate = () => {}) {
-  const message = $("#orderMessage");
   const order = paymentUploadTargetOrder();
   if (!order) {
-    setMessage(message, "Primero crea una solicitud pendiente de pago.", "error");
-    return;
+    throw new Error("Primero crea una solicitud pendiente de pago.");
   }
-  setMessage(message, `Subiendo comprobante para ${order.code}...`);
   const proofs = await filesToProofs(files);
   const payload = await api(`/api/portal/orders/${order.id}/payment-proof`, {
     method: "PATCH",
     body: JSON.stringify({ paymentProofs: proofs }),
   });
   state.customer = payload.customer;
-  setMessage(message, `Comprobante recibido para ${order.code}. Queda en revision.`, "success");
   onCustomerUpdate();
+  return payload;
 }
 
 export function hasDraggedFiles(event) {

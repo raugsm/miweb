@@ -128,6 +128,25 @@ async function runSmoke({ baseUrl, dataDir, setupToken }) {
   assert.match(adminConfigRateEvent.text, /"currency":"PEN"/);
   assert.match(adminConfigRateEvent.text, /"ratePerUsdt":3\.76/);
 
+  response = await http.request("GET", "/api/frp/pricing");
+  assert.equal(response.status, 200);
+  assert.ok(response.data.pricing.summary.available);
+  const policyForCatalogEvent = response.data.pricing.policy;
+  let frpPolicyUpdateResponse;
+  const adminConfigCatalogEvent = await readAdminConfigEventAfter(baseUrl, async () => {
+    frpPolicyUpdateResponse = await http.request("PATCH", "/api/frp/pricing/policy", {
+      minMarginUsdt: policyForCatalogEvent.minMarginUsdt,
+      targetMarginUsdt: policyForCatalogEvent.targetMarginUsdt,
+      minSellPriceUsdt: policyForCatalogEvent.minSellPriceUsdt,
+      maxWorkerCostChangePct: policyForCatalogEvent.maxWorkerCostChangePct,
+    });
+  }, "portal_catalog_changed");
+  assert.equal(frpPolicyUpdateResponse.status, 200);
+  assert.match(adminConfigCatalogEvent.text, /event: portal_catalog_changed/);
+  assert.match(adminConfigCatalogEvent.text, /"scope":"frp_pricing"/);
+  assert.match(adminConfigCatalogEvent.text, /"reason":"pricing_policy_updated"/);
+  assert.match(adminConfigCatalogEvent.text, /"requiresSessionRefresh":true/);
+
   response = await http.request("PATCH", `/api/users/${encodeURIComponent(adminUser.id)}`, {
     technicianRedirectorId: "1000 9983 5478",
   });

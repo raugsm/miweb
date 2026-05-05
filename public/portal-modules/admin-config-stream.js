@@ -1,8 +1,9 @@
 // Sub-commit 15a.2: listener del canal SSE admin-config (broadcast).
 //
-// Conecta a `GET /api/portal/admin-config/events` y escucha dos eventos:
+// Conecta a `GET /api/portal/admin-config/events` y escucha eventos:
 //   - exchange_rate_changed: { currency, ratePerUsdt, updatedAt }
 //   - payment_method_toggled: { code, active, customMessage }
+//   - portal_catalog_changed: { scope, reason, updatedAt, requiresSessionRefresh }
 //
 // Cada evento muta `state.catalog` localmente (sin re-fetch), recalcula la
 // quote y dispara los cajones del panel 1 cuando aplica. Cuando llega un
@@ -14,6 +15,7 @@
 // portal.js controle el ciclo de vida.
 
 import { hidePanelNotice, showPanelNotice } from "./panel-notices.js";
+import { loadSession } from "./session.js";
 import {
   clearLastSelectedPill,
   readLastSelectedPill,
@@ -24,6 +26,7 @@ import {
 import { state } from "./state.js";
 
 let stream = null;
+let catalogRefresh = null;
 
 function selectedPaymentCode() {
   return document.getElementById("paymentSelect")?.value || "";
@@ -107,6 +110,22 @@ function handlePaymentMethodToggled(data) {
   // Si el cliente termina sin pill activa, debe contactar soporte.
 }
 
+async function handlePortalCatalogChanged(data) {
+  if (data?.scope && data.scope !== "frp_pricing") return;
+  if (data?.requiresSessionRefresh === false) return;
+  if (!catalogRefresh) {
+    catalogRefresh = loadSession().finally(() => {
+      catalogRefresh = null;
+    });
+  }
+  await catalogRefresh;
+  showPanelNotice("panel1EstimateNotice", "Precio FRP actualizado", {
+    durationMs: 8000,
+    variant: "warning",
+    prevailIfExisting: true,
+  });
+}
+
 export function startAdminConfigStream() {
   if (stream) return;
   if (!window.EventSource) return;
@@ -126,6 +145,15 @@ export function startAdminConfigStream() {
       handlePaymentMethodToggled(JSON.parse(event.data || "{}"));
     } catch (error) {
       console.warn("[admin-config-stream] payload inválido:", error?.message || error);
+    }
+  });
+  stream.addEventListener("portal_catalog_changed", (event) => {
+    try {
+      handlePortalCatalogChanged(JSON.parse(event.data || "{}")).catch((error) => {
+        console.warn("[admin-config-stream] no se pudo refrescar catalogo:", error?.message || error);
+      });
+    } catch (error) {
+      console.warn("[admin-config-stream] payload invalido:", error?.message || error);
     }
   });
   stream.onerror = () => {

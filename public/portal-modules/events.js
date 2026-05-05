@@ -43,15 +43,8 @@ import { state } from "./state.js";
 // dropzone se habilitaba para PATCH. Ese flujo se elimina.
 async function submitOrderWithProofs(files) {
   const form = $("#orderForm");
-  const message = $("#orderMessage");
-  setMessage(message, "");
-  let proofs;
-  try {
-    proofs = await filesToProofs(files);
-  } catch (error) {
-    setMessage(message, error.message, "error");
-    return;
-  }
+  setMessage($("#orderMessage"), "");
+  const proofs = await filesToProofs(files);
   try {
     syncDetectedItems();
     const data = Object.fromEntries(new FormData(form));
@@ -85,13 +78,10 @@ async function submitOrderWithProofs(files) {
     updateQuote();
     renderCustomer();
     resetTurnstile("order");
-    const createdMessage = payload.order?.publicStatus === "REVISION_COMPATIBILIDAD"
-      ? `Solicitud ${payload.order.code} creada para revision de compatibilidad. Espera confirmacion antes de pagar.`
-      : `Comprobante recibido para ${payload.order.code}. Queda en revision.`;
-    setMessage(message, createdMessage, "success");
+    setMessage($("#orderMessage"), "");
   } catch (error) {
-    setMessage(message, error.message, "error");
     resetTurnstile("order");
+    throw error;
   }
 }
 
@@ -399,15 +389,15 @@ export function wireEvents() {
       updateQuote();
     } catch (error) {
       // Errores de validación (tipo/tamaño) muestran cajón inline 4s y
-      // vuelven a default. Otros errores (red/backend) usan flow de #orderMessage.
+      // vuelven a default. Los errores de red/backend tambien se muestran en Panel 3.
       if (error?.code === "TYPE") {
         flashPanel3DropzoneError("error-type", "Tipo no permitido. Solo JPG, PNG o PDF.");
       } else if (error?.code === "SIZE") {
         flashPanel3DropzoneError("error-size", "Archivo muy grande. Máximo 5 MB.");
       } else {
-        setPanel3ProofState("default");
-        setMessage($("#orderMessage"), error.message || "No se pudo subir el comprobante.", "error");
+        flashPanel3DropzoneError("error-backend", error.message || "No se pudo subir el comprobante.");
       }
+      setMessage($("#orderMessage"), "");
     }
   };
 

@@ -655,6 +655,99 @@ POST /api/portal/orders/:orderId/items/:itemId/ready
 
 **Pendiente separado:** la vista sigue confirmando que el breakpoint de 4 columnas queda apretado. Ese problema no pertenece al bug de pills; queda para el contrato visual general de los 4 paneles.
 
+### S16-UI-017 - Reubicar avisos de comprobante al Panel 3
+
+**Problema confirmado por Bryam:** al subir un comprobante duplicado aparecia el mensaje global `Ese comprobante ya fue cargado antes.` debajo de los 4 paneles. Esa zona dejaba un espacio visual que ya no pertenece al flujo actual.
+
+**Hechos verificados antes de tocar codigo:**
+
+- El backend conserva correctamente la validacion de comprobante duplicado en `POST /api/portal/orders/frp` y `PATCH /api/portal/orders/:id/payment-proof`.
+- `#orderMessage` no se podia eliminar completo todavia porque tambien lo usan mensajes de Panel 4, correo, modal de pago y links de seguimiento.
+- El Panel 3 ya tenia estados propios para tipo invalido, tamano excedido, subiendo, subido, validado y rechazado.
+
+**Decision aplicada:** mover solo los mensajes del comprobante al Panel 3 y eliminar los mensajes globales redundantes de subida exitosa. `#orderMessage` queda vivo temporalmente para otros flujos, pero ya no reserva espacio cuando esta vacio.
+
+**Cambio aplicado:**
+
+- `public/portal-modules/proofs.js`: el reemplazo de comprobante ya no escribe en `#orderMessage`; si no hay orden valida, lanza error para que Panel 3 lo muestre.
+- `public/portal-modules/events.js`: errores de comprobante tipo/red/backend se muestran con `flashPanel3DropzoneError`; el mensaje global se limpia.
+- `public/portal-styles/13-panel-3.css`: nuevo estado visual `error-backend` con el mismo cajon rojo del Panel 3.
+- `public/portal-styles/03-auth-forms.css`: `.message:empty` no ocupa espacio.
+
+**Validacion:**
+
+- `node --check` paso para `events.js`, `proofs.js` y `panel-3-account.js`.
+- `git diff --check` paso sin errores; solo aviso normal LF/CRLF de Windows.
+- `npm.cmd test` paso completo: 12 pruebas, 0 fallos.
+
+**Pendiente intencional:** reubicar en tareas separadas los mensajes que no pertenecen al comprobante: errores de Panel 4, reenvio de correo, copiar cuenta desde modal y link de seguimiento.
+
+### S16-ARCH-018 - Precio FRP en vivo como evento de catalogo
+
+**Problema confirmado por Bryam:** al cambiar el precio FRP desde el panel operador/admin de `3.50` a `4.00` USDT, la pantalla cliente no actualizo el precio en vivo. Solo cambio despues de recargar.
+
+**Hechos verificados antes de tocar codigo funcional:**
+
+- El cliente calcula Panel 1 y Panel 2 desde `state.catalog.services[0].baseUnitPrice`, `state.catalog.quantityTiers` y `state.catalog.monthlyTiers`.
+- El cambio de tasa de moneda ya usa SSE por `/api/portal/admin-config/events` con `exchange_rate_changed`.
+- El cambio de precio FRP (`/api/frp/pricing/...`) hoy llama `publishPortalOrdersForAll(...)`, que republica ordenes del cliente.
+- El payload de ordenes contiene `orders`, `reason` y `updatedAt`, pero no contiene el catalogo completo ni los beneficios del cliente.
+- `/api/portal/session` ya devuelve juntos `customer` y `catalog`, calculados con permisos correctos para ese cliente.
+
+**Fuentes externas usadas para la decision:**
+
+- MDN `EventSource`: SSE es adecuado cuando el servidor necesita enviar actualizaciones al navegador en una sola direccion. Fuente: https://developer.mozilla.org/en-US/docs/Web/API/EventSource
+- MDN `Using server-sent events`: SSE permite eventos con nombre (`event`) y payload en `data`. Fuente: https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events
+- WHATWG HTML Server-Sent Events: el stream puede usar eventos, datos e id para mensajes estructurados y reconexion. Fuente: https://html.spec.whatwg.org/dev/server-sent-events.html
+- OWASP API3:2023: no se deben exponer propiedades sensibles que el usuario no debe leer. Por eso un canal publico no debe transportar beneficios privados del cliente. Fuente: https://owasp.org/API-Security/editions/2023/en/0xa3-broken-object-property-level-authorization/
+
+**Decision de arquitectura:**
+
+- No meter el precio FRP dentro de `Seguimiento`, porque `Seguimiento` representa ordenes privadas del cliente.
+- No mandar beneficios, VIP, deuda o estado privado por el SSE publico `admin-config`.
+- Crear un evento formal de catalogo, por ejemplo:
+
+```text
+event: portal_catalog_changed
+data: {
+  "scope": "frp_pricing",
+  "reason": "pricing_provider_updated",
+  "updatedAt": "...",
+  "requiresSessionRefresh": true
+}
+```
+
+- Cuando el cliente reciba ese evento, debe recargar `/api/portal/session` y volver a pintar `catalog`, `customer`, Panel 1, Panel 2, Panel 3, Panel 4 y Mis ordenes segun el estado real.
+
+**Por que esta opcion y no otra:**
+
+- Tocar solo el numero visible seria un parche: podria dejar mal descuentos, VIP o tiers.
+- Meter todo en el SSE publico seria riesgo de seguridad.
+- Hacer polling repetido volveria a una arquitectura mas pesada y menos limpia que el SSE ya elegido.
+- Reutilizar `/api/portal/session` evita duplicar calculos y respeta permisos por cliente.
+
+**Impacto previsto antes de implementar:**
+
+- Backend: emitir `portal_catalog_changed` cuando cambie politica/proveedor FRP o se apruebe un cambio pendiente de costo.
+- Frontend cliente: escuchar `portal_catalog_changed`, recargar sesion y re-renderizar.
+- Tests: agregar prueba automatica que confirme que un cambio de precio FRP dispara el SSE correcto.
+
+**Resultado implementado:**
+
+- `server.js`: se agrego `publishPortalCatalogChanged(...)` y `publishPortalOrdersForAll(...)` ahora emite `portal_catalog_changed` cuando cambia pricing FRP.
+- `public/portal-modules/admin-config-stream.js`: escucha `portal_catalog_changed`, recarga `/api/portal/session` usando `loadSession()` y muestra el aviso `Precio FRP actualizado`.
+- `public/portal.js` y `public/portal.html`: se actualizo el cache-busting a `s16-fix008` para que el navegador cargue el modulo nuevo.
+- `test/phase4.smoke.test.js`: se agrego prueba que abre el SSE `admin-config`, actualiza politica FRP y confirma `event: portal_catalog_changed` con `scope: frp_pricing`, `reason: pricing_policy_updated` y `requiresSessionRefresh: true`.
+
+**Validacion:**
+
+- `node --check server.js` paso.
+- `node --check public/portal-modules/admin-config-stream.js` paso.
+- `node --check public/portal.js` paso.
+- `node --check test/phase4.smoke.test.js` paso.
+- `git diff --check` paso sin errores; solo avisos normales LF/CRLF de Windows.
+- `npm.cmd test` paso completo: 12 pruebas, 0 fallos.
+
 ---
 
 ## Checklist de esta fase
@@ -690,6 +783,9 @@ POST /api/portal/orders/:orderId/items/:itemId/ready
 - [x] Documentar auditoria visual cliente vs guia de 4 paneles.
 - [x] Documentar evidencia responsive de pantalla angosta/grande/local.
 - [x] Documentar regla responsive para pills del panel 1.
+- [x] Mover avisos de comprobante al Panel 3 y quitar hueco de `#orderMessage` vacio.
+- [x] Documentar decision de arquitectura para precio FRP en vivo como evento de catalogo.
+- [x] Implementar `portal_catalog_changed` para refrescar precio FRP en vivo sin recargar la pagina completa.
 - [x] Aprobar y aplicar correccion tecnica de pills sin romper orden 3+2 en ancho grande.
 - [x] Corregir efecto lateral donde `Chile` dejaba hueco en panel estrecho.
 - [x] Validar con Bryam el ancho exacto donde aparecia el hueco de pills.

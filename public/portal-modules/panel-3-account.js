@@ -190,7 +190,7 @@ function renderProofBlock() {
 
   // Estados transitorios mantienen su data-state hasta que su timer expire
   // o el upload termine. NO los pisamos en este re-render.
-  const transitional = ["uploading", "error-type", "error-size", "dragover"];
+  const transitional = ["uploading", "error-type", "error-size", "error-backend", "dragover"];
   if (transitional.includes(proof.dataset.state)) return;
 
   const customer = state.customer;
@@ -307,6 +307,7 @@ export function setPanel3ProofState(stateName) {
 
 // Muestra el cajón rojo inline con el mensaje de error de validación durante
 // 4 segundos, después vuelve a default. Spec §2.5 (estados error-type / error-size).
+// Tambien se usa para errores backend/red del comprobante con estado error-backend.
 let dropzoneErrorTimer = null;
 export function flashPanel3DropzoneError(stateName, message) {
   const proof = $("#panel3Proof");

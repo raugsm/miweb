@@ -331,14 +331,17 @@
 
 /* Errores tipo / tamaño: border rojo + texto rojo + mensaje inline 4s. */
 .panel-3-proof[data-state="error-type"] .panel-3-dropzone,
-.panel-3-proof[data-state="error-size"] .panel-3-dropzone {
+.panel-3-proof[data-state="error-size"] .panel-3-dropzone,
+.panel-3-proof[data-state="error-backend"] .panel-3-dropzone {
   border: 1px solid #A32D2D;
   background: #FFFAFA;
 }
 .panel-3-proof[data-state="error-type"] .panel-3-dropzone-title,
 .panel-3-proof[data-state="error-size"] .panel-3-dropzone-title,
+.panel-3-proof[data-state="error-backend"] .panel-3-dropzone-title,
 .panel-3-proof[data-state="error-type"] .panel-3-dropzone-icon,
-.panel-3-proof[data-state="error-size"] .panel-3-dropzone-icon {
+.panel-3-proof[data-state="error-size"] .panel-3-dropzone-icon,
+.panel-3-proof[data-state="error-backend"] .panel-3-dropzone-icon {
   color: #A32D2D;
 }
 

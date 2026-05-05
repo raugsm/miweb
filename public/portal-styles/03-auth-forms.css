@@ -151,6 +151,10 @@ textarea:focus {
   font-weight: 700;
 }
 
+.message:empty {
+  display: none;
+}
+
 .message[data-type="success"] {
   color: var(--green);
 }
