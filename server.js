@@ -123,6 +123,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, "public");
 const dataDir = process.env.ARIAD_DATA_DIR || path.join(__dirname, "data");
 const dbPath = path.join(dataDir, "users.json");
+const dbLastGoodPath = path.join(dataDir, "users.json.last-good.bak");
+let dbWriteQueue = Promise.resolve();
 const port = Number(process.env.PORT || 4173);
 const setupToken = process.env.ARIAD_SETUP_TOKEN || "";
 const enableSetupPasswordReset = ["true", "1", "yes"].includes(String(process.env.ARIAD_ENABLE_SETUP_RESET || "").toLowerCase());
@@ -288,48 +290,83 @@ function paymentMethodsWithOverrides(db) {
   });
 }
 
+function defaultDb() {
+  return {
+    users: [],
+    sessions: [],
+    devices: [],
+    deviceApprovals: [],
+    customerClients: [],
+    customerUsers: [],
+    customerSessions: [],
+    customerDevices: [],
+    customerRequests: [],
+    customerOrders: [],
+    customerOrderItems: [],
+    customerBenefits: [],
+    customerEmailVerificationTokens: [],
+    customerCounters: {},
+    masterClients: [],
+    clientLinks: [],
+    clientLinkSuggestions: [],
+    paymentLedgerEntries: [],
+    dailyCloses: [],
+    dailyCloseLines: [],
+    dailyAdjustments: [],
+    portalRateLimits: [],
+    clients: [],
+    audit: [],
+    tickets: [],
+    ticketCounters: {},
+    frpOrders: [],
+    frpJobs: [],
+    frpCounters: {},
+    frpProviderCostHistory: [],
+    frpPendingCostChanges: [],
+    passwordResetTokens: [],
+    passwordResetRequests: [],
+    pricingConfig: defaultPricingConfig(),
+    activeTechnician: null,
+  };
+}
+
+async function backupLastGoodDb() {
+  try {
+    const current = await fs.readFile(dbPath, "utf8");
+    JSON.parse(current);
+    await fs.copyFile(dbPath, dbLastGoodPath);
+  } catch {
+    // No sobrescribimos last-good si el archivo activo ya esta corrupto.
+  }
+}
+
+async function replaceDbAtomically(db) {
+  await fs.mkdir(dataDir, { recursive: true });
+  const payload = `${JSON.stringify(db, null, 2)}\n`;
+  JSON.parse(payload);
+  const tempPath = `${dbPath}.${process.pid}.${Date.now()}.${crypto.randomUUID()}.tmp`;
+  try {
+    const handle = await fs.open(tempPath, "w");
+    try {
+      await handle.writeFile(payload, "utf8");
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    await backupLastGoodDb();
+    await fs.rename(tempPath, dbPath);
+  } catch (error) {
+    await fs.rm(tempPath, { force: true }).catch(() => {});
+    throw error;
+  }
+}
+
 async function ensureDb() {
   await fs.mkdir(dataDir, { recursive: true });
   try {
     await fs.access(dbPath);
   } catch {
-    await fs.writeFile(dbPath, JSON.stringify({
-      users: [],
-      sessions: [],
-      devices: [],
-      deviceApprovals: [],
-      customerClients: [],
-      customerUsers: [],
-      customerSessions: [],
-      customerDevices: [],
-      customerRequests: [],
-      customerOrders: [],
-      customerOrderItems: [],
-      customerBenefits: [],
-      customerEmailVerificationTokens: [],
-      customerCounters: {},
-      masterClients: [],
-      clientLinks: [],
-      clientLinkSuggestions: [],
-      paymentLedgerEntries: [],
-      dailyCloses: [],
-      dailyCloseLines: [],
-      dailyAdjustments: [],
-      portalRateLimits: [],
-      clients: [],
-      audit: [],
-      tickets: [],
-      ticketCounters: {},
-      frpOrders: [],
-      frpJobs: [],
-      frpCounters: {},
-      frpProviderCostHistory: [],
-      frpPendingCostChanges: [],
-      passwordResetTokens: [],
-      passwordResetRequests: [],
-      pricingConfig: defaultPricingConfig(),
-      activeTechnician: null,
-    }, null, 2));
+    await writeDb(defaultDb());
   }
 }
 
@@ -433,12 +470,14 @@ async function readDb() {
       changed = true;
     }
   }
-  if (changed) await fs.writeFile(dbPath, JSON.stringify(db, null, 2));
+  if (changed) await writeDb(db);
   return db;
 }
 
 async function writeDb(db) {
-  await fs.writeFile(dbPath, JSON.stringify(db, null, 2));
+  const write = dbWriteQueue.then(() => replaceDbAtomically(db));
+  dbWriteQueue = write.catch(() => {});
+  return write;
 }
 
 function normalizeUserPermissions(permissions = {}) {
