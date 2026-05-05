@@ -371,6 +371,54 @@ Lectura de la prueba de estres:
 - No demuestra seguridad transaccional completa.
 - La prioridad siguiente sigue siendo desplegar el hotfix, reparar el JSON activo una ultima vez y continuar migracion PostgreSQL.
 
+Validacion produccion despues del deploy:
+
+- Fecha UTC observada: `2026-05-05T23:51:46Z`.
+- `GET https://ariadgsm.com/api/health`: HTTP 200.
+- `GET https://ariadgsm.com/api/portal/catalog`: HTTP 500.
+- `GET https://ariadgsm.com/api/portal/session`: HTTP 500.
+- Error activo:
+
+```txt
+Unexpected non-whitespace character after JSON at position 4874600 (line 16903 column 2)
+```
+
+Lectura:
+
+- El deploy esta respondiendo.
+- El archivo persistente activo seguia corrupto desde antes del hotfix.
+- El hotfix no puede leer ni reparar automaticamente un `users.json` que ya no parsea.
+- Siguiente accion: reparar una ultima vez `users.json` en Render Shell, ahora con el codigo de escritura segura ya desplegado.
+
+Resultado Render Shell posterior:
+
+```json
+{
+  "kind": "ariadgsm-final-json-repair-after-hotfix",
+  "generatedAt": "2026-05-05T23:52:49.547Z",
+  "sourceSha256": "f0970b38a3f02ec6b06328d1614d086d2ce51f9c39eee669a1f7dd6f91c11321",
+  "sanitized": true,
+  "sourceParseOk": true,
+  "message": "users.json ya parsea; no se reemplazo"
+}
+```
+
+Validacion externa final:
+
+- `2026-05-05T23:53:12Z`:
+  - `GET /api/health`: HTTP 200.
+  - `GET /api/portal/catalog`: HTTP 200.
+  - `GET /api/portal/session`: HTTP 200.
+- Segunda lectura despues de una escritura de `/api/portal/session`:
+  - `GET /api/portal/catalog`: HTTP 200.
+  - `GET /api/portal/session`: HTTP 200.
+
+Conclusion:
+
+- Produccion quedo recuperada a nivel login/catalogo/session.
+- El hotfix desplegado ya soporta al menos una escritura de sesion posterior sin repetir el error de parseo.
+- La prueba Gmail puede retomarse, pero el cierre estructural sigue siendo PostgreSQL.
+
 7. Reiniciar el servicio desde Render.
 
 8. Verificar:
