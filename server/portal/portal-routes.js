@@ -850,6 +850,14 @@ export function createPortalRoutes({
     }
     const timestamp = nowIso();
     const activeRedirectorId = activeRedirectorIdFromDb(db);
+    if (!activeRedirectorId) {
+      audit(db, context.user.id, "PORTAL_CUSTOMER_CONNECTED_BLOCKED_NO_TECHNICIAN", order.id, {
+        code: order.code,
+        derivedStatus: derived.publicStatus,
+      });
+      await writeDb(db);
+      return sendJson(res, 409, { error: "No hay tecnico activo disponible. Espera a que AriadGSM asigne un tecnico." });
+    }
     order.customerConnectedAt = order.customerConnectedAt || timestamp;
     order.customerConnectedBy = context.user.id;
     freezeRedirectorId(order, null, activeRedirectorId);
@@ -933,6 +941,15 @@ export function createPortalRoutes({
 
     const timestamp = nowIso();
     const activeRedirectorId = activeRedirectorIdFromDb(db);
+    if (!activeRedirectorId) {
+      audit(db, context.user.id, "PORTAL_CUSTOMER_ITEM_READY_BLOCKED_NO_TECHNICIAN", order.id, {
+        code: order.code,
+        itemId,
+        frpJobId: job.id,
+      });
+      await writeDb(db);
+      return sendJson(res, 409, { error: "No hay tecnico activo disponible. Espera a que AriadGSM asigne un tecnico." });
+    }
     order.customerConnectedAt ||= timestamp;
     order.customerConnectedBy ||= context.user.id;
     order.customerConnectionReadyAt ||= timestamp;
@@ -959,6 +976,154 @@ export function createPortalRoutes({
     await writeDb(db);
     publishPortalOrders(db, context.client.id, "customer_item_ready");
     publishFrpOps(db, "frp_job_ready_for_technician");
+    return sendJson(res, 200, {
+      ok: true,
+      order: publicCustomerOrder(order, db),
+      customer: publicCustomerState(db, context),
+    });
+  }
+
+  const portalItemCancelMatch = pathname.match(/^\/api\/portal\/orders\/([^/]+)\/items\/([^/]+)\/cancel$/);
+  if (req.method === "POST" && portalItemCancelMatch) {
+    const context = await getCurrentCustomerContext(req);
+    if (!requireCustomer(context, res)) return;
+    const input = await parseJson(req);
+    const db = context.db;
+    const orderId = cleanText(decodeURIComponent(portalItemCancelMatch[1]), 80);
+    const itemId = cleanText(decodeURIComponent(portalItemCancelMatch[2]), 80);
+    const order = db.customerOrders.find((candidate) => candidate.id === orderId && candidate.clientId === context.client.id);
+    if (!order) return sendJson(res, 404, { error: "Orden no encontrada." });
+    const publicOrderBefore = publicCustomerOrder(order, db);
+    if (["CANCELADO", "FINALIZADO"].includes(publicOrderBefore.publicStatus)) {
+      return sendJson(res, 409, { error: "La orden no acepta cancelaciones en su estado actual." });
+    }
+    const item = db.customerOrderItems.find((candidate) => candidate.id === itemId && candidate.orderId === order.id);
+    if (!item) return sendJson(res, 404, { error: "Equipo no encontrado en esta orden." });
+    const frpOrder = db.frpOrders.find((candidate) => candidate.id === order.frpOrderId);
+    if (!frpOrder) return sendJson(res, 404, { error: "Orden tecnica no encontrada." });
+    const job = db.frpJobs.find((candidate) => candidate.id === item.frpJobId && candidate.orderId === frpOrder.id);
+    if (!job) return sendJson(res, 404, { error: "Trabajo tecnico no encontrado para este equipo." });
+    if (!["ESPERANDO_PREPARACION", "ESPERANDO_CLIENTE"].includes(job.status)) {
+      return sendJson(res, 409, { error: "Solo puedes cancelar un equipo que todavia esta pendiente." });
+    }
+
+    const timestamp = nowIso();
+    const reason = cleanText(input.reason || "CUSTOMER_ITEM_CANCEL", 80) || "CUSTOMER_ITEM_CANCEL";
+    item.status = "CANCELADO";
+    item.cancelReason = reason;
+    item.canceledAt = timestamp;
+    item.updatedAt = timestamp;
+    job.status = "CANCELADO";
+    job.technicianId = "";
+    job.takenAt = "";
+    job.cancelReason = "customer_item_cancel";
+    job.cancelNote = cleanText(input.note || "", 200);
+    job.canceledAt = timestamp;
+    job.updatedAt = timestamp;
+    order.updatedAt = timestamp;
+    frpOrder.updatedAt = timestamp;
+
+    const orderJobs = db.frpJobs.filter((candidate) => candidate.orderId === frpOrder.id);
+    if (orderJobs.length && orderJobs.every((candidate) => candidate.status === "CANCELADO")) {
+      order.publicStatus = "CANCELADO";
+      order.cancellationReason = "ALL_ITEMS_CANCELED_BY_CUSTOMER";
+      order.canceledAt = timestamp;
+      frpOrder.orderStatus = "CANCELADA";
+      frpOrder.cancellationReason = "ALL_ITEMS_CANCELED_BY_CUSTOMER";
+      frpOrder.canceledAt = timestamp;
+      const request = db.customerRequests.find((candidate) => candidate.id === order.requestId);
+      if (request) {
+        request.status = "CANCELADO";
+        request.updatedAt = timestamp;
+      }
+    } else {
+      syncFrpOrderStatus(db, frpOrder);
+    }
+
+    audit(db, context.user.id, "PORTAL_CUSTOMER_ITEM_CANCELED", order.id, {
+      code: order.code,
+      itemId: item.id,
+      frpJobId: job.id,
+      sequence: item.sequence,
+      reason,
+      refundMode: "manual",
+    });
+    await writeDb(db);
+    publishPortalOrders(db, context.client.id, "customer_item_canceled");
+    publishFrpOps(db, "customer_item_canceled", {
+      notice: { type: "info", message: "Un cliente cancelo un equipo. Reembolso manual pendiente." },
+    });
+    return sendJson(res, 200, {
+      ok: true,
+      order: publicCustomerOrder(order, db),
+      customer: publicCustomerState(db, context),
+    });
+  }
+
+  const portalAbortMatch = pathname.match(/^\/api\/portal\/orders\/([^/]+)\/abort$/);
+  if (req.method === "POST" && portalAbortMatch) {
+    const context = await getCurrentCustomerContext(req);
+    if (!requireCustomer(context, res)) return;
+    const input = await parseJson(req);
+    const db = context.db;
+    const orderId = cleanText(decodeURIComponent(portalAbortMatch[1]), 80);
+    const order = db.customerOrders.find((candidate) => candidate.id === orderId && candidate.clientId === context.client.id);
+    if (!order) return sendJson(res, 404, { error: "Orden no encontrada." });
+    const publicOrderBefore = publicCustomerOrder(order, db);
+    if (["CANCELADO", "FINALIZADO"].includes(publicOrderBefore.publicStatus)) {
+      return sendJson(res, 409, { error: "La orden no acepta aborto en su estado actual." });
+    }
+    const frpOrder = db.frpOrders.find((candidate) => candidate.id === order.frpOrderId);
+    if (!frpOrder) return sendJson(res, 404, { error: "Orden tecnica no encontrada." });
+
+    const timestamp = nowIso();
+    const note = cleanText(input.note || "", 200);
+    const items = db.customerOrderItems.filter((candidate) => candidate.orderId === order.id);
+    const jobs = db.frpJobs.filter((candidate) => candidate.orderId === frpOrder.id);
+    for (const item of items) {
+      const job = jobs.find((candidate) => candidate.id === item.frpJobId);
+      if (job?.status !== "FINALIZADO") {
+        item.status = "CANCELADO";
+        item.cancelReason = "CUSTOMER_ORDER_ABORT";
+        item.canceledAt = timestamp;
+        item.updatedAt = timestamp;
+      }
+    }
+    for (const job of jobs) {
+      if (job.status === "FINALIZADO") continue;
+      job.status = "CANCELADO";
+      job.technicianId = "";
+      job.takenAt = "";
+      job.cancelReason = "customer_order_abort";
+      if (note) job.cancelNote = note;
+      job.canceledAt = timestamp;
+      job.updatedAt = timestamp;
+    }
+    order.publicStatus = "CANCELADO";
+    order.cancellationReason = "CUSTOMER_ORDER_ABORT";
+    order.canceledAt = timestamp;
+    order.updatedAt = timestamp;
+    frpOrder.orderStatus = "CANCELADA";
+    frpOrder.cancellationReason = "CUSTOMER_ORDER_ABORT";
+    frpOrder.canceledAt = timestamp;
+    frpOrder.updatedAt = timestamp;
+    const request = db.customerRequests.find((candidate) => candidate.id === order.requestId);
+    if (request) {
+      request.status = "CANCELADO";
+      request.updatedAt = timestamp;
+    }
+
+    audit(db, context.user.id, "PORTAL_CUSTOMER_ORDER_ABORTED", order.id, {
+      code: order.code,
+      frpOrderId: frpOrder.id,
+      affectedJobs: jobs.filter((job) => job.status === "CANCELADO").length,
+      refundMode: "manual",
+    });
+    await writeDb(db);
+    publishPortalOrders(db, context.client.id, "customer_order_aborted");
+    publishFrpOps(db, "customer_order_aborted", {
+      notice: { type: "error", message: "Un cliente aborto un pedido. Detener trabajo y revisar reembolso manual." },
+    });
     return sendJson(res, 200, {
       ok: true,
       order: publicCustomerOrder(order, db),

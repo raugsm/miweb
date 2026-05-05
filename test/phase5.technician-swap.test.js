@@ -45,6 +45,24 @@ test("phase 5: technician switch with swap window and auto-revert", { timeout: 3
     assert.equal(response.status, 200);
     assert.equal(response.data.user.technicianRedirectorId, "1000 9983 5478");
 
+    const jackEmail = `phase5-jack-${Date.now()}@example.com`;
+    const jackPassword = "Jack12345!";
+    response = await http.request("POST", "/api/register", {
+      name: "Jack",
+      email: jackEmail,
+      password: jackPassword,
+      workChannel: "WhatsApp 3",
+    });
+    assert.equal(response.status, 201);
+    const jackId = response.data.user.id;
+
+    response = await http.request("PATCH", `/api/users/${jackId}`, {
+      role: "ATENCION_TECNICA",
+      active: true,
+      technicianRedirectorId: "1000 9983 5478",
+    });
+    assert.equal(response.status, 200);
+
     const angeloEmail = `phase5-angelo-${Date.now()}@example.com`;
     const angeloPassword = "Angelo12345!";
     response = await http.request("POST", "/api/register", {
@@ -63,6 +81,23 @@ test("phase 5: technician switch with swap window and auto-revert", { timeout: 3
     });
     assert.equal(response.status, 200);
 
+    const wrongChannelEmail = `phase5-wrong-channel-${Date.now()}@example.com`;
+    response = await http.request("POST", "/api/register", {
+      name: "Tecnico WhatsApp 1",
+      email: wrongChannelEmail,
+      password: "Wrong12345!",
+      workChannel: "WhatsApp 1",
+    });
+    assert.equal(response.status, 201);
+    const wrongChannelId = response.data.user.id;
+
+    response = await http.request("PATCH", `/api/users/${wrongChannelId}`, {
+      role: "ATENCION_TECNICA",
+      active: true,
+      technicianRedirectorId: "3000 5544 7788",
+    });
+    assert.equal(response.status, 200);
+
     response = await http.request("GET", "/api/portal/active-technician");
     assert.equal(response.status, 200);
     assert.equal(response.data.technician.swapInProgress, false);
@@ -70,8 +105,11 @@ test("phase 5: technician switch with swap window and auto-revert", { timeout: 3
 
     response = await http.request("GET", "/api/operator/technician/status");
     assert.equal(response.status, 200);
-    assert.equal(response.data.technician.active.userId, adminUser.id);
+    assert.equal(response.data.technician.active.userId, jackId);
     assert.equal(response.data.technician.eligible.length, 2);
+    assert.equal(response.data.technician.eligible.some((candidate) => candidate.userId === adminUser.id), false);
+    assert.equal(response.data.technician.eligible.some((candidate) => candidate.userId === wrongChannelId), false);
+    assert.equal(response.data.technician.eligible.every((candidate) => candidate.role === "ATENCION_TECNICA" && candidate.workChannel === "WhatsApp 3"), true);
 
     response = await http.request("POST", "/api/operator/technician/switch", {
       targetUserId: angeloId,
@@ -96,7 +134,7 @@ test("phase 5: technician switch with swap window and auto-revert", { timeout: 3
 
     const revertSeconds = 1.0;
     response = await http.request("POST", "/api/operator/technician/switch", {
-      targetUserId: adminUser.id,
+      targetUserId: jackId,
       durationMinutes: revertSeconds / 60,
     });
     assert.equal(response.status, 200);
@@ -117,11 +155,11 @@ test("phase 5: technician switch with swap window and auto-revert", { timeout: 3
     assert.equal(response.data.technician.redirectorId, "2000 4422 1188");
 
     response = await http.request("POST", "/api/operator/technician/switch", {
-      targetUserId: adminUser.id,
+      targetUserId: jackId,
     });
     assert.equal(response.status, 200);
 
-    // Wait for the swap to commit so the next assertion observes a stable active=admin
+    // Wait for the swap to commit so the next assertion observes a stable active=Jack
     await delay(SWAP_MS + 80);
     response = await http.request("GET", "/api/portal/active-technician");
     assert.equal(response.data.technician.swapInProgress, false);

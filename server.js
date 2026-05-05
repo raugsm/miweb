@@ -111,6 +111,8 @@ import { createPortalRoutes } from "./server/portal/portal-routes.js";
 import {
   applySwitch as applyTechnicianSwitch,
   eligibleTechnicians,
+  isActiveFrpTechnician,
+  normalizeTechnicianRedirectorId,
   operatorTechnicianStatus,
   publicActiveTechnician,
   resolveActiveTechnician,
@@ -2807,6 +2809,19 @@ function publicPresence(db) {
   };
 }
 
+function operatorTechnicianStatusWithPresence(db, now = Date.now()) {
+  const status = operatorTechnicianStatus(db, db.activeTechnician, now);
+  const onlineIds = new Set(publicPresence(db).onlineUsers.map((onlineUser) => onlineUser.id));
+  const withOnline = (candidate) => candidate
+    ? { ...candidate, online: onlineIds.has(candidate.userId) }
+    : null;
+  return {
+    ...status,
+    active: withOnline(status.active),
+    eligible: (status.eligible || []).map(withOnline).filter(Boolean),
+  };
+}
+
 function requireUser(user, res) {
   if (!user) {
     sendJson(res, 401, { error: "Sesion requerida." });
@@ -2866,6 +2881,20 @@ async function requireFrpAccess(user, res, db, action = "FRP_ACCESS_DENIED", tar
   audit(db, user.id, action, targetId, { role: user.role, workChannel: user.workChannel || "" });
   await writeDb(db);
   sendJson(res, 403, { error: "FRP Express pertenece a WhatsApp 3." });
+  return false;
+}
+
+async function requireActiveFrpTechnician(user, res, db, action = "FRP_ACTIVE_TECHNICIAN_REQUIRED", targetId = "frp") {
+  if (!requireUser(user, res)) return false;
+  if (isActiveFrpTechnician(db, user)) return true;
+  const active = db.activeTechnician && !db.activeTechnician.swapInProgress ? db.activeTechnician : null;
+  audit(db, user.id, action, targetId, {
+    role: user.role,
+    workChannel: user.workChannel || "",
+    activeTechnicianUserId: active?.userId || "",
+  });
+  await writeDb(db);
+  sendJson(res, 403, { error: "Solo el tecnico activo puede tomar trabajos FRP." });
   return false;
 }
 
@@ -3510,6 +3539,7 @@ const handleFrpApi = createFrpRoutes({
   classifyCostChange,
   computeProviderBaseline,
   readDb,
+  requireActiveFrpTechnician,
   requireAdminWithAudit,
   requireFrpAccess,
   requireFrpCostManagerWithAudit,
@@ -4678,10 +4708,23 @@ async function handleApi(req, res, pathname) {
       target.permissions = nextPermissions;
     }
     if (Object.hasOwn(input, "technicianRedirectorId")) {
-      target.technicianRedirectorId = String(input.technicianRedirectorId || "").trim().slice(0, 64);
+      const rawTechnicianId = String(input.technicianRedirectorId || "").trim();
+      const normalizedTechnicianId = normalizeTechnicianRedirectorId(rawTechnicianId);
+      if (rawTechnicianId && !normalizedTechnicianId) {
+        return sendJson(res, 400, { error: "Technician ID invalido. Debe tener 12 digitos, con o sin espacios." });
+      }
+      target.technicianRedirectorId = normalizedTechnicianId;
     }
     target.updatedAt = nowIso();
     audit(db, user.id, "USER_UPDATED", target.id, { before: previous, after: publicUser(target) });
+    const technicianResolution = resolveActiveTechnician(db, Date.now(), technicianSwapMs);
+    if (technicianResolution.changed) {
+      db.activeTechnician = technicianResolution.state;
+      audit(db, user.id, "ACTIVE_TECHNICIAN_SYNCED", target.id, {
+        activeTechnicianUserId: technicianResolution.state?.userId || "",
+        reason: "user_updated",
+      });
+    }
     await writeDb(db);
     return sendJson(res, 200, { user: publicUser(target) });
   }
@@ -4753,7 +4796,7 @@ async function handleApi(req, res, pathname) {
   if (req.method === "GET" && pathname === "/api/operator/technician/status") {
     if (!requireUser(user, res)) return;
     const db = await readDb();
-    const status = operatorTechnicianStatus(db, db.activeTechnician, Date.now());
+    const status = operatorTechnicianStatusWithPresence(db, Date.now());
     return sendJson(res, 200, { technician: status });
   }
 
@@ -4793,7 +4836,7 @@ async function handleApi(req, res, pathname) {
     // para no instrumentar readDb. Frontend resuelve con polling acelerado a
     // 2s durante swap, vuelve a 30s después. Implementar en commit 7c.
     publishFrpOps(db, "technician_switched");
-    const status = operatorTechnicianStatus(db, db.activeTechnician, now);
+    const status = operatorTechnicianStatusWithPresence(db, now);
     return sendJson(res, 200, { technician: status });
   }
 

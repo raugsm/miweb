@@ -1,44 +1,71 @@
+import { frpWorkChannel } from "../config/catalog.js";
+import { normalizeWorkChannel } from "../core/validation.js";
+
 export const autoRevertSwapMs = 10_000;
 
-function trimRedirectorId(value) {
-  return String(value || "").trim().slice(0, 64);
+const technicianRole = "ATENCION_TECNICA";
+
+export function normalizeTechnicianRedirectorId(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  if (!/^[\d\s]+$/.test(raw)) return "";
+  const compact = raw.replace(/\s+/g, "");
+  if (!/^\d{12}$/.test(compact)) return "";
+  return compact.replace(/(\d{4})(?=\d)/g, "$1 ").trim();
+}
+
+export function isFrpTechnicianEligible(user) {
+  return Boolean(
+    user
+    && user.active !== false
+    && user.role === technicianRole
+    && normalizeWorkChannel(user.workChannel) === frpWorkChannel
+    && normalizeTechnicianRedirectorId(user.technicianRedirectorId),
+  );
 }
 
 export function eligibleTechnicians(db) {
   return (db.users || [])
-    .filter((user) => user.active !== false && trimRedirectorId(user.technicianRedirectorId))
+    .filter(isFrpTechnicianEligible)
     .map((user) => ({
       userId: user.id,
       name: user.name,
       email: user.email,
-      redirectorId: trimRedirectorId(user.technicianRedirectorId),
+      redirectorId: normalizeTechnicianRedirectorId(user.technicianRedirectorId),
       role: user.role,
+      workChannel: normalizeWorkChannel(user.workChannel),
     }));
 }
 
-export function defaultActiveTechnician(db) {
-  const eligible = eligibleTechnicians(db);
-  if (!eligible.length) return null;
-  const titular = eligible[0];
+function activeStateFromCandidate(candidate, now, previous = {}) {
   return {
-    userId: titular.userId,
-    redirectorId: titular.redirectorId,
-    switchedAt: new Date().toISOString(),
+    userId: candidate.userId,
+    redirectorId: candidate.redirectorId,
+    switchedAt: previous.switchedAt || new Date(now).toISOString(),
     swapInProgress: false,
     swapEndsAt: null,
     pendingUserId: null,
     pendingRedirectorId: null,
-    autoRevertAt: null,
-    autoRevertToUserId: null,
+    autoRevertAt: previous.autoRevertAt || null,
+    autoRevertToUserId: previous.autoRevertToUserId || null,
   };
 }
 
-function commitPendingSwap(state) {
+export function defaultActiveTechnician(db, now = Date.now()) {
+  const eligible = eligibleTechnicians(db);
+  if (!eligible.length) return null;
+  const titular = eligible[0];
+  return activeStateFromCandidate(titular, now);
+}
+
+function commitPendingSwap(state, db, now) {
+  const target = eligibleTechnicians(db).find((candidate) => candidate.userId === state.pendingUserId);
+  if (!target) return defaultActiveTechnician(db, now);
   return {
     ...state,
-    userId: state.pendingUserId,
-    redirectorId: state.pendingRedirectorId,
-    switchedAt: new Date().toISOString(),
+    userId: target.userId,
+    redirectorId: target.redirectorId,
+    switchedAt: new Date(now).toISOString(),
     swapInProgress: false,
     swapEndsAt: null,
     pendingUserId: null,
@@ -47,9 +74,8 @@ function commitPendingSwap(state) {
 }
 
 function startRevertSwap(state, db, swapMs) {
-  const target = (db.users || []).find((user) => user.id === state.autoRevertToUserId);
-  const targetRedirector = trimRedirectorId(target?.technicianRedirectorId);
-  if (!target || !targetRedirector) {
+  const target = eligibleTechnicians(db).find((candidate) => candidate.userId === state.autoRevertToUserId);
+  if (!target) {
     return {
       ...state,
       autoRevertAt: null,
@@ -61,8 +87,8 @@ function startRevertSwap(state, db, swapMs) {
     ...state,
     swapInProgress: true,
     swapEndsAt: Date.now() + swapMs,
-    pendingUserId: target.id,
-    pendingRedirectorId: targetRedirector,
+    pendingUserId: target.userId,
+    pendingRedirectorId: target.redirectorId,
     autoRevertAt: null,
     autoRevertToUserId: null,
     switchedAt: nowIso,
@@ -72,16 +98,43 @@ function startRevertSwap(state, db, swapMs) {
 export function resolveActiveTechnician(db, now, swapMs) {
   let state = db.activeTechnician;
   if (!state) {
-    const next = defaultActiveTechnician(db);
+    const next = defaultActiveTechnician(db, now);
     if (!next) return { state: null, changed: false };
     return { state: next, changed: true };
   }
   let changed = false;
+  let eligible = eligibleTechnicians(db);
   if (state.swapInProgress && state.swapEndsAt && now >= state.swapEndsAt) {
-    state = commitPendingSwap(state);
+    state = commitPendingSwap(state, db, now);
     changed = true;
+    eligible = eligibleTechnicians(db);
   }
-  if (!state.swapInProgress && state.autoRevertAt && now >= state.autoRevertAt) {
+  if (state?.swapInProgress) {
+    const current = eligible.find((candidate) => candidate.userId === state.userId);
+    const pending = eligible.find((candidate) => candidate.userId === state.pendingUserId);
+    if (!current || !pending) {
+      state = current ? activeStateFromCandidate(current, now, state) : defaultActiveTechnician(db, now);
+      changed = true;
+    } else if (state.pendingRedirectorId !== pending.redirectorId || state.redirectorId !== current.redirectorId) {
+      state = {
+        ...state,
+        redirectorId: current.redirectorId,
+        pendingRedirectorId: pending.redirectorId,
+      };
+      changed = true;
+    }
+  }
+  if (state && !state.swapInProgress) {
+    const current = eligible.find((candidate) => candidate.userId === state.userId);
+    if (!current) {
+      state = defaultActiveTechnician(db, now);
+      changed = true;
+    } else if (state.redirectorId !== current.redirectorId) {
+      state = activeStateFromCandidate(current, now, state);
+      changed = true;
+    }
+  }
+  if (state && !state.swapInProgress && state.autoRevertAt && now >= state.autoRevertAt) {
     state = startRevertSwap(state, db, swapMs);
     changed = true;
   }
@@ -107,13 +160,11 @@ export function publicActiveTechnician(state, now) {
 
 export function operatorTechnicianStatus(db, state, now) {
   const eligible = eligibleTechnicians(db);
-  const activeUser = state ? (db.users || []).find((user) => user.id === state.userId) : null;
-  const autoRevertUser = state?.autoRevertToUserId
-    ? (db.users || []).find((user) => user.id === state.autoRevertToUserId)
-    : null;
+  const activeUser = state ? eligible.find((candidate) => candidate.userId === state.userId) : null;
+  const autoRevertUser = state?.autoRevertToUserId ? eligible.find((candidate) => candidate.userId === state.autoRevertToUserId) : null;
   const autoRevertSecondsLeft = state?.autoRevertAt ? Math.max(0, Math.ceil((state.autoRevertAt - now) / 1000)) : 0;
   return {
-    active: state
+    active: state && activeUser
       ? {
           userId: state.userId,
           name: activeUser?.name || "",
@@ -137,6 +188,11 @@ export function operatorTechnicianStatus(db, state, now) {
         }
       : null,
   };
+}
+
+export function isActiveFrpTechnician(db, user) {
+  if (!user || !db.activeTechnician || db.activeTechnician.swapInProgress) return false;
+  return eligibleTechnicians(db).some((candidate) => candidate.userId === user.id && candidate.userId === db.activeTechnician.userId);
 }
 
 export function applySwitch(db, { actor, targetUserId, durationMinutes, now, swapMs }) {

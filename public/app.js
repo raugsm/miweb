@@ -3769,13 +3769,19 @@ const technicianModal = document.querySelector("#technician-switch-modal");
 const technicianModalMode = document.querySelector("#technician-modal-mode");
 const technicianModalList = document.querySelector("#technician-modal-list");
 const technicianModalMessage = document.querySelector("#technician-modal-message");
+const technicianPauseButton = document.querySelector('[data-technician-action="pause"]');
+const technicianPermanentButton = document.querySelector('[data-technician-action="permanent"]');
 
 let technicianRefreshTimer = null;
 let technicianRevertCountdown = null;
 let technicianStatusCache = null;
 
 function userIsEligibleTechnician() {
-  return Boolean(String(session?.user?.technicianRedirectorId || "").trim());
+  return Boolean(
+    session?.user?.role === "ATENCION_TECNICA"
+    && session.user.workChannel === "WhatsApp 3"
+    && String(session.user.technicianRedirectorId || "").trim(),
+  );
 }
 
 function userCanViewTechnicianWidget() {
@@ -3806,15 +3812,24 @@ function paintTechnicianWidget(status) {
   // status nuevo (ej. "Cambiando tecnico..." durante swap). Lo dispara
   // skipPricing:true para no destruir el estado del Costos FRP collapsible.
   if (frpEnabled()) renderFrp({ skipPricing: true });
-  if (!userCanViewTechnicianWidget() || !status?.active) {
+  const canViewWidget = userCanViewTechnicianWidget();
+  const hasEligible = Boolean(status?.eligible?.length);
+  if (!canViewWidget || (!status?.active && session.user?.role !== "ADMIN")) {
     technicianWidget.classList.add("hidden");
     return;
   }
   technicianWidget.classList.remove("hidden");
-  technicianWidgetName.textContent = status.active.name || "-";
-  technicianWidgetId.textContent = status.active.redirectorId || "-";
+  if (status?.active) {
+    technicianWidgetName.textContent = status.active.name || "-";
+    technicianWidgetId.textContent = status.active.redirectorId || "-";
+  } else {
+    technicianWidgetName.textContent = hasEligible ? "Sin tecnico activo" : "Sin tecnico elegible";
+    technicianWidgetId.textContent = hasEligible ? "Elegir tecnico" : "-";
+  }
+  if (technicianPauseButton) technicianPauseButton.disabled = !status?.active;
+  if (technicianPermanentButton) technicianPermanentButton.disabled = !hasEligible;
   clearTechnicianRevertCountdown();
-  if (status.autoRevert?.toName && status.autoRevert.secondsLeft > 0) {
+  if (status?.autoRevert?.toName && status.autoRevert.secondsLeft > 0) {
     const tick = () => {
       const remaining = Math.max(0, technicianStatusCache?.autoRevert?.secondsLeft ?? 0) - 1;
       if (technicianStatusCache?.autoRevert) technicianStatusCache.autoRevert.secondsLeft = remaining;
@@ -3829,8 +3844,9 @@ function paintTechnicianWidget(status) {
     tick();
     technicianRevertCountdown = setInterval(tick, 1000);
   } else {
-    technicianWidgetRevert.classList.add("hidden");
-    technicianWidgetRevert.textContent = "";
+    const onlineText = status?.active ? (status.active.online ? "Conectado" : "Desconectado") : "";
+    technicianWidgetRevert.textContent = onlineText;
+    technicianWidgetRevert.classList.toggle("hidden", !onlineText);
   }
 }
 
@@ -3994,6 +4010,7 @@ function openTechnicianSwitchModal({ temporary }) {
         <div>
           <strong>${escapeHtml(candidate.name || candidate.email || "Tecnico")}</strong>
           <code>${escapeHtml(candidate.redirectorId)}</code>
+          <span class="table-subtext">${candidate.online ? "Conectado" : "Desconectado"}</span>
         </div>
         <button type="button" class="primary-btn" data-technician-target="${escapeHtml(candidate.userId)}" data-technician-mode="${temporary ? "temporary" : "permanent"}">Elegir</button>
       </li>

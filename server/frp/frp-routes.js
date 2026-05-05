@@ -41,6 +41,7 @@ export function createFrpRoutes({
   classifyCostChange,
   computeProviderBaseline,
   readDb,
+  requireActiveFrpTechnician,
   requireAdminWithAudit,
   requireFrpAccess,
   requireFrpCostManagerWithAudit,
@@ -746,16 +747,14 @@ export function createFrpRoutes({
   // permite que el tecnico elija cual tomar primero (filtro VIP, urgencia
   // visual). Carrera resuelta por el primer writeDb que pisa el status —
   // segundo intento recibe 409 "Otro tecnico ya tomo este job".
-  // El backend NO valida que user.id === activeTechnician.userId aca, igual
-  // que take-next: la spec exige que UI lo deshabilite (AC #18) pero el
-  // endpoint queda operable para ADMIN que necesita rescatar/troubleshoot.
-  // Si en el futuro se necesita enforcement, agregar check + cambiar take-next
-  // por consistencia (no en este commit, no fue pedido).
+  // Contrato sesion 17: la UI ayuda, pero el backend tambien bloquea. Solo el
+  // tecnico FRP activo compartido entre cliente y operador puede tomar jobs.
   const frpJobTakeMatch = pathname.match(/^\/api\/frp\/jobs\/([^/]+)\/take$/);
   if (req.method === "POST" && frpJobTakeMatch) {
     if (!requireUser(user, res)) return;
     const db = await readDb();
     if (!(await requireFrpAccess(user, res, db, "FRP_JOB_TAKE_DENIED", frpJobTakeMatch[1]))) return;
+    if (!(await requireActiveFrpTechnician(user, res, db, "FRP_JOB_TAKE_NOT_ACTIVE", frpJobTakeMatch[1]))) return;
     const activeJob = frpActiveJobForUser(db, user);
     if (activeJob) return sendJson(res, 409, { error: `Ya tienes un FRP en proceso: ${activeJob.code}.` });
     const job = db.frpJobs.find((candidate) => candidate.id === frpJobTakeMatch[1]);
@@ -785,6 +784,7 @@ export function createFrpRoutes({
     if (!requireUser(user, res)) return;
     const db = await readDb();
     if (!(await requireFrpAccess(user, res, db, "FRP_JOB_TAKE_DENIED"))) return;
+    if (!(await requireActiveFrpTechnician(user, res, db, "FRP_JOB_TAKE_NOT_ACTIVE", "frp-take-next"))) return;
     const activeJob = frpActiveJobForUser(db, user);
     if (activeJob) return sendJson(res, 409, { error: `Ya tienes un FRP en proceso: ${activeJob.code}.` });
     const job = db.frpJobs

@@ -90,10 +90,12 @@ export function createPortalSerializers({
     const jobs = items.map((item) => db.frpJobs.find((job) => job.id === item.frpJobId)).filter(Boolean);
     if (order.publicStatus === "CANCELADO") return "CANCELADO";
     if (order.publicStatus === "REVISION_COMPATIBILIDAD") return "REVISION_COMPATIBILIDAD";
-    if (jobs.length && jobs.every((job) => job.status === "FINALIZADO")) return "FINALIZADO";
-    if (jobs.some((job) => job.status === "REQUIERE_REVISION" || job.status === "ESPERANDO_CLIENTE")) return "REQUIERE_ATENCION";
-    if (jobs.some((job) => job.status === "EN_PROCESO")) return "EN_PROCESO";
-    if (jobs.some((job) => job.status === "LISTO_PARA_TECNICO")) return "LISTO_PARA_CONEXION";
+    const activeJobs = jobs.filter((job) => job.status !== "CANCELADO");
+    if (jobs.length && !activeJobs.length) return "CANCELADO";
+    if (activeJobs.length && activeJobs.every((job) => job.status === "FINALIZADO")) return "FINALIZADO";
+    if (activeJobs.some((job) => job.status === "REQUIERE_REVISION" || job.status === "ESPERANDO_CLIENTE")) return "REQUIERE_ATENCION";
+    if (activeJobs.some((job) => job.status === "EN_PROCESO")) return "EN_PROCESO";
+    if (activeJobs.some((job) => job.status === "LISTO_PARA_TECNICO")) return "LISTO_PARA_CONEXION";
     if ((frpOrder?.checklist?.paymentValidated || frpOrder?.paymentStatus === "PAGO_VALIDADO") && (order.customerConnectionReadyAt || frpOrder?.customerConnectionReadyAt)) return "LISTO_PARA_CONEXION";
     if (frpOrder?.checklist?.paymentValidated || frpOrder?.paymentStatus === "PAGO_VALIDADO") return "EN_PREPARACION";
     // QUE: rechazo de comprobante por el operador antes que "proofs presentes".
@@ -291,6 +293,8 @@ export function createPortalSerializers({
           readyAt: job?.readyAt || "",
           takenAt: job?.takenAt || "",
           doneAt: job?.doneAt || "",
+          canceledAt: job?.canceledAt || item.canceledAt || "",
+          cancelReason: job?.cancelReason || item.cancelReason || "",
           eligibilityStatus,
           eligibilityMessage,
           reviewReason: publicReviewMessage,

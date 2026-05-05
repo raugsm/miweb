@@ -136,7 +136,34 @@ async function runSmoke({ baseUrl, dataDir, setupToken }) {
 
   response = await http.request("GET", "/api/portal/active-technician");
   assert.equal(response.status, 200);
-  assert.equal(response.data.technician.redirectorId, "1000 9983 5478");
+  assert.equal(response.data.technician.redirectorId, null, "el administrador con Technician ID no debe quedar como tecnico activo");
+
+  response = await http.request("POST", "/api/portal/orders/frp", {
+    quantity: 1,
+    paymentMethod: "PE_YAPE_BRYAMS",
+    items: [
+      { model: "Redmi Note 12", raw: "Redmi Note 12", imei: "123456789012348" },
+    ],
+    note: "phase 4 no active technician block",
+  });
+  assert.equal(response.status, 201);
+  const noActiveTechOrder = response.data.order;
+
+  response = await http.request("PATCH", `/api/portal/orders/${encodeURIComponent(noActiveTechOrder.id)}/payment-proof`, {
+    paymentProofs: [proofImage("no-tech-proof.png", onePixelPng)],
+  });
+  assert.equal(response.status, 200);
+
+  response = await http.request("GET", "/api/session");
+  assert.equal(response.status, 200);
+  const noActiveTechFrpOrder = (response.data.frp?.orders || []).find((order) => order.portalOrderId === noActiveTechOrder.id);
+  assert.ok(noActiveTechFrpOrder, "admin debe ver la orden portal usada para probar bloqueo sin tecnico");
+
+  response = await http.request("PATCH", `/api/frp/orders/${encodeURIComponent(noActiveTechFrpOrder.id)}/payment-review`, { action: "approve" });
+  assert.equal(response.status, 200);
+
+  response = await http.request("POST", `/api/portal/orders/${encodeURIComponent(noActiveTechOrder.id)}/notify-connected`);
+  assert.equal(response.status, 409, "notify-connected debe bloquearse si no hay tecnico activo valido");
 
   const technicianEmail = `phase4-tech-${Date.now()}@example.com`;
   const technicianPassword = "Tech12345!";
@@ -153,6 +180,19 @@ async function runSmoke({ baseUrl, dataDir, setupToken }) {
     role: "ATENCION_TECNICA",
     active: true,
     technicianRedirectorId: "2000 1122 3344",
+  });
+  assert.equal(response.status, 200);
+  assert.equal(response.data.user.role, "ATENCION_TECNICA");
+
+  response = await http.request("GET", "/api/portal/active-technician");
+  assert.equal(response.status, 200);
+  assert.equal(response.data.technician.redirectorId, "2000 1122 3344");
+
+  const technicianJar = new CookieJar();
+  const technicianHttp = createHttpClient(baseUrl, technicianJar);
+  response = await technicianHttp.request("POST", "/api/login", {
+    email: technicianEmail,
+    password: technicianPassword,
   });
   assert.equal(response.status, 200);
   assert.equal(response.data.user.role, "ATENCION_TECNICA");
@@ -237,11 +277,14 @@ async function runSmoke({ baseUrl, dataDir, setupToken }) {
   assert.equal(response.data.job.status, "LISTO_PARA_TECNICO");
 
   response = await http.request("POST", "/api/frp/jobs/take-next");
+  assert.equal(response.status, 403, "admin no puede tomar FRP si no es el tecnico activo");
+
+  response = await technicianHttp.request("POST", "/api/frp/jobs/take-next");
   assert.equal(response.status, 200);
   internalJob = response.data.job;
   assert.equal(internalJob.status, "EN_PROCESO");
 
-  response = await http.request("PATCH", `/api/frp/jobs/${encodeURIComponent(internalJob.id)}/finalize`, {
+  response = await technicianHttp.request("PATCH", `/api/frp/jobs/${encodeURIComponent(internalJob.id)}/finalize`, {
     finalLog: "Smoke finalizado Paso 4",
   });
   assert.equal(response.status, 200);
@@ -272,15 +315,6 @@ async function runSmoke({ baseUrl, dataDir, setupToken }) {
   response = await otherChannelHttp.request("PATCH", `/api/frp/orders/${encodeURIComponent(portalFrpOrder.id)}/payment-review`, { action: "approve" });
   assert.equal(response.status, 403, "operador fuera de WhatsApp 3 no puede validar pagos FRP");
 
-  const technicianJar = new CookieJar();
-  const technicianHttp = createHttpClient(baseUrl, technicianJar);
-  response = await technicianHttp.request("POST", "/api/login", {
-    email: technicianEmail,
-    password: technicianPassword,
-  });
-  assert.equal(response.status, 200);
-  assert.equal(response.data.user.role, "ATENCION_TECNICA");
-
   response = await technicianHttp.request("PATCH", `/api/frp/orders/${encodeURIComponent(portalFrpOrder.id)}/payment-review`, { action: "approve" });
   assert.equal(response.status, 200);
   assert.equal(response.data.order.checklist.paymentValidated, true);
@@ -298,7 +332,7 @@ async function runSmoke({ baseUrl, dataDir, setupToken }) {
   response = await http.request("POST", `/api/portal/orders/${encodeURIComponent(portalOrder.id)}/notify-connected`);
   assert.equal(response.status, 200, "notify-connected debe aceptar tras pago validado");
   assert.ok(response.data.order.customerConnectionReadyAt, "el portal debe reflejar customerConnectionReadyAt");
-  assert.equal(response.data.order.technicianId, "1000 9983 5478", "notify-connected debe congelar el Technician ID activo");
+  assert.equal(response.data.order.technicianId, "2000 1122 3344", "notify-connected debe congelar el Technician ID activo real");
   assert.equal(
     response.data.order.items.find((item) => item.sequence === 1)?.status,
     "LISTO_PARA_TECNICO",
@@ -320,10 +354,36 @@ async function runSmoke({ baseUrl, dataDir, setupToken }) {
     "Equipo listo por item debe mandar el equipo elegido a cola tecnica",
   );
 
+  const thirdPortalItem = response.data.order.items.find((item) => item.sequence === 3);
+  assert.ok(thirdPortalItem, "la orden portal debe exponer el tercer item");
+  response = await http.request("POST", `/api/portal/orders/${encodeURIComponent(portalOrder.id)}/items/${encodeURIComponent(thirdPortalItem.id)}/cancel`, {
+    reason: "CUSTOMER_ITEM_CANCEL",
+  });
+  assert.equal(response.status, 200, "Cancelar equipo debe aceptar un equipo pendiente");
+  assert.equal(
+    response.data.order.items.find((item) => item.sequence === 3)?.status,
+    "CANCELADO",
+    "Cancelar equipo debe marcar solo el item elegido como CANCELADO",
+  );
+  assert.equal(response.data.order.publicStatus, "LISTO_PARA_CONEXION", "cancelar un pendiente no debe sacar de cola los equipos listos");
+
   response = await technicianHttp.request("GET", "/api/session");
   assert.equal(response.status, 200);
   const readyPortalJobs = (response.data.frp?.jobs || []).filter((job) => job.orderId === portalFrpOrder.id && job.status === "LISTO_PARA_TECNICO");
   assert.equal(readyPortalJobs.length, 2, "el panel operador debe recibir dos equipos listos sin desaparecer la orden");
+  const canceledPortalJobs = (response.data.frp?.jobs || []).filter((job) => job.orderId === portalFrpOrder.id && job.status === "CANCELADO");
+  assert.equal(canceledPortalJobs.length, 1, "el panel operador debe ver el equipo cancelado para trazabilidad");
+
+  response = await http.request("POST", `/api/portal/orders/${encodeURIComponent(noActiveTechOrder.id)}/abort`, {
+    reason: "CUSTOMER_ORDER_ABORT",
+  });
+  assert.equal(response.status, 200, "Abortar pedido debe aceptar una orden activa del cliente");
+  assert.equal(response.data.order.publicStatus, "CANCELADO", "Abortar pedido debe cerrar la orden cliente como CANCELADO");
+
+  response = await technicianHttp.request("GET", "/api/session");
+  assert.equal(response.status, 200);
+  const abortedFrpOrder = (response.data.frp?.orders || []).find((order) => order.portalOrderId === noActiveTechOrder.id);
+  assert.equal(abortedFrpOrder?.orderStatus, "CANCELADA", "Abortar pedido debe notificar al panel operador como orden tecnica cancelada");
 }
 
 async function startIsolatedServer() {
