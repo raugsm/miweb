@@ -1178,49 +1178,56 @@ function renderFrpPricingBox() {
   // editar (backend devuelve 409 si intentás).
   const visibleProviders = (pricing.providers || []).filter((p) => p.status !== "ARCHIVED");
   const providersHtml = canManageFrpCosts() ? `
-    <div class="table-wrap frp-provider-table">
-      <table>
-        <thead>
-          <tr>
-            <th>Proveedor</th>
-            <th>Estado</th>
-            <th>Modo</th>
-            <th>USDT fijo</th>
-            <th>Creditos</th>
-            <th>USDT/credito</th>
-            <th>Motivo</th>
-            <th>Accion</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${visibleProviders.map((provider) => `
-            <tr>
-              <td>
-                <strong>${escapeHtml(provider.name)}</strong>
-                <span class="table-subtext">${escapeHtml(provider.updatedByName || provider.reason || "")}</span>
-              </td>
-              <td>
+    <div class="frp-provider-card-grid">
+      ${visibleProviders.map((provider) => {
+        const statusKey = String(provider.status || "OFF").toLowerCase();
+        return `
+          <article class="frp-provider-card">
+            <header class="frp-provider-card-head">
+              <div>
+                <p class="frp-provider-card-label">Proveedor</p>
+                <h5>${escapeHtml(provider.name)}</h5>
+                <span class="frp-provider-card-meta">${escapeHtml(provider.updatedByName || provider.reason || "Sin cambios recientes")}</span>
+              </div>
+              <span class="frp-provider-status-pill is-${escapeHtml(statusKey)}">${escapeHtml(frpProviderStatusLabel(provider.status))}</span>
+            </header>
+            <div class="frp-provider-fields">
+              <label>
+                <span>Estado</span>
                 <select class="table-input" data-frp-provider-status="${escapeHtml(provider.id)}">
                   ${["ACTIVE", "BACKUP", "OFF"].map((status) => `<option value="${status}" ${provider.status === status ? "selected" : ""}>${escapeHtml(frpProviderStatusLabel(status))}</option>`).join("")}
                 </select>
-              </td>
-              <td>
+              </label>
+              <label>
+                <span>Modo</span>
                 <select class="table-input" data-frp-provider-mode="${escapeHtml(provider.id)}">
                   ${["FIXED_USDT", "CREDITS"].map((mode) => `<option value="${mode}" ${provider.costMode === mode ? "selected" : ""}>${escapeHtml(frpCostModeLabel(mode))}</option>`).join("")}
                 </select>
-              </td>
-              <td><input class="table-input numeric-input" type="number" min="0" step="0.0001" value="${escapeHtml(provider.fixedCostUsdt)}" data-frp-provider-fixed="${escapeHtml(provider.id)}" /></td>
-              <td><input class="table-input numeric-input" type="number" min="0" step="0.0001" value="${escapeHtml(provider.creditsPerProcess)}" data-frp-provider-credits="${escapeHtml(provider.id)}" /></td>
-              <td><input class="table-input numeric-input" type="number" min="0" step="0.0001" value="${escapeHtml(provider.creditUnitCostUsdt)}" data-frp-provider-credit-cost="${escapeHtml(provider.id)}" /></td>
-              <td><input class="table-input" type="text" maxlength="200" value="" placeholder="${escapeHtml(provider.reason || "Motivo obligatorio")}" data-frp-provider-reason="${escapeHtml(provider.id)}" /></td>
-              <td class="action-cell-stack">
-                <button class="mini-btn" type="button" data-save-frp-provider="${escapeHtml(provider.id)}">Guardar</button>
-                <button class="mini-btn danger-mini" type="button" data-archive-frp-provider="${escapeHtml(provider.id)}" data-provider-name="${escapeHtml(provider.name)}">Archivar</button>
-              </td>
-            </tr>
-          `).join("")}
-        </tbody>
-      </table>
+              </label>
+              <label>
+                <span>USDT fijo</span>
+                <input class="table-input numeric-input" type="number" min="0" step="0.0001" value="${escapeHtml(provider.fixedCostUsdt)}" data-frp-provider-fixed="${escapeHtml(provider.id)}" />
+              </label>
+              <label>
+                <span>Creditos</span>
+                <input class="table-input numeric-input" type="number" min="0" step="0.0001" value="${escapeHtml(provider.creditsPerProcess)}" data-frp-provider-credits="${escapeHtml(provider.id)}" />
+              </label>
+              <label>
+                <span>USDT/credito</span>
+                <input class="table-input numeric-input" type="number" min="0" step="0.0001" value="${escapeHtml(provider.creditUnitCostUsdt)}" data-frp-provider-credit-cost="${escapeHtml(provider.id)}" />
+              </label>
+              <label class="frp-provider-reason-field">
+                <span>Motivo obligatorio</span>
+                <input class="table-input" type="text" maxlength="200" value="" placeholder="${escapeHtml(provider.reason || "Motivo obligatorio")}" data-frp-provider-reason="${escapeHtml(provider.id)}" />
+              </label>
+            </div>
+            <div class="frp-provider-card-actions">
+              <button class="mini-btn" type="button" data-save-frp-provider="${escapeHtml(provider.id)}">Guardar</button>
+              <button class="mini-btn danger-mini" type="button" data-archive-frp-provider="${escapeHtml(provider.id)}" data-provider-name="${escapeHtml(provider.name)}">Archivar</button>
+            </div>
+          </article>
+        `;
+      }).join("")}
       <div class="frp-provider-actions">
         <button class="secondary-btn" type="button" data-action="open-new-provider">+ Agregar proveedor</button>
       </div>
@@ -1668,8 +1675,41 @@ function frpOpsV2RenderQueueSection({ queueJobs, isMeActive, swapInProgress, has
   `;
 }
 
+function frpOpsV2RenderWaitingConnectionSection({ waitingOrders }) {
+  const total = waitingOrders.length;
+  return `
+    <section class="frp-ops-v2-section">
+      <div class="frp-ops-v2-section-header">
+        <div class="frp-ops-v2-section-label">Esperando conexion · ${escapeHtml(total)}</div>
+      </div>
+      ${!total ? `<p class="frp-ops-v2-queue-empty">No hay pagos aprobados esperando conexion.</p>` : ""}
+      ${total ? `
+        <div class="frp-ops-v2-queue">
+          ${waitingOrders.map((order) => {
+            const quantity = Number(order.quantity || order.jobs?.length || 1);
+            const approvedRel = frpOpsV2RelativeTime(order.paymentReviewedAt || order.updatedAt || order.createdAt);
+            return `
+              <div class="frp-ops-v2-queue-card is-waiting-connection">
+                <div>
+                  <div class="frp-ops-v2-queue-card-meta">${escapeHtml(order.code)} · ${escapeHtml(quantity)} equipo${quantity === 1 ? "" : "s"}</div>
+                  <div class="frp-ops-v2-queue-card-name">${escapeHtml(order.clientName || "-")} · Pago aprobado</div>
+                  <div class="frp-ops-v2-queue-card-detail">Esperando que el cliente marque equipo conectado.</div>
+                </div>
+                <div class="frp-ops-v2-queue-card-right">
+                  ${approvedRel ? `<span class="frp-ops-v2-queue-card-time">${escapeHtml(approvedRel)}</span>` : ""}
+                  <span class="frp-ops-v2-waiting-pill">Cliente pendiente</span>
+                </div>
+              </div>
+            `;
+          }).join("")}
+        </div>
+      ` : ""}
+    </section>
+  `;
+}
+
 function frpOpsV2RenderAttentionGrid({ pagosRevisar, reviewJobs }) {
-  const canReview = canReviewPayments();
+  const canReview = canReviewFrpPayments();
   const pagosHtml = pagosRevisar.length
     ? pagosRevisar.map((o) => `
       <button type="button" class="frp-ops-v2-alert-card is-warning"
@@ -1777,6 +1817,14 @@ function renderFrp({ skipPricing = false } = {}) {
   const queueJobs = jobs.filter((j) => j.status === "LISTO_PARA_TECNICO");
   const reviewJobs = jobs.filter((j) => j.status === "REQUIERE_REVISION");
   const pagosRevisar = orders.filter((o) => o.paymentStatus === "PAGO_EN_VALIDACION" && (o.paymentProofs?.length || 0) > 0);
+  const waitingConnectionOrders = orders.filter((o) => {
+    const paymentApproved = o.checklist?.paymentValidated
+      || ["COMPROBANTE_RECIBIDO", "PAGO_VALIDADO"].includes(o.paymentStatus)
+      || o.orderStatus === "PAGO_VALIDADO";
+    const connectionReady = o.checklist?.connectionDataSent && o.checklist?.authorizationConfirmed;
+    const hasWaitingJobs = (o.jobs || []).some((job) => ["ESPERANDO_PREPARACION", "ESPERANDO_CLIENTE"].includes(job.status));
+    return paymentApproved && !connectionReady && hasWaitingJobs;
+  });
 
   const isMeActive = Boolean(tech?.active?.userId && tech.active.userId === session.user?.id);
   const swapInProgress = Boolean(tech?.swap?.inProgress);
@@ -1798,6 +1846,7 @@ function renderFrp({ skipPricing = false } = {}) {
       ${frpOpsV2RenderHeader(tech)}
       <div class="frp-ops-v2-body">
         ${currentHtml}
+        ${frpOpsV2RenderWaitingConnectionSection({ waitingOrders: waitingConnectionOrders })}
         ${frpOpsV2RenderQueueSection({ queueJobs, isMeActive, swapInProgress, hasMyActive: Boolean(myActiveJob) })}
         ${frpOpsV2RenderAttentionGrid({ pagosRevisar, reviewJobs })}
         ${frpOpsV2RenderFinalized(finishedToday)}
@@ -1891,6 +1940,10 @@ function paymentStatusLabel(status) {
 
 function canReviewPayments() {
   return ["ADMIN", "COORDINADOR"].includes(session.user?.role);
+}
+
+function canReviewFrpPayments() {
+  return canReviewPayments() || frpEnabled();
 }
 
 function canMoveTicketToStatus(ticket, operationalStatus) {

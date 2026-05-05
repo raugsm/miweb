@@ -903,7 +903,10 @@ function canManageFrpPolicy(user) {
 }
 
 function canReviewFrpPayments(user) {
-  return Boolean(user && ["ADMIN", "COORDINADOR"].includes(user.role));
+  return Boolean(user && user.active !== false && (
+    ["ADMIN", "COORDINADOR"].includes(user.role)
+    || normalizeWorkChannel(user.workChannel) === frpWorkChannel
+  ));
 }
 
 function frpOrderIsReady(order) {
@@ -2880,7 +2883,7 @@ async function requireFrpPaymentReviewer(user, res, db, targetId) {
   if (canReviewFrpPayments(user)) return true;
   audit(db, user.id, "FRP_PAYMENT_REVIEW_DENIED", targetId, { role: user.role, workChannel: user.workChannel || "" });
   await writeDb(db);
-  sendJson(res, 403, { error: "Solo administrador o coordinador puede validar pagos FRP." });
+  sendJson(res, 403, { error: "Solo administrador, coordinador o tecnico WhatsApp 3 puede validar pagos FRP." });
   return false;
 }
 
@@ -4955,7 +4958,11 @@ async function serveStatic(req, res, pathname) {
       ".png": "image/png",
       ".jpg": "image/jpeg",
     }[ext] || "application/octet-stream";
-    const cacheHeader = ext === ".html" ? "no-store" : "public, max-age=3600, must-revalidate";
+    const cacheHeader = ext === ".html"
+      ? "no-store"
+      : [".js", ".css"].includes(ext)
+        ? "no-cache, must-revalidate"
+        : "public, max-age=3600, must-revalidate";
     res.writeHead(200, { "Content-Type": type, "Cache-Control": cacheHeader });
     res.end(file);
   } catch {

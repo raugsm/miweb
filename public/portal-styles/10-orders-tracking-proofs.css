@@ -641,3 +641,203 @@
   border-color: #ffffff;
   box-shadow: 0 14px 30px rgba(47, 109, 243, 0.28);
 }
+
+/* Sesion 16: Mis Ordenes v1 por equipo.
+   La referencia aprobada pide una sola zona de seguimiento, con filas por
+   equipo y accion "Equipo listo" solo en equipos pendientes. */
+.orders-list {
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 768px) {
+  .orders-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+.orders-empty-state {
+  min-height: 168px;
+  display: grid;
+  place-content: center;
+  gap: 6px;
+  text-align: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: #475569;
+}
+
+.orders-empty-state strong {
+  color: #2456c8;
+  font-size: 0.95rem;
+}
+
+.orders-empty-state span {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.order-card-v1 {
+  gap: 14px;
+}
+
+.order-equipment-list {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.order-equipment-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  min-height: 74px;
+  padding: 12px;
+  border: 1px solid #dce7f7;
+  border-radius: 8px;
+  background: #f8fbff;
+}
+
+.order-equipment-row.is-done {
+  border-color: #b7ead6;
+  background: #edfbf5;
+}
+
+.order-equipment-row.is-process {
+  border-color: #bdd2fb;
+  background: #eaf2ff;
+}
+
+.order-equipment-row.is-ready {
+  border-color: #c7d2fe;
+  background: #f5f7ff;
+}
+
+.order-equipment-row.is-warn {
+  border-color: #fdba74;
+  background: #fffbf5;
+}
+
+.order-equipment-main {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.order-equipment-main strong {
+  color: #0f1629;
+  font-size: 0.92rem;
+}
+
+.order-equipment-main span {
+  color: #53627a;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.order-equipment-side {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.order-item-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid #d4dae5;
+  background: #ffffff;
+  color: #475569;
+  font-size: 0.76rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.order-item-status[data-stage="ready"] {
+  border-color: #c7d2fe;
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
+.order-item-status[data-stage="process"] {
+  border-color: #bdd2fb;
+  background: #eaf2ff;
+  color: #2456c8;
+}
+
+.order-item-status[data-stage="done"] {
+  border-color: #b7ead6;
+  background: #edfbf5;
+  color: #0f9f6e;
+}
+
+.order-item-status[data-stage="warn"] {
+  border-color: #fdba74;
+  background: #ffedd5;
+  color: #9a3412;
+}
+
+.order-item-ready-button,
+.order-receipt-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 8px;
+  border: 1px solid #1d4ed8;
+  background: #ffffff;
+  color: #1d4ed8;
+  font-size: 0.8rem;
+  font-weight: 900;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.order-item-ready-button {
+  background: #1d4ed8;
+  color: #ffffff;
+}
+
+.order-item-ready-button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.order-card-actions-v1 {
+  justify-content: flex-end;
+  margin: 2px 0 0;
+}
+
+.order-receipt-button.is-disabled,
+.order-receipt-button[aria-disabled="true"] {
+  border-color: #d4dae5;
+  color: #94a3b8;
+  background: #f8fafc;
+  cursor: not-allowed;
+}
+
+@media (max-width: 720px) {
+  .order-equipment-row {
+    grid-template-columns: 1fr;
+  }
+
+  .order-equipment-side {
+    justify-content: space-between;
+  }
+
+  .order-item-ready-button,
+  .order-receipt-button {
+    width: 100%;
+  }
+
+  .order-card-actions-v1 {
+    justify-content: stretch;
+  }
+}

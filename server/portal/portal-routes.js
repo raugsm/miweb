@@ -71,6 +71,35 @@ export function createPortalRoutes({
   verifyPassword,
   writeDb,
 }) {
+  function markCustomerFrpJobReady(job, timestamp) {
+    if (!job) return false;
+    job.checklist = {
+      ...job.checklist,
+      clientConnected: true,
+      requiredStateConfirmed: true,
+      modelSupported: Boolean(job.checklist?.modelSupported || !job.eligibilityStatus || job.eligibilityStatus === "APTO_EXPRESS"),
+    };
+    job.status = job.checklist.modelSupported ? "LISTO_PARA_TECNICO" : "REQUIERE_REVISION";
+    if (job.status === "LISTO_PARA_TECNICO") job.readyAt ||= timestamp;
+    job.updatedAt = timestamp;
+    return true;
+  }
+
+  function activeRedirectorIdFromDb(db) {
+    const activeTechnician = publicActiveTechnician(db.activeTechnician, Date.now());
+    return cleanText(activeTechnician?.redirectorId || "", 64);
+  }
+
+  function freezeRedirectorId(order, frpOrder, redirectorId) {
+    if (!redirectorId) return;
+    order.technicianId ||= redirectorId;
+    order.redirectorId ||= redirectorId;
+    if (frpOrder) {
+      frpOrder.technicianId ||= redirectorId;
+      frpOrder.redirectorId ||= redirectorId;
+    }
+  }
+
   return async function handlePortalApi(req, res, pathname) {
   if (req.method === "GET" && pathname === "/api/portal/catalog") {
     const db = await readDb();
@@ -820,8 +849,10 @@ export function createPortalRoutes({
       return sendJson(res, 409, { error: "Solo puedes avisar de conexion cuando tu orden este en preparacion o lista para conexion." });
     }
     const timestamp = nowIso();
+    const activeRedirectorId = activeRedirectorIdFromDb(db);
     order.customerConnectedAt = order.customerConnectedAt || timestamp;
     order.customerConnectedBy = context.user.id;
+    freezeRedirectorId(order, null, activeRedirectorId);
     // Compat con el serializer existente: si todavia no estaba marcado el
     // connection-ready legacy, lo seteamos para que la derivacion siga produciendo
     // LISTO_PARA_CONEXION sin tocar deriveCustomerOrderStatus.
@@ -831,7 +862,18 @@ export function createPortalRoutes({
     if (frpOrder) {
       frpOrder.customerConnectedAt = frpOrder.customerConnectedAt || timestamp;
       frpOrder.customerConnectionReadyAt = frpOrder.customerConnectionReadyAt || timestamp;
+      freezeRedirectorId(order, frpOrder, activeRedirectorId);
+      frpOrder.checklist = {
+        ...frpOrder.checklist,
+        connectionDataSent: true,
+        authorizationConfirmed: true,
+      };
       frpOrder.updatedAt = timestamp;
+      const nextJob = db.frpJobs
+        .filter((job) => job.orderId === frpOrder.id)
+        .sort((a, b) => Number(a.sequence || 0) - Number(b.sequence || 0))
+        .find((job) => ["ESPERANDO_PREPARACION", "ESPERANDO_CLIENTE"].includes(job.status));
+      if (nextJob) markCustomerFrpJobReady(nextJob, timestamp);
       syncFrpOrderStatus(db, frpOrder);
     }
     audit(db, context.user.id, "PORTAL_CUSTOMER_CONNECTED", order.id, {
@@ -852,6 +894,78 @@ export function createPortalRoutes({
   // PR-2a-final.bundle2 item 4C — descarga del PDF del comprobante. Auth via
   // sesion del cliente o accessCode en query string (mismo patron que track).
   // Solo cuando publicStatus = FINALIZADO — antes no hay servicio que certificar.
+  const portalItemReadyMatch = pathname.match(/^\/api\/portal\/orders\/([^/]+)\/items\/([^/]+)\/ready$/);
+  if (req.method === "POST" && portalItemReadyMatch) {
+    const context = await getCurrentCustomerContext(req);
+    if (!requireCustomer(context, res)) return;
+    const db = context.db;
+    const orderId = cleanText(decodeURIComponent(portalItemReadyMatch[1]), 80);
+    const itemId = cleanText(decodeURIComponent(portalItemReadyMatch[2]), 80);
+    const order = db.customerOrders.find((candidate) => candidate.id === orderId && candidate.clientId === context.client.id);
+    if (!order) return sendJson(res, 404, { error: "Orden no encontrada." });
+    if (order.publicStatus === "CANCELADO") return sendJson(res, 409, { error: "Esta orden fue cancelada." });
+
+    const item = db.customerOrderItems.find((candidate) => candidate.id === itemId && candidate.orderId === order.id);
+    if (!item) return sendJson(res, 404, { error: "Equipo no encontrado en esta orden." });
+    const frpOrder = db.frpOrders.find((candidate) => candidate.id === order.frpOrderId);
+    const paymentValidated = Boolean(frpOrder?.checklist?.paymentValidated || frpOrder?.paymentStatus === "PAGO_VALIDADO");
+    if (!frpOrder || !paymentValidated) {
+      audit(db, context.user.id, "PORTAL_CUSTOMER_ITEM_READY_BLOCKED_NO_PAYMENT", order.id, {
+        code: order.code,
+        itemId,
+      });
+      await writeDb(db);
+      return sendJson(res, 409, { error: "Primero debe aprobarse el pago de esta orden." });
+    }
+
+    const job = db.frpJobs.find((candidate) => candidate.id === item.frpJobId && candidate.orderId === frpOrder.id);
+    if (!job) return sendJson(res, 404, { error: "Trabajo tecnico no encontrado para este equipo." });
+    if (job.status === "LISTO_PARA_TECNICO") {
+      return sendJson(res, 200, {
+        ok: true,
+        order: publicCustomerOrder(order, db),
+        customer: publicCustomerState(db, context),
+      });
+    }
+    if (!["ESPERANDO_PREPARACION", "ESPERANDO_CLIENTE"].includes(job.status)) {
+      return sendJson(res, 409, { error: "Este equipo ya no esta pendiente de conexion." });
+    }
+
+    const timestamp = nowIso();
+    const activeRedirectorId = activeRedirectorIdFromDb(db);
+    order.customerConnectedAt ||= timestamp;
+    order.customerConnectedBy ||= context.user.id;
+    order.customerConnectionReadyAt ||= timestamp;
+    order.customerConnectionReadyBy ||= context.user.id;
+    order.updatedAt = timestamp;
+    frpOrder.customerConnectedAt ||= timestamp;
+    frpOrder.customerConnectionReadyAt ||= timestamp;
+    frpOrder.checklist = {
+      ...frpOrder.checklist,
+      connectionDataSent: true,
+      authorizationConfirmed: true,
+    };
+    frpOrder.updatedAt = timestamp;
+    freezeRedirectorId(order, frpOrder, activeRedirectorId);
+    markCustomerFrpJobReady(job, timestamp);
+    syncFrpOrderStatus(db, frpOrder);
+    audit(db, context.user.id, "PORTAL_CUSTOMER_ITEM_READY", order.id, {
+      code: order.code,
+      itemId: item.id,
+      frpJobId: job.id,
+      sequence: item.sequence,
+      jobStatus: job.status,
+    });
+    await writeDb(db);
+    publishPortalOrders(db, context.client.id, "customer_item_ready");
+    publishFrpOps(db, "frp_job_ready_for_technician");
+    return sendJson(res, 200, {
+      ok: true,
+      order: publicCustomerOrder(order, db),
+      customer: publicCustomerState(db, context),
+    });
+  }
+
   const portalComprobanteMatch = pathname.match(/^\/api\/portal\/orders\/([^/]+)\/comprobante\.pdf$/);
   if (req.method === "GET" && portalComprobanteMatch) {
     const context = await getCurrentCustomerContext(req);
@@ -934,7 +1048,7 @@ export function createPortalRoutes({
       await writeDb(db);
       return sendJson(res, 409, { error: "Ese comprobante ya fue cargado antes." });
     }
-    order.paymentProofs = (order.paymentProofs || []).concat(proofs);
+    order.paymentProofs = proofs.slice();
     order.publicStatus = "PAGO_EN_REVISION";
     order.updatedAt = nowIso();
     // PR-2a-final.1: lock se setea recien al APROBAR. PATCH /payment-proof
@@ -947,8 +1061,11 @@ export function createPortalRoutes({
     }
     const frpOrder = db.frpOrders.find((candidate) => candidate.id === order.frpOrderId);
     if (frpOrder) {
-      frpOrder.paymentProofs = (frpOrder.paymentProofs || []).concat(proofs);
+      frpOrder.paymentProofs = proofs.slice();
       frpOrder.paymentStatus = "PAGO_EN_VALIDACION";
+      frpOrder.paymentRejectedReason = "";
+      frpOrder.paymentReviewedBy = "";
+      frpOrder.paymentReviewedAt = "";
       frpOrder.updatedAt = nowIso();
       syncFrpOrderStatus(db, frpOrder);
     }

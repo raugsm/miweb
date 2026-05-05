@@ -1019,12 +1019,12 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
 }
 
 .frp-pricing-panel {
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 14px;
-  background: rgba(255, 255, 255, 0.72);
+  border: 0.5px solid #E5E3DC;
+  border-radius: 8px;
+  padding: 18px;
+  background: #FFFFFF;
   display: grid;
-  gap: 14px;
+  gap: 16px;
 }
 
 .frp-pricing-panel > header {
@@ -1037,35 +1037,37 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
 .frp-pricing-panel h4 {
   margin: 0;
   font-size: 18px;
+  font-weight: 700;
 }
 
 .frp-pricing-summary,
 .frp-policy-form {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .frp-pricing-summary article,
 .frp-policy-form label {
-  border: 1px solid var(--line);
+  border: 0.5px solid #E5E3DC;
   border-radius: 8px;
-  padding: 12px;
-  background: var(--panel-soft);
+  padding: 14px 16px;
+  background: #FFFFFF;
 }
 
 .frp-pricing-summary span,
 .frp-policy-form label {
-  color: var(--muted);
+  color: #5F5E5A;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .frp-pricing-summary strong {
   display: block;
   margin-top: 6px;
   font-size: 18px;
-  color: var(--text);
+  color: #1A1A1A;
+  font-weight: 800;
 }
 
 .frp-policy-form input {
@@ -1078,6 +1080,116 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
 
 .frp-provider-table {
   margin-top: 0;
+}
+
+.frp-provider-card-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.frp-provider-card {
+  border: 0.5px solid #E5E3DC;
+  border-radius: 8px;
+  background: #FFFFFF;
+  padding: 16px;
+  display: grid;
+  gap: 14px;
+}
+
+.frp-provider-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.frp-provider-card-label {
+  margin: 0 0 4px;
+  color: #888780;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+
+.frp-provider-card h5 {
+  margin: 0;
+  color: #1A1A1A;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.frp-provider-card-meta {
+  display: block;
+  margin-top: 4px;
+  color: #5F5E5A;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.frp-provider-status-pill {
+  flex-shrink: 0;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+  border: 0.5px solid #C8C5BB;
+  background: #F0EFE8;
+  color: #5F5E5A;
+}
+
+.frp-provider-status-pill.is-active {
+  border-color: #B8D8A1;
+  background: #EAF3DE;
+  color: #173404;
+}
+
+.frp-provider-status-pill.is-backup {
+  border-color: #B5D4F4;
+  background: #E6F1FB;
+  color: #185FA5;
+}
+
+.frp-provider-status-pill.is-off {
+  border-color: #C8C5BB;
+  background: #F0EFE8;
+  color: #5F5E5A;
+}
+
+.frp-provider-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.frp-provider-fields label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.frp-provider-fields label > span {
+  color: #5F5E5A;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.frp-provider-fields .table-input {
+  width: 100%;
+  max-width: none;
+  min-height: 40px;
+}
+
+.frp-provider-reason-field {
+  grid-column: span 2;
+}
+
+.frp-provider-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .frp-suggestion {
@@ -1936,6 +2048,10 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
   border-color: var(--vip-border);
   background: #FFFCF5;
 }
+.frp-ops-v2-queue-card.is-waiting-connection {
+  border-color: #BFDBFE;
+  background: #EFF6FF;
+}
 .frp-ops-v2-queue-card-vip-badge {
   position: absolute;
   top: 8px;
@@ -1961,6 +2077,11 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 100%;
+}
+.frp-ops-v2-queue-card-detail {
+  font-size: 11px;
+  margin-top: 2px;
+  color: var(--text-secondary);
 }
 .frp-ops-v2-queue-card-right {
   display: flex;
@@ -1992,6 +2113,15 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
 }
 
 /* Grid Pagos + Atención */
+.frp-ops-v2-waiting-pill {
+  font-size: 11px;
+  color: #1D4ED8;
+  background: #DBEAFE;
+  border: 0.5px solid #BFDBFE;
+  border-radius: 999px;
+  padding: 4px 9px;
+  white-space: nowrap;
+}
 .frp-ops-v2-grid-attention {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -2315,4 +2445,40 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
 .frp-costs-collapsed > summary:focus-visible {
   outline: 2px solid #185FA5;
   outline-offset: 2px;
+}
+
+@media (max-width: 900px) {
+  .frp-provider-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .frp-provider-reason-field {
+    grid-column: 1 / -1;
+  }
+
+  .frp-provider-card-actions .mini-btn {
+    width: auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .frp-pricing-panel {
+    padding: 14px;
+  }
+
+  .frp-pricing-summary,
+  .frp-policy-form,
+  .frp-provider-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .frp-provider-card-head,
+  .frp-provider-card-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .frp-provider-status-pill {
+    align-self: flex-start;
+  }
 }

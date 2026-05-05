@@ -42,7 +42,6 @@
 import { $ } from "./dom.js";
 import { state } from "./state.js";
 
-const DEBUG_TECHNICIAN_ID = "1000 9983 5478";
 const DEBUG_ORDER_CODE = "CL-20260504-001-2";
 const PLACEHOLDER_CODE_TEXT = "Aparecerá cuando subas tu pago";
 
@@ -106,15 +105,20 @@ export function updatePanel4(_context = {}) {
   const usingDebug = typeof window !== "undefined"
     && VALID_DEBUG_STATES.has(String(window.__panel4DebugState || "").toUpperCase());
 
-  // Tech ID: siempre visible. En 15c.4 viene de GET /api/portal/active-technician
-  // (en vivo) o congelado de la orden post-clic. Hasta entonces, hardcoded.
+  // Tech ID: siempre visible. Primero usa el ID congelado en la orden; si aun
+  // no existe, usa el tecnico activo cargado por GET /api/portal/active-technician.
   const order = orderForCards();
   let technicianId = String(order?.technicianId || order?.redirectorId || "").trim();
-  if (!technicianId) technicianId = DEBUG_TECHNICIAN_ID;
+  if (!technicianId && state.activeTechnician && !state.activeTechnician.swapInProgress) {
+    technicianId = String(state.activeTechnician.redirectorId || "").trim();
+  }
+  const technicianText = technicianId
+    || (state.activeTechnician?.swapInProgress ? "Cambio de tecnico en curso" : "Tecnico no disponible");
 
-  // Código del proceso: real en estados B y C, placeholder en estado A.
+  // Código del proceso: real en estados B/C y tambien en estado A post-clic
+  // cuando la orden sigue viva en seguimiento.
   let orderCode = "";
-  if (visualState === "B" || visualState === "C") {
+  if (visualState === "B" || visualState === "C" || order) {
     orderCode = String(order?.code || "").trim();
     if (!orderCode && usingDebug) orderCode = DEBUG_ORDER_CODE;
   }
@@ -124,8 +128,14 @@ export function updatePanel4(_context = {}) {
   const codeValue = $("#panel4OrderCodeValue");
   const codeCopyBtn = $("#panel4OrderCodeCopy");
 
-  if (tidValue) tidValue.textContent = technicianId || "—";
-  if (tidCopyBtn) tidCopyBtn.dataset.copyValue = technicianId;
+  if (tidValue) {
+    tidValue.textContent = technicianText;
+    tidValue.classList.toggle("is-placeholder", !technicianId);
+  }
+  if (tidCopyBtn) {
+    tidCopyBtn.dataset.copyValue = technicianId;
+    tidCopyBtn.hidden = !technicianId;
+  }
 
   if (codeValue) {
     if (orderCode) {
@@ -138,9 +148,7 @@ export function updatePanel4(_context = {}) {
   }
   if (codeCopyBtn) {
     codeCopyBtn.dataset.copyValue = orderCode;
-    // El botón Copiar de la card Código está oculto cuando se muestra el
-    // placeholder (decisión 5 de la mini-spec). data-state="A" del panel padre
-    // controla el `display: none` vía CSS.
+    codeCopyBtn.hidden = !orderCode;
   }
 }
 

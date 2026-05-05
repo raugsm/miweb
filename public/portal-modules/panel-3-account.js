@@ -198,7 +198,7 @@ function renderProofBlock() {
   const orderInReview = orders.find((order) => order.publicStatus === "PAGO_EN_REVISION") || null;
   const orderRejected = orders.find((order) => order.publicStatus === "PAGO_RECHAZADO") || null;
   const orderValidated = orders.find((order) => (
-    ["EN_PREPARACION", "LISTO_PARA_CONEXION", "EN_PROCESO"].includes(order.publicStatus)
+    order.publicStatus === "EN_PREPARACION" && !order.customerConnectedAt
   )) || null;
   const authenticated = Boolean(customer?.user && customer?.client);
   const emailVerified = Boolean(customer?.client?.emailVerified);
@@ -359,4 +359,3 @@ export function flashCopyFeedback(button) {
   }, 1500);
   copyTimers.set(button, timer);
 }
-

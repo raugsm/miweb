@@ -149,7 +149,7 @@ Card oscura (#2C2C2A) con texto blanco/gris. Múltiples estados según data y co
 
 11. **Cliente sin conexión a internet.** El panel igual carga (la tasa se sirve desde el backend del propio sitio, no desde fuente externa). Si la conexión SSE se cae, no se actualizan en vivo los cambios admin pero el panel sigue funcional con los datos que tenía. Indicador "Sin conexión, intentando reconectar…" se muestra en la sección Mis órdenes (no en este panel).
 
-12. **Texto largo en pill.** No aplica — los nombres de los 5 países son cortos (≤8 caracteres).
+12. **Texto largo en pill.** Si aplica. Aunque los nombres de los 5 paises son cortos, `Colombia` puede desbordar cuando el panel 1 queda angosto dentro del grid de 4 paneles. Las pills deben reacomodarse segun el ancho disponible y nunca salirse de su contenedor. No se debe resolver primero bajando fuente o cortando texto; el layout de pills debe permitir que cada opcion use el ancho que necesita y baje de linea si hace falta.
 
 13. **Cliente cambia de pill después de subir comprobante.** No puede. Los paneles 1, 2 y 3 están **congelados** mientras hay comprobante en revisión. Click sobre pills no hace nada visual. El comportamiento de congelado se documenta en la spec del panel 3.
 

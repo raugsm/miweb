@@ -185,19 +185,32 @@ export function wireEvents() {
     event.preventDefault();
   });
 
-  // Click delegado para el botón "Equipo conectado" (#panel4EquipoConectado).
-  // Sub-commit 15c.1: el click es NO-OP por decisión explícita — la llamada a
-  // notifyEquipoConectado() se reconecta en 15c.4 cuando se cierre el wiring
-  // backend del Panel 4. El selector y data-flow-action quedan intactos para
-  // que la reactivación sea trivial. El listener delega al #orderForm que
-  // envuelve la .panels-row (el botón está dentro de .panel.panel-4 que es
-  // descendiente del form).
+  // Click delegado para el boton "Equipo conectado" (#panel4EquipoConectado).
+  // Confirma que el cliente ya pego los datos en Redirector y mueve el job
+  // hacia la cola tecnica mediante notify-connected.
   $("#orderForm")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-flow-action='notify-connected']");
     if (!button) return;
     event.preventDefault();
-    // 15c.4 restaurará: const order = activeOrderForFlow(state.customer);
-    //                   await notifyEquipoConectado(order.id); ...
+    (async () => {
+      const message = $("#orderMessage");
+      const order = activeOrderForFlow(state.customer);
+      if (!order) {
+        setMessage(message, "No hay una orden validada lista para conectar.", "error");
+        return;
+      }
+      button.disabled = true;
+      try {
+        await notifyEquipoConectado(order.id);
+        renderCustomer();
+        updateQuote();
+        setMessage(message, "");
+      } catch (error) {
+        setMessage(message, error.message, "error");
+      } finally {
+        button.disabled = false;
+      }
+    })();
   });
 
   // Sub-commit 15c.1 — Panel 4 nuevo: botones Copiar (delegación por data-attr).
@@ -461,7 +474,7 @@ export function wireEvents() {
     if (dropzoneIsDisabled()) return;
     panel3ProofInput?.click();
   });
-  $("#refreshButton").addEventListener("click", async () => {
+  $("#refreshButton")?.addEventListener("click", async () => {
     await refreshOrdersSilently();
     setOrdersLiveStatus(state.ordersStream ? "En vivo" : "Actualizado", state.ordersStream ? "success" : "warn");
   });

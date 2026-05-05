@@ -207,10 +207,9 @@
   animation: panel4FadeIn 200ms ease;
 }
 
-/* Estado A: oculta el botón Copiar de la card Código (decisión 5 de la
-   mini-spec). El selector apunta al botón con id específico para no afectar
-   el botón Copiar de la card Tech ID (que es siempre funcional). */
-.panel.panel-4[data-state="A"] #panel4OrderCodeCopy {
+/* El boton Copiar del codigo solo se oculta cuando realmente no hay codigo.
+   En estado A post-clic puede existir orden viva y debe poder copiarse. */
+.panel.panel-4 #panel4OrderCodeCopy[hidden] {
   display: none;
 }
 

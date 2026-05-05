@@ -13,7 +13,7 @@ export async function loadActiveTechnician() {
 
 export function startTechnicianPolling(onUpdate, intervalMs = 5_000) {
   stopTechnicianPolling();
-  state.technicianPollTimer = setInterval(async () => {
+  const refresh = async () => {
     const previous = state.activeTechnician;
     const next = await loadActiveTechnician();
     if (typeof onUpdate === "function") {
@@ -21,7 +21,9 @@ export function startTechnicianPolling(onUpdate, intervalMs = 5_000) {
       const snapNext = next ? `${next.redirectorId || ""}|${next.swapInProgress}|${next.swapSecondsLeft}` : "";
       if (snapPrev !== snapNext) onUpdate(next);
     }
-  }, Math.max(1_000, intervalMs));
+  };
+  refresh();
+  state.technicianPollTimer = setInterval(refresh, Math.max(1_000, intervalMs));
 }
 
 export function stopTechnicianPolling() {

@@ -1,10 +1,10 @@
-import { startAdminConfigStream } from "./portal-modules/admin-config-stream.js";
-import { renderCustomer } from "./portal-modules/auth-forms.js";
-import { applyEmailVerification, applyQueryTracking } from "./portal-modules/deep-links.js";
-import { setMessage, $ } from "./portal-modules/dom.js";
-import { wireEvents } from "./portal-modules/events.js";
-import { configureOrderRenderer } from "./portal-modules/orders.js";
-import { loadSession } from "./portal-modules/session.js";
+import { startAdminConfigStream } from "./portal-modules/admin-config-stream.js?v=s16-fix007";
+import { renderCustomer } from "./portal-modules/auth-forms.js?v=s16-fix007";
+import { applyEmailVerification, applyQueryTracking } from "./portal-modules/deep-links.js?v=s16-fix007";
+import { setMessage, $ } from "./portal-modules/dom.js?v=s16-fix007";
+import { wireEvents } from "./portal-modules/events.js?v=s16-fix007";
+import { configureOrderRenderer } from "./portal-modules/orders.js?v=s16-fix007";
+import { loadSession } from "./portal-modules/session.js?v=s16-fix007";
 
 // Sub-commit 15c.1: cleanup one-time del localStorage del banner viejo
 // "¿Listo para conectar?" (paso4-timer.js eliminado). La key era

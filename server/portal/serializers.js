@@ -240,6 +240,8 @@ export function createPortalSerializers({
       publicStatus,
       paymentRejectedReason,
       nextAction: publicCustomerOrderNextAction(order, db, publicStatus),
+      technicianId: order.technicianId || order.redirectorId || "",
+      redirectorId: order.redirectorId || order.technicianId || "",
       customerConnectionReadyAt: order.customerConnectionReadyAt || "",
       customerConnectedAt: order.customerConnectedAt || "",
       // PR-2a-final.bundle2 item 3: timestamp de aprobacion del pago. Frontend
@@ -286,6 +288,9 @@ export function createPortalSerializers({
           status: job?.status || item.status,
           ardCode: job?.ardCode || item.ardCode || "",
           finalLog: job?.finalLog || "",
+          readyAt: job?.readyAt || "",
+          takenAt: job?.takenAt || "",
+          doneAt: job?.doneAt || "",
           eligibilityStatus,
           eligibilityMessage,
           reviewReason: publicReviewMessage,

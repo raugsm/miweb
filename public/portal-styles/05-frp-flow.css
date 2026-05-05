@@ -188,6 +188,11 @@
 }
 
 /* Variante verde (cantidad >10 → "contactanos por WhatsApp"). */
+.panel-1-estimate-notice[hidden],
+.panel-2-notice[hidden] {
+  display: none;
+}
+
 .panel-2-notice[data-variant="success"] {
   background: var(--color-bg-success);
   color: var(--color-text-success);
@@ -197,9 +202,18 @@
    Panel 1 — Pills de método de pago
    --------------------------------------------------------------------------- */
 .panel-1-pills {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
+}
+
+.panel-1-pills .flow-payment-pill {
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  max-width: 100%;
+  min-width: max-content;
+  padding-inline: 10px;
 }
 
 .flow-payment-pill {
@@ -265,15 +279,26 @@
   white-space: nowrap;
 }
 
-/* Pill placeholder (slot vacío en fila 2 según spec — Perú · USDT · México
-   arriba, Colombia · Chile · vacío abajo). Mantiene la grilla 3-col. */
-.flow-payment-pill-empty {
-  visibility: hidden;
+/* Slot vacio heredado del layout fijo 3+2. En el panel nuevo no reserva espacio
+   porque las pills se reacomodan segun el ancho disponible. */
+.panel-1-pills .flow-payment-pill-empty {
+  display: none;
+}
+
+@media (min-width: 1024px) and (max-width: 1199.98px) {
+  .panel-1-pills .flow-payment-pill[data-pill-country="Colombia"] {
+    order: 2;
+  }
+
+  .panel-1-pills .flow-payment-pill[data-pill-country="Chile"] {
+    order: 1;
+  }
 }
 
 @media (max-width: 639.98px) {
   .panel-1-pills { gap: 6px; }
   .flow-payment-pill { padding: 8px 6px; font-size: 12px; }
+  .panel-1-pills .flow-payment-pill { padding-inline: 6px; }
   .flow-payment-pill-flag { width: 12px; height: 12px; }
 }
 

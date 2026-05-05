@@ -51,21 +51,33 @@ async function runSmoke({ baseUrl, dataDir, setupToken }) {
   assert.ok(response.data.customer);
 
   response = await http.request("POST", "/api/portal/orders/frp", {
-    quantity: 1,
+    quantity: 3,
     paymentMethod: "PE_YAPE_BRYAMS",
-    items: [{ model: "Redmi Note 13", raw: "Redmi Note 13", imei: "123456789012345" }],
+    items: [
+      { model: "Redmi Note 13", raw: "Redmi Note 13", imei: "123456789012345" },
+      { model: "Redmi Note 13", raw: "Redmi Note 13", imei: "123456789012346" },
+      { model: "Redmi Note 13", raw: "Redmi Note 13", imei: "123456789012347" },
+    ],
     note: "phase 4 smoke",
   });
   assert.equal(response.status, 201);
   const portalOrder = response.data.order;
-  assert.equal(portalOrder.totalPrice, 25);
-  assert.match(portalOrder.priceFormatted || "", /S\/\s*93\.75/);
+  assert.equal(portalOrder.totalPrice, 74.55);
+  assert.match(portalOrder.priceFormatted || "", /S\/\s*279\.56/);
+  assert.equal(portalOrder.items.length, 3);
 
   response = await http.request("PATCH", `/api/portal/orders/${encodeURIComponent(portalOrder.id)}/payment-proof`, {
     paymentProofs: [proofImage("portal-proof.png", onePixelPng)],
   });
   assert.equal(response.status, 200);
   assert.equal(response.data.order.paymentProofs.length, 1);
+
+  response = await http.request("PATCH", `/api/portal/orders/${encodeURIComponent(portalOrder.id)}/payment-proof`, {
+    paymentProofs: [proofImage("portal-proof-replacement.png", onePixelPng.replace("iVBOR", "kVBOR"))],
+  });
+  assert.equal(response.status, 200);
+  assert.equal(response.data.order.paymentProofs.length, 1, "Reemplazar comprobante no debe acumular archivos");
+  assert.equal(response.data.order.paymentProofs[0].name, "portal-proof-replacement.png");
 
   // notify-connected debe rechazarse en PAGO_EN_REVISION (aun sin pago validado).
   response = await http.request("POST", `/api/portal/orders/${encodeURIComponent(portalOrder.id)}/notify-connected`);
@@ -103,6 +115,66 @@ async function runSmoke({ baseUrl, dataDir, setupToken }) {
   });
   assert.equal(response.status, 200);
   assert.equal(response.data.user.role, "ADMIN");
+  const adminUser = response.data.user;
+
+  let rateUpdateResponse;
+  const adminConfigRateEvent = await readAdminConfigEventAfter(baseUrl, async () => {
+    rateUpdateResponse = await http.request("PATCH", "/api/pricing/exchange-rates/peru", {
+      ratePerUsdt: 3.76,
+    });
+  }, "exchange_rate_changed");
+  assert.equal(rateUpdateResponse.status, 200);
+  assert.match(adminConfigRateEvent.text, /event: exchange_rate_changed/);
+  assert.match(adminConfigRateEvent.text, /"currency":"PEN"/);
+  assert.match(adminConfigRateEvent.text, /"ratePerUsdt":3\.76/);
+
+  response = await http.request("PATCH", `/api/users/${encodeURIComponent(adminUser.id)}`, {
+    technicianRedirectorId: "1000 9983 5478",
+  });
+  assert.equal(response.status, 200);
+  assert.equal(response.data.user.technicianRedirectorId, "1000 9983 5478");
+
+  response = await http.request("GET", "/api/portal/active-technician");
+  assert.equal(response.status, 200);
+  assert.equal(response.data.technician.redirectorId, "1000 9983 5478");
+
+  const technicianEmail = `phase4-tech-${Date.now()}@example.com`;
+  const technicianPassword = "Tech12345!";
+  response = await http.request("POST", "/api/register", {
+    name: "Tecnico FRP Phase",
+    email: technicianEmail,
+    password: technicianPassword,
+    workChannel: "WhatsApp 3",
+  });
+  assert.equal(response.status, 201);
+  const technicianUser = response.data.user;
+
+  response = await http.request("PATCH", `/api/users/${encodeURIComponent(technicianUser.id)}`, {
+    role: "ATENCION_TECNICA",
+    active: true,
+    technicianRedirectorId: "2000 1122 3344",
+  });
+  assert.equal(response.status, 200);
+  assert.equal(response.data.user.role, "ATENCION_TECNICA");
+
+  const otherChannelEmail = `phase4-other-channel-${Date.now()}@example.com`;
+  const otherChannelPassword = "Other12345!";
+  response = await http.request("POST", "/api/register", {
+    name: "Operador Otro Canal Phase",
+    email: otherChannelEmail,
+    password: otherChannelPassword,
+    workChannel: "WhatsApp 1",
+  });
+  assert.equal(response.status, 201);
+  const otherChannelUser = response.data.user;
+
+  response = await http.request("PATCH", `/api/users/${encodeURIComponent(otherChannelUser.id)}`, {
+    role: "ATENCION_TECNICA",
+    active: true,
+    workChannel: "WhatsApp 1",
+  });
+  assert.equal(response.status, 200);
+  assert.equal(response.data.user.workChannel, "WhatsApp 1");
 
   response = await http.request("GET", "/api/session");
   assert.equal(response.status, 200);
@@ -184,18 +256,74 @@ async function runSmoke({ baseUrl, dataDir, setupToken }) {
   assert.equal(response.status, 200);
   const portalFrpOrder = (response.data.frp?.orders || []).find((order) => order.portalOrderId === portalOrder.id);
   assert.ok(portalFrpOrder, "session.frp.orders debe incluir el frpOrder ligado al portalOrder");
+  assert.equal(portalFrpOrder.paymentProofs.length, 1, "operador debe ver solo el comprobante vigente");
+  assert.equal(portalFrpOrder.paymentProofs[0].name, "portal-proof-replacement.png");
 
-  for (const key of ["priceSent", "connectionDataSent", "authorizationConfirmed"]) {
-    response = await http.request("PATCH", `/api/frp/orders/${encodeURIComponent(portalFrpOrder.id)}/checklist`, { key, value: true });
-    assert.equal(response.status, 200);
-  }
-  response = await http.request("PATCH", `/api/frp/orders/${encodeURIComponent(portalFrpOrder.id)}/payment-review`, { action: "approve" });
+  const otherChannelJar = new CookieJar();
+  const otherChannelHttp = createHttpClient(baseUrl, otherChannelJar);
+  response = await otherChannelHttp.request("POST", "/api/login", {
+    email: otherChannelEmail,
+    password: otherChannelPassword,
+  });
+  assert.equal(response.status, 200);
+  assert.equal(response.data.user.role, "ATENCION_TECNICA");
+  assert.equal(response.data.user.workChannel, "WhatsApp 1");
+
+  response = await otherChannelHttp.request("PATCH", `/api/frp/orders/${encodeURIComponent(portalFrpOrder.id)}/payment-review`, { action: "approve" });
+  assert.equal(response.status, 403, "operador fuera de WhatsApp 3 no puede validar pagos FRP");
+
+  const technicianJar = new CookieJar();
+  const technicianHttp = createHttpClient(baseUrl, technicianJar);
+  response = await technicianHttp.request("POST", "/api/login", {
+    email: technicianEmail,
+    password: technicianPassword,
+  });
+  assert.equal(response.status, 200);
+  assert.equal(response.data.user.role, "ATENCION_TECNICA");
+
+  response = await technicianHttp.request("PATCH", `/api/frp/orders/${encodeURIComponent(portalFrpOrder.id)}/payment-review`, { action: "approve" });
   assert.equal(response.status, 200);
   assert.equal(response.data.order.checklist.paymentValidated, true);
+
+  response = await technicianHttp.request("GET", "/api/session");
+  assert.equal(response.status, 200);
+  const waitingConnectionOrder = (response.data.frp?.orders || []).find((order) => order.id === portalFrpOrder.id);
+  assert.ok(waitingConnectionOrder, "el panel operador debe conservar visible la orden aprobada");
+  assert.equal(waitingConnectionOrder.paymentStatus, "COMPROBANTE_RECIBIDO");
+  assert.ok(
+    (waitingConnectionOrder.jobs || []).some((job) => job.status === "ESPERANDO_PREPARACION"),
+    "despues de aprobar pago, la orden debe quedar esperando conexion del cliente",
+  );
 
   response = await http.request("POST", `/api/portal/orders/${encodeURIComponent(portalOrder.id)}/notify-connected`);
   assert.equal(response.status, 200, "notify-connected debe aceptar tras pago validado");
   assert.ok(response.data.order.customerConnectionReadyAt, "el portal debe reflejar customerConnectionReadyAt");
+  assert.equal(response.data.order.technicianId, "1000 9983 5478", "notify-connected debe congelar el Technician ID activo");
+  assert.equal(
+    response.data.order.items.find((item) => item.sequence === 1)?.status,
+    "LISTO_PARA_TECNICO",
+    "notify-connected debe mandar el primer equipo a cola tecnica",
+  );
+  assert.equal(
+    response.data.order.items.find((item) => item.sequence === 2)?.status,
+    "ESPERANDO_PREPARACION",
+    "los equipos restantes deben seguir pendientes hasta que el cliente los marque listos",
+  );
+
+  const secondPortalItem = response.data.order.items.find((item) => item.sequence === 2);
+  assert.ok(secondPortalItem, "la orden portal debe exponer el segundo item");
+  response = await http.request("POST", `/api/portal/orders/${encodeURIComponent(portalOrder.id)}/items/${encodeURIComponent(secondPortalItem.id)}/ready`);
+  assert.equal(response.status, 200, "Equipo listo por item debe aceptar un equipo pendiente");
+  assert.equal(
+    response.data.order.items.find((item) => item.sequence === 2)?.status,
+    "LISTO_PARA_TECNICO",
+    "Equipo listo por item debe mandar el equipo elegido a cola tecnica",
+  );
+
+  response = await technicianHttp.request("GET", "/api/session");
+  assert.equal(response.status, 200);
+  const readyPortalJobs = (response.data.frp?.jobs || []).filter((job) => job.orderId === portalFrpOrder.id && job.status === "LISTO_PARA_TECNICO");
+  assert.equal(readyPortalJobs.length, 2, "el panel operador debe recibir dos equipos listos sin desaparecer la orden");
 }
 
 async function startIsolatedServer() {
@@ -300,6 +428,48 @@ async function readPortalOrdersEvent(baseUrl, jar) {
     };
   } finally {
     clearTimeout(timer);
+  }
+}
+
+async function readAdminConfigEventAfter(baseUrl, trigger, expectedEvent) {
+  const controller = new AbortController();
+  const deadline = Date.now() + 5_000;
+  const timer = setTimeout(() => controller.abort(), 5_000);
+  let reader;
+  try {
+    const res = await fetch(`${baseUrl}/api/portal/admin-config/events`, {
+      signal: controller.signal,
+    });
+    assert.equal(res.status, 200);
+    assert.match(res.headers.get("content-type") || "", /text\/event-stream/);
+    reader = res.body.getReader();
+    await trigger();
+    const decoder = new TextDecoder();
+    let text = "";
+    while (Date.now() < deadline) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      text += decoder.decode(value || new Uint8Array(), { stream: true });
+      if (text.includes(`event: ${expectedEvent}`)) {
+        await reader.cancel();
+        return {
+          status: res.status,
+          contentType: res.headers.get("content-type") || "",
+          text,
+        };
+      }
+    }
+    throw new Error(`Expected admin-config SSE event ${expectedEvent}, got:\n${text}`);
+  } finally {
+    clearTimeout(timer);
+    controller.abort();
+    if (reader) {
+      try {
+        await reader.cancel();
+      } catch {
+        // The reader may already be closed after finding the expected event.
+      }
+    }
   }
 }
 

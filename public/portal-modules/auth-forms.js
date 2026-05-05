@@ -9,6 +9,7 @@ import {
 } from "./payments.js";
 import { startTechnicianPolling, stopTechnicianPolling } from "./technician.js";
 import { deriveFlowState } from "./flow-state.js";
+import { setQuantity } from "./frp.js";
 import { resetPaso2InactivityTimer } from "./paso2-timer.js";
 import { state } from "./state.js";
 
@@ -163,6 +164,7 @@ export function renderCatalog() {
 export function renderCustomer() {
   const customer = state.customer;
   const logged = Boolean(customer?.user && customer?.client);
+  document.querySelector(".brand-panel")?.classList.toggle("hidden", logged);
   $("#accessPanel").classList.toggle("hidden", logged);
   $("#appPanel").classList.toggle("hidden", !logged);
   if (!logged) {
@@ -197,6 +199,7 @@ export function renderCustomer() {
   startOrdersLive();
   startTechnicianPolling(() => {
     renderOrders(state.customer?.orders || []);
+    updateQuote();
   });
 }
 
@@ -210,6 +213,11 @@ function applyFlowState(customer) {
   // Transition non-draft a draft: orden cerrada o cancelada; ahora podemos limpiar el form.
   if (previous !== "draft" && flowState === "draft") {
     document.querySelector("#orderForm")?.reset();
+  }
+  // Cuando el cliente ya confirmo conexion, la orden pasa a seguimiento y los
+  // paneles 1-3 vuelven a funcionar como borrador para el siguiente pedido.
+  if (previous === "awaiting_connection" && flowState === "connected") {
+    resetPostConnectionDraftControls();
   }
   state.lastFlowState = flowState;
 
@@ -227,15 +235,28 @@ function applyStepLocks(flowState) {
   // Spec panel-3 §3 edge 11: "Paneles 1-2-3 se vuelven a congelar [cuando el
   // nuevo comprobante entra a uploading]" → durante el rechazo NO están
   // congelados, el cliente puede cambiar pill/cantidad antes de re-subir.
-  const lock = flowState !== "draft" && flowState !== "rejected";
+  const lockPanels12 = ["awaiting_proof", "in_review", "awaiting_connection"].includes(flowState);
+  const lockPanel3 = flowState === "awaiting_connection";
   // Sub-commit 15a.1: selectores actualizados a paneles nuevos. Paneles 1-2-3
   // se congelan cuando hay orden in-flight (mismo comportamiento que antes —
   // mecánica congelar/descongelar de la spec pantalla-principal-cliente.md
   // v1.1 § "Concepto clave"). Panel 4 NO se congela (decisión spec v1.0 §1
   // contexto: "a diferencia de paneles 1-2-3, NO se congela").
-  [".panel-1", ".panel-2", ".panel-3"].forEach((selector) => {
-    document.querySelector(selector)?.classList.toggle("step-locked", lock);
-  });
+  document.querySelector(".panel-1")?.classList.toggle("step-locked", lockPanels12);
+  document.querySelector(".panel-2")?.classList.toggle("step-locked", lockPanels12);
+  // Panel 3 no se bloquea durante PAGO_EN_REVISION: debe permitir Reemplazar
+  // comprobante sin desbloquear metodo/cantidad.
+  document.querySelector(".panel-3")?.classList.toggle("step-locked", lockPanel3);
+}
+
+function resetPostConnectionDraftControls() {
+  setQuantity(1);
+  const modelInput = $("#panel2ModelInput");
+  if (modelInput) {
+    modelInput.value = "";
+    modelInput.dataset.eligibilityState = "";
+  }
+  state.activePaymentOrderId = "";
 }
 
 // Sub-commit 15c.1: applyStep4Visibility eliminada. El Panel 4 nuevo es
