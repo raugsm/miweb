@@ -130,8 +130,8 @@
   50% { opacity: 0.4; }
 }
 
-/* Sub-commit 15a.5 — descuentos por volumen (spec panel-2-solicitud.md v1.1 §8).
-   Badge verde con % en la esquina superior derecha de la card oscura "TOTAL".
+/* Sub-commit 15a.5 + S16-FIX-022 — beneficios por volumen (spec panel-2 v1.3 §8).
+   Badge verde "Volumen" en la esquina superior derecha de la card oscura "TOTAL".
    Anclado por position:absolute; la card debe ser position:relative (panel-dark-card
    ya lo es vía declaración base línea 67). VIP oculta el badge entero. */
 .panel-2-discount-badge {
@@ -149,7 +149,7 @@
 }
 
 /* Etiqueta descriptiva del tier debajo de la card oscura "TOTAL".
-   "Precio normal" / "Descuento por X-Y equipos". VIP la oculta. */
+   "Precio normal" / "Beneficio por X-Y equipos". VIP la oculta. */
 .panel-2-discount-label {
   font-size: 11px;
   color: var(--color-text-secondary);
@@ -158,7 +158,7 @@
   text-align: right;
 }
 
-/* Aviso "Si sumás 1 más, mejorás a −X%" debajo del stepper.
+/* Aviso "Si sumás 1 más, mejorás el beneficio por volumen" debajo del stepper.
    Sólo visible cuando qty=1, 3 o 6 (límites superiores de tier no-tope). */
 .panel-2-next-tier-hint {
   font-size: 12px;

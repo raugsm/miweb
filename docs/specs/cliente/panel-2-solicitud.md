@@ -1,6 +1,6 @@
 # Panel 2 — Solicitud
 
-**Versión:** 1.2 · **Fecha:** 5 de mayo 2026 · **Estado:** spec formal con las 9 piezas. v1.2 corrige el contrato de pricing dinámico: cantidad 1 usa `pricing.unitPrice` y elimina el margen oculto 1.50 USDT como precio normal.
+**Versión:** 1.3 · **Fecha:** 5 de mayo 2026 · **Estado:** spec formal con las 9 piezas. v1.3 cambia los beneficios por volumen para descontar solo sobre la ganancia objetivo y proteger el piso público `costo interno + 0.60 USDT`.
 
 **Reemplaza a:** no había spec previa. Hereda algunas decisiones tipográficas del HANDOFF línea 580 ("paso 2: stepper -/n/+ con label 'Equipos a desbloquear', total en card oscura, insignia verde 98%, validación modelo opcional").
 
@@ -380,14 +380,16 @@ El portal aplica descuentos automáticos por cantidad de equipos en una misma or
 
 ### Tiers visibles al cliente
 
-| Cantidad | Etiqueta mostrada | % descuento visual | Regla de precio |
+| Cantidad | Etiqueta mostrada | Tasa interna | Regla de precio |
 |---|---|---|---|
 | 1 equipo | "Precio normal" | 0% | `pricing.unitPrice` |
-| 2-3 equipos | "Descuento por 2-3 equipos" | −3% | `pricing.unitPrice - 0.15 USDT` |
-| 4-6 equipos | "Descuento por 4-6 equipos" | −5% | `pricing.unitPrice - 0.25 USDT` |
-| 7-10 equipos | "Descuento por 7-10 equipos" | −8% | `pricing.unitPrice - 0.40 USDT` |
+| 2-3 equipos | "Beneficio por 2-3 equipos" | 15% sobre ganancia | `costo interno + ganancia objetivo × 0.85` |
+| 4-6 equipos | "Beneficio por 4-6 equipos" | 25% sobre ganancia | `costo interno + ganancia objetivo × 0.75` |
+| 7-10 equipos | "Beneficio por 7-10 equipos" | 40% sobre ganancia | `costo interno + ganancia objetivo × 0.60` |
 
-**Regla de contrato:** cantidad 1 SIEMPRE usa el mismo precio normal dinámico que se muestra en Costos FRP (`costo proveedor + ganancia objetivo`). No existe margen oculto de 1.50 USDT para cantidad 1. Los descuentos de volumen se restan desde ese precio normal y nunca pueden bajar por debajo del costo interno del proveedor.
+**Regla de contrato:** cantidad 1 SIEMPRE usa el mismo precio normal dinámico que se muestra en Costos FRP (`costo proveedor + ganancia objetivo`). No existe margen oculto de 1.50 USDT para cantidad 1. Los beneficios por volumen descuentan solo sobre la ganancia objetivo, nunca sobre el costo interno del proveedor ni sobre el precio total.
+
+**Piso de protección:** el precio público por volumen nunca puede bajar de `costo interno + 0.60 USDT`. Ese piso queda por encima del precio VIP futuro (`costo interno + 0.50 USDT`) para que VIP conserve sentido comercial. Si la ganancia objetivo es demasiado baja y el piso no deja espacio para descuento real, el sistema mantiene el precio normal y no muestra beneficio.
 
 ### Tope de cantidad
 
@@ -397,14 +399,13 @@ El frontend mantiene el cap de 10 equipos por orden (decisión D3 de sesión 15)
 
 **Card oscura "TOTAL":**
 - Para cantidad = 1: SIN badge de descuento. Etiqueta debajo de la card dice "Precio normal".
-- Para cantidad ≥ 2: badge verde con el % en la esquina superior derecha de la card oscura ("−3%", "−5%", "−8%"). Etiqueta debajo dice "Descuento por X-Y equipos".
+- Para cantidad ≥ 2 con beneficio real: badge verde "Volumen" en la esquina superior derecha de la card oscura. Etiqueta debajo dice "Beneficio por X-Y equipos".
+- El portal NO muestra "-X%" al cliente porque el porcentaje se aplica sobre ganancia, no sobre el total.
 - El monto del breakdown ("X equipos × S/ N") usa el precio CON descuento, no el normal.
 
 **Aviso de "1 más mejora tier" (debajo del stepper):**
 - Cuando el cliente está exactamente en el límite superior de un tier (cantidad = 1, 3 o 6), aparece debajo del stepper un texto azul:
-  - cantidad 1 → "Si sumás 1 más, mejorás a −3%"
-  - cantidad 3 → "Si sumás 1 más, mejorás a −5%"
-  - cantidad 6 → "Si sumás 1 más, mejorás a −8%"
+  - "Si sumás 1 más, mejorás el beneficio por volumen"
 - Cantidad 7 a 10 → sin aviso (ya están en el mejor tier).
 - El aviso desaparece automáticamente cuando el cliente cambia la cantidad.
 
@@ -444,6 +445,7 @@ El catálogo backend (`server/config/catalog.js#frpEligibilityCatalog`) hoy NO i
 
 ## Changelog
 
+- **panel-2-solicitud.md v1.3** (2026-05-05, sesión 16) — Cambia beneficios por volumen: 2-3 descuenta 15% de la ganancia objetivo, 4-6 descuenta 25%, 7-10 descuenta 40%. El precio público nunca baja de `costo interno + 0.60 USDT`. El portal deja de mostrar "-X%" y muestra "Volumen" + "Beneficio por X-Y equipos" para evitar confundir porcentaje sobre ganancia con descuento sobre total.
 - **panel-2-solicitud.md v1.2** (2026-05-05, sesión 16) — Corrige contrato de pricing dinámico: cantidad 1 = `pricing.unitPrice`; se elimina el margen oculto 1.50 USDT como precio normal. Los descuentos de volumen ahora se calculan desde el precio normal dinámico: 2-3 resta 0.15 USDT, 4-6 resta 0.25 USDT, 7-10 resta 0.40 USDT, con piso de costo interno para evitar venta por debajo del proveedor.
 - **panel-2-solicitud.md v1.1** (2026-05-04, sesión 15) — Agrega §8 "Descuentos por volumen". Tiers: 1 equipo "Precio normal" (0%, margen 1.50 USDT) / 2-3 equipos −3% (margen 1.35) / 4-6 equipos −5% (margen 1.25) / 7-10 equipos −8% (margen 1.10). Regla de protección: el descuento nunca deja al operador por debajo de costo + 1 USDT. Visualización: badge verde con % en la esquina superior derecha de la card oscura "TOTAL" + etiqueta descriptiva debajo. Aviso "1 más mejora tier" debajo del stepper en cantidades 1, 3 y 6. Cliente VIP: pricing aparte, fuera de scope. Renumeración: la sección "Open questions" pasa de §8 a §9; cross-ref interno actualizado.
 - **panel-2-solicitud.md v1.0** (2026-05-03, sesión 13) — Spec inicial completa con las 8 piezas. Decisiones tomadas en la sesión:

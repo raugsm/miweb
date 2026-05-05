@@ -1,4 +1,4 @@
-import { frpMonthlyTiers, frpProviderCostModes, frpProviderStatuses, frpQuantityTiers } from "../config/catalog.js";
+import { frpMonthlyTiers, frpProviderCostModes, frpProviderStatuses, frpPublicVolumeFloorMarginUsdt, frpQuantityTiers } from "../config/catalog.js";
 import { nowIso } from "../core/dates.js";
 import { moneyNumber, percentNumber } from "../core/money.js";
 import { cleanText } from "../core/validation.js";
@@ -161,23 +161,47 @@ export function frpCurrentPricing(db) {
 }
 
 // QUE: calcula el unitPrice efectivo de un tier.
-//   1. Tier con `discountUsdt` (frpQuantityTiers): unit = precio normal dinamico
-//      menos descuento por unidad. Cantidad 1 usa discountUsdt=0, por lo tanto
-//      queda exactamente igual a pricing.unitPrice.
-//   2. Tier legacy con `marginUsdt`: se conserva por compatibilidad con datos viejos,
+//   1. Tier con `marginDiscountPct` (frpQuantityTiers): descuenta SOLO sobre la
+//      ganancia objetivo (unitPrice - internalCost). El precio publico nunca baja
+//      de costo interno + frpPublicVolumeFloorMarginUsdt ni sube sobre el normal.
+//      Cantidad 1 usa pct 0 y queda exactamente igual a pricing.unitPrice.
+//   2. Tier legacy con `discountUsdt`: se conserva por compatibilidad con datos viejos.
+//   3. Tier legacy con `marginUsdt`: se conserva por compatibilidad con datos viejos,
 //      pero los tiers oficiales ya no lo usan como "precio normal" oculto.
-//   3. Tier con `unitPrice` (frpMonthlyTiers, sin migrar — fallback legacy):
+//   4. Tier con `unitPrice` (frpMonthlyTiers, sin migrar — fallback legacy):
 //      computa descuento contra el precio nominal 25.
 export function frpDynamicTier(defaultTier, pricing) {
   if (!pricing?.available) return { ...defaultTier };
   const internalCost = moneyNumber(pricing.internalCostUsdt || 0);
-  const breakEvenFloor = moneyNumber(internalCost);
-  if (defaultTier.discountUsdt !== undefined) {
-    const discount = moneyNumber(defaultTier.discountUsdt);
-    const computed = moneyNumber(Number(pricing.unitPrice || 0) - discount);
+  const normalUnitPrice = moneyNumber(pricing.unitPrice || 0);
+  const publicDiscountFloor = moneyNumber(internalCost + frpPublicVolumeFloorMarginUsdt);
+  const applyPublicDiscountFloor = (computed) => {
+    const floored = moneyNumber(Math.max(moneyNumber(computed), publicDiscountFloor));
+    return moneyNumber(Math.min(normalUnitPrice, floored));
+  };
+  if (defaultTier.marginDiscountPct !== undefined) {
+    const discountPct = percentNumber(defaultTier.marginDiscountPct);
+    const margin = moneyNumber(Math.max(0, normalUnitPrice - internalCost));
+    if (discountPct <= 0 || margin <= 0) {
+      return { ...defaultTier, unitPrice: normalUnitPrice, discountPct: 0 };
+    }
+    const discountedMargin = moneyNumber(margin * (1 - discountPct / 100));
+    const computed = moneyNumber(internalCost + discountedMargin);
+    const unitPrice = applyPublicDiscountFloor(computed);
+    const hasDiscount = unitPrice < normalUnitPrice;
     return {
       ...defaultTier,
-      unitPrice: moneyNumber(Math.max(computed, breakEvenFloor)),
+      unitPrice,
+      discountPct: hasDiscount ? Number(defaultTier.discountPct || discountPct) : 0,
+      label: hasDiscount ? defaultTier.label : "Precio normal",
+    };
+  }
+  if (defaultTier.discountUsdt !== undefined) {
+    const discount = moneyNumber(defaultTier.discountUsdt);
+    const computed = moneyNumber(normalUnitPrice - discount);
+    return {
+      ...defaultTier,
+      unitPrice: applyPublicDiscountFloor(computed),
     };
   }
   if (defaultTier.marginUsdt !== undefined) {
@@ -185,15 +209,15 @@ export function frpDynamicTier(defaultTier, pricing) {
     const computed = moneyNumber(internalCost + margin);
     return {
       ...defaultTier,
-      unitPrice: moneyNumber(Math.max(computed, breakEvenFloor)),
+      unitPrice: applyPublicDiscountFloor(computed),
     };
   }
   // Legacy unitPrice-based (frpMonthlyTiers).
   const discount = moneyNumber(25 - Number(defaultTier.unitPrice || 25));
-  const computed = moneyNumber(Math.max(0, pricing.unitPrice - discount));
+  const computed = moneyNumber(Math.max(0, normalUnitPrice - discount));
   return {
     ...defaultTier,
-    unitPrice: moneyNumber(Math.max(computed, breakEvenFloor)),
+    unitPrice: applyPublicDiscountFloor(computed),
   };
 }
 

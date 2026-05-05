@@ -883,6 +883,59 @@ data: {
 
 ---
 
+### S16-FIX-022 - Beneficios por volumen sobre ganancia objetivo
+
+**Problema confirmado por Bryam:** el portal mostraba badges como `-5%`, pero la formula real no aplicaba porcentaje. Restaba montos fijos desde el precio normal (`0.15`, `0.25`, `0.40` USDT). Eso podia confundir porque el porcentaje visual no coincidia con el calculo.
+
+**Hechos verificados antes de tocar codigo:**
+
+- `server/config/catalog.js` definia tiers con `discountUsdt` fijo y `discountPct` solo visual.
+- `server/frp/pricing.js` calculaba `unitPrice = pricing.unitPrice - discountUsdt`.
+- `public/portal-modules/frp.js` elegia el tier mas barato desde `state.catalog.quantityTiers`.
+- `public/portal-modules/payments.js` mostraba `-${discountPct}%` en la card TOTAL y en el aviso de siguiente tier.
+- `portalFrpPriceSuggestion()` en `server.js` tambien dependia del mismo `frpTierForQuantity()`, por lo que el backend cobraba con la misma formula vieja.
+
+**Decision aprobada por Bryam:**
+
+- El descuento por volumen debe aplicar solo sobre la ganancia objetivo, no sobre el costo interno ni sobre el precio total.
+- Formula nueva: `precio = costo interno + ganancia objetivo * (1 - porcentaje)`.
+- Tiers internos: 2-3 equipos = 15%, 4-6 equipos = 25%, 7-10 equipos = 40%.
+- Piso publico: nunca bajar de `costo interno + 0.60 USDT`.
+- El VIP futuro queda separado como `costo interno + 0.50 USDT`, para que tenga mejor precio que el volumen publico.
+- El cliente no debe ver `-25%` porque podria entender descuento sobre total. La UI muestra "Volumen" y "Beneficio por X-Y equipos".
+
+**Riesgos revisados:**
+
+- Si solo se cambiaba frontend, el backend podia seguir cobrando con la formula fija vieja.
+- Si se mostraba `-25%`, se creaba una promesa visual incorrecta para el cliente.
+- Si el piso publico se aplicaba mal, una ganancia objetivo baja podia hacer que el volumen subiera por encima del precio normal. Se evita: cuando no hay espacio real para descuento, se mantiene precio normal y se oculta el beneficio.
+- Los tiers mensuales legacy pasan por el mismo helper de precio. Se aplico el mismo piso publico a descuentos publicos legacy para no dejar una ruta que pueda bajar hasta costo interno.
+- No se fuerza desde codigo una ganancia fija de `1.50`; la ganancia sigue siendo configurable desde Costos FRP.
+
+**Resultado implementado:**
+
+- `server/config/catalog.js`: los tiers dejan de usar `discountUsdt` activo y pasan a `marginDiscountPct` 15/25/40; se agrega `frpPublicVolumeFloorMarginUsdt = 0.60`.
+- `server/frp/pricing.js`: `frpDynamicTier()` calcula volumen sobre margen (`unitPrice - internalCost`) y respeta piso publico `costo + 0.60`; el mismo piso se aplica a rutas legacy de descuento publico.
+- `public/portal-modules/frp.js`: comentarios y hint quedan alineados al beneficio por volumen.
+- `public/portal-modules/payments.js`: badge cambia de `-X%` a `Volumen`; el aviso deja de mostrar porcentaje.
+- `docs/specs/cliente/panel-2-solicitud.md`: spec sube a v1.3 con el contrato nuevo.
+- `test/phase3a.contract.test.js`: pruebas actualizadas para bloquear la formula nueva y el piso publico.
+
+**Validacion:**
+
+- `node --check server/config/catalog.js` paso.
+- `node --check server/frp/pricing.js` paso.
+- `node --check public/portal-modules/frp.js` paso.
+- `node --check public/portal-modules/payments.js` paso.
+- `node --check test/phase3a.contract.test.js` paso.
+- `node --test test/phase3a.contract.test.js` paso: 10 pruebas, 0 fallos.
+- `npm.cmd test` paso completo: 12 pruebas, 0 fallos.
+- Calculo manual con `costo interno = 3.00` y `precio normal = 4.50`: tiers devuelven 4.50 / 4.275 / 4.125 / 3.90 USDT segun cantidad.
+- Calculo manual legacy: un tier mensual agresivo tambien queda frenado por piso publico (`costo 3.50 + 0.60 = 4.10`).
+- `git diff --check` paso sin errores; solo avisos normales LF/CRLF de Windows.
+
+---
+
 ## Checklist de esta fase
 
 - [x] Revisar ruta correcta del repo.

@@ -33,27 +33,32 @@ test("FRP volume tiers derive from dynamic normal price (qty 1 = pricing.unitPri
   const pricing = frpCurrentPricing(db);
 
   // 4 tiers (sub-commit 15a.5), ordenados de mayor minQty a menor.
-  // Descuentos 0.40/0.25/0.15/0.00 desde el precio normal dinamico 24.50.
+  // Descuentos sobre margen 40/25/15/0 desde costo 23.50 + margen 1.00.
   assert.deepEqual(
     frpDynamicQuantityTiers(pricing).map((tier) => tier.unitPrice),
     [24.1, 24.25, 24.35, 24.5],
   );
-  // discountPct expuesto literal del spec (0/3/5/8) para el badge frontend.
+  // discountPct queda como señal interna del beneficio; el portal no muestra "-X%".
   assert.deepEqual(
     frpDynamicQuantityTiers(pricing).map((tier) => tier.discountPct),
-    [8, 5, 3, 0],
+    [40, 25, 15, 0],
   );
 });
 
-test("FRP volume discounts never make quantity 1 differ from pricing.unitPrice", () => {
+test("FRP volume discounts apply only over target margin and protect public floor", () => {
   const pricing = { available: true, internalCostUsdt: 3.5, unitPrice: 4.5 };
-  const normalTier = { minQty: 1, discountUsdt: 0, unitPrice: 25, label: "Precio normal" };
-  const volumeTier = { minQty: 2, discountUsdt: 0.15, unitPrice: 24.85, label: "Descuento por 2-3 equipos" };
-  const tooDeepTier = { minQty: 7, discountUsdt: 2, unitPrice: 23, label: "Test" };
+  const normalTier = { minQty: 1, marginDiscountPct: 0, discountPct: 0, unitPrice: 25, label: "Precio normal" };
+  const volumeTier = { minQty: 2, marginDiscountPct: 15, discountPct: 15, unitPrice: 24.85, label: "Beneficio por 2-3 equipos" };
+  const tooDeepTier = { minQty: 7, marginDiscountPct: 100, discountPct: 100, unitPrice: 23, label: "Test" };
+  const narrowMarginTier = { minQty: 7, marginDiscountPct: 40, discountPct: 40, unitPrice: 23, label: "Test" };
+  const legacyUnitTier = { minJobs: 30, unitPrice: 22, label: "Meta 30+" };
 
   assert.equal(frpDynamicTier(normalTier, pricing).unitPrice, 4.5);
   assert.equal(frpDynamicTier(volumeTier, pricing).unitPrice, 4.35);
-  assert.equal(frpDynamicTier(tooDeepTier, pricing).unitPrice, 3.5);
+  assert.equal(frpDynamicTier(tooDeepTier, pricing).unitPrice, 4.1);
+  assert.equal(frpDynamicTier(legacyUnitTier, pricing).unitPrice, 4.1);
+  assert.equal(frpDynamicTier(narrowMarginTier, { available: true, internalCostUsdt: 3.5, unitPrice: 4.0 }).unitPrice, 4.0);
+  assert.equal(frpDynamicTier(narrowMarginTier, { available: true, internalCostUsdt: 3.5, unitPrice: 4.0 }).discountPct, 0);
 });
 
 test("classifyCostChange enforces 5-level validation (PR-2a.6)", () => {

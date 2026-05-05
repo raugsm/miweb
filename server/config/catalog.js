@@ -221,18 +221,20 @@ export const frpEligibilityCatalog = [
 ];
 export const frpOrderChecklistKeys = ["priceSent", "paymentValidated", "connectionDataSent", "authorizationConfirmed"];
 export const frpJobChecklistKeys = ["clientConnected", "requiredStateConfirmed", "modelSupported"];
-// QUE: tiers de descuento por volumen — spec panel-2-solicitud.md v1.2.
+// QUE: tiers de descuento por volumen — spec panel-2-solicitud.md v1.3.
 // 4 tiers (1 / 2-3 / 4-6 / 7-10). Tier 11+ removido porque el frontend cap a 10.
-// `discountUsdt` = descuento por unidad aplicado DESDE el precio normal dinamico
-// (`pricing.unitPrice`). Cantidad 1 siempre debe ser exactamente pricing.unitPrice.
-// `discountPct` = % nominal del tier para mostrar en el badge de la card "TOTAL".
+// `marginDiscountPct` = % aplicado SOLO sobre la ganancia objetivo, no sobre
+// costo proveedor ni sobre precio total.
+// `discountPct` se conserva como señal interna/UI del tier; el portal ya no lo
+// muestra como "-X%" para evitar que el cliente piense que descuenta del total.
 // `unitPrice` = FALLBACK cuando no hay pricingConfig (publicPortalCatalog lo expone
 // tal cual). Refleja la curva historica con precio normal default 25 USDT.
+export const frpPublicVolumeFloorMarginUsdt = 0.60;
 export const frpQuantityTiers = [
-  { minQty: 7, discountUsdt: 0.40, unitPrice: 24.60, discountPct: 8, label: "Descuento por 7-10 equipos" },
-  { minQty: 4, discountUsdt: 0.25, unitPrice: 24.75, discountPct: 5, label: "Descuento por 4-6 equipos" },
-  { minQty: 2, discountUsdt: 0.15, unitPrice: 24.85, discountPct: 3, label: "Descuento por 2-3 equipos" },
-  { minQty: 1, discountUsdt: 0, unitPrice: 25.00, discountPct: 0, label: "Precio normal" },
+  { minQty: 7, marginDiscountPct: 40, unitPrice: 24.60, discountPct: 40, label: "Beneficio por 7-10 equipos" },
+  { minQty: 4, marginDiscountPct: 25, unitPrice: 24.75, discountPct: 25, label: "Beneficio por 4-6 equipos" },
+  { minQty: 2, marginDiscountPct: 15, unitPrice: 24.85, discountPct: 15, label: "Beneficio por 2-3 equipos" },
+  { minQty: 1, marginDiscountPct: 0, unitPrice: 25.00, discountPct: 0, label: "Precio normal" },
 ];
 export const frpMonthlyTiers = [
   { minJobs: 100, unitPrice: 22, label: "Meta 100+" },

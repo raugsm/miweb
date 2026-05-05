@@ -381,16 +381,16 @@ export function updateQuote() {
     }
   }
 
-  // Sub-commit 15a.5: badge verde con % en card oscura, label descriptivo
+  // Sub-commit 15a.5 + S16-FIX-022: badge verde de volumen, label descriptivo
   // debajo de la card, aviso "1 más mejora tier" debajo del stepper.
-  // Spec panel-2-solicitud.md v1.1 §8. VIP saltea las 3 piezas (estimate.isVip).
+  // Spec panel-2-solicitud.md v1.3 §8. VIP saltea las 3 piezas (estimate.isVip).
   const panel2DiscountBadge = $("#panel2DiscountBadge");
   const panel2DiscountLabel = $("#panel2DiscountLabel");
   const panel2NextTierHint = $("#panel2NextTierHint");
   const showDiscountUi = !estimate.isVip && context.totalUsdt > 0;
   if (panel2DiscountBadge) {
     if (showDiscountUi && Number(estimate.discountPct || 0) > 0) {
-      panel2DiscountBadge.textContent = `−${Number(estimate.discountPct)}%`;
+      panel2DiscountBadge.textContent = "Volumen";
       panel2DiscountBadge.hidden = false;
     } else {
       panel2DiscountBadge.hidden = true;
@@ -406,7 +406,7 @@ export function updateQuote() {
   }
   if (panel2NextTierHint) {
     if (!estimate.isVip && estimate.nextTierHint && Number(estimate.nextTierHint.nextDiscountPct || 0) > 0) {
-      panel2NextTierHint.textContent = `Si sumás 1 más, mejorás a −${Number(estimate.nextTierHint.nextDiscountPct)}%`;
+      panel2NextTierHint.textContent = "Si sumás 1 más, mejorás el beneficio por volumen";
       panel2NextTierHint.hidden = false;
     } else {
       panel2NextTierHint.hidden = true;

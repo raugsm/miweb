@@ -53,11 +53,11 @@ export function clampQuantityWithFlag(raw) {
 // QUE: estimacion del cliente. Devuelve `base` (precio nominal por unidad,
 // constante — panel 1 siempre lo muestra), `unit` (precio efectivo con tier
 // por volumen / monthly / VIP aplicado, usado en total), `total` (= unit * qty),
-// `discountPct` (% del tier seleccionado, 0 si normal), `isVip` (flag para que
-// el panel 2 oculte badge/label/aviso) y `nextTierHint` (si qty está exactamente
-// en el límite superior de un tier no-tope, sugiere subir 1 más).
-// POR QUE: spec panel-2-solicitud.md v1.1 §8 — descuentos por volumen 0/-3/-5/-8%
-// con badge en card oscura, label descriptivo y aviso "1 más mejora tier".
+// `discountPct` (señal interna del beneficio, 0 si normal), `isVip` (flag para
+// que el panel 2 oculte badge/label/aviso) y `nextTierHint` (si qty está
+// exactamente en el límite superior de un tier no-tope, sugiere subir 1 más).
+// POR QUE: spec panel-2-solicitud.md v1.3 §8 — descuentos por volumen sobre la
+// ganancia objetivo. La UI evita mostrar "-X%" porque no descuenta sobre el total.
 export function estimatePortalPrice(quantity) {
   const qty = Math.max(1, Math.min(50, Number.parseInt(quantity, 10) || 1));
   const service = state.catalog?.services?.[0];
@@ -97,7 +97,7 @@ export function estimatePortalPrice(quantity) {
       .filter((tier) => (qty + 1) >= Number(tier.minQty || 0) && qty < Number(tier.minQty || 0))
       .sort((a, b) => Number(b.minQty) - Number(a.minQty))[0];
     if (nextTier && Number(nextTier.discountPct || 0) > 0) {
-      nextTierHint = { remaining: 1, nextDiscountPct: Number(nextTier.discountPct) };
+      nextTierHint = { remaining: 1, nextDiscountPct: Number(nextTier.discountPct), nextLabel: nextTier.label || "Beneficio por volumen" };
     }
   }
   return {
