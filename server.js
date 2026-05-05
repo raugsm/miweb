@@ -5046,13 +5046,14 @@ async function serveStatic(req, res, pathname) {
       ".html": "text/html; charset=utf-8",
       ".css": "text/css; charset=utf-8",
       ".js": "text/javascript; charset=utf-8",
+      ".mjs": "text/javascript; charset=utf-8",
       ".svg": "image/svg+xml",
       ".png": "image/png",
       ".jpg": "image/jpeg",
     }[ext] || "application/octet-stream";
     const cacheHeader = ext === ".html"
       ? "no-store"
-      : [".js", ".css"].includes(ext)
+      : [".js", ".mjs", ".css"].includes(ext)
         ? "no-cache, must-revalidate"
         : "public, max-age=3600, must-revalidate";
     res.writeHead(200, { "Content-Type": type, "Cache-Control": cacheHeader });

@@ -2578,6 +2578,15 @@ async function cancelFrpJob(jobId, reason, note = "") {
 // muestra imágenes del comprobante + monto, deja aprobar directo o pedir
 // motivo de rechazo (≥10 chars) antes de submitear.
 const frpProofDialog = document.querySelector("#frpProofDialog");
+const frpProofPdfJsUrl = "/vendor/pdfjs/pdf.min.mjs";
+const frpProofPdfWorkerUrl = "/vendor/pdfjs/pdf.worker.min.mjs";
+const frpProofImageBaseWidth = 220;
+const frpProofPdfBaseWidth = 360;
+const frpProofMinZoom = 0.55;
+const frpProofMaxZoom = 3;
+let frpProofPdfJsPromise = null;
+let frpProofZoom = 1;
+let frpProofDrag = null;
 
 function frpProofMessageEl() {
   return frpProofDialog?.querySelector("[data-proof-message]") || null;
@@ -2591,13 +2600,202 @@ function setFrpProofMessage(text, type = "") {
   else delete el.dataset.type;
 }
 
+function frpProofStageEl() {
+  return frpProofDialog?.querySelector("[data-proof-stage]") || null;
+}
+
+function setFrpProofText(selector, text) {
+  const el = frpProofDialog?.querySelector(selector);
+  if (el) el.textContent = text || "-";
+}
+
+function frpProofAmount(order) {
+  if (order?.priceFormatted) return order.priceFormatted;
+  const payment = frpPaymentByCode(order?.paymentMethod);
+  return formatAmountForPayment(order?.totalPrice, payment) || `${Number(order?.totalPrice || 0).toFixed(2)} USDT`;
+}
+
+function frpProofMethod(order) {
+  return order?.paymentLabel || frpPaymentByCode(order?.paymentMethod)?.label || order?.paymentMethod || "-";
+}
+
+function frpProofSource(proof) {
+  return proof?.dataUrl || proof?.url || "";
+}
+
+function frpProofMime(proof, src = frpProofSource(proof)) {
+  if (proof?.type) return proof.type;
+  const match = String(src || "").match(/^data:([^;]+);/i);
+  return match?.[1] || "";
+}
+
+function currentFrpProofs(order) {
+  const proofs = (Array.isArray(order?.paymentProofs) ? order.paymentProofs : [])
+    .filter((proof) => frpProofSource(proof));
+  const pending = proofs.filter((proof) => !proof.reviewStatus || proof.reviewStatus === "PENDIENTE");
+  return (pending.length ? pending : proofs.slice(-1)).slice(-4);
+}
+
+function dataUrlToBytes(dataUrl) {
+  const base64 = String(dataUrl || "").split(",")[1] || "";
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return bytes;
+}
+
+async function loadFrpProofPdfJs() {
+  if (!frpProofPdfJsPromise) {
+    frpProofPdfJsPromise = import(frpProofPdfJsUrl).then((pdfjs) => {
+      pdfjs.GlobalWorkerOptions.workerSrc = frpProofPdfWorkerUrl;
+      return pdfjs;
+    });
+  }
+  return frpProofPdfJsPromise;
+}
+
+function resetFrpProofViewer() {
+  frpProofZoom = 1;
+  frpProofDrag = null;
+  const stage = frpProofStageEl();
+  if (stage) {
+    stage.classList.remove("is-dragging");
+    stage.scrollLeft = 0;
+    stage.scrollTop = 0;
+  }
+}
+
+function setFrpProofFileKind(text) {
+  const el = frpProofDialog?.querySelector("[data-proof-file-kind]");
+  if (el) el.textContent = text || "Comprobante";
+}
+
+function setFrpProofStageMessage(text) {
+  const stage = frpProofStageEl();
+  if (!stage) return;
+  stage.innerHTML = `<div class="frp-proof-stage-empty">${escapeHtml(text)}</div>`;
+}
+
+function applyFrpProofZoom() {
+  const stage = frpProofStageEl();
+  if (!stage) return;
+  stage.querySelectorAll("[data-proof-page]").forEach((page) => {
+    const width = Number(page.dataset.baseWidth || 0);
+    const height = Number(page.dataset.baseHeight || 0);
+    if (width > 0) page.style.width = `${Math.round(width * frpProofZoom)}px`;
+    if (height > 0) page.style.height = `${Math.round(height * frpProofZoom)}px`;
+  });
+}
+
+function updateFrpProofZoom(nextZoom) {
+  const stage = frpProofStageEl();
+  if (!stage) return;
+  const previousWidth = stage.scrollWidth || 1;
+  const previousHeight = stage.scrollHeight || 1;
+  const centerX = (stage.scrollLeft + stage.clientWidth / 2) / previousWidth;
+  const centerY = (stage.scrollTop + stage.clientHeight / 2) / previousHeight;
+  frpProofZoom = Math.min(frpProofMaxZoom, Math.max(frpProofMinZoom, nextZoom));
+  applyFrpProofZoom();
+  requestAnimationFrame(() => {
+    stage.scrollLeft = Math.max(0, centerX * stage.scrollWidth - stage.clientWidth / 2);
+    stage.scrollTop = Math.max(0, centerY * stage.scrollHeight - stage.clientHeight / 2);
+  });
+}
+
+function loadProofImage(src, alt) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.alt = alt;
+    image.decoding = "async";
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("No se pudo cargar la imagen."));
+    image.src = src;
+  });
+}
+
+async function appendImageProof(documentEl, proof, src, index) {
+  const image = await loadProofImage(src, `Comprobante ${index + 1}`);
+  image.className = "frp-proof-page is-image";
+  image.dataset.proofPage = "true";
+  const stageWidth = Math.max(180, (frpProofStageEl()?.clientWidth || 320) - 48);
+  const naturalWidth = image.naturalWidth || frpProofImageBaseWidth;
+  const naturalHeight = image.naturalHeight || Math.round(frpProofImageBaseWidth * 1.7);
+  const baseWidth = Math.min(frpProofImageBaseWidth, stageWidth, naturalWidth);
+  image.dataset.baseWidth = String(baseWidth);
+  image.dataset.baseHeight = String(Math.round((baseWidth * naturalHeight) / naturalWidth));
+  documentEl.append(image);
+}
+
+async function appendPdfProof(documentEl, proof, src) {
+  const pdfjs = await loadFrpProofPdfJs();
+  const loadingTask = src.startsWith("data:")
+    ? pdfjs.getDocument({ data: dataUrlToBytes(src) })
+    : pdfjs.getDocument({ url: src });
+  const pdf = await loadingTask.promise;
+  const stageWidth = Math.max(260, (frpProofStageEl()?.clientWidth || 460) - 48);
+  const baseWidthLimit = Math.min(frpProofPdfBaseWidth, stageWidth);
+  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+    const page = await pdf.getPage(pageNumber);
+    const rawViewport = page.getViewport({ scale: 1 });
+    const scale = baseWidthLimit / rawViewport.width;
+    const viewport = page.getViewport({ scale });
+    const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+    const canvas = document.createElement("canvas");
+    canvas.className = "frp-proof-page is-pdf";
+    canvas.dataset.proofPage = "true";
+    canvas.dataset.baseWidth = String(Math.round(viewport.width));
+    canvas.dataset.baseHeight = String(Math.round(viewport.height));
+    canvas.width = Math.floor(viewport.width * pixelRatio);
+    canvas.height = Math.floor(viewport.height * pixelRatio);
+    await page.render({
+      canvasContext: canvas.getContext("2d"),
+      viewport,
+      transform: pixelRatio === 1 ? undefined : [pixelRatio, 0, 0, pixelRatio, 0, 0],
+    }).promise;
+    documentEl.append(canvas);
+  }
+}
+
+async function renderFrpProofViewer(order) {
+  const stage = frpProofStageEl();
+  if (!stage) return;
+  resetFrpProofViewer();
+  setFrpProofStageMessage("Cargando comprobante...");
+  const proofs = currentFrpProofs(order);
+  if (!proofs.length) {
+    setFrpProofFileKind("Sin comprobante");
+    setFrpProofStageMessage("No hay comprobante adjunto.");
+    return;
+  }
+  const documentEl = document.createElement("div");
+  documentEl.className = "frp-proof-document";
+  stage.replaceChildren(documentEl);
+  let pdfCount = 0;
+  let imageCount = 0;
+  for (const [index, proof] of proofs.entries()) {
+    const src = frpProofSource(proof);
+    const mime = frpProofMime(proof, src);
+    if (mime === "application/pdf") {
+      pdfCount += 1;
+      await appendPdfProof(documentEl, proof, src);
+    } else {
+      imageCount += 1;
+      await appendImageProof(documentEl, proof, src, index);
+    }
+  }
+  setFrpProofFileKind(pdfCount ? "PDF" : imageCount > 1 ? `${imageCount} imagenes` : "Imagen");
+  applyFrpProofZoom();
+}
+
 function openFrpProofDialog(orderId) {
   if (!frpProofDialog) return;
   const order = frpOrders().find((candidate) => candidate.id === orderId);
   if (!order) return;
   frpProofDialog.dataset.orderId = orderId;
-  const meta = frpProofDialog.querySelector("[data-proof-meta]");
-  if (meta) meta.textContent = `${order.code} · ${order.clientName || "-"} · ${order.priceFormatted || `${order.totalPrice} USDT`}`;
+  setFrpProofText("[data-proof-order]", order.code || "-");
+  setFrpProofText("[data-proof-client]", order.clientName || "-");
+  setFrpProofText("[data-proof-amount]", frpProofAmount(order));
+  setFrpProofText("[data-proof-method]", frpProofMethod(order));
   setFrpProofMessage("");
   const reasonRow = frpProofDialog.querySelector(".frp-proof-dialog-reason");
   if (reasonRow) {
@@ -2605,16 +2803,14 @@ function openFrpProofDialog(orderId) {
     const ta = reasonRow.querySelector("textarea");
     if (ta) ta.value = "";
   }
-  const imagesContainer = frpProofDialog.querySelector("[data-proof-images]");
-  if (imagesContainer) {
-    const proofs = Array.isArray(order.paymentProofs) ? order.paymentProofs : [];
-    imagesContainer.innerHTML = proofs.map((p) => {
-      const src = p.dataUrl || p.url || "";
-      return src ? `<img src="${escapeHtml(src)}" alt="Comprobante" />` : "";
-    }).filter(Boolean).join("");
-  }
+  setFrpProofFileKind("Comprobante");
+  setFrpProofStageMessage("Cargando comprobante...");
   if (typeof frpProofDialog.showModal === "function") frpProofDialog.showModal();
   else frpProofDialog.setAttribute("open", "");
+  renderFrpProofViewer(order).catch((error) => {
+    setFrpProofFileKind("Error");
+    setFrpProofStageMessage(error.message || "No se pudo mostrar el comprobante.");
+  });
 }
 
 function closeFrpProofDialog() {
@@ -2666,6 +2862,41 @@ frpProofDialog?.addEventListener("click", (event) => {
     submitFrpProofDecision(action);
   }
 });
+
+frpProofStageEl()?.addEventListener("wheel", (event) => {
+  if (!event.currentTarget.querySelector("[data-proof-page]")) return;
+  event.preventDefault();
+  const direction = event.deltaY < 0 ? 1 : -1;
+  updateFrpProofZoom(frpProofZoom + direction * 0.12);
+}, { passive: false });
+
+frpProofStageEl()?.addEventListener("pointerdown", (event) => {
+  if (event.button !== 0 || !event.currentTarget.querySelector("[data-proof-page]")) return;
+  frpProofDrag = {
+    pointerId: event.pointerId,
+    x: event.clientX,
+    y: event.clientY,
+    scrollLeft: event.currentTarget.scrollLeft,
+    scrollTop: event.currentTarget.scrollTop,
+  };
+  event.currentTarget.setPointerCapture(event.pointerId);
+  event.currentTarget.classList.add("is-dragging");
+});
+
+frpProofStageEl()?.addEventListener("pointermove", (event) => {
+  if (!frpProofDrag || frpProofDrag.pointerId !== event.pointerId) return;
+  event.currentTarget.scrollLeft = frpProofDrag.scrollLeft - (event.clientX - frpProofDrag.x);
+  event.currentTarget.scrollTop = frpProofDrag.scrollTop - (event.clientY - frpProofDrag.y);
+});
+
+["pointerup", "pointercancel", "pointerleave"].forEach((eventName) => {
+  frpProofStageEl()?.addEventListener(eventName, (event) => {
+    if (frpProofDrag?.pointerId === event.pointerId) frpProofDrag = null;
+    event.currentTarget.classList.remove("is-dragging");
+  });
+});
+
+frpProofStageEl()?.addEventListener("dblclick", () => updateFrpProofZoom(1));
 
 async function requestFrpReview(jobId) {
   const job = frpJobs().find((candidate) => candidate.id === jobId);

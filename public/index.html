@@ -222,21 +222,47 @@
 
             <dialog id="frpProofDialog" class="frp-proof-dialog">
               <form method="dialog" class="frp-proof-dialog-form">
-                <header>
-                  <h3>Comprobante de pago</h3>
-                  <span class="frp-proof-dialog-meta" data-proof-meta></span>
-                </header>
-                <p class="frp-proof-dialog-message" data-proof-message aria-live="polite"></p>
-                <div class="frp-proof-dialog-images" data-proof-images></div>
-                <label class="frp-proof-dialog-reason" hidden>
-                  Motivo del rechazo (≥10 caracteres)
-                  <textarea name="reason" minlength="10" maxlength="200" rows="3" placeholder="Ej: comprobante ilegible, monto distinto al esperado"></textarea>
-                </label>
-                <div class="dialog-actions">
-                  <button type="button" class="secondary-btn" data-proof-action="cancel">Cerrar</button>
-                  <button type="button" class="secondary-btn danger-mini" data-proof-action="reject">Rechazar</button>
-                  <button type="button" class="primary-btn" data-proof-action="approve">Aprobar</button>
-                </div>
+                <aside class="frp-proof-dialog-summary">
+                  <header>
+                    <span class="section-kicker">Revision de pago</span>
+                    <h3 data-proof-title>Validar pago</h3>
+                  </header>
+                  <div class="frp-proof-dialog-facts">
+                    <div>
+                      <span>Orden</span>
+                      <strong data-proof-order>-</strong>
+                    </div>
+                    <div>
+                      <span>Cliente</span>
+                      <strong data-proof-client>-</strong>
+                    </div>
+                    <div>
+                      <span>Monto</span>
+                      <strong data-proof-amount>-</strong>
+                    </div>
+                    <div>
+                      <span>Metodo</span>
+                      <strong data-proof-method>-</strong>
+                    </div>
+                  </div>
+                  <p class="frp-proof-dialog-message" data-proof-message aria-live="polite"></p>
+                  <label class="frp-proof-dialog-reason" hidden>
+                    Motivo si no coincide o no se lee
+                    <textarea name="reason" minlength="10" maxlength="200" rows="3" placeholder="Ej: monto distinto o comprobante ilegible"></textarea>
+                  </label>
+                  <div class="dialog-actions">
+                    <button type="button" class="secondary-btn" data-proof-action="cancel">Cerrar</button>
+                    <button type="button" class="secondary-btn danger-mini" data-proof-action="reject">Rechazar</button>
+                    <button type="button" class="primary-btn" data-proof-action="approve">Aprobar</button>
+                  </div>
+                </aside>
+                <section class="frp-proof-viewer" aria-label="Visor de comprobante">
+                  <div class="frp-proof-viewer-topline">
+                    <span data-proof-file-kind>Comprobante</span>
+                    <span>Rueda para zoom - arrastra para mover</span>
+                  </div>
+                  <div class="frp-proof-stage" data-proof-stage></div>
+                </section>
               </form>
             </dialog>
 
