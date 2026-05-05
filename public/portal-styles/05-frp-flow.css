@@ -148,26 +148,6 @@
   line-height: 1.4;
 }
 
-/* Etiqueta descriptiva del tier debajo de la card oscura "TOTAL".
-   "Precio normal" / "Beneficio por X-Y equipos". VIP la oculta. */
-.panel-2-discount-label {
-  font-size: 11px;
-  color: var(--color-text-secondary);
-  font-weight: 500;
-  margin: 6px 0 0;
-  text-align: right;
-}
-
-/* Aviso "Si sumás 1 más, mejorás el beneficio por volumen" debajo del stepper.
-   Sólo visible cuando qty=1, 3 o 6 (límites superiores de tier no-tope). */
-.panel-2-next-tier-hint {
-  font-size: 12px;
-  color: #1d4ed8;
-  font-weight: 500;
-  margin: 6px 0 0;
-  line-height: 1.3;
-}
-
 /* Cajón amarillo INTERNO de la card oscura. Se usa en panel 1 (cambio de tasa,
    USDT pausado) y panel 2 (modelo no soportado, no reconocido, cantidad >10).
    Aparece arriba del label/monto y desaparece automáticamente con timer del

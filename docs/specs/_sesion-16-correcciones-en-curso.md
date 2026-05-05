@@ -936,6 +936,48 @@ data: {
 
 ---
 
+### S16-FIX-023 - Limpieza de textos auxiliares del Panel 2
+
+**Problema confirmado por Bryam:** en el Panel 2 quedaban dos textos que cargaban visualmente la card: el aviso azul debajo del stepper ("Si sumas 1 mas...") y la etiqueta inferior de la card oscura ("Precio normal" / "Beneficio por X-Y equipos").
+
+**Hechos verificados antes de tocar codigo:**
+
+- `public/portal.html` contenia los nodos `#panel2NextTierHint` y `#panel2DiscountLabel`.
+- `public/portal-modules/payments.js` los actualizaba desde `estimate.nextTierHint` y `estimate.label`.
+- `public/portal-styles/05-frp-flow.css` tenia reglas dedicadas para ambos.
+- `public/portal-modules/frp.js` calculaba `nextTierHint` solo para ese aviso azul.
+- El calculo de precio real vive en `estimate.unit`, `estimate.total`, `state.catalog.quantityTiers` y backend; no dependia de esos dos textos.
+
+**Decision aprobada por Bryam:**
+
+- Quitar ambos textos del Panel 2.
+- Mantener intacto el calculo de precios, Panel 3 y backend.
+- Mantener el badge "Volumen" cuando haya beneficio real, porque ese si marca visualmente que el total tiene precio por volumen.
+
+**Riesgos revisados:**
+
+- Si se quitaba solo HTML, quedaba JS/CSS muerto.
+- Si se quitaba el `label` de backend, se podia afectar recibos/seguimiento. No se toca.
+- Si se quitaba el badge "Volumen", el cliente no tendria señal minima de que el total cambio por volumen.
+
+**Resultado implementado:**
+
+- `public/portal.html`: removidos `#panel2NextTierHint` y `#panel2DiscountLabel`.
+- `public/portal-modules/payments.js`: removido render de ambos textos.
+- `public/portal-modules/frp.js`: removido calculo frontend de `nextTierHint`.
+- `public/portal-styles/05-frp-flow.css`: removidas reglas CSS de ambos textos.
+- `docs/specs/cliente/panel-2-solicitud.md`: spec sube a v1.4.
+
+**Validacion:**
+
+- `node --check public/portal-modules/frp.js` paso.
+- `node --check public/portal-modules/payments.js` paso.
+- `rg` no encontro rastros activos en `public` de `panel2NextTierHint`, `panel2DiscountLabel`, `panel-2-next-tier-hint`, `panel-2-discount-label`, `nextTierHint` ni el texto "Si sumas".
+- `npm.cmd test` paso completo: 12 pruebas, 0 fallos.
+- `git diff --check` paso sin errores; solo avisos normales LF/CRLF de Windows.
+
+---
+
 ## Checklist de esta fase
 
 - [x] Revisar ruta correcta del repo.

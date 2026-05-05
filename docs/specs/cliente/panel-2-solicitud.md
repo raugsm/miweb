@@ -1,6 +1,6 @@
 # Panel 2 — Solicitud
 
-**Versión:** 1.3 · **Fecha:** 5 de mayo 2026 · **Estado:** spec formal con las 9 piezas. v1.3 cambia los beneficios por volumen para descontar solo sobre la ganancia objetivo y proteger el piso público `costo interno + 0.60 USDT`.
+**Versión:** 1.4 · **Fecha:** 5 de mayo 2026 · **Estado:** spec formal con las 9 piezas. v1.4 simplifica la UI del panel 2: se eliminan el aviso azul de siguiente beneficio y la etiqueta inferior "Precio normal/Beneficio por X-Y equipos".
 
 **Reemplaza a:** no había spec previa. Hereda algunas decisiones tipográficas del HANDOFF línea 580 ("paso 2: stepper -/n/+ con label 'Equipos a desbloquear', total en card oscura, insignia verde 98%, validación modelo opcional").
 
@@ -398,16 +398,12 @@ El frontend mantiene el cap de 10 equipos por orden (decisión D3 de sesión 15)
 ### Visualización en pantalla (panel 2)
 
 **Card oscura "TOTAL":**
-- Para cantidad = 1: SIN badge de descuento. Etiqueta debajo de la card dice "Precio normal".
-- Para cantidad ≥ 2 con beneficio real: badge verde "Volumen" en la esquina superior derecha de la card oscura. Etiqueta debajo dice "Beneficio por X-Y equipos".
+- Para cantidad = 1: SIN badge de descuento y sin etiqueta inferior.
+- Para cantidad ≥ 2 con beneficio real: badge verde "Volumen" en la esquina superior derecha de la card oscura. Sin etiqueta inferior.
 - El portal NO muestra "-X%" al cliente porque el porcentaje se aplica sobre ganancia, no sobre el total.
 - El monto del breakdown ("X equipos × S/ N") usa el precio CON descuento, no el normal.
 
-**Aviso de "1 más mejora tier" (debajo del stepper):**
-- Cuando el cliente está exactamente en el límite superior de un tier (cantidad = 1, 3 o 6), aparece debajo del stepper un texto azul:
-  - "Si sumás 1 más, mejorás el beneficio por volumen"
-- Cantidad 7 a 10 → sin aviso (ya están en el mejor tier).
-- El aviso desaparece automáticamente cuando el cliente cambia la cantidad.
+**Aviso de siguiente tier:** eliminado en v1.4. El panel 2 no muestra texto azul debajo del stepper.
 
 ### Cliente VIP
 
@@ -445,6 +441,7 @@ El catálogo backend (`server/config/catalog.js#frpEligibilityCatalog`) hoy NO i
 
 ## Changelog
 
+- **panel-2-solicitud.md v1.4** (2026-05-05, sesión 16) — Simplifica UI: elimina el aviso azul debajo del stepper ("Si sumás 1 más...") y elimina la etiqueta inferior de la card oscura ("Precio normal" / "Beneficio por X-Y equipos"). Se conserva el cálculo y el badge "Volumen" cuando hay beneficio real.
 - **panel-2-solicitud.md v1.3** (2026-05-05, sesión 16) — Cambia beneficios por volumen: 2-3 descuenta 15% de la ganancia objetivo, 4-6 descuenta 25%, 7-10 descuenta 40%. El precio público nunca baja de `costo interno + 0.60 USDT`. El portal deja de mostrar "-X%" y muestra "Volumen" + "Beneficio por X-Y equipos" para evitar confundir porcentaje sobre ganancia con descuento sobre total.
 - **panel-2-solicitud.md v1.2** (2026-05-05, sesión 16) — Corrige contrato de pricing dinámico: cantidad 1 = `pricing.unitPrice`; se elimina el margen oculto 1.50 USDT como precio normal. Los descuentos de volumen ahora se calculan desde el precio normal dinámico: 2-3 resta 0.15 USDT, 4-6 resta 0.25 USDT, 7-10 resta 0.40 USDT, con piso de costo interno para evitar venta por debajo del proveedor.
 - **panel-2-solicitud.md v1.1** (2026-05-04, sesión 15) — Agrega §8 "Descuentos por volumen". Tiers: 1 equipo "Precio normal" (0%, margen 1.50 USDT) / 2-3 equipos −3% (margen 1.35) / 4-6 equipos −5% (margen 1.25) / 7-10 equipos −8% (margen 1.10). Regla de protección: el descuento nunca deja al operador por debajo de costo + 1 USDT. Visualización: badge verde con % en la esquina superior derecha de la card oscura "TOTAL" + etiqueta descriptiva debajo. Aviso "1 más mejora tier" debajo del stepper en cantidades 1, 3 y 6. Cliente VIP: pricing aparte, fuera de scope. Renumeración: la sección "Open questions" pasa de §8 a §9; cross-ref interno actualizado.

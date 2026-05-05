@@ -53,9 +53,8 @@ export function clampQuantityWithFlag(raw) {
 // QUE: estimacion del cliente. Devuelve `base` (precio nominal por unidad,
 // constante — panel 1 siempre lo muestra), `unit` (precio efectivo con tier
 // por volumen / monthly / VIP aplicado, usado en total), `total` (= unit * qty),
-// `discountPct` (señal interna del beneficio, 0 si normal), `isVip` (flag para
-// que el panel 2 oculte badge/label/aviso) y `nextTierHint` (si qty está
-// exactamente en el límite superior de un tier no-tope, sugiere subir 1 más).
+// `discountPct` (señal interna del beneficio, 0 si normal) e `isVip` (flag para
+// que el panel 2 oculte el badge de volumen).
 // POR QUE: spec panel-2-solicitud.md v1.3 §8 — descuentos por volumen sobre la
 // ganancia objetivo. La UI evita mostrar "-X%" porque no descuenta sobre el total.
 export function estimatePortalPrice(quantity) {
@@ -68,7 +67,7 @@ export function estimatePortalPrice(quantity) {
   const isVip = String(state.customer?.client?.status || "").toUpperCase() === "VIP"
     || Number(benefit?.vipEffectiveUnitPrice || 0) > 0;
   if (!benefit?.usableNow) {
-    return { unit: base, base, total: base * qty, label: "Precio base. Beneficios bloqueados para este dispositivo.", discountPct: 0, isVip, nextTierHint: null };
+    return { unit: base, base, total: base * qty, label: "Precio base. Beneficios bloqueados para este dispositivo.", discountPct: 0, isVip };
   }
   const tiers = state.catalog?.quantityTiers || [];
   // Sub-commit 15a.5: VIP saltea volume tiers — sólo VIP price aplica.
@@ -88,18 +87,6 @@ export function estimatePortalPrice(quantity) {
   const selected = [quantityTier, monthlyTier, vipTier]
     .filter(Boolean)
     .sort((a, b) => Number(a.unitPrice) - Number(b.unitPrice))[0] || { unitPrice: base, label: "Precio normal", discountPct: 0 };
-  // Aviso "1 más mejora tier": qty está en el límite superior de su tier (1, 3, 6).
-  // Sólo aplica si NO es VIP. Mira el catálogo para encontrar el tier siguiente
-  // (mayor minQty que aplica a qty+1).
-  let nextTierHint = null;
-  if (!isVip && tiers.length) {
-    const nextTier = tiers
-      .filter((tier) => (qty + 1) >= Number(tier.minQty || 0) && qty < Number(tier.minQty || 0))
-      .sort((a, b) => Number(b.minQty) - Number(a.minQty))[0];
-    if (nextTier && Number(nextTier.discountPct || 0) > 0) {
-      nextTierHint = { remaining: 1, nextDiscountPct: Number(nextTier.discountPct), nextLabel: nextTier.label || "Beneficio por volumen" };
-    }
-  }
   return {
     unit: Number(selected.unitPrice || base),
     base,
@@ -107,7 +94,6 @@ export function estimatePortalPrice(quantity) {
     label: selected.label || "Precio normal",
     discountPct: Number(selected.discountPct || 0),
     isVip,
-    nextTierHint,
   };
 }
 
