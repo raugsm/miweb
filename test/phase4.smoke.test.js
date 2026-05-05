@@ -79,6 +79,36 @@ async function runSmoke({ baseUrl, dataDir, setupToken }) {
   assert.equal(response.data.order.paymentProofs.length, 1, "Reemplazar comprobante no debe acumular archivos");
   assert.equal(response.data.order.paymentProofs[0].name, "portal-proof-replacement.png");
 
+  response = await http.request("POST", "/api/portal/orders/frp", {
+    quantity: 1,
+    paymentMethod: "PE_YAPE_BRYAMS",
+    items: [
+      { model: "Redmi Note 11", raw: "Redmi Note 11", imei: "123456789012349" },
+    ],
+    note: "phase 4 stale no-proof draft",
+  });
+  assert.equal(response.status, 201);
+  const staleDraftOrder = response.data.order;
+  assert.equal(staleDraftOrder.publicStatus, "ESPERANDO_PAGO");
+  assert.equal(staleDraftOrder.paymentProofs.length, 0);
+
+  response = await http.request("POST", "/api/portal/orders/frp", {
+    quantity: 1,
+    paymentMethod: "PE_YAPE_BRYAMS",
+    items: [
+      { model: "Redmi Note 10", raw: "Redmi Note 10", imei: "123456789012350" },
+    ],
+    paymentProofs: [proofImage("proofed-current-price.png", onePixelPng.replace("iVBOR", "mVBOR"))],
+    note: "phase 4 proof creates fresh priced order",
+  });
+  assert.equal(response.status, 201);
+  assert.equal(response.data.order.publicStatus, "PAGO_EN_REVISION");
+  assert.equal(response.data.order.paymentProofs.length, 1);
+
+  response = await http.request("GET", `/api/portal/orders/${encodeURIComponent(staleDraftOrder.id)}`);
+  assert.equal(response.status, 200);
+  assert.equal(response.data.order.publicStatus, "CANCELADO", "subir comprobante nuevo debe retirar borradores sin comprobante");
+
   // notify-connected debe rechazarse en PAGO_EN_REVISION (aun sin pago validado).
   response = await http.request("POST", `/api/portal/orders/${encodeURIComponent(portalOrder.id)}/notify-connected`);
   assert.equal(response.status, 409, "notify-connected debe bloquearse antes de pago validado");

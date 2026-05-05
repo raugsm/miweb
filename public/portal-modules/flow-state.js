@@ -16,12 +16,10 @@ import { state } from "./state.js";
 //   rejected            PAGO_RECHAZADO en alguna orden — debe subir nuevo comprobante.
 //   awaiting_connection EN_PREPARACION + sin customerConnectedAt — debe presionar "Equipo conectado".
 //   in_review           PAGO_EN_REVISION — esperar revision del operador.
-//   awaiting_proof      ESPERANDO_PAGO sin proofs (legacy/edge — apenas ocurre).
 //   connected           LISTO_PARA_CONEXION/EN_PROCESO/REQUIERE_ATENCION — ya conectado, en pipeline.
 //   draft               Sin ordenes activas.
 
 const ACTIVE_STATES = new Set([
-  "ESPERANDO_PAGO",
   "PAGO_EN_REVISION",
   "PAGO_RECHAZADO",
   "EN_PREPARACION",
@@ -41,11 +39,6 @@ export function deriveFlowState(customer) {
   if (awaitingConn) return "awaiting_connection";
 
   if (orders.some((order) => order.publicStatus === "PAGO_EN_REVISION")) return "in_review";
-
-  const awaitingProof = orders.some((order) => (
-    order.publicStatus === "ESPERANDO_PAGO" && !(order.paymentProofs || []).length
-  ));
-  if (awaitingProof) return "awaiting_proof";
 
   if (orders.some((order) => ACTIVE_STATES.has(order.publicStatus))) return "connected";
 

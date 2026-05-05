@@ -100,6 +100,72 @@ export function createPortalRoutes({
     }
   }
 
+  function retireDraftPaymentOrders(db, clientId, replacementOrderId, actorId) {
+    const timestamp = nowIso();
+    const retired = [];
+    for (const order of db.customerOrders || []) {
+      if (order.clientId !== clientId) continue;
+      if (order.id === replacementOrderId) continue;
+      if (order.publicStatus !== "ESPERANDO_PAGO") continue;
+      if ((order.paymentProofs || []).length) continue;
+      if (Number(order.priceLocked || 0) > 0) continue;
+
+      order.publicStatus = "CANCELADO";
+      order.cancellationReason = "SUPERSEDED_BY_PROOF_UPLOAD";
+      order.canceledAt = timestamp;
+      order.updatedAt = timestamp;
+
+      const request = (db.customerRequests || []).find((candidate) => candidate.id === order.requestId);
+      if (request) {
+        request.status = "CANCELADO";
+        request.updatedAt = timestamp;
+      }
+
+      const frpOrder = (db.frpOrders || []).find((candidate) => (
+        candidate.id === order.frpOrderId || candidate.portalOrderId === order.id
+      ));
+      if (frpOrder && frpOrder.orderStatus !== "FINALIZADO") {
+        frpOrder.orderStatus = "CANCELADA";
+        frpOrder.cancellationReason = "SUPERSEDED_BY_PROOF_UPLOAD";
+        frpOrder.canceledAt = timestamp;
+        frpOrder.updatedAt = timestamp;
+      }
+
+      const items = (db.customerOrderItems || []).filter((candidate) => candidate.orderId === order.id);
+      for (const item of items) {
+        if (item.status === "FINALIZADO") continue;
+        item.status = "CANCELADO";
+        item.cancelReason = "superseded_by_proof_upload";
+        item.canceledAt = timestamp;
+        item.updatedAt = timestamp;
+      }
+
+      const jobs = frpOrder
+        ? (db.frpJobs || []).filter((candidate) => candidate.orderId === frpOrder.id)
+        : [];
+      for (const job of jobs) {
+        if (job.status === "FINALIZADO") continue;
+        job.status = "CANCELADO";
+        job.technicianId = "";
+        job.takenAt = "";
+        job.cancelReason = "superseded_by_proof_upload";
+        job.canceledAt = timestamp;
+        job.updatedAt = timestamp;
+      }
+
+      retired.push(order);
+    }
+
+    if (retired.length) {
+      audit(db, actorId || null, "PORTAL_DRAFT_PAYMENT_ORDERS_RETIRED", clientId, {
+        replacementOrderId,
+        count: retired.length,
+        codes: retired.map((order) => order.code),
+      });
+    }
+    return retired.length;
+  }
+
   return async function handlePortalApi(req, res, pathname) {
   if (req.method === "GET" && pathname === "/api/portal/catalog") {
     const db = await readDb();
@@ -705,6 +771,9 @@ export function createPortalRoutes({
     db.customerRequests.unshift(request);
     db.customerOrders.unshift(order);
     db.customerOrderItems.unshift(...items);
+    const retiredDraftPaymentOrders = inputProofs.length
+      ? retireDraftPaymentOrders(db, context.client.id, order.id, context.user.id)
+      : 0;
     if (requestedPaymentCode && requestedPaymentCode !== payment.code) {
       audit(db, context.user.id, "PORTAL_PAYMENT_METHOD_ALIGNED", order.id, {
         code: order.code,
@@ -725,6 +794,7 @@ export function createPortalRoutes({
       postpayRequested,
       postpayStatus: order.postpayStatus,
       compatibilityReviewRequired,
+      retiredDraftPaymentOrders,
     });
     if (compatibilityReviewRequired) {
       audit(db, context.user.id, "PORTAL_FRP_ELIGIBILITY_REVIEW_CREATED", order.id, {

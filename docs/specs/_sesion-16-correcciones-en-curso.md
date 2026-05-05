@@ -748,6 +748,49 @@ data: {
 - `git diff --check` paso sin errores; solo avisos normales LF/CRLF de Windows.
 - `npm.cmd test` paso completo: 12 pruebas, 0 fallos.
 
+### S16-FIX-019 - Orden sin comprobante no congela Panel 2/3
+
+**Problema confirmado por Bryam:** despues de cambiar el precio FRP online, Panel 1 si actualizaba el precio vivo, pero Panel 2 y Panel 3 quedaban con el precio anterior hasta que el cliente cambiara estado o recargara.
+
+**Hechos verificados antes de tocar codigo:**
+
+- `public/portal-modules/frp.js` calcula Panel 1 desde el catalogo vivo (`baseUnitPrice`, tiers y beneficios).
+- `public/portal-modules/payments.js` calcula Panel 2/3 desde `activePaymentContext()`.
+- `activePaymentContext()` usa `targetOrder.totalPrice` cuando `paymentUploadTargetOrder()` encuentra una orden pendiente de comprobante.
+- `paymentUploadTargetOrder()` dependia de `orderNeedsPaymentProof(order)`.
+- Antes de esta correccion, una orden `ESPERANDO_PAGO` sin comprobante calificaba como pendiente de pago y heredaba su `totalPrice` viejo.
+- El backend guarda `totalPrice` al crear la orden. Eso es correcto para una orden real, pero no debe congelar una orden que todavia no tiene comprobante.
+
+**Decision aprobada por Bryam (opcion 3):**
+
+- Una orden `ESPERANDO_PAGO` sin comprobante se trata como borrador, no como orden activa para Panel 2/3.
+- Mientras no exista comprobante, Panel 2 y Panel 3 deben usar la cotizacion viva del catalogo.
+- Al subir un comprobante nuevo se crea una orden nueva con el precio vigente en ese momento.
+- Si existian borradores viejos sin comprobante del mismo cliente, se retiran para no dejar basura operativa en el panel.
+
+**Riesgos revisados:**
+
+- No se tocan ordenes con comprobante.
+- No se tocan ordenes rechazadas; siguen pudiendo recibir reemplazo de comprobante.
+- No se tocan ordenes aprobadas, en preparacion, listas, en proceso, finalizadas ni canceladas reales.
+- El cambio puede cancelar borradores `ESPERANDO_PAGO` sin comprobante cuando el cliente sube un comprobante real. Esto es intencional porque esos borradores no representan pago ni trabajo validado.
+
+**Resultado implementado:**
+
+- `public/portal-modules/order-state.js`: `orderNeedsPaymentProof()` ya no considera `ESPERANDO_PAGO` sin comprobante como orden objetivo; solo mantiene `PAGO_RECHAZADO` como reemplazable.
+- `public/portal-modules/flow-state.js`: `ESPERANDO_PAGO` sin comprobante sale de los estados activos del flujo cliente.
+- `server/portal/portal-routes.js`: al crear una orden con comprobante, se retiran borradores anteriores sin comprobante del mismo cliente y sus registros tecnicos vinculados quedan cancelados.
+- `test/phase4.smoke.test.js`: se agrego prueba que crea un borrador sin comprobante, luego crea una orden con comprobante y verifica que el borrador viejo queda cancelado.
+
+**Validacion:**
+
+- `node --check public/portal-modules/order-state.js` paso.
+- `node --check public/portal-modules/flow-state.js` paso.
+- `node --check server/portal/portal-routes.js` paso.
+- `node --check test/phase4.smoke.test.js` paso.
+- `git diff --check` paso sin errores; solo avisos normales LF/CRLF de Windows.
+- `npm.cmd test` paso completo: 12 pruebas, 0 fallos.
+
 ---
 
 ## Checklist de esta fase
@@ -786,6 +829,7 @@ data: {
 - [x] Mover avisos de comprobante al Panel 3 y quitar hueco de `#orderMessage` vacio.
 - [x] Documentar decision de arquitectura para precio FRP en vivo como evento de catalogo.
 - [x] Implementar `portal_catalog_changed` para refrescar precio FRP en vivo sin recargar la pagina completa.
+- [x] Corregir Panel 2/3 para no heredar precio viejo de orden sin comprobante.
 - [x] Aprobar y aplicar correccion tecnica de pills sin romper orden 3+2 en ancho grande.
 - [x] Corregir efecto lateral donde `Chile` dejaba hueco en panel estrecho.
 - [x] Validar con Bryam el ancho exacto donde aparecia el hueco de pills.

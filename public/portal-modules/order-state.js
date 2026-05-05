@@ -1,14 +1,10 @@
 import { state } from "./state.js";
 import { money } from "./format.js";
 
-export function orderHasPaymentProof(order) {
-  return (order?.paymentProofs || []).length > 0;
-}
-
 export function orderNeedsPaymentProof(order) {
   if (!order || order.publicStatus === "REVISION_COMPATIBILIDAD") return false;
   if (order.publicStatus === "PAGO_RECHAZADO") return true;
-  return order.publicStatus === "ESPERANDO_PAGO" && !orderHasPaymentProof(order);
+  return false;
 }
 
 export function statusLabel(code) {
