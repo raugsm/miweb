@@ -1,8 +1,8 @@
 import { startAdminConfigStream } from "./portal-modules/admin-config-stream.js?v=s16-fix008";
 import { renderCustomer } from "./portal-modules/auth-forms.js?v=s16-fix007";
-import { applyEmailVerification, applyQueryTracking } from "./portal-modules/deep-links.js?v=s16-fix007";
+import { applyEmailVerification } from "./portal-modules/deep-links.js?v=s16-fix009";
 import { setMessage, $ } from "./portal-modules/dom.js?v=s16-fix007";
-import { wireEvents } from "./portal-modules/events.js?v=s16-fix007";
+import { wireEvents } from "./portal-modules/events.js?v=s16-fix009";
 import { configureOrderRenderer } from "./portal-modules/orders.js?v=s16-fix007";
 import { loadSession } from "./portal-modules/session.js?v=s16-fix007";
 
@@ -32,5 +32,4 @@ loadSession()
     startAdminConfigStream();
   })
   .then(applyEmailVerification)
-  .then(applyQueryTracking)
   .catch((error) => setMessage($("#authMessage"), error.message, "error"));

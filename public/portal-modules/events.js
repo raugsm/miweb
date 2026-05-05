@@ -23,7 +23,6 @@ import {
   updateQuote,
 } from "./payments.js";
 import { filesToProofs, hasDraggedFiles, uploadPaymentProofFromFlow, wireGlobalFileDropGuard } from "./proofs.js";
-import { renderTrackedOrder } from "./deep-links.js";
 import { hidePanelNotice, showPanelNotice } from "./panel-notices.js";
 import {
   flashCopyFeedback,
@@ -153,21 +152,6 @@ export function wireEvents() {
     event.currentTarget.setCustomValidity(result.ok || !event.currentTarget.value.trim() ? "" : result.error);
   });
   $("#registerForm input[name='whatsapp']").addEventListener("input", updatePhoneCountryFromInput);
-  $("#showTrackLink").addEventListener("click", () => setTab("track"));
-  $("#backToLoginLink").addEventListener("click", () => setTab("login"));
-
-  $("#trackForm").addEventListener("submit", async (event) => {
-    event.preventDefault();
-    setMessage($("#authMessage"), "");
-    try {
-      const data = Object.fromEntries(new FormData(event.currentTarget));
-      const payload = await api(`/api/portal/orders/${encodeURIComponent(data.code)}?accessCode=${encodeURIComponent(data.accessCode)}`);
-      renderTrackedOrder(payload.order);
-    } catch (error) {
-      setMessage($("#authMessage"), error.message, "error");
-    }
-  });
-
   // QUE: el form ya no tiene boton submit (FINAL §15). Bloqueamos submits implicitos
   // por Enter para evitar reload accidental de la pagina si el cliente aprieta Enter
   // dentro de un input.

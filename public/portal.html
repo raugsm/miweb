@@ -24,7 +24,6 @@
         <p class="lead">Registra tus equipos, sube comprobante y revisa el avance sin depender de mensajes sueltos.</p>
         <div class="service-strip">
           <span>WhatsApp 3</span>
-          <span>Multi-equipo</span>
           <span>Descuentos verificados</span>
         </div>
       </section>
@@ -54,7 +53,6 @@
             </span>
           </label>
           <button type="submit">Entrar</button>
-          <button id="showTrackLink" class="text-link" type="button">Consultar pedido con codigo</button>
         </form>
 
         <form id="registerForm" class="auth-form">
@@ -81,17 +79,6 @@
           <label>Pais <select name="country" id="countrySelect" required></select></label>
           <div class="turnstile-box" data-turnstile-widget="register"></div>
           <button type="submit">Crear cuenta cliente</button>
-        </form>
-
-        <form id="trackForm" class="auth-form">
-          <div class="form-title">
-            <strong>Consultar pedido con codigo</strong>
-            <span>Usa esta opcion si recibiste un enlace o codigo por WhatsApp.</span>
-          </div>
-          <label>Codigo de orden <input name="code" autocomplete="off" placeholder="CLI-20260429-001" required /></label>
-          <label>Codigo de seguimiento <input name="accessCode" autocomplete="off" required /></label>
-          <button type="submit">Consultar estado</button>
-          <button id="backToLoginLink" class="text-link" type="button">Volver al ingreso</button>
         </form>
 
         <p id="authMessage" class="message" aria-live="polite"></p>
@@ -403,6 +390,6 @@
       </article>
     </template>
 
-    <script src="/portal.js?v=s16-fix008" type="module"></script>
+    <script src="/portal.js?v=s16-fix009" type="module"></script>
   </body>
 </html>

@@ -838,18 +838,16 @@ export function createPortalRoutes({
     const context = await getCurrentCustomerContext(req);
     const db = context.db;
     const codeOrId = cleanText(decodeURIComponent(portalOrderMatch[1]), 80);
-    const accessCode = cleanText(new URL(req.url || "/", `http://${req.headers.host || "localhost"}`).searchParams.get("accessCode") || "", 80);
     const order = db.customerOrders.find((candidate) => candidate.id === codeOrId || candidate.code === codeOrId);
     if (!order) return sendJson(res, 404, { error: "Orden no encontrada." });
     const ownsOrder = context.user && context.client && order.clientId === context.client.id;
-    const hasAccessCode = accessCode && order.accessCode === accessCode;
-    if (!ownsOrder && !hasAccessCode) {
+    if (!ownsOrder) {
       audit(db, context.user?.id || null, "PORTAL_ORDER_LOOKUP_BLOCKED", order.id, {
         code: order.code,
         ipHash: hashToken(clientIp(req)),
       });
       await writeDb(db);
-      return sendJson(res, 403, { error: "Codigo de seguimiento invalido." });
+      return sendJson(res, 403, { error: "Inicia sesion para consultar esta orden." });
     }
     if (context.deviceToken) {
       res.setHeader("Set-Cookie", cookieHeader(customerDeviceCookieName, context.deviceToken, customerDeviceMaxAgeSeconds));

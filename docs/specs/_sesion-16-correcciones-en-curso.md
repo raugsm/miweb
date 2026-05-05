@@ -839,6 +839,48 @@ data: {
 - `rg "marginUsdt: 1.5|targetMarginUsdt: 1.5" server public test` no encontro restos activos en codigo runtime/test.
 - `git diff --check` paso sin errores; solo avisos normales LF/CRLF de Windows.
 
+### S16-FIX-021 - Retiro de consulta publica por codigo en login cliente
+
+**Problema confirmado por Bryam:** en la pantalla de acceso cliente quedaban dos elementos que podian confundir: el pill "Multi-equipo" y el boton "Consultar pedido con codigo".
+
+**Hechos verificados antes de tocar codigo:**
+
+- "Multi-equipo" era solo texto visual en `public/portal.html`.
+- "Consultar pedido con codigo" tenia UI, formulario, handlers JS y deep-link `?orden=&codigo=`.
+- El endpoint `GET /api/portal/orders/:id?accessCode=...` permitia consulta publica si el `accessCode` coincidia.
+- El endpoint tambien se usa para consulta autenticada del cliente dueño de la orden.
+- El accessCode del recibo PDF queda fuera de este cambio porque vive en "Recibo de operacion", no en el login.
+
+**Decision aprobada por Bryam:**
+
+- Quitar de raiz el acceso de login para consultar pedido por codigo.
+- El cliente debe ver sus ordenes entrando a su cuenta.
+- Mantener la ruta de orden solo para el cliente logueado dueño de la orden.
+
+**Riesgos revisados:**
+
+- Borrar solo el boton dejaba una funcion oculta por URL.
+- Borrar el endpoint completo rompia consultas internas de orden para clientes logueados.
+- Borrar accessCode de recibos podia afectar "Recibo de operacion"; se deja para decision separada si se quiere cerrar recibos publicos.
+
+**Resultado implementado:**
+
+- `public/portal.html`: removido pill "Multi-equipo", boton "Consultar pedido con codigo" y formulario `trackForm`.
+- `public/portal.js`: removido `applyQueryTracking()` y actualizado cache-busting a `s16-fix009`.
+- `public/portal-modules/events.js`: removidos handlers de `showTrackLink`, `backToLoginLink` y submit de `trackForm`.
+- `public/portal-modules/deep-links.js`: removida logica de consulta por `?orden=&codigo=`, queda solo verificacion de correo.
+- `server/portal/portal-routes.js`: `GET /api/portal/orders/:id` ya no acepta `accessCode` para consulta publica; exige que la orden pertenezca al cliente logueado.
+
+**Validacion:**
+
+- `node --check public/portal.js` paso.
+- `node --check public/portal-modules/events.js` paso.
+- `node --check public/portal-modules/deep-links.js` paso.
+- `node --check server/portal/portal-routes.js` paso.
+- `rg` no encontro rastros activos de `Multi-equipo`, `Consultar pedido con codigo`, `trackForm`, `showTrackLink`, `applyQueryTracking` ni `renderTrackedOrder` en `public`, `server` o `test`.
+- `npm.cmd test` paso completo: 12 pruebas, 0 fallos.
+- `git diff --check` paso sin errores; solo avisos normales LF/CRLF de Windows.
+
 ---
 
 ## Checklist de esta fase
