@@ -191,7 +191,7 @@ function defaultServicePricingRule(service) {
     updatedBy: "",
   };
   if (service.code === "XIA-FRP-GOOGLE") {
-    return { ...baseRule, pricingMode: "USDT_BASE", marginUsdt: 1.5, manualAdjustmentAllowed: false };
+    return { ...baseRule, pricingMode: "USDT_BASE", marginUsdt: 1, manualAdjustmentAllowed: false };
   }
   if (service.code === "XIA-F4") {
     return { ...baseRule, pricingMode: "COMPONENTS", manualAdjustmentAllowed: true };

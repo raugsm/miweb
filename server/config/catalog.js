@@ -221,19 +221,18 @@ export const frpEligibilityCatalog = [
 ];
 export const frpOrderChecklistKeys = ["priceSent", "paymentValidated", "connectionDataSent", "authorizationConfirmed"];
 export const frpJobChecklistKeys = ["clientConnected", "requiredStateConfirmed", "modelSupported"];
-// QUE: tiers de descuento por volumen — spec panel-2-solicitud.md v1.1 §8 (sub-commit 15a.5).
+// QUE: tiers de descuento por volumen — spec panel-2-solicitud.md v1.2.
 // 4 tiers (1 / 2-3 / 4-6 / 7-10). Tier 11+ removido porque el frontend cap a 10.
-// `marginUsdt` = margen que conserva el operador por unidad (se suma al costo del
-// proveedor activo para obtener el precio de venta). Piso de proteccion absoluto:
-// internalCost + 1.0 USDT, aplicado en frpDynamicTier (clamp silencioso).
+// `discountUsdt` = descuento por unidad aplicado DESDE el precio normal dinamico
+// (`pricing.unitPrice`). Cantidad 1 siempre debe ser exactamente pricing.unitPrice.
 // `discountPct` = % nominal del tier para mostrar en el badge de la card "TOTAL".
 // `unitPrice` = FALLBACK cuando no hay pricingConfig (publicPortalCatalog lo expone
-// tal cual). Refleja la curva esperada con costo default 23.5 USDT.
+// tal cual). Refleja la curva historica con precio normal default 25 USDT.
 export const frpQuantityTiers = [
-  { minQty: 7, marginUsdt: 1.10, unitPrice: 24.60, discountPct: 8, label: "Descuento por 7-10 equipos" },
-  { minQty: 4, marginUsdt: 1.25, unitPrice: 24.75, discountPct: 5, label: "Descuento por 4-6 equipos" },
-  { minQty: 2, marginUsdt: 1.35, unitPrice: 24.85, discountPct: 3, label: "Descuento por 2-3 equipos" },
-  { minQty: 1, marginUsdt: 1.50, unitPrice: 25.00, discountPct: 0, label: "Precio normal" },
+  { minQty: 7, discountUsdt: 0.40, unitPrice: 24.60, discountPct: 8, label: "Descuento por 7-10 equipos" },
+  { minQty: 4, discountUsdt: 0.25, unitPrice: 24.75, discountPct: 5, label: "Descuento por 4-6 equipos" },
+  { minQty: 2, discountUsdt: 0.15, unitPrice: 24.85, discountPct: 3, label: "Descuento por 2-3 equipos" },
+  { minQty: 1, discountUsdt: 0, unitPrice: 25.00, discountPct: 0, label: "Precio normal" },
 ];
 export const frpMonthlyTiers = [
   { minJobs: 100, unitPrice: 22, label: "Meta 100+" },

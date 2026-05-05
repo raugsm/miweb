@@ -1,6 +1,6 @@
 # Panel 2 — Solicitud
 
-**Versión:** 1.1 · **Fecha:** 4 de mayo 2026 · **Estado:** spec formal con las 9 piezas. v1.1 agrega §8 "Descuentos por volumen" (tiers, regla de protección de margen, visualización en card oscura, aviso "1 más mejora tier", excepción VIP).
+**Versión:** 1.2 · **Fecha:** 5 de mayo 2026 · **Estado:** spec formal con las 9 piezas. v1.2 corrige el contrato de pricing dinámico: cantidad 1 usa `pricing.unitPrice` y elimina el margen oculto 1.50 USDT como precio normal.
 
 **Reemplaza a:** no había spec previa. Hereda algunas decisiones tipográficas del HANDOFF línea 580 ("paso 2: stepper -/n/+ con label 'Equipos a desbloquear', total en card oscura, insignia verde 98%, validación modelo opcional").
 
@@ -380,14 +380,14 @@ El portal aplica descuentos automáticos por cantidad de equipos en una misma or
 
 ### Tiers visibles al cliente
 
-| Cantidad | Etiqueta mostrada | % descuento | Margen mínimo del operador |
+| Cantidad | Etiqueta mostrada | % descuento visual | Regla de precio |
 |---|---|---|---|
-| 1 equipo | "Precio normal" | 0% | 1.50 USDT |
-| 2-3 equipos | "Descuento por 2-3 equipos" | −3% | 1.35 USDT |
-| 4-6 equipos | "Descuento por 4-6 equipos" | −5% | 1.25 USDT |
-| 7-10 equipos | "Descuento por 7-10 equipos" | −8% | 1.10 USDT |
+| 1 equipo | "Precio normal" | 0% | `pricing.unitPrice` |
+| 2-3 equipos | "Descuento por 2-3 equipos" | −3% | `pricing.unitPrice - 0.15 USDT` |
+| 4-6 equipos | "Descuento por 4-6 equipos" | −5% | `pricing.unitPrice - 0.25 USDT` |
+| 7-10 equipos | "Descuento por 7-10 equipos" | −8% | `pricing.unitPrice - 0.40 USDT` |
 
-**Regla de protección:** el descuento NUNCA puede dejar la ganancia del operador por debajo de costo del proveedor + 1 USDT. Si por algún motivo el costo del proveedor sube y un tier quedaría debajo de ese piso, el sistema mantiene el precio del tier inmediato superior (no rompe la regla).
+**Regla de contrato:** cantidad 1 SIEMPRE usa el mismo precio normal dinámico que se muestra en Costos FRP (`costo proveedor + ganancia objetivo`). No existe margen oculto de 1.50 USDT para cantidad 1. Los descuentos de volumen se restan desde ese precio normal y nunca pueden bajar por debajo del costo interno del proveedor.
 
 ### Tope de cantidad
 
@@ -444,6 +444,7 @@ El catálogo backend (`server/config/catalog.js#frpEligibilityCatalog`) hoy NO i
 
 ## Changelog
 
+- **panel-2-solicitud.md v1.2** (2026-05-05, sesión 16) — Corrige contrato de pricing dinámico: cantidad 1 = `pricing.unitPrice`; se elimina el margen oculto 1.50 USDT como precio normal. Los descuentos de volumen ahora se calculan desde el precio normal dinámico: 2-3 resta 0.15 USDT, 4-6 resta 0.25 USDT, 7-10 resta 0.40 USDT, con piso de costo interno para evitar venta por debajo del proveedor.
 - **panel-2-solicitud.md v1.1** (2026-05-04, sesión 15) — Agrega §8 "Descuentos por volumen". Tiers: 1 equipo "Precio normal" (0%, margen 1.50 USDT) / 2-3 equipos −3% (margen 1.35) / 4-6 equipos −5% (margen 1.25) / 7-10 equipos −8% (margen 1.10). Regla de protección: el descuento nunca deja al operador por debajo de costo + 1 USDT. Visualización: badge verde con % en la esquina superior derecha de la card oscura "TOTAL" + etiqueta descriptiva debajo. Aviso "1 más mejora tier" debajo del stepper en cantidades 1, 3 y 6. Cliente VIP: pricing aparte, fuera de scope. Renumeración: la sección "Open questions" pasa de §8 a §9; cross-ref interno actualizado.
 - **panel-2-solicitud.md v1.0** (2026-05-03, sesión 13) — Spec inicial completa con las 8 piezas. Decisiones tomadas en la sesión:
   - Header "Solicitud" sin numeración.

@@ -62,8 +62,8 @@ async function runSmoke({ baseUrl, dataDir, setupToken }) {
   });
   assert.equal(response.status, 201);
   const portalOrder = response.data.order;
-  assert.equal(portalOrder.totalPrice, 74.55);
-  assert.match(portalOrder.priceFormatted || "", /S\/\s*279\.56/);
+  assert.equal(portalOrder.totalPrice, 73.05);
+  assert.match(portalOrder.priceFormatted || "", /S\/\s*273\.94/);
   assert.equal(portalOrder.items.length, 3);
 
   response = await http.request("PATCH", `/api/portal/orders/${encodeURIComponent(portalOrder.id)}/payment-proof`, {

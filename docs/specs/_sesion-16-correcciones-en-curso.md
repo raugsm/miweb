@@ -791,6 +791,54 @@ data: {
 - `git diff --check` paso sin errores; solo avisos normales LF/CRLF de Windows.
 - `npm.cmd test` paso completo: 12 pruebas, 0 fallos.
 
+### S16-FIX-020 - Contrato unico de precio normal FRP
+
+**Problema confirmado por Bryam:** en la web online, despues de cambiar el precio normal a 4.50 USDT, Panel 1 mostraba 4.50 USDT pero Panel 2 y Panel 3 seguian calculando 5.00 USDT para cantidad 1.
+
+**Hechos verificados antes de tocar codigo:**
+
+- `/api/portal/catalog` exponia `services[0].baseUnitPrice = 4.50`.
+- El mismo catalogo exponia `quantityTiers[minQty=1].unitPrice = 5.00`.
+- Panel 1 usaba `baseUnitPrice`.
+- Panel 2 y Panel 3 usaban el tier efectivo de `estimatePortalPrice()`.
+- Backend creaba ordenes usando `portalFrpPriceSuggestion()`, que tambien podia tomar el tier de cantidad.
+- La raiz estaba en `frpQuantityTiers`: cantidad 1 tenia `marginUsdt: 1.50`, separado de `pricing.unitPrice`.
+
+**Decision aprobada por Bryam:**
+
+- Cantidad 1 debe ser exactamente `pricing.unitPrice`.
+- `pricing.unitPrice` nace de `costo proveedor + ganancia objetivo`.
+- Panel 1, Panel 2, Panel 3, backend, recibo y tests deben seguir esa misma fuente.
+- El margen oculto 1.50 USDT deja de ser fuente del precio normal.
+
+**Riesgos revisados:**
+
+- Si solo se tocaba frontend, la orden podia cobrarse distinto en backend.
+- Si solo se tocaba backend, el cliente podia seguir viendo un total viejo.
+- No se deben borrar otros `1.5` no relacionados: CSS, timers de feedback, alertas pausadas o documentos historicos.
+- El cambio mantiene el modelo VIP separado: VIP sigue siendo `costo proveedor + margen VIP`.
+
+**Resultado implementado:**
+
+- `server/config/catalog.js`: `frpQuantityTiers` deja de usar `marginUsdt` y pasa a `discountUsdt` desde el precio normal dinamico. Cantidad 1 usa `discountUsdt: 0`.
+- `server/frp/pricing.js`: `frpDynamicTier()` calcula tiers oficiales desde `pricing.unitPrice`; conserva soporte legacy para `marginUsdt` solo por compatibilidad.
+- `server/frp/pricing.js`: default `targetMarginUsdt` pasa de 1.5 a 1.0 para no reintroducir el margen viejo en instalaciones nuevas.
+- `server.js`: default legacy de `serviceRules` para `XIA-FRP-GOOGLE` pasa de `marginUsdt: 1.5` a `marginUsdt: 1`.
+- `test/phase3a.contract.test.js`: pruebas actualizadas para bloquear la regresion: cantidad 1 = `pricing.unitPrice`.
+- `test/phase4.smoke.test.js`: total esperado actualizado al contrato nuevo para una orden de 3 equipos.
+- `docs/specs/cliente/panel-2-solicitud.md`: spec subida a v1.2 con el contrato nuevo.
+
+**Validacion:**
+
+- `node --check server/frp/pricing.js` paso.
+- `node --check server/config/catalog.js` paso.
+- `node --check server.js` paso.
+- `node --check test/phase3a.contract.test.js` paso.
+- `node --test test/phase3a.contract.test.js` paso: 10 pruebas, 0 fallos.
+- `npm.cmd test` paso completo: 12 pruebas, 0 fallos.
+- `rg "marginUsdt: 1.5|targetMarginUsdt: 1.5" server public test` no encontro restos activos en codigo runtime/test.
+- `git diff --check` paso sin errores; solo avisos normales LF/CRLF de Windows.
+
 ---
 
 ## Checklist de esta fase

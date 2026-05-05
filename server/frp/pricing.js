@@ -11,7 +11,7 @@ export function defaultFrpPricingConfig() {
       // sistema dinamico de validacion (5 niveles + histórico 7d) en frp-routes.
       // Se conservan a 0 por compat de schema (algunas DBs viejas pueden tenerlos).
       minMarginUsdt: 0,
-      targetMarginUsdt: 1.5,
+      targetMarginUsdt: 1,
       minSellPriceUsdt: 0,
       maxWorkerCostChangePct: 30,
       updatedAt: "",
@@ -160,22 +160,32 @@ export function frpCurrentPricing(db) {
   };
 }
 
-// QUE: calcula el unitPrice efectivo de un tier. Soporta dos modelos:
-//   1. Tier con `marginUsdt` (frpQuantityTiers, spec panel-2 §8): unit = cost + margin,
-//      con piso de proteccion absoluto = cost + 1.0 USDT (sub-commit 15a.5 — clamp
-//      silencioso, garantiza ganancia minima del operador).
-//   2. Tier con `unitPrice` (frpMonthlyTiers, sin migrar — fallback legacy):
-//      computa descuento contra el precio nominal 25 y aplica el mismo piso.
+// QUE: calcula el unitPrice efectivo de un tier.
+//   1. Tier con `discountUsdt` (frpQuantityTiers): unit = precio normal dinamico
+//      menos descuento por unidad. Cantidad 1 usa discountUsdt=0, por lo tanto
+//      queda exactamente igual a pricing.unitPrice.
+//   2. Tier legacy con `marginUsdt`: se conserva por compatibilidad con datos viejos,
+//      pero los tiers oficiales ya no lo usan como "precio normal" oculto.
+//   3. Tier con `unitPrice` (frpMonthlyTiers, sin migrar — fallback legacy):
+//      computa descuento contra el precio nominal 25.
 export function frpDynamicTier(defaultTier, pricing) {
   if (!pricing?.available) return { ...defaultTier };
   const internalCost = moneyNumber(pricing.internalCostUsdt || 0);
-  const protectionFloor = moneyNumber(internalCost + 1.0);
+  const breakEvenFloor = moneyNumber(internalCost);
+  if (defaultTier.discountUsdt !== undefined) {
+    const discount = moneyNumber(defaultTier.discountUsdt);
+    const computed = moneyNumber(Number(pricing.unitPrice || 0) - discount);
+    return {
+      ...defaultTier,
+      unitPrice: moneyNumber(Math.max(computed, breakEvenFloor)),
+    };
+  }
   if (defaultTier.marginUsdt !== undefined) {
     const margin = moneyNumber(defaultTier.marginUsdt);
     const computed = moneyNumber(internalCost + margin);
     return {
       ...defaultTier,
-      unitPrice: moneyNumber(Math.max(computed, protectionFloor)),
+      unitPrice: moneyNumber(Math.max(computed, breakEvenFloor)),
     };
   }
   // Legacy unitPrice-based (frpMonthlyTiers).
@@ -183,7 +193,7 @@ export function frpDynamicTier(defaultTier, pricing) {
   const computed = moneyNumber(Math.max(0, pricing.unitPrice - discount));
   return {
     ...defaultTier,
-    unitPrice: moneyNumber(Math.max(computed, protectionFloor)),
+    unitPrice: moneyNumber(Math.max(computed, breakEvenFloor)),
   };
 }
 
