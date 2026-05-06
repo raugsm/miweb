@@ -112,7 +112,14 @@ import { createPortalRoutes } from "./server/portal/portal-routes.js";
 import { createStorage } from "./server/db/storage.js";
 import { confirmPortalCustomerPostgres } from "./server/db/postgres-customer-admin.js";
 import { insertAuditEvent } from "./server/db/postgres-audit.js";
-import { reviewFrpPaymentPostgres } from "./server/db/postgres-frp-core.js";
+import {
+  cancelFrpJobPostgres,
+  finalizeFrpJobPostgres,
+  reviewFrpJobPostgres,
+  reviewFrpPaymentPostgres,
+  takeFrpJobPostgres,
+  takeNextFrpJobPostgres,
+} from "./server/db/postgres-frp-core.js";
 import {
   applySwitch as applyTechnicianSwitch,
   eligibleTechnicians,
@@ -3621,7 +3628,12 @@ const handleFrpApi = createFrpRoutes({
   requireFrpCostManagerWithAudit,
   requireFrpPaymentReviewer,
   requireUser,
+  cancelFrpJobPostgres: storage.driver === "postgres" ? cancelFrpJobPostgres : null,
+  finalizeFrpJobPostgres: storage.driver === "postgres" ? finalizeFrpJobPostgres : null,
+  reviewFrpJobPostgres: storage.driver === "postgres" ? reviewFrpJobPostgres : null,
   reviewFrpPaymentPostgres: storage.driver === "postgres" ? reviewFrpPaymentPostgres : null,
+  takeFrpJobPostgres: storage.driver === "postgres" ? takeFrpJobPostgres : null,
+  takeNextFrpJobPostgres: storage.driver === "postgres" ? takeNextFrpJobPostgres : null,
   sanitizeFinalLogImages,
   sanitizePaymentProofImages,
   sendJson,

@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 
 import { frpServiceCode, frpWorkChannel, paymentMethods } from "../config/catalog.js";
 import { createAuditEvent } from "../core/audit.js";
+import { limaDateStamp } from "../core/dates.js";
 import { moneyNumber } from "../core/money.js";
 import { withTransaction } from "./postgres.js";
 import { insertAuditEventWithClient } from "./postgres-audit.js";
@@ -40,6 +41,18 @@ function isoOrEmpty(value) {
 
 function timestampOrNull(value) {
   return value ? value : null;
+}
+
+function sha256(value) {
+  return crypto.createHash("sha256").update(value).digest("hex");
+}
+
+function uuidFromSeed(seed) {
+  const bytes = Buffer.from(sha256(seed).slice(0, 32), "hex");
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = bytes.toString("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
 }
 
 function legacyObject(row) {
@@ -131,8 +144,19 @@ function jobFromRow(row) {
   return {
     ...legacy,
     id: stringValue(row.id || legacy.id),
+    code: stringValue(row.code || legacy.code),
     orderId: stringValue(row.order_id || legacy.orderId),
     status: stringValue(row.status || legacy.status),
+    technicianId: stringValue(row.technician_id || legacy.technicianId),
+    finalLog: stringValue(row.final_log || legacy.finalLog),
+    ardCode: stringValue(row.ard_code || legacy.ardCode),
+    reviewReason: stringValue(row.review_reason || legacy.reviewReason),
+    doneAt: isoOrEmpty(row.done_at) || stringValue(legacy.doneAt),
+    canceledAt: isoOrEmpty(row.canceled_at) || stringValue(legacy.canceledAt),
+    canceledBy: stringValue(row.canceled_by || legacy.canceledBy),
+    cancelReason: stringValue(row.cancel_reason || legacy.cancelReason),
+    createdAt: isoOrEmpty(row.created_at) || stringValue(legacy.createdAt),
+    updatedAt: isoOrEmpty(row.updated_at) || stringValue(legacy.updatedAt),
   };
 }
 
@@ -219,6 +243,648 @@ export function applyFrpPaymentReviewLegacyState({ order, portalOrder = null, pr
     publishReason: action === "approve" ? "frp_payment_validated" : "frp_payment_rejected",
     ledgerAction: action === "approve" ? "upsert" : "void",
   };
+}
+
+export function applyFrpJobTakeLegacyState({ job, order = null, jobs = [], activeJob = null, specific = false, userId, takenAt }) {
+  if (activeJob) {
+    return { ok: false, status: 409, error: `Ya tienes un FRP en proceso: ${activeJob.code}.` };
+  }
+  if (!job) {
+    return { ok: false, status: 404, error: "Trabajo FRP no encontrado." };
+  }
+  if (job.status !== "LISTO_PARA_TECNICO") {
+    if (job.technicianId && job.technicianId !== userId) {
+      return { ok: false, status: 409, error: "Otro tecnico ya tomo este job." };
+    }
+    return { ok: false, status: 422, error: "El trabajo no esta disponible para tomar." };
+  }
+
+  const nextJob = {
+    ...job,
+    status: "EN_PROCESO",
+    technicianId: userId,
+    takenAt,
+    updatedAt: takenAt,
+  };
+  const nextJobs = jobs.length
+    ? jobs.map((candidate) => (candidate.id === nextJob.id ? nextJob : candidate))
+    : [nextJob];
+  const nextOrder = order
+    ? {
+        ...order,
+        checklist: { ...jsonObject(order.checklist) },
+      }
+    : null;
+  if (nextOrder) syncFrpOrderStatusLegacy(nextOrder, nextJobs, takenAt);
+
+  return {
+    ok: true,
+    job: nextJob,
+    order: nextOrder,
+    auditAction: specific ? "FRP_JOB_TAKEN_SPECIFIC" : "FRP_JOB_TAKEN",
+    publishReason: "frp_job_taken",
+  };
+}
+
+export function applyFrpJobFinalizeLegacyState({ job, order = null, jobs = [], userId, userRole = "", finalLog = "", finalImages = [], doneAt, ardCode }) {
+  if (!job || !order) {
+    return { ok: false, status: 404, error: "Trabajo FRP no encontrado." };
+  }
+  if (job.technicianId && job.technicianId !== userId && userRole !== "ADMIN") {
+    return { ok: false, status: 403, error: "Este trabajo lo tomo otro tecnico." };
+  }
+  if (job.status !== "EN_PROCESO" && userRole !== "ADMIN") {
+    return { ok: false, status: 400, error: "Solo puedes finalizar un trabajo en proceso." };
+  }
+
+  const nextJob = {
+    ...job,
+    status: "FINALIZADO",
+    finalLog: finalLog || job.finalLog || "",
+    ardCode: job.ardCode || ardCode || "",
+    doneAt,
+    updatedAt: doneAt,
+    technicianId: job.technicianId || userId,
+  };
+  if (finalImages.length) nextJob.finalImages = finalImages;
+  const nextJobs = jobs.length
+    ? jobs.map((candidate) => (candidate.id === nextJob.id ? nextJob : candidate))
+    : [nextJob];
+  const nextOrder = {
+    ...order,
+    checklist: { ...jsonObject(order.checklist) },
+  };
+  const previousOrderStatus = nextOrder.orderStatus;
+  syncFrpOrderStatusLegacy(nextOrder, nextJobs, doneAt);
+  if (nextOrder.orderStatus !== previousOrderStatus) nextOrder.updatedAt = doneAt;
+
+  return {
+    ok: true,
+    job: nextJob,
+    order: nextOrder,
+    auditAction: "FRP_JOB_DONE",
+    auditDetail: { code: nextJob.code, order: nextOrder.code, ardCode: nextJob.ardCode },
+    publishReason: "frp_job_done",
+  };
+}
+
+export function applyFrpJobCancelLegacyState({ job, order = null, jobs = [], userId, userRole = "", reason = "", note = "", canceledAt }) {
+  if (!job || !order) {
+    return { ok: false, status: 404, error: "Trabajo FRP no encontrado." };
+  }
+  if (job.technicianId && job.technicianId !== userId && userRole !== "ADMIN") {
+    return { ok: false, status: 403, error: "Este trabajo lo tomo otro tecnico." };
+  }
+  if (job.status !== "EN_PROCESO" && userRole !== "ADMIN") {
+    return { ok: false, status: 400, error: "Solo puedes cancelar un trabajo en proceso." };
+  }
+  const allowedReasons = ["timeout", "payment_reverted", "manual"];
+  if (!allowedReasons.includes(reason)) {
+    return { ok: false, status: 400, error: "Razon de cancelacion no valida." };
+  }
+
+  const nextStatus = reason === "payment_reverted" ? "CANCELADO" : "LISTO_PARA_TECNICO";
+  const nextJob = {
+    ...job,
+    status: nextStatus,
+    technicianId: "",
+    takenAt: "",
+    canceledAt,
+    cancelReason: reason,
+    updatedAt: canceledAt,
+  };
+  if (note) nextJob.cancelNote = note;
+  const nextJobs = jobs.length
+    ? jobs.map((candidate) => (candidate.id === nextJob.id ? nextJob : candidate))
+    : [nextJob];
+  const nextOrder = {
+    ...order,
+    checklist: { ...jsonObject(order.checklist) },
+  };
+  const previousOrderStatus = nextOrder.orderStatus;
+  syncFrpOrderStatusLegacy(nextOrder, nextJobs, canceledAt);
+  if (nextOrder.orderStatus !== previousOrderStatus) nextOrder.updatedAt = canceledAt;
+
+  return {
+    ok: true,
+    job: nextJob,
+    order: nextOrder,
+    auditAction: "FRP_JOB_CANCELED",
+    auditDetail: {
+      code: nextJob.code,
+      order: nextOrder.code,
+      reason,
+      note: note || "",
+      nextStatus,
+    },
+    publishReason: "frp_job_canceled",
+  };
+}
+
+export function applyFrpJobReviewLegacyState({ job, order = null, jobs = [], userId, userRole = "", reason = "", reviewedAt }) {
+  if (!job || !order) {
+    return { ok: false, status: 404, error: "Trabajo FRP no encontrado." };
+  }
+  if (job.technicianId && job.technicianId !== userId && userRole !== "ADMIN") {
+    return { ok: false, status: 403, error: "Este trabajo lo tomo otro tecnico." };
+  }
+  if (job.status !== "EN_PROCESO") {
+    return { ok: false, status: 400, error: "Solo puedes enviar a revision un trabajo en proceso." };
+  }
+  if (!reason) {
+    return { ok: false, status: 400, error: "Indica motivo de revision." };
+  }
+
+  const nextJob = {
+    ...job,
+    status: "REQUIERE_REVISION",
+    reviewReason: reason,
+    updatedAt: reviewedAt,
+  };
+  const nextJobs = jobs.length
+    ? jobs.map((candidate) => (candidate.id === nextJob.id ? nextJob : candidate))
+    : [nextJob];
+  const nextOrder = {
+    ...order,
+    checklist: { ...jsonObject(order.checklist) },
+  };
+  const previousOrderStatus = nextOrder.orderStatus;
+  syncFrpOrderStatusLegacy(nextOrder, nextJobs, reviewedAt);
+  if (nextOrder.orderStatus !== previousOrderStatus) nextOrder.updatedAt = reviewedAt;
+
+  return {
+    ok: true,
+    job: nextJob,
+    order: nextOrder,
+    auditAction: "FRP_JOB_REVIEW_REQUIRED",
+    auditDetail: { code: nextJob.code, order: nextOrder.code, reason },
+    publishReason: "frp_job_review_required",
+  };
+}
+
+async function lockFrpTakeUser(client, userId) {
+  const userUuid = uuidOrNull(userId);
+  if (!userUuid) return;
+  await client.query(
+    `
+      select id
+      from ariad.operator_users
+      where id = $1
+      for update
+    `,
+    [userUuid],
+  );
+}
+
+async function activeFrpJobForUser(client, userId) {
+  const userUuid = uuidOrNull(userId);
+  if (!userUuid) return null;
+  const result = await client.query(
+    `
+      select *
+      from ariad.frp_jobs
+      where technician_id = $1
+        and status = 'EN_PROCESO'
+      order by updated_at desc nulls last, id asc
+      limit 1
+      for update
+    `,
+    [userUuid],
+  );
+  return result.rows[0] || null;
+}
+
+async function readFrpOrder(client, orderId) {
+  const orderUuid = uuidOrNull(orderId);
+  if (!orderUuid) return null;
+  const result = await client.query(
+    `
+      select *
+      from ariad.frp_orders
+      where id = $1
+    `,
+    [orderUuid],
+  );
+  return result.rows[0] || null;
+}
+
+async function readFrpOrderForUpdate(client, orderId) {
+  const orderUuid = uuidOrNull(orderId);
+  if (!orderUuid) return null;
+  const result = await client.query(
+    `
+      select *
+      from ariad.frp_orders
+      where id = $1
+      for update
+    `,
+    [orderUuid],
+  );
+  return result.rows[0] || null;
+}
+
+async function readFrpOrderJobs(client, orderId) {
+  const orderUuid = uuidOrNull(orderId);
+  if (!orderUuid) return [];
+  const result = await client.query(
+    `
+      select *
+      from ariad.frp_jobs
+      where order_id = $1
+      order by sequence asc, id asc
+    `,
+    [orderUuid],
+  );
+  return result.rows;
+}
+
+async function persistFrpJobTakeState(client, state, takenAt, userId) {
+  await client.query(
+    `
+      update ariad.frp_jobs
+      set status = $2,
+          technician_id = $3,
+          updated_at = $4,
+          legacy_json = $5::jsonb
+      where id = $1
+    `,
+    [
+      state.job.id,
+      state.job.status,
+      uuidOrNull(state.job.technicianId),
+      state.job.updatedAt || takenAt,
+      JSON.stringify(state.job),
+    ],
+  );
+
+  await insertAuditEventWithClient(
+    client,
+    createAuditEvent(userId, state.auditAction, state.job.id, {
+      code: state.job.code,
+      order: state.order?.code || "",
+    }),
+  );
+}
+
+function formatFrpArdCode(next) {
+  const first = String.fromCharCode(65 + Math.floor((next - 1) / 26) % 26);
+  const second = String.fromCharCode(65 + ((next - 1) % 26));
+  return `ARD${String(next).padStart(3, "0")}-${first}${second}`;
+}
+
+async function nextFrpArdCodePostgres(client, now) {
+  const stamp = limaDateStamp(now ? new Date(now) : new Date());
+  const result = await client.query(
+    `
+      insert into ariad.sequence_counters
+        (scope, bucket, counter_key, counter_value, updated_at)
+      values
+        ('frpCounters', 'ard', $1, 1, $2)
+      on conflict (scope, bucket, counter_key) do update set
+        counter_value = ariad.sequence_counters.counter_value + 1,
+        updated_at = excluded.updated_at
+      returning counter_value
+    `,
+    [stamp, now],
+  );
+  return formatFrpArdCode(numberValue(result.rows[0]?.counter_value, 1));
+}
+
+function finalImageDigest(image) {
+  const existing = stringValue(image?.hash || image?.sha256).trim();
+  if (existing) return existing;
+  const dataUrl = stringValue(image?.dataUrl).trim();
+  return dataUrl ? sha256(dataUrl) : "";
+}
+
+async function persistFrpFinalImages(client, jobId, finalImages, now) {
+  for (const image of finalImages) {
+    const digest = finalImageDigest(image);
+    if (!digest) continue;
+    const legacy = {
+      ...jsonObject(image),
+      hash: image.hash || digest,
+      sha256: image.sha256 || image.hash || digest,
+      createdAt: image.createdAt || now,
+    };
+    const storedFileResult = await client.query(
+      `
+        insert into ariad.stored_files
+          (id, owner_type, owner_id, purpose, name, content_type, size_bytes,
+           sha256, storage_kind, storage_key, legacy_data_url, created_at, legacy_json)
+        values
+          ($1, 'FRP_JOB', $2, 'final_image', $3, $4, $5,
+           $6, 'legacy_inline', '', $7, $8, $9::jsonb)
+        on conflict (sha256) do update set
+          sha256 = excluded.sha256
+        returning id
+      `,
+      [
+        uuidFromSeed(`stored-file:${digest}`),
+        uuidOrNull(jobId),
+        stringValue(legacy.name),
+        stringValue(legacy.type || legacy.contentType),
+        integerValue(legacy.size, 0),
+        digest,
+        stringValue(legacy.dataUrl) || null,
+        legacy.createdAt,
+        JSON.stringify(legacy),
+      ],
+    );
+    await client.query(
+      `
+        insert into ariad.frp_job_files
+          (job_id, stored_file_id, purpose, created_at)
+        values
+          ($1, $2, 'final_image', $3)
+        on conflict (job_id, stored_file_id) do nothing
+      `,
+      [uuidOrNull(jobId), storedFileResult.rows[0]?.id, legacy.createdAt],
+    );
+  }
+}
+
+async function persistFrpOrderStatus(client, order, now) {
+  await client.query(
+    `
+      update ariad.frp_orders
+      set order_status = $2,
+          updated_at = $3,
+          legacy_json = $4::jsonb
+      where id = $1
+    `,
+    [
+      order.id,
+      order.orderStatus,
+      order.updatedAt || now,
+      JSON.stringify(order),
+    ],
+  );
+}
+
+async function persistFrpFinalizeState(client, state, doneAt, userId) {
+  await client.query(
+    `
+      update ariad.frp_jobs
+      set status = $2,
+          technician_id = $3,
+          final_log = $4,
+          ard_code = $5,
+          done_at = $6,
+          updated_at = $7,
+          legacy_json = $8::jsonb
+      where id = $1
+    `,
+    [
+      state.job.id,
+      state.job.status,
+      uuidOrNull(state.job.technicianId),
+      state.job.finalLog || "",
+      state.job.ardCode || "",
+      timestampOrNull(state.job.doneAt),
+      state.job.updatedAt || doneAt,
+      JSON.stringify(state.job),
+    ],
+  );
+  await persistFrpFinalImages(client, state.job.id, state.job.finalImages || [], doneAt);
+  await persistFrpOrderStatus(client, state.order, doneAt);
+  await insertAuditEventWithClient(
+    client,
+    createAuditEvent(userId, state.auditAction, state.job.id, state.auditDetail),
+  );
+}
+
+async function persistFrpCancelState(client, state, canceledAt, userId) {
+  await client.query(
+    `
+      update ariad.frp_jobs
+      set status = $2,
+          technician_id = null,
+          canceled_at = $3,
+          canceled_by = $4,
+          cancel_reason = $5,
+          updated_at = $6,
+          legacy_json = $7::jsonb
+      where id = $1
+    `,
+    [
+      state.job.id,
+      state.job.status,
+      timestampOrNull(state.job.canceledAt),
+      uuidOrNull(userId),
+      state.job.cancelReason || "",
+      state.job.updatedAt || canceledAt,
+      JSON.stringify(state.job),
+    ],
+  );
+  await persistFrpOrderStatus(client, state.order, canceledAt);
+  await insertAuditEventWithClient(
+    client,
+    createAuditEvent(userId, state.auditAction, state.job.id, state.auditDetail),
+  );
+}
+
+async function persistFrpReviewState(client, state, reviewedAt, userId) {
+  await client.query(
+    `
+      update ariad.frp_jobs
+      set status = $2,
+          review_reason = $3,
+          updated_at = $4,
+          legacy_json = $5::jsonb
+      where id = $1
+    `,
+    [
+      state.job.id,
+      state.job.status,
+      state.job.reviewReason || "",
+      state.job.updatedAt || reviewedAt,
+      JSON.stringify(state.job),
+    ],
+  );
+  await persistFrpOrderStatus(client, state.order, reviewedAt);
+  await insertAuditEventWithClient(
+    client,
+    createAuditEvent(userId, state.auditAction, state.job.id, state.auditDetail),
+  );
+}
+
+async function takeFrpJobRowPostgres(client, { jobRow, activeJobRow = null, userId, takenAt, specific }) {
+  const orderRow = await readFrpOrder(client, jobRow?.order_id);
+  const job = jobRow ? jobFromRow(jobRow) : null;
+  const state = applyFrpJobTakeLegacyState({
+    job,
+    order: orderRow ? frpOrderFromRow(orderRow) : null,
+    jobs: job ? [job] : [],
+    activeJob: activeJobRow ? jobFromRow(activeJobRow) : null,
+    specific,
+    userId,
+    takenAt,
+  });
+  if (!state.ok) return state;
+  await persistFrpJobTakeState(client, state, takenAt, userId);
+  return {
+    ok: true,
+    jobId: state.job.id,
+    orderId: state.job.orderId,
+    publishReason: state.publishReason,
+  };
+}
+
+export async function takeFrpJobPostgres({ jobId, userId, takenAt }) {
+  return withTransaction(async (client) => {
+    const normalizedJobId = uuidOrNull(jobId);
+    if (!normalizedJobId) return { ok: false, status: 404, error: "Trabajo FRP no encontrado." };
+    await lockFrpTakeUser(client, userId);
+    const activeJobRow = await activeFrpJobForUser(client, userId);
+    if (activeJobRow) {
+      return applyFrpJobTakeLegacyState({
+        activeJob: jobFromRow(activeJobRow),
+        userId,
+        takenAt,
+      });
+    }
+
+    const jobResult = await client.query(
+      `
+        select *
+        from ariad.frp_jobs
+        where id = $1
+        for update
+      `,
+      [normalizedJobId],
+    );
+    const jobRow = jobResult.rows[0] || null;
+    if (!jobRow) return { ok: false, status: 404, error: "Trabajo FRP no encontrado." };
+    return takeFrpJobRowPostgres(client, { jobRow, userId, takenAt, specific: true });
+  });
+}
+
+export async function takeNextFrpJobPostgres({ userId, takenAt }) {
+  return withTransaction(async (client) => {
+    await lockFrpTakeUser(client, userId);
+    const activeJobRow = await activeFrpJobForUser(client, userId);
+    if (activeJobRow) {
+      return applyFrpJobTakeLegacyState({
+        activeJob: jobFromRow(activeJobRow),
+        userId,
+        takenAt,
+      });
+    }
+
+    const jobResult = await client.query(
+      `
+        select *
+        from ariad.frp_jobs
+        where status = 'LISTO_PARA_TECNICO'
+        order by coalesce(nullif(legacy_json->>'readyAt', ''), updated_at::text, created_at::text) asc, id asc
+        limit 1
+        for update skip locked
+      `,
+    );
+    const jobRow = jobResult.rows[0] || null;
+    if (!jobRow) return { ok: false, status: 404, error: "No hay trabajos FRP listos." };
+    return takeFrpJobRowPostgres(client, { jobRow, userId, takenAt, specific: false });
+  });
+}
+
+async function readLockedFrpJobWithOrder(client, jobId) {
+  const normalizedJobId = uuidOrNull(jobId);
+  if (!normalizedJobId) return { jobRow: null, orderRow: null, jobRows: [] };
+  const jobResult = await client.query(
+    `
+      select *
+      from ariad.frp_jobs
+      where id = $1
+      for update
+    `,
+    [normalizedJobId],
+  );
+  const jobRow = jobResult.rows[0] || null;
+  if (!jobRow) return { jobRow: null, orderRow: null, jobRows: [] };
+  const orderRow = await readFrpOrderForUpdate(client, jobRow.order_id);
+  const jobRows = orderRow ? await readFrpOrderJobs(client, orderRow.id) : [];
+  return { jobRow, orderRow, jobRows };
+}
+
+export async function finalizeFrpJobPostgres({ jobId, userId, userRole = "", finalLog = "", finalImages = [], doneAt }) {
+  return withTransaction(async (client) => {
+    const { jobRow, orderRow, jobRows } = await readLockedFrpJobWithOrder(client, jobId);
+    if (!jobRow || !orderRow) return { ok: false, status: 404, error: "Trabajo FRP no encontrado." };
+    const currentJob = jobFromRow(jobRow);
+    const state = applyFrpJobFinalizeLegacyState({
+      job: currentJob,
+      order: frpOrderFromRow(orderRow),
+      jobs: jobRows.map(jobFromRow),
+      userId,
+      userRole,
+      finalLog,
+      finalImages,
+      doneAt,
+      ardCode: currentJob.ardCode,
+    });
+    if (!state.ok) return state;
+    if (!state.job.ardCode) {
+      state.job.ardCode = await nextFrpArdCodePostgres(client, doneAt);
+      state.auditDetail.ardCode = state.job.ardCode;
+    }
+    await persistFrpFinalizeState(client, state, doneAt, userId);
+    return {
+      ok: true,
+      jobId: state.job.id,
+      orderId: state.job.orderId,
+      publishReason: state.publishReason,
+    };
+  });
+}
+
+export async function cancelFrpJobPostgres({ jobId, userId, userRole = "", reason = "", note = "", canceledAt }) {
+  return withTransaction(async (client) => {
+    const { jobRow, orderRow, jobRows } = await readLockedFrpJobWithOrder(client, jobId);
+    if (!jobRow || !orderRow) return { ok: false, status: 404, error: "Trabajo FRP no encontrado." };
+    const state = applyFrpJobCancelLegacyState({
+      job: jobFromRow(jobRow),
+      order: frpOrderFromRow(orderRow),
+      jobs: jobRows.map(jobFromRow),
+      userId,
+      userRole,
+      reason,
+      note,
+      canceledAt,
+    });
+    if (!state.ok) return state;
+    await persistFrpCancelState(client, state, canceledAt, userId);
+    return {
+      ok: true,
+      jobId: state.job.id,
+      orderId: state.job.orderId,
+      publishReason: state.publishReason,
+    };
+  });
+}
+
+export async function reviewFrpJobPostgres({ jobId, userId, userRole = "", reason = "", reviewedAt }) {
+  return withTransaction(async (client) => {
+    const { jobRow, orderRow, jobRows } = await readLockedFrpJobWithOrder(client, jobId);
+    if (!jobRow || !orderRow) return { ok: false, status: 404, error: "Trabajo FRP no encontrado." };
+    const state = applyFrpJobReviewLegacyState({
+      job: jobFromRow(jobRow),
+      order: frpOrderFromRow(orderRow),
+      jobs: jobRows.map(jobFromRow),
+      userId,
+      userRole,
+      reason,
+      reviewedAt,
+    });
+    if (!state.ok) return state;
+    await persistFrpReviewState(client, state, reviewedAt, userId);
+    return {
+      ok: true,
+      jobId: state.job.id,
+      orderId: state.job.orderId,
+      publishReason: state.publishReason,
+    };
+  });
 }
 
 async function currentExchangeForCurrency(client, currency) {

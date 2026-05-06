@@ -41,6 +41,9 @@ export function createFrpRoutes({
   classifyCostChange,
   computeProviderBaseline,
   readDb,
+  cancelFrpJobPostgres,
+  finalizeFrpJobPostgres,
+  reviewFrpJobPostgres,
   requireActiveFrpTechnician,
   requireAdminWithAudit,
   requireFrpAccess,
@@ -48,6 +51,8 @@ export function createFrpRoutes({
   requireFrpPaymentReviewer,
   requireUser,
   reviewFrpPaymentPostgres,
+  takeFrpJobPostgres,
+  takeNextFrpJobPostgres,
   sanitizeFinalLogImages,
   sanitizePaymentProofImages,
   sendJson,
@@ -772,6 +777,21 @@ export function createFrpRoutes({
     const db = await readDb();
     if (!(await requireFrpAccess(user, res, db, "FRP_JOB_TAKE_DENIED", frpJobTakeMatch[1]))) return;
     if (!(await requireActiveFrpTechnician(user, res, db, "FRP_JOB_TAKE_NOT_ACTIVE", frpJobTakeMatch[1]))) return;
+    if (takeFrpJobPostgres) {
+      const result = await takeFrpJobPostgres({
+        jobId: frpJobTakeMatch[1],
+        userId: user.id,
+        takenAt: nowIso(),
+      });
+      if (!result.ok) return sendJson(res, result.status || 500, { error: result.error || "No se pudo tomar el trabajo FRP." });
+      const nextDb = await readDb();
+      const nextJob = nextDb.frpJobs.find((candidate) => candidate.id === result.jobId);
+      const nextOrder = nextDb.frpOrders.find((candidate) => candidate.id === result.orderId);
+      if (!nextJob) return sendJson(res, 500, { error: "Trabajo FRP tomado, pero la lectura reconstruida no lo encontro." });
+      publishPortalOrdersForFrpOrder(nextDb, nextOrder, result.publishReason || "frp_job_taken");
+      publishFrpOps(nextDb, result.publishReason || "frp_job_taken");
+      return sendJson(res, 200, { job: publicFrpJob(nextJob, nextDb), frp: publicFrpState(nextDb, user) });
+    }
     const activeJob = frpActiveJobForUser(db, user);
     if (activeJob) return sendJson(res, 409, { error: `Ya tienes un FRP en proceso: ${activeJob.code}.` });
     const job = db.frpJobs.find((candidate) => candidate.id === frpJobTakeMatch[1]);
@@ -802,6 +822,20 @@ export function createFrpRoutes({
     const db = await readDb();
     if (!(await requireFrpAccess(user, res, db, "FRP_JOB_TAKE_DENIED"))) return;
     if (!(await requireActiveFrpTechnician(user, res, db, "FRP_JOB_TAKE_NOT_ACTIVE", "frp-take-next"))) return;
+    if (takeNextFrpJobPostgres) {
+      const result = await takeNextFrpJobPostgres({
+        userId: user.id,
+        takenAt: nowIso(),
+      });
+      if (!result.ok) return sendJson(res, result.status || 500, { error: result.error || "No se pudo tomar el siguiente FRP." });
+      const nextDb = await readDb();
+      const nextJob = nextDb.frpJobs.find((candidate) => candidate.id === result.jobId);
+      const nextOrder = nextDb.frpOrders.find((candidate) => candidate.id === result.orderId);
+      if (!nextJob) return sendJson(res, 500, { error: "Trabajo FRP tomado, pero la lectura reconstruida no lo encontro." });
+      publishPortalOrdersForFrpOrder(nextDb, nextOrder, result.publishReason || "frp_job_taken");
+      publishFrpOps(nextDb, result.publishReason || "frp_job_taken");
+      return sendJson(res, 200, { job: publicFrpJob(nextJob, nextDb), frp: publicFrpState(nextDb, user) });
+    }
     const activeJob = frpActiveJobForUser(db, user);
     if (activeJob) return sendJson(res, 409, { error: `Ya tienes un FRP en proceso: ${activeJob.code}.` });
     const job = db.frpJobs
@@ -847,6 +881,24 @@ export function createFrpRoutes({
       hour12: false,
     }).format(new Date());
     const finalLog = inputLog || job.finalLog || `Finalizado por ${user.name || "operador"} a las ${limaTime}`;
+    if (finalizeFrpJobPostgres) {
+      const result = await finalizeFrpJobPostgres({
+        jobId: frpJobFinalizeMatch[1],
+        userId: user.id,
+        userRole: user.role,
+        finalLog,
+        finalImages,
+        doneAt: nowIso(),
+      });
+      if (!result.ok) return sendJson(res, result.status || 500, { error: result.error || "No se pudo finalizar el trabajo FRP." });
+      const nextDb = await readDb();
+      const nextJob = nextDb.frpJobs.find((candidate) => candidate.id === result.jobId);
+      const nextOrder = nextDb.frpOrders.find((candidate) => candidate.id === result.orderId);
+      if (!nextJob) return sendJson(res, 500, { error: "Trabajo FRP finalizado, pero la lectura reconstruida no lo encontro." });
+      publishPortalOrdersForFrpOrder(nextDb, nextOrder, result.publishReason || "frp_job_done");
+      publishFrpOps(nextDb, result.publishReason || "frp_job_done");
+      return sendJson(res, 200, { job: publicFrpJob(nextJob, nextDb), frp: publicFrpState(nextDb, user) });
+    }
     job.status = "FINALIZADO";
     job.finalLog = finalLog;
     if (finalImages.length) job.finalImages = finalImages;
@@ -898,6 +950,24 @@ export function createFrpRoutes({
     // payment_reverted es terminal (la orden murio). Los demas reasons liberan
     // el job a la cola para que otro tecnico intente.
     const nextStatus = reason === "payment_reverted" ? "CANCELADO" : "LISTO_PARA_TECNICO";
+    if (cancelFrpJobPostgres) {
+      const result = await cancelFrpJobPostgres({
+        jobId: frpJobCancelMatch[1],
+        userId: user.id,
+        userRole: user.role,
+        reason,
+        note,
+        canceledAt: nowIso(),
+      });
+      if (!result.ok) return sendJson(res, result.status || 500, { error: result.error || "No se pudo cancelar el trabajo FRP." });
+      const nextDb = await readDb();
+      const nextJob = nextDb.frpJobs.find((candidate) => candidate.id === result.jobId);
+      const nextOrder = nextDb.frpOrders.find((candidate) => candidate.id === result.orderId);
+      if (!nextJob) return sendJson(res, 500, { error: "Trabajo FRP cancelado, pero la lectura reconstruida no lo encontro." });
+      publishPortalOrdersForFrpOrder(nextDb, nextOrder, result.publishReason || "frp_job_canceled");
+      publishFrpOps(nextDb, result.publishReason || "frp_job_canceled");
+      return sendJson(res, 200, { job: publicFrpJob(nextJob, nextDb), frp: publicFrpState(nextDb, user) });
+    }
     job.status = nextStatus;
     job.technicianId = "";
     job.takenAt = "";
@@ -931,6 +1001,23 @@ export function createFrpRoutes({
     if (job.technicianId && job.technicianId !== user.id && user.role !== "ADMIN") return sendJson(res, 403, { error: "Este trabajo lo tomo otro tecnico." });
     const reason = cleanText(input.reason, 180);
     if (!reason) return sendJson(res, 400, { error: "Indica motivo de revision." });
+    if (reviewFrpJobPostgres) {
+      const result = await reviewFrpJobPostgres({
+        jobId: job.id,
+        userId: user.id,
+        userRole: user.role,
+        reason,
+        reviewedAt: nowIso(),
+      });
+      if (!result.ok) return sendJson(res, result.status || 500, { error: result.error || "No se pudo enviar el trabajo FRP a revision." });
+      const nextDb = await readDb();
+      const nextJob = nextDb.frpJobs.find((candidate) => candidate.id === result.jobId);
+      const nextOrder = nextDb.frpOrders.find((candidate) => candidate.id === result.orderId);
+      if (!nextJob) return sendJson(res, 500, { error: "Trabajo FRP enviado a revision, pero la lectura reconstruida no lo encontro." });
+      publishPortalOrdersForFrpOrder(nextDb, nextOrder, result.publishReason || "frp_job_review_required");
+      publishFrpOps(nextDb, result.publishReason || "frp_job_review_required");
+      return sendJson(res, 200, { job: publicFrpJob(nextJob, nextDb), frp: publicFrpState(nextDb, user) });
+    }
     job.status = "REQUIERE_REVISION";
     job.reviewReason = reason;
     job.updatedAt = nowIso();
