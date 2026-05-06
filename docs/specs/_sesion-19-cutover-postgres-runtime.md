@@ -380,3 +380,42 @@ Resultado:
 Siguiente paso unico:
 
 - Commit y push de Fase A.
+
+## Validacion publica post-Fase A
+
+Fecha: 2026-05-06
+
+Contexto:
+
+- Commit local/remoto de Fase A: `71d3357 Add storage adapter gate`.
+- Repo local: `main` alineado con `origin/main`.
+- No se cambio `ARIAD_STORAGE_DRIVER`.
+- El default esperado sigue siendo `json`.
+
+Comandos ejecutados desde la maquina local:
+
+```powershell
+Invoke-WebRequest https://ariadgsm.com/api/health
+Invoke-WebRequest https://ariadgsm.com/api/portal/catalog
+Invoke-WebRequest https://ariadgsm.com/api/portal/session
+```
+
+Resultado:
+
+- `https://ariadgsm.com/api/health`: HTTP 200, JSON, `ok: true`.
+- `https://ariadgsm.com/api/portal/catalog`: HTTP 200, JSON.
+- `https://ariadgsm.com/api/portal/session`: HTTP 200, JSON, crea dispositivo cliente anonimo.
+
+Lectura:
+
+- La web publica sigue respondiendo despues de subir Fase A.
+- No hay evidencia publica de caida inmediata en health, catalogo ni sesion anonima.
+- Esta validacion no prueba por si sola que Render ya este corriendo el commit `71d3357`, porque `/api/health` todavia no expone commit ni driver de storage.
+
+Riesgo:
+
+- Sin metadata de runtime en `/api/health`, la validacion post-deploy depende de observar el dashboard/logs de Render o de agregar una seccion sanitizada al health.
+
+Siguiente paso unico:
+
+- Agregar observabilidad minima y sanitizada a `/api/health`: `storageDriver`, `storageRuntimeImplemented` y, si se define por env, `releaseCommit`; sin exponer rutas locales, `DATABASE_URL`, hashes ni secretos.
