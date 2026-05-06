@@ -73,6 +73,8 @@ Si Codex detecta que una correccion puede ser un parche sin entender la causa, d
 
 Antes de tocar storage, sesiones, presencia, portal FRP o cualquier llamada a `writeDb(db)`, Codex debe leer `docs/specs/_sesion-20-postgres-runtime-p0-estabilizacion.md`.
 
+Tambien debe leer `docs/specs/_sesion-20-postgres-runtime-write-surface-audit.md` para clasificar si el cambio toca P0 estabilizado, FRP/pagos, auth/sesiones, SSE/GET con efectos laterales, pricing/costos, cierres o frontend/performance separado.
+
 Desde el cutover PostgreSQL, `storage/users.json` es snapshot historico pre-cutover. No se usa como fuente esperada para `postgres:read-check --strict`. La salud viva de Postgres se verifica sin `--input`.
 
 ## Regla de alcance por turno
