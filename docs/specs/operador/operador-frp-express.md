@@ -155,7 +155,7 @@ Estado único, informativa. Muestra finalizados de **todos los tecnicos FRP eleg
 - Order code (formato corto)
 - Cliente + ARD code (ej. "RAUL GSM · ARD012-AL")
 - Hora de finalización (ej. "14:32")
-- Técnico que finalizó (avatar pequeño o iniciales: "J" para Jack, "A" para Angelo)
+- Técnico que finalizó: marca compacta derivada del nombre del operador (dos letras cuando sea posible) y `title` con el nombre completo. No se hardcodea Jack/Angelo.
 
 Sin acciones. Sin botones. Click en "Ver todos →" del header lleva a vista filtrada de histórico (esa vista no es parte de esta spec).
 

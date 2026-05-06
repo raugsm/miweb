@@ -203,3 +203,10 @@ Riesgo residual del panel trabajador: ya no es el dato mostrado en `Tu trabajo a
 - `Tu trabajo actual` queda reservado al job propio del usuario actual.
 - Jobs de otros operadores en `EN_PROCESO` se listan en una seccion separada: `Trabajos en curso por otros`.
 - El CTA `Tomar siguiente` ya no queda bloqueado por jobs ajenos si el operador actual no tiene job propio.
+
+## Actualizacion 2026-05-06 - Finalizados hoy multioperador
+
+- La seccion `Finalizados hoy` ya venia alimentada por `finishedTodayJobs[]`, que incluye todos los jobs `FINALIZADO` del dia en Lima para el canal FRP.
+- El riesgo encontrado no era de backend, sino de representacion: el frontend reducia `technicianName` a una sola inicial, suficiente para Jack/Angelo pero ambiguo con N operadores.
+- La UI ahora usa una marca compacta derivada del nombre completo (`JA`, `BZ`, etc.) y conserva el `title` con el nombre completo.
+- Se agrego guarda en `phase3a.contract.test.js` para impedir que la seccion vuelva a depender de `frpOpsV2TechInitial`.

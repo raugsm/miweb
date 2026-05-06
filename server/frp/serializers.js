@@ -72,7 +72,7 @@ export function createFrpSerializers({
     const todaysJobs = jobs.filter((job) => limaDateStamp(job.createdAt) === today || limaDateStamp(job.doneAt) === today);
     // QUE: lista (no count) de jobs FINALIZADO con doneAt en el dia actual Lima.
     // Spec operador-frp-express.md §2.7 + AC #29: la tabla "Finalizados hoy"
-    // muestra finalizados de AMBOS tecnicos del dia, ordenados por doneAt desc
+    // muestra finalizados de todos los tecnicos FRP elegibles del dia, ordenados por doneAt desc
     // (mas recientes primero).
     // POR QUE expongo aparte de jobs[]: jobs.slice(0,200) puede recortar dias
     // antiguos en deployments con muchos jobs historicos y dejaria al frontend

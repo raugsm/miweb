@@ -1433,9 +1433,13 @@ function frpOpsV2LimaTime(iso) {
   }).format(date);
 }
 
-function frpOpsV2TechInitial(name) {
-  if (!name) return "?";
-  return String(name).trim().charAt(0).toUpperCase() || "?";
+function frpOpsV2TechMark(name) {
+  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return `${parts[0].charAt(0)}${parts[1].charAt(0)}`.toUpperCase() || "?";
+  }
+  if (parts[0]) return parts[0].slice(0, 2).toUpperCase();
+  return "?";
 }
 
 // Spec operador-frp-express.md §3.3 + AC #23-25: banner de timeout 30 min
@@ -1823,7 +1827,7 @@ function frpOpsV2RenderFinalized(jobs) {
     `;
   }
   const rowsHtml = items.map((j) => {
-    const initial = frpOpsV2TechInitial(j.technicianName);
+    const techMark = frpOpsV2TechMark(j.technicianName);
     const time = frpOpsV2LimaTime(j.doneAt);
     const idText = j.code || j.order?.code || "";
     const nameText = `${j.order?.clientName || j.clientName || "-"}${j.ardCode ? ` · ${j.ardCode}` : ""}`;
@@ -1835,7 +1839,7 @@ function frpOpsV2RenderFinalized(jobs) {
         </div>
         <div class="frp-ops-v2-finalized-row-right">
           ${time ? `<span class="frp-ops-v2-finalized-row-time">${escapeHtml(time)}</span>` : ""}
-          <span class="frp-ops-v2-tech-mark" title="${escapeHtml(j.technicianName || "")}">${escapeHtml(initial)}</span>
+          <span class="frp-ops-v2-tech-mark" title="${escapeHtml(j.technicianName || "")}">${escapeHtml(techMark)}</span>
         </div>
       </div>
     `;

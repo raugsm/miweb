@@ -194,6 +194,18 @@ test("operator workbench treats other active jobs as plural observer state", asy
   assert.match(appJs, /currentHtml = frpOpsV2RenderCurrentEmpty\(\{ queueLen: queueJobs\.length, isMeActive, swapInProgress \}\);/);
 });
 
+test("operator finalized today uses multi-operator technician marks", async () => {
+  const appJs = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
+  const stylesCss = await readFile(new URL("../public/styles.css", import.meta.url), "utf8");
+
+  assert.match(appJs, /function frpOpsV2TechMark\(name\)/);
+  assert.match(appJs, /split\(\/\\s\+\/\)\.filter\(Boolean\)/);
+  assert.match(appJs, /return parts\[0\]\.slice\(0, 2\)\.toUpperCase\(\);/);
+  assert.match(appJs, /const techMark = frpOpsV2TechMark\(j\.technicianName\);/);
+  assert.doesNotMatch(appJs, /frpOpsV2TechInitial/);
+  assert.match(stylesCss, /\.frp-ops-v2-tech-mark\s*{[\s\S]*min-width:\s*26px;/);
+});
+
 test("portal proof reader accepts mobile picker files with missing MIME but safe extension", async () => {
   const previousFileReader = globalThis.FileReader;
   globalThis.FileReader = class {
