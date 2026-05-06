@@ -206,6 +206,9 @@ const reportBlockPatterns = [
   /legacy_data_url/i,
 ];
 
+let activeReportPath = "";
+let activeReport = null;
+
 function parseArgs(argv) {
   const args = {
     input: path.join("data", "users.json"),
@@ -451,6 +454,12 @@ function finalImageEntries(db) {
 
 function fileDigest(value) {
   return stringValue(value?.hash || value?.sha256).trim();
+}
+
+function proofRelationId(entry, digest) {
+  const legacyId = stringValue(entry.proof?.id).trim();
+  const stableProofKey = legacyId || digest || `index:${entry.index}`;
+  return uuidFromSeed(`payment-proof:${entry.sourceType}:${entry.sourceId}:${stableProofKey}:${entry.index}`);
 }
 
 function flattenCounters(scope, value, rows, pathParts = []) {
@@ -1069,7 +1078,7 @@ function buildImportPlan(db, sourceName, sourceSha256) {
     const digest = fileDigest(entry.proof);
     const storedFile = digest ? storedFiles.get(digest) : null;
     rows.payment_proofs.push({
-      id: uuidOrNull(entry.proof?.id) || uuidFromSeed(`payment-proof:${entry.sourceType}:${entry.sourceId}:${digest || entry.index}`),
+      id: proofRelationId(entry, digest),
       source_type: entry.sourceType,
       source_id: requiredUuid(entry.sourceId, `paymentProofs.${entry.sourceType}.sourceId`),
       stored_file_id: storedFile?.id || null,
@@ -1338,6 +1347,14 @@ function buildImportPlan(db, sourceName, sourceSha256) {
   });
 
   const tables = Object.fromEntries(targetTables.map((table) => [table, rows[table].length]));
+  const duplicatePrimaryKeys = findDuplicatePlannedPrimaryKeys(rows);
+  if (duplicatePrimaryKeys.length) {
+    warnings.push({
+      code: "duplicatePlannedPrimaryKeys",
+      count: duplicatePrimaryKeys.length,
+      examples: duplicatePrimaryKeys.slice(0, 20),
+    });
+  }
   const summaryChecks = {
     customerUsersMatch: customerUsers.length === tables.customer_users,
     customerClientsMatch: customerClients.length === tables.customer_clients,
@@ -1353,6 +1370,66 @@ function buildImportPlan(db, sourceName, sourceSha256) {
   };
 
   return { rows, tables, collections, summaryChecks, warnings };
+}
+
+function findDuplicatePlannedPrimaryKeys(rows) {
+  const primaryKeyColumns = {
+    migration_runs: ["id"],
+    sequence_counters: ["scope", "bucket", "counter_key"],
+    operator_users: ["id"],
+    operator_devices: ["id"],
+    operator_device_admin_users: ["device_id", "user_id"],
+    operator_device_approvals: ["id"],
+    operator_sessions: ["id"],
+    password_reset_tokens: ["id"],
+    password_reset_requests: ["id"],
+    master_clients: ["id"],
+    customer_clients: ["id"],
+    customer_users: ["id"],
+    internal_clients: ["id"],
+    client_links: ["id"],
+    client_link_suggestions: ["id"],
+    customer_benefits: ["id"],
+    customer_devices: ["id"],
+    customer_device_authorizations: ["device_id", "client_id"],
+    customer_sessions: ["id"],
+    customer_email_verification_tokens: ["id"],
+    exchange_rates: ["rate_key"],
+    service_pricing_rules: ["service_code"],
+    payment_method_overrides: ["code"],
+    frp_pricing_policy: ["id"],
+    frp_pricing_providers: ["id"],
+    frp_provider_cost_history: ["id"],
+    frp_pending_cost_changes: ["id"],
+    customer_requests: ["id"],
+    customer_orders: ["id"],
+    customer_order_items: ["id"],
+    service_tickets: ["id"],
+    stored_files: ["id"],
+    payment_proofs: ["id"],
+    frp_orders: ["id"],
+    frp_jobs: ["id"],
+    frp_job_files: ["job_id", "stored_file_id"],
+    active_technician_state: ["id"],
+    payment_ledger_entries: ["id"],
+    daily_closes: ["id"],
+    daily_close_lines: ["id"],
+    daily_adjustments: ["id"],
+    portal_rate_limits: ["id"],
+    audit_events: ["id"],
+  };
+  const duplicates = [];
+  for (const [table, columns] of Object.entries(primaryKeyColumns)) {
+    const seen = new Map();
+    for (const row of rows[table] || []) {
+      const key = columns.map((column) => stringValue(row[column])).join("::");
+      if (!key || key.split("::").some((part) => !part)) continue;
+      const count = (seen.get(key) || 0) + 1;
+      seen.set(key, count);
+      if (count === 2) duplicates.push({ table, key });
+    }
+  }
+  return duplicates;
 }
 
 function reportMismatches(expected, actual) {
@@ -1465,6 +1542,7 @@ function buildBaseReport(args, inputPath, sourceSha256, plan) {
 
 async function main() {
   const args = parseArgs(process.argv);
+  activeReportPath = args.report;
   if (args.help) {
     console.log(usage());
     return;
@@ -1477,6 +1555,7 @@ async function main() {
   const db = JSON.parse(raw);
   const plan = buildImportPlan(db, path.basename(inputPath), sourceSha256);
   const report = buildBaseReport(args, inputPath, sourceSha256, plan);
+  activeReport = report;
 
   if (!hasPostgresConfig()) {
     report.ok = false;
@@ -1551,6 +1630,7 @@ async function main() {
 main()
   .catch(async (error) => {
     const report = {
+      ...(activeReport || {}),
       kind: "ariadgsm-postgres-users-json-import",
       generatedAt: new Date().toISOString(),
       sanitized: true,
@@ -1558,6 +1638,7 @@ main()
       error: sanitizeErrorMessage(error.message || error),
     };
     ensureReportSafe(report);
+    await writeReport(activeReportPath, report).catch(() => {});
     console.error(JSON.stringify(report, null, 2));
     process.exitCode = 1;
   })

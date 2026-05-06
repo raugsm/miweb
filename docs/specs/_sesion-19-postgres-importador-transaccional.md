@@ -265,3 +265,97 @@ No correr `postgres:import:apply` hasta que el nuevo dry-run diga:
 - `targetEmpty: true`;
 - `nonEmptyTables: []`;
 - `mismatches: []`.
+
+## Resultado apply bloqueado por payment_proofs
+
+Fecha: 2026-05-06
+
+Comando ejecutado en Render Shell:
+
+```sh
+npm run postgres:import:apply -- --input /tmp/postgres-import-source-users.json --report /tmp/postgres-render-import-apply.json
+```
+
+Resultado:
+
+```json
+{
+  "kind": "ariadgsm-postgres-users-json-import",
+  "generatedAt": "2026-05-06T01:09:35.075Z",
+  "sanitized": true,
+  "ok": false,
+  "error": "duplicate key value violates unique constraint \"payment_proofs_pkey\""
+}
+```
+
+Verificacion posterior:
+
+- `npm run postgres:import -- --input /tmp/postgres-import-source-users.json --report /tmp/postgres-render-import-after-failed-apply.json`
+- Resultado: `targetEmpty: true`, `payment_proofs: 0`, `ok: true`.
+
+Lectura:
+
+- La transaccion hizo rollback completo.
+- No quedo import parcial.
+- La causa no fue el DDL ni la DB vacia.
+- La causa fue la identidad planeada de `payment_proofs`.
+
+Causa tecnica:
+
+- `stored_files` debe deduplicarse por `sha256`.
+- `payment_proofs` no debe deduplicarse solo por `proof.id`, porque el mismo comprobante legacy puede aparecer enlazado desde `customerOrders` y `frpOrders`.
+- La PK de `payment_proofs` debe representar la relacion legacy, no el archivo.
+
+Decision:
+
+- Mantener `stored_files` deduplicado por hash.
+- Generar `payment_proofs.id` de forma deterministica con:
+  - `sourceType`;
+  - `sourceId`;
+  - `proof.id` o `hash`;
+  - indice dentro de la lista legacy.
+- Agregar detector de PK duplicadas planeadas antes de escribir.
+- Si el apply falla, escribir tambien el reporte indicado por `--report`.
+
+Cambio aplicado:
+
+- `scripts/migration/import-users-json-to-postgres.mjs`
+  - `proofRelationId(...)`;
+  - `findDuplicatePlannedPrimaryKeys(...)`;
+  - reporte de error en catch con `--report`.
+
+Nuevo criterio:
+
+- El dry-run debe seguir en `ok: true`.
+- Si aparecen duplicados planeados, el reporte debe bloquear con warning `duplicatePlannedPrimaryKeys` antes de `--apply`.
+
+Validacion local:
+
+```sh
+node --check scripts\migration\import-users-json-to-postgres.mjs
+npm.cmd run postgres:import -- --input data\users.json --report .local-preview-data\postgres-import-no-db-report.json
+npm.cmd run postgres:import -- --input .local-preview-data\users-import-duplicate-proof-fixture.json --report .local-preview-data\postgres-import-duplicate-proof-fixture-report.json
+npm.cmd run postgres:import -- --input .local-preview-data\users-import-duplicate-pk-fixture.json --report .local-preview-data\postgres-import-duplicate-pk-fixture-report.json
+npm.cmd run postgres:import -- --input .local-preview-data\users-import-invalid.json --report .local-preview-data\postgres-import-invalid-report.json
+npm.cmd test
+```
+
+Resultados:
+
+- fixture con mismo `proof.id` en dos fuentes: `stored_files: 1`, `payment_proofs: 2`, `warnings: []`;
+- fixture con PK duplicada planeada: warning `duplicatePlannedPrimaryKeys`;
+- JSON invalido: se escribio reporte sanitizado en `--report`;
+- reportes sin `passwordHash`, `operatorPinHash`, `tokenHash`, `dataUrl`, `base64` ni `legacy_data_url`;
+- `npm.cmd test`: 14/14 OK.
+
+Siguiente gate en Render:
+
+```sh
+cd /opt/render/project/src
+git rev-parse --short HEAD || true
+npm run postgres:import -- --input /tmp/postgres-import-source-users.json --report /tmp/postgres-render-import-plan-after-proof-fix.json
+cat /tmp/postgres-render-import-plan-after-proof-fix.json
+grep -E 'passwordHash|operatorPinHash|tokenHash|dataUrl|base64|legacy_data_url' /tmp/postgres-render-import-plan-after-proof-fix.json || true
+```
+
+No repetir `postgres:import:apply` hasta que Render este en el commit del fix y el dry-run del snapshot vuelva `ok: true`.
