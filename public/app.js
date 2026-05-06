@@ -1505,7 +1505,8 @@ function frpOpsV2MarkKeepWorking(jobId) {
   } catch { /* localStorage no disponible — no-op silencioso */ }
 }
 
-function frpOpsV2RenderActiveBanner(jobId) {
+function frpOpsV2RenderActiveBanner(jobId, { actionsDisabled = false } = {}) {
+  const disabledAttrs = actionsDisabled ? `disabled title="Cambio de tecnico en curso"` : "";
   return `
     <div class="frp-ops-v2-banner-30min" role="alert">
       <div>
@@ -1513,8 +1514,8 @@ function frpOpsV2RenderActiveBanner(jobId) {
         <span>El equipo del cliente sigue conectado. Decidí si seguís procesando o cancelás para que otro técnico lo retome.</span>
       </div>
       <div class="frp-ops-v2-banner-30min-actions">
-        <button type="button" class="frp-ops-v2-banner-30min-action-keep" data-frp-keep-working="${escapeHtml(jobId)}">Sigo trabajando</button>
-        <button type="button" class="frp-ops-v2-banner-30min-action-cancel" data-frp-cancel-timeout="${escapeHtml(jobId)}">Cancelar job</button>
+        <button type="button" class="frp-ops-v2-banner-30min-action-keep" data-frp-keep-working="${escapeHtml(jobId)}" ${disabledAttrs}>Sigo trabajando</button>
+        <button type="button" class="frp-ops-v2-banner-30min-action-cancel" data-frp-cancel-timeout="${escapeHtml(jobId)}" ${disabledAttrs}>Cancelar job</button>
       </div>
     </div>
   `;
@@ -1577,7 +1578,7 @@ function frpOpsV2RenderCurrentActive(job, { swapInProgress, tech }) {
   const takenAtRel = frpOpsV2RelativeTime(job.takenAt);
   const actionsDisabled = swapInProgress;
   const bannerHtml = frpOpsV2ShouldShow30MinBanner(job)
-    ? frpOpsV2RenderActiveBanner(job.id)
+    ? frpOpsV2RenderActiveBanner(job.id, { actionsDisabled })
     : "";
   return `
     <section class="frp-ops-v2-section">
@@ -1789,13 +1790,14 @@ function frpOpsV2RenderWaitingConnectionSection({ waitingOrders }) {
   `;
 }
 
-function frpOpsV2RenderAttentionGrid({ pagosRevisar, reviewJobs }) {
-  const canReview = canReviewFrpPayments();
+function frpOpsV2RenderAttentionGrid({ pagosRevisar, reviewJobs, swapInProgress }) {
+  const canReview = canReviewFrpPayments() && !swapInProgress;
+  const disabledTitle = swapInProgress ? "Cambio de tecnico en curso" : "Permisos insuficientes";
   const pagosHtml = pagosRevisar.length
     ? pagosRevisar.map((o) => `
       <button type="button" class="frp-ops-v2-alert-card is-warning"
         data-frp-show-proof="${escapeHtml(o.id)}"
-        ${canReview ? "" : `disabled title="Permisos insuficientes"`}>
+        ${canReview ? "" : `disabled title="${escapeHtml(disabledTitle)}"`}>
         <div class="frp-ops-v2-alert-card-id">${escapeHtml(o.code)}</div>
         <div class="frp-ops-v2-alert-card-title">${escapeHtml(o.clientName || "-")} · ${escapeHtml(o.priceFormatted || `${o.totalPrice} USDT`)}</div>
         <div class="frp-ops-v2-alert-card-action">Ver comprobante →</div>
@@ -1804,11 +1806,14 @@ function frpOpsV2RenderAttentionGrid({ pagosRevisar, reviewJobs }) {
     : `<p class="frp-ops-v2-alert-empty">Sin pagos pendientes.</p>`;
   const reviewHtml = reviewJobs.length
     ? reviewJobs.map((j) => {
-      const canResolve = canResolveFrpReviewJob(j);
+      const canResolve = canResolveFrpReviewJob(j) && !swapInProgress;
+      const reviewDisabledTitle = swapInProgress
+        ? "Cambio de tecnico en curso"
+        : "Solo quien reporto el caso, coordinador o administrador puede resolverlo";
       return `
       <button type="button" class="frp-ops-v2-alert-card is-danger"
         data-frp-show-review="${escapeHtml(j.id)}"
-        ${canResolve ? "" : `disabled title="Solo quien reporto el caso, coordinador o administrador puede resolverlo"`}>
+        ${canResolve ? "" : `disabled title="${escapeHtml(reviewDisabledTitle)}"`}>
         <div class="frp-ops-v2-alert-card-id">${escapeHtml(j.order?.code || j.code)}</div>
         <div class="frp-ops-v2-alert-card-title">${escapeHtml(j.order?.clientName || j.clientName || "-")}</div>
         <div class="frp-ops-v2-alert-card-detail">${escapeHtml(j.reviewReason || "Requiere atencion")}</div>
@@ -1928,7 +1933,7 @@ function renderFrp({ skipPricing = false } = {}) {
         ${frpOpsV2RenderOtherActiveSection({ jobs: otherActiveJobs, tech })}
         ${frpOpsV2RenderWaitingConnectionSection({ waitingOrders: waitingConnectionOrders })}
         ${frpOpsV2RenderQueueSection({ queueState, isMeActive, swapInProgress, hasMyActive: Boolean(myActiveJob) })}
-        ${frpOpsV2RenderAttentionGrid({ pagosRevisar, reviewJobs })}
+        ${frpOpsV2RenderAttentionGrid({ pagosRevisar, reviewJobs, swapInProgress })}
         ${frpOpsV2RenderFinalized(finishedToday)}
       </div>
     </div>

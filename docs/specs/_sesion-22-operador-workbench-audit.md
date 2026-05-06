@@ -259,3 +259,12 @@ Riesgo residual del panel trabajador: ya no es el dato mostrado en `Tu trabajo a
 - Se agrego prueba runtime para `ADMIN` y `COORDINADOR` resolviendo una revision ajena.
 - La prueba confirma que ambos roles pueden devolver el job a `LISTO_PARA_TECNICO` y que `technicianId` queda limpio.
 - El helper de prueba usa payload unico por comprobante para no saltarse ni falsear la guarda anti-reuso de comprobantes.
+
+## Actualizacion 2026-05-06 - Swap congela acciones del panel
+
+- Riesgo revisado: estado vacio, sin tecnico activo y `swap.inProgress`.
+- Hecho confirmado: `Tomar siguiente`, `Tomar` especifico, `Marcar finalizado` y `Reportar problema` ya respetaban `swapInProgress`.
+- Gap encontrado: el banner de timeout 30 min (`Sigo trabajando` / `Cancelar job`) y las cards de `Pagos por revisar` / `Atencion` podian seguir habilitadas durante swap.
+- Se propago `swapInProgress` a esas superficies y ahora muestran `disabled title="Cambio de tecnico en curso"`.
+- No se cambio backend; este corte corrige el contrato visual para que ninguna accion FRP quede operable mientras el tecnico activo esta cambiando.
+- Documento dedicado: `_sesion-22-operador-swap-freezes-actions-contract.md`.

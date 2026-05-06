@@ -230,8 +230,10 @@ test("operator current job actions follow ownership, not global active technicia
 
   assert.match(appJs, /const myActiveJob = jobs\.find\(\(j\) => j\.status === "EN_PROCESO" && j\.technicianId === session\.user\?\.id\);/);
   assert.match(appJs, /function frpOpsV2RenderCurrentActive\(job, \{ swapInProgress, tech \}\)/);
-  assert.match(appJs, /function frpOpsV2RenderActiveBanner\(jobId\)/);
+  assert.match(appJs, /function frpOpsV2RenderActiveBanner\(jobId, \{ actionsDisabled = false \} = \{\}\)/);
   assert.match(appJs, /const actionsDisabled = swapInProgress;/);
+  assert.match(appJs, /const disabledAttrs = actionsDisabled \? `disabled title="Cambio de tecnico en curso"` : "";/);
+  assert.match(appJs, /frpOpsV2RenderActiveBanner\(job\.id, \{ actionsDisabled \}\)/);
   assert.match(appJs, /data-frp-finalize="\$\{escapeHtml\(job\.id\)\}"/);
   assert.match(appJs, /data-frp-review="\$\{escapeHtml\(job\.id\)\}"/);
   assert.match(appJs, /data-frp-cancel-timeout="\$\{escapeHtml\(jobId\)\}"/);
@@ -244,8 +246,12 @@ test("operator review resolver cards are readonly for non-owner technicians", as
   assert.match(appJs, /function canResolveFrpReviewJob\(job\)/);
   assert.match(appJs, /\["ADMIN", "COORDINADOR"\]\.includes\(session\.user\?\.role\)/);
   assert.match(appJs, /job\?\.technicianId && job\.technicianId === session\.user\?\.id/);
-  assert.match(appJs, /const canResolve = canResolveFrpReviewJob\(j\);/);
-  assert.match(appJs, /disabled title="Solo quien reporto el caso, coordinador o administrador puede resolverlo"/);
+  assert.match(appJs, /function frpOpsV2RenderAttentionGrid\(\{ pagosRevisar, reviewJobs, swapInProgress \}\)/);
+  assert.match(appJs, /const canReview = canReviewFrpPayments\(\) && !swapInProgress;/);
+  assert.match(appJs, /const disabledTitle = swapInProgress \? "Cambio de tecnico en curso" : "Permisos insuficientes";/);
+  assert.match(appJs, /const canResolve = canResolveFrpReviewJob\(j\) && !swapInProgress;/);
+  assert.match(appJs, /const reviewDisabledTitle = swapInProgress[\s\S]*\? "Cambio de tecnico en curso"[\s\S]*: "Solo quien reporto el caso, coordinador o administrador puede resolverlo";/);
+  assert.match(appJs, /frpOpsV2RenderAttentionGrid\(\{ pagosRevisar, reviewJobs, swapInProgress \}\)/);
   assert.match(appJs, /canResolve \? "Resolver ->" : "Solo lectura"/);
 });
 
