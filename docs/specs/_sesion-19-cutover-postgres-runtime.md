@@ -1041,3 +1041,44 @@ Decision:
 - Corregir el writer para calificar tablas con schema `ariad`.
 - Repetir `postgres:write-check`.
 - Cuando el writer pase, hacer sync final de drift antes de cualquier cutover.
+
+## Resultado Render Fase C - Write-check aprobado
+
+Fecha: 2026-05-06
+
+Contexto:
+
+- Commit desplegado: `09405d5`.
+- Runtime productivo todavia en `json`.
+- `ARIAD_STORAGE_DRIVER=postgres` no fue activado.
+
+Resultado:
+
+- `postgres:write-check` termino con `ok: true`.
+- `warnings: []`.
+- `writeMismatches: []`.
+- `rolledBack: true`.
+- `rollbackMismatches: []`.
+- El grep de patrones sensibles no imprimio secretos.
+
+Lectura:
+
+- El writer transaccional pudo reconstruir el estado completo desde `users.json`.
+- Dentro de la transaccion, PostgreSQL paso de:
+  - `audit_events: 831`
+  - a `audit_events: 833`.
+- La transaccion hizo rollback intencional y PostgreSQL volvio a:
+  - `audit_events: 831`.
+- Esto valida que la escritura completa funciona y que el rollback no deja cambios.
+
+Decision:
+
+- Fase C queda aprobada como writer tecnicamente listo.
+- No se aprueba cutover todavia.
+- Como el write-check revierte, el drift sigue pendiente:
+  - JSON `audit: 833`;
+  - PostgreSQL `audit_events: 831`.
+
+Siguiente paso unico:
+
+- Ejecutar sync final de drift permitido y luego `read-check`.
