@@ -359,3 +359,97 @@ grep -E 'passwordHash|operatorPinHash|tokenHash|dataUrl|base64|legacy_data_url' 
 ```
 
 No repetir `postgres:import:apply` hasta que Render este en el commit del fix y el dry-run del snapshot vuelva `ok: true`.
+
+## Resultado Render import apply exitoso
+
+Fecha: 2026-05-06
+
+Contexto:
+
+- Render estaba en el commit `b5448eb`.
+- La instancia nueva de Render no conservaba `/tmp/postgres-import-source-users.json`, por lo que se recreo el snapshot desde `storage/users.json`.
+- Snapshot usado: `/tmp/postgres-import-source-users.json`.
+- `sourceSha256`: `b81bcac3be2aefaa93be14884458677e561a5717fb3c39fee7108ad2a780e52f`.
+
+Dry-run previo al apply:
+
+```sh
+cd /opt/render/project/src
+cp storage/users.json /tmp/postgres-import-source-users.json
+npm run postgres:import -- --input /tmp/postgres-import-source-users.json --report /tmp/postgres-render-import-plan-after-proof-fix.json
+cat /tmp/postgres-render-import-plan-after-proof-fix.json
+grep -E 'passwordHash|operatorPinHash|tokenHash|dataUrl|base64|legacy_data_url' /tmp/postgres-render-import-plan-after-proof-fix.json || true
+```
+
+Resultado aceptado:
+
+- `ok: true`;
+- `warnings: []`;
+- `targetEmpty: true`;
+- `nonEmptyTables: []`;
+- `mismatches: []`;
+- reporte sanitizado, sin patrones sensibles.
+
+Apply ejecutado:
+
+```sh
+cd /opt/render/project/src
+npm run postgres:import:apply -- --input /tmp/postgres-import-source-users.json --report /tmp/postgres-render-import-apply-after-proof-fix.json
+cat /tmp/postgres-render-import-apply-after-proof-fix.json
+grep -E 'passwordHash|operatorPinHash|tokenHash|dataUrl|base64|legacy_data_url' /tmp/postgres-render-import-apply-after-proof-fix.json || true
+```
+
+Resultado del apply:
+
+- `ok: true`;
+- `apply: true`;
+- `warnings: []`;
+- `mismatches: []`;
+- `currentTables` estaba en cero antes de escribir;
+- `actualTables` coincidio con `expectedTables`;
+- reporte sanitizado, sin `passwordHash`, `operatorPinHash`, `tokenHash`, `dataUrl`, `base64` ni `legacy_data_url`.
+
+Conteos relevantes importados:
+
+- `migration_runs`: 1;
+- `sequence_counters`: 8;
+- `operator_users`: 5;
+- `customer_clients`: 18;
+- `customer_users`: 18;
+- `customer_orders`: 13;
+- `customer_order_items`: 14;
+- `stored_files`: 17;
+- `payment_proofs`: 32;
+- `frp_orders`: 13;
+- `frp_jobs`: 14;
+- `payment_ledger_entries`: 13;
+- `audit_events`: 830.
+
+Verificacion anti doble-importacion:
+
+```sh
+cd /opt/render/project/src
+npm run postgres:import -- --input /tmp/postgres-import-source-users.json --report /tmp/postgres-render-import-post-apply-check.json
+cat /tmp/postgres-render-import-post-apply-check.json
+grep -E 'passwordHash|operatorPinHash|tokenHash|dataUrl|base64|legacy_data_url' /tmp/postgres-render-import-post-apply-check.json || true
+```
+
+Resultado esperado y confirmado:
+
+- `targetEmpty: false`;
+- `nonEmptyTables` contiene las tablas pobladas;
+- `wouldWrite: false`;
+- `mismatches: []`;
+- `ok: false`;
+- `error`: `Dry-run bloqueado porque la DB destino no esta vacia.`
+
+Lectura:
+
+- La importacion inicial a PostgreSQL quedo aplicada.
+- La compuerta anti doble-importacion funciona y bloquea una segunda carga por defecto.
+- No se debe repetir `postgres:import:apply` sobre esta base ya poblada.
+- El runtime todavia sigue usando `users.json`; no se activo cutover.
+
+Siguiente paso unico:
+
+- Disenar y validar el cutover controlado de runtime a PostgreSQL, con modo de lectura/escritura claramente definido y rollback antes de tocar rutas HTTP.

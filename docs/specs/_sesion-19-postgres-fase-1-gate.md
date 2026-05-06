@@ -370,3 +370,46 @@ npm run postgres:import -- --input /opt/render/project/src/storage/users.json --
 cat /tmp/postgres-render-import-plan.json
 grep -E 'passwordHash|operatorPinHash|tokenHash|dataUrl|base64|legacy_data_url' /tmp/postgres-render-import-plan.json || true
 ```
+
+## Estado posterior al import inicial
+
+Fecha: 2026-05-06
+
+Resultado recibido despues de aplicar el import transaccional:
+
+- Render estaba en el commit `b5448eb`.
+- Snapshot usado: `/tmp/postgres-import-source-users.json`.
+- `sourceSha256`: `b81bcac3be2aefaa93be14884458677e561a5717fb3c39fee7108ad2a780e52f`.
+- `postgres:import:apply` termino con `ok: true`.
+- `warnings: []`.
+- `mismatches: []`.
+- `actualTables` coincidio con `expectedTables`.
+
+Conteos clave confirmados:
+
+- `operator_users`: 5;
+- `customer_clients`: 18;
+- `customer_users`: 18;
+- `customer_orders`: 13;
+- `customer_order_items`: 14;
+- `stored_files`: 17;
+- `payment_proofs`: 32;
+- `frp_orders`: 13;
+- `frp_jobs`: 14;
+- `audit_events`: 830.
+
+Verificacion posterior:
+
+- Se corrio `postgres:import` otra vez en modo dry-run contra el mismo snapshot.
+- Resultado: `targetEmpty: false`, `nonEmptyTables` poblado, `wouldWrite: false`, `ok: false`.
+- Error esperado: `Dry-run bloqueado porque la DB destino no esta vacia.`
+
+Decision:
+
+- Fase 1 queda cerrada para conexion, DDL, migraciones e import inicial.
+- No se repite `postgres:import:apply`.
+- No hay cutover todavia: la aplicacion sigue operando con `users.json`.
+
+Siguiente fase:
+
+- Crear el plan de cutover controlado a PostgreSQL antes de modificar rutas HTTP o repositorios de runtime.
