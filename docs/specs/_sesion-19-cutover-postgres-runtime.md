@@ -933,3 +933,72 @@ Criterio de aceptacion:
 Siguiente paso unico:
 
 - Implementar Fase C exactamente con este alcance y mantener `ARIAD_STORAGE_DRIVER=json` en produccion.
+
+## Resultado local Fase C - Writer transaccional preparado
+
+Fecha: 2026-05-06
+
+Cambio aplicado:
+
+- Se creo `server/db/postgres-legacy-plan.js`.
+- Se refactorizo `scripts/migration/import-users-json-to-postgres.mjs` para usar el planificador comun.
+- Se implemento `postgresStorage.writeDb(db)` con:
+  - plan legacy compartido;
+  - bloqueo por warnings de integridad;
+  - `withTransaction`;
+  - gate de migraciones requeridas;
+  - advisory lock transaccional;
+  - reemplazo completo de tablas runtime;
+  - comparacion de conteos antes de confirmar.
+- Se agrego `scripts/postgres/write-db-check.mjs`.
+- Se agrego `npm run postgres:write-check`.
+
+Decision implementada:
+
+- `migration_runs` queda reservado para import inicial.
+- `writeDb(db)` no trunca ni reinserta `migration_runs`.
+- `schema_migrations` no se toca.
+- `ARIAD_STORAGE_DRIVER=postgres` pasa a reportar `runtimeImplemented: true` y `phase: "C-write-ready"`, pero no se activa en produccion.
+
+Validacion local ejecutada:
+
+```powershell
+node --check server/db/postgres-legacy-plan.js
+node --check server/db/postgres-storage.js
+node --check scripts/migration/import-users-json-to-postgres.mjs
+node --check scripts/postgres/write-db-check.mjs
+npm.cmd test
+npm.cmd run postgres:write-check -- --input data/users.json --report $env:TEMP\postgres-write-check-no-db.json --strict
+npm.cmd run postgres:import -- --input data/users.json --report $env:TEMP\postgres-import-no-db.json --strict
+```
+
+Resultado local:
+
+- Checks de sintaxis: OK.
+- `npm.cmd test`: 14/14 OK.
+- `postgres:write-check` sin `DATABASE_URL`: fallo controlado con `ok: false` y `DATABASE_URL no configurado.`
+- `postgres:import` sin `DATABASE_URL`: fallo controlado con `ok: false` y `DATABASE_URL no configurado.`
+- Los reportes locales no imprimieron patrones sensibles:
+  - `passwordHash`;
+  - `operatorPinHash`;
+  - `tokenHash`;
+  - `dataUrl`;
+  - `base64`;
+  - `legacy_data_url`.
+
+Riesgo restante:
+
+- La prueba local no ejecuta escritura real porque esta maquina no tiene `DATABASE_URL`.
+- Falta ejecutar `postgres:write-check` en Render, donde si existe la base real.
+- Mientras produccion siga en `json`, puede aparecer nuevo drift antes del cutover.
+
+No se hizo:
+
+- No se activo Postgres en Render.
+- No se cambio `ARIAD_STORAGE_DRIVER`.
+- No se borro ni modifico `storage/users.json`.
+- No se ejecuto escritura real contra PostgreSQL desde local.
+
+Siguiente paso unico:
+
+- Subir Fase C y ejecutar en Render el `postgres:write-check` con rollback contra `/opt/render/project/src/storage/users.json`.

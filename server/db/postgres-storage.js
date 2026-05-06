@@ -1,8 +1,17 @@
-import { checkPostgresConnection, hasPostgresConfig } from "./postgres.js";
+import { checkPostgresConnection, hasPostgresConfig, withTransaction } from "./postgres.js";
 import { readPostgresLegacyDb } from "./postgres-legacy-read.js";
+import {
+  assertPostgresRequiredMigrations,
+  buildPostgresLegacyPlan,
+  replacePostgresLegacyRuntime,
+  sanitizePostgresErrorMessage,
+} from "./postgres-legacy-plan.js";
 
-function notImplementedError() {
-  return new Error("ARIAD_STORAGE_DRIVER=postgres todavia no tiene escritura runtime implementada en Fase B.");
+function integrityWarningsError(warnings = []) {
+  const error = new Error(`ARIAD_STORAGE_DRIVER=postgres escritura bloqueada por ${warnings.length} warnings de integridad.`);
+  error.code = "POSTGRES_RUNTIME_WRITE_WARNINGS";
+  error.warningCount = warnings.length;
+  return error;
 }
 
 export function createPostgresStorage({ env = process.env } = {}) {
@@ -14,16 +23,26 @@ export function createPostgresStorage({ env = process.env } = {}) {
     return readPostgresLegacyDb();
   }
 
-  async function writeDb() {
-    throw notImplementedError();
+  async function writeDb(db) {
+    try {
+      const plan = buildPostgresLegacyPlan(db, "runtime-write", "runtime-write");
+      if (plan.warnings.length) throw integrityWarningsError(plan.warnings);
+      return await withTransaction(async (client) => {
+        await assertPostgresRequiredMigrations(client);
+        return replacePostgresLegacyRuntime(client, plan);
+      });
+    } catch (error) {
+      if (error?.code === "POSTGRES_RUNTIME_WRITE_WARNINGS") throw error;
+      throw new Error(`ARIAD_STORAGE_DRIVER=postgres escritura fallo: ${sanitizePostgresErrorMessage(error?.message || error)}`);
+    }
   }
 
   async function health() {
     const configured = hasPostgresConfig(env);
     const report = {
       driver: "postgres",
-      runtimeImplemented: false,
-      phase: "B-read-only",
+      runtimeImplemented: true,
+      phase: "C-write-ready",
       configured,
     };
     if (configured) {
@@ -43,7 +62,7 @@ export function createPostgresStorage({ env = process.env } = {}) {
 
   return {
     driver: "postgres",
-    runtimeImplemented: false,
+    runtimeImplemented: true,
     ensureDb,
     readDb,
     writeDb,
