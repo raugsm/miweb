@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import { frpServiceCode, frpWorkChannel, portalPublicServices } from "../server/config/catalog.js";
@@ -7,6 +8,7 @@ import { sendSseEvent } from "../server/core/http.js";
 import { classifyCostChange, computeProviderBaseline, defaultFrpPricingConfig, frpCurrentPricing, frpDynamicQuantityTiers, frpDynamicTier } from "../server/frp/pricing.js";
 import { frpEligibilityResult, summarizeFrpEligibility } from "../server/frp/eligibility.js";
 import { roundFinalPaymentAmount } from "../public/portal-modules/payments.js";
+import { filesToProofs } from "../public/portal-modules/proofs.js";
 
 test("portal Xiaomi FRP keeps its internal service and WhatsApp 3 mapping", () => {
   const portalFrp = portalPublicServices.find((service) => service.code === "PORTAL-XIAOMI-FRP");
@@ -156,6 +158,43 @@ test("SSE helper keeps event-stream wire format", () => {
   sendSseEvent(res, "orders", { ok: true }, "evt-1");
 
   assert.equal(output, "id: evt-1\nevent: orders\ndata: {\"ok\":true}\n\n");
+});
+
+test("portal proof upload picker keeps mobile-safe file input contract", async () => {
+  const portalHtml = await readFile(new URL("../public/portal.html", import.meta.url), "utf8");
+  const panel3Css = await readFile(new URL("../public/portal-styles/13-panel-3.css", import.meta.url), "utf8");
+
+  const inputTag = portalHtml.match(/<input[^>]+id="panel3ProofInput"[^>]*>/)?.[0] || "";
+  const labelTag = portalHtml.match(/<label[^>]+id="panel3Dropzone"[^>]*>/)?.[0] || "";
+
+  assert.match(inputTag, /\bclass="panel-3-proof-input"/);
+  assert.match(inputTag, /\btype="file"/);
+  assert.match(inputTag, /\baccept="image\/\*,\.pdf,application\/pdf"/);
+  assert.doesNotMatch(inputTag, /\bhidden\b/);
+  assert.match(labelTag, /\bfor="panel3ProofInput"/);
+  assert.match(panel3Css, /\.panel-3-proof-input\s*{[\s\S]*clip-path:\s*inset\(50%\);/);
+});
+
+test("portal proof reader accepts mobile picker files with missing MIME but safe extension", async () => {
+  const previousFileReader = globalThis.FileReader;
+  globalThis.FileReader = class {
+    readAsDataURL(file) {
+      this.result = `data:${file.type || ""};base64,abcd`;
+      this.onload();
+    }
+  };
+
+  try {
+    const [proof] = await filesToProofs([{ name: "comprobante.jpg", type: "", size: 123 }]);
+    assert.equal(proof.type, "image/jpeg");
+    assert.equal(proof.dataUrl, "data:image/jpeg;base64,abcd");
+  } finally {
+    if (previousFileReader) {
+      globalThis.FileReader = previousFileReader;
+    } else {
+      delete globalThis.FileReader;
+    }
+  }
 });
 
 test("Lima date helpers preserve compact stamps", () => {

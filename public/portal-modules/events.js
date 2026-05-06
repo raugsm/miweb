@@ -375,7 +375,7 @@ export function wireEvents() {
       // Errores de validación (tipo/tamaño) muestran cajón inline 4s y
       // vuelven a default. Los errores de red/backend tambien se muestran en Panel 3.
       if (error?.code === "TYPE") {
-        flashPanel3DropzoneError("error-type", "Tipo no permitido. Solo JPG, PNG o PDF.");
+        flashPanel3DropzoneError("error-type", "Tipo no permitido. Solo JPG, PNG, WebP o PDF.");
       } else if (error?.code === "SIZE") {
         flashPanel3DropzoneError("error-size", "Archivo muy grande. Máximo 5 MB.");
       } else {

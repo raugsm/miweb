@@ -224,16 +224,16 @@
                      apariencia: default | dragover | error-type | error-size |
                      uploading | uploaded | validated | rejected. -->
                 <div class="panel-3-proof" id="panel3Proof" data-state="default">
-                  <label class="panel-3-dropzone" id="panel3Dropzone" role="button" tabindex="0" aria-label="Subir comprobante">
+                  <input class="panel-3-proof-input" type="file" id="panel3ProofInput" accept="image/*,.pdf,application/pdf" />
+                  <label class="panel-3-dropzone" id="panel3Dropzone" for="panel3ProofInput" role="button" tabindex="0" aria-label="Subir comprobante">
                     <svg class="panel-3-dropzone-icon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
                       <path d="M12 4v12m0-12l-5 5m5-5l5 5M4 20h16" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
                     </svg>
                     <span class="panel-3-dropzone-title">Subí tu comprobante</span>
-                    <span class="panel-3-dropzone-sub">JPG, PNG o PDF · máx 5 MB</span>
+                    <span class="panel-3-dropzone-sub">Foto o PDF · máx 5 MB</span>
                     <span class="panel-3-dropzone-error" id="panel3DropzoneError" role="alert" aria-live="polite" hidden></span>
                     <span class="panel-3-dropzone-spinner" aria-hidden="true"></span>
                     <span class="panel-3-dropzone-uploading-text">Subiendo comprobante…</span>
-                    <input type="file" id="panel3ProofInput" accept="image/jpeg,image/png,image/webp,application/pdf" hidden />
                   </label>
 
                   <div class="panel-3-proof-card" id="panel3ProofCard" hidden>

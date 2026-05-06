@@ -230,6 +230,24 @@
   margin-top: 8px;
 }
 
+.panel-3-proof-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.panel-3-proof-input:focus-visible + .panel-3-dropzone {
+  outline: 2px solid var(--color-border-info);
+  outline-offset: 2px;
+}
+
 /* Dropzone — estado default */
 .panel-3-dropzone {
   display: flex;
