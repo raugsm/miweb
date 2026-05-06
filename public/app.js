@@ -594,7 +594,9 @@ function renderPortalCustomers() {
     const vipBadge = c.isVip ? `<span class="vip-badge" title="Cliente VIP">★</span>` : "";
     const statusCell = c.isVip
       ? `<span class="status-pill vip-pill">VIP</span>`
-      : `<span class="status-pill">${escapeHtml(c.status || "Regular")}</span>`;
+      : c.emailVerified
+        ? `<span class="status-pill">${escapeHtml(c.status || "Regular")}</span>`
+        : `<span class="status-pill danger-pill">Sin verificar</span>`;
     const margin = Number(c.vipUnitMargin || 0);
     const effective = Number(c.vipEffectiveUnitPrice || 0);
     const priceCell = c.isVip && margin > 0
@@ -602,6 +604,9 @@ function renderPortalCustomers() {
       : "-";
     const actionLabel = c.isVip ? "Quitar VIP" : "Marcar VIP";
     const actionMode = c.isVip ? "unmark" : "mark";
+    const confirmButton = c.emailVerified
+      ? ""
+      : `<button class="mini-btn" type="button" data-portal-confirm-client="${escapeHtml(c.id)}">Confirmar</button>`;
     return `
       <tr>
         <td><strong>${escapeHtml(c.name)}</strong> ${vipBadge}<span class="table-subtext">${escapeHtml(c.whatsapp || "")}</span></td>
@@ -609,7 +614,7 @@ function renderPortalCustomers() {
         <td>${escapeHtml(c.country || "-")}</td>
         <td>${statusCell}</td>
         <td>${priceCell}</td>
-        <td class="action-cell"><button class="mini-btn" type="button" data-portal-vip-action="${actionMode}" data-client-id="${escapeHtml(c.id)}">${actionLabel}</button></td>
+        <td class="action-cell">${confirmButton}<button class="mini-btn" type="button" data-portal-vip-action="${actionMode}" data-client-id="${escapeHtml(c.id)}">${actionLabel}</button></td>
       </tr>
     `;
   }).join("");
@@ -643,6 +648,36 @@ function openVipDialog(customer, action) {
 }
 
 document.addEventListener("click", (event) => {
+  const confirmButton = event.target.closest("[data-portal-confirm-client]");
+  if (confirmButton) {
+    const clientId = confirmButton.dataset.portalConfirmClient;
+    const customer = (session.portalCustomers || []).find((c) => c.id === clientId);
+    if (!customer) return;
+    const portalMessage = document.querySelector("#portal-customers-message");
+    if (portalMessage) portalMessage.textContent = "";
+    showButtonFeedback(confirmButton, "saving", "Confirmando...");
+    confirmButton.disabled = true;
+    api(`/api/admin/customer-clients/${encodeURIComponent(clientId)}/confirm`, {
+      method: "POST",
+      body: JSON.stringify({ reason: "Confirmacion manual desde panel admin" }),
+    }).then(async () => {
+      showButtonFeedback(confirmButton, "success", "Confirmado", 1200);
+      if (portalMessage) {
+        portalMessage.textContent = "Cliente confirmado manualmente.";
+        portalMessage.dataset.type = "success";
+      }
+      await refreshSession();
+    }).catch((error) => {
+      confirmButton.disabled = false;
+      showButtonFeedback(confirmButton, "error", `Error: ${error.message.slice(0, 60)}`, 3500);
+      if (portalMessage) {
+        portalMessage.textContent = error.message;
+        portalMessage.dataset.type = "error";
+      }
+    });
+    return;
+  }
+
   const button = event.target.closest("[data-portal-vip-action]");
   if (!button) return;
   const clientId = button.dataset.clientId;

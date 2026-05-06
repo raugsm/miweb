@@ -110,6 +110,7 @@ import { createFrpRoutes } from "./server/frp/frp-routes.js";
 import { createPortalSerializers } from "./server/portal/serializers.js";
 import { createPortalRoutes } from "./server/portal/portal-routes.js";
 import { createStorage } from "./server/db/storage.js";
+import { confirmPortalCustomerPostgres } from "./server/db/postgres-customer-admin.js";
 import { insertAuditEvent } from "./server/db/postgres-audit.js";
 import { reviewFrpPaymentPostgres } from "./server/db/postgres-frp-core.js";
 import {
@@ -3724,6 +3725,8 @@ async function handleApi(req, res, pathname) {
         country: client.country || "",
         primaryEmail: client.primaryEmail || "",
         status,
+        emailVerified: customerEmailIsVerified(client),
+        emailVerifiedAt: client.emailVerifiedAt || "",
         isVip: status === "VIP",
         vipUnitMargin,
         vipEffectiveUnitPrice,
@@ -3747,6 +3750,71 @@ async function handleApi(req, res, pathname) {
       roles: user.role === "ADMIN" ? Array.from(roles).map((role) => ({ value: role, label: roleLabels[role] })) : [],
       catalog: { services: catalogServicesForUser(user), paymentMethods, workChannels, ticketStatuses, countries: countries.map(([, country]) => country) },
       frp: publicFrpState(db, user),
+    });
+  }
+
+  // Confirmacion manual de cliente portal: via admin auditada para casos donde
+  // la verificacion por correo falla en el celular. En Postgres evita writeDb.
+  const portalConfirmMatch = pathname.match(/^\/api\/admin\/customer-clients\/([^/]+)\/confirm$/);
+  if (req.method === "POST" && portalConfirmMatch) {
+    const db = await readDb();
+    const clientId = decodeURIComponent(portalConfirmMatch[1]);
+    if (!(await requireAdminWithAudit(user, res, db, "PORTAL_CLIENT_CONFIRM_DENIED", clientId, { route: pathname }, "Solo administrador puede confirmar clientes manualmente."))) return;
+    const input = await parseJson(req);
+    const reason = cleanText(input.reason || "Confirmacion manual desde panel admin", 200);
+    const confirmedAt = nowIso();
+
+    if (storage.driver === "postgres") {
+      const result = await confirmPortalCustomerPostgres({
+        clientId,
+        actorId: user.id,
+        confirmedAt,
+        reason,
+      });
+      if (!result.ok) return sendJson(res, result.status || 500, { error: result.error || "No se pudo confirmar el cliente." });
+      const nextDb = await readDb();
+      publishPortalOrders(nextDb, clientId, "portal_client_confirmed");
+      return sendJson(res, 200, result);
+    }
+
+    const client = db.customerClients.find((candidate) => candidate.id === clientId);
+    if (!client) return sendJson(res, 404, { error: "Cliente del portal no encontrado." });
+    const previousStatus = normalizeCustomerStatus(client.status);
+    if (previousStatus === "BLOQUEADO") {
+      return sendJson(res, 409, { error: "Cliente bloqueado. No se puede confirmar manualmente." });
+    }
+    const customerUsers = db.customerUsers.filter((candidate) => candidate.clientId === client.id && candidate.active !== false);
+    const pendingTokens = (db.customerEmailVerificationTokens || []).filter((candidate) => candidate.clientId === client.id && !candidate.usedAt);
+    client.emailVerifiedAt ||= confirmedAt;
+    if (!["EMAIL_VERIFICADO", "VERIFICADO", "VIP", "EMPRESA"].includes(previousStatus)) {
+      client.status = "EMAIL_VERIFICADO";
+    }
+    client.updatedAt = confirmedAt;
+    for (const customerUser of customerUsers) {
+      customerUser.emailVerifiedAt ||= confirmedAt;
+      customerUser.updatedAt = confirmedAt;
+    }
+    for (const token of pendingTokens) {
+      token.usedAt = confirmedAt;
+    }
+    reconcilePortalClientLink(db, client, user.id);
+    audit(db, user.id, "PORTAL_CLIENT_MANUALLY_CONFIRMED", client.id, {
+      previousStatus,
+      newStatus: normalizeCustomerStatus(client.status),
+      userCount: customerUsers.length,
+      consumedVerificationTokens: pendingTokens.length,
+      reason,
+    });
+    await writeDb(db);
+    publishPortalOrders(db, client.id, "portal_client_confirmed");
+    return sendJson(res, 200, {
+      ok: true,
+      client: {
+        id: client.id,
+        name: client.name,
+        status: normalizeCustomerStatus(client.status),
+        emailVerifiedAt: client.emailVerifiedAt || "",
+      },
     });
   }
 
