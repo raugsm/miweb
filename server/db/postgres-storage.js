@@ -3,9 +3,27 @@ import { readPostgresLegacyDb } from "./postgres-legacy-read.js";
 import {
   assertPostgresRequiredMigrations,
   buildPostgresLegacyPlan,
+  queryPostgresRuntimeCounts,
   replacePostgresLegacyRuntime,
   sanitizePostgresErrorMessage,
 } from "./postgres-legacy-plan.js";
+
+const destructiveGuardTables = [
+  "operator_users",
+  "master_clients",
+  "customer_clients",
+  "customer_users",
+  "internal_clients",
+  "customer_orders",
+  "customer_order_items",
+  "stored_files",
+  "payment_proofs",
+  "frp_orders",
+  "frp_jobs",
+  "active_technician_state",
+  "payment_ledger_entries",
+  "audit_events",
+];
 
 function integrityWarningsError(warnings = []) {
   const error = new Error(`ARIAD_STORAGE_DRIVER=postgres escritura bloqueada por ${warnings.length} warnings de integridad.`);
@@ -14,8 +32,35 @@ function integrityWarningsError(warnings = []) {
   return error;
 }
 
+function envFlag(value) {
+  return ["1", "true", "yes"].includes(String(value || "").trim().toLowerCase());
+}
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function countValue(counts, table) {
+  const count = Number(counts?.[table] || 0);
+  return Number.isFinite(count) ? count : 0;
+}
+
+export function destructiveRuntimeWriteDiff(currentTables = {}, plannedTables = {}) {
+  return destructiveGuardTables
+    .map((table) => ({
+      table,
+      current: countValue(currentTables, table),
+      planned: countValue(plannedTables, table),
+    }))
+    .filter((entry) => entry.current > 0 && entry.planned === 0);
+}
+
+function destructiveRuntimeWriteError(diffs) {
+  const detail = diffs.map((entry) => `${entry.table}:${entry.current}->${entry.planned}`).join(", ");
+  const error = new Error(`ARIAD_STORAGE_DRIVER=postgres escritura bloqueada por reemplazo destructivo (${detail}).`);
+  error.code = "POSTGRES_RUNTIME_DESTRUCTIVE_WRITE_BLOCKED";
+  error.diffs = diffs;
+  return error;
 }
 
 function isTransientPostgresWriteError(error) {
@@ -45,6 +90,12 @@ export function createPostgresStorage({ env = process.env } = {}) {
     if (plan.warnings.length) throw integrityWarningsError(plan.warnings);
     return withTransaction(async (client) => {
       await assertPostgresRequiredMigrations(client);
+      if (!envFlag(env.POSTGRES_RUNTIME_ALLOW_DESTRUCTIVE_REPLACE)) {
+        await client.query("select pg_advisory_xact_lock(hashtext($1), hashtext($2))", ["ariadgsm", "legacy-runtime-write"]);
+        const currentTables = await queryPostgresRuntimeCounts(client, { includeMigrationRuns: false });
+        const destructiveDiffs = destructiveRuntimeWriteDiff(currentTables, plan.tables);
+        if (destructiveDiffs.length) throw destructiveRuntimeWriteError(destructiveDiffs);
+      }
       return replacePostgresLegacyRuntime(client, plan);
     });
   }
@@ -72,7 +123,12 @@ export function createPostgresStorage({ env = process.env } = {}) {
       try {
         return await writeDbWithRetry(db);
       } catch (error) {
-        if (error?.code === "POSTGRES_RUNTIME_WRITE_WARNINGS") throw error;
+        if (
+          error?.code === "POSTGRES_RUNTIME_WRITE_WARNINGS"
+          || error?.code === "POSTGRES_RUNTIME_DESTRUCTIVE_WRITE_BLOCKED"
+        ) {
+          throw error;
+        }
         throw new Error(`ARIAD_STORAGE_DRIVER=postgres escritura fallo: ${sanitizePostgresErrorMessage(error?.message || error)}`);
       }
     };
