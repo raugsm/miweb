@@ -1537,6 +1537,14 @@ function frpOpsV2RenderHeader(tech) {
   `;
 }
 
+function frpOpsV2JobRedirectorId(job, { swapInProgress, tech } = {}) {
+  const order = job?.order || {};
+  const frozenRedirectorId = String(order.redirectorId || order.technicianId || "").trim();
+  if (frozenRedirectorId) return frozenRedirectorId;
+  if (swapInProgress) return "-";
+  return String(tech?.active?.redirectorId || "").trim() || "-";
+}
+
 function frpOpsV2RenderCurrentActive(job, { swapInProgress, tech }) {
   const order = job.order || {};
   const orderCode = order.code || job.code || "";
@@ -1545,7 +1553,7 @@ function frpOpsV2RenderCurrentActive(job, { swapInProgress, tech }) {
   const clientName = order.clientName || job.clientName || "-";
   const serviceName = job.serviceName || "Xiaomi Cuenta Google";
   const ardCode = job.ardCode || "";
-  const technicianId = tech?.active?.redirectorId || "-";
+  const technicianId = frpOpsV2JobRedirectorId(job, { swapInProgress, tech });
   const processCode = order.processCode || "-";
   const takenAtRel = frpOpsV2RelativeTime(job.takenAt);
   const actionsDisabled = swapInProgress;

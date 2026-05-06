@@ -175,6 +175,15 @@ test("portal proof upload picker keeps mobile-safe file input contract", async (
   assert.match(panel3Css, /\.panel-3-proof-input\s*{[\s\S]*clip-path:\s*inset\(50%\);/);
 });
 
+test("operator current job renders frozen redirector before active technician fallback", async () => {
+  const appJs = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
+
+  assert.match(appJs, /function frpOpsV2JobRedirectorId\(job, \{ swapInProgress, tech \} = \{\}\)/);
+  assert.match(appJs, /order\.redirectorId \|\| order\.technicianId/);
+  assert.match(appJs, /if \(swapInProgress\) return "-";/);
+  assert.match(appJs, /frpOpsV2JobRedirectorId\(job, \{ swapInProgress, tech \}\)/);
+});
+
 test("portal proof reader accepts mobile picker files with missing MIME but safe extension", async () => {
   const previousFileReader = globalThis.FileReader;
   globalThis.FileReader = class {

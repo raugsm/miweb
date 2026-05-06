@@ -40,6 +40,7 @@ export function createFrpSerializers({
     const processCode = portalOrder?.code && order?.quantity
       ? `${portalOrder.code}-${Math.max(1, Number(order.quantity) || 1)}`
       : "";
+    const frozenRedirectorId = order?.redirectorId || order?.technicianId || "";
     return {
       ...job,
       technicianName: technician?.name || "",
@@ -52,6 +53,8 @@ export function createFrpSerializers({
         totalPrice: order.totalPrice,
         paymentLabel: order.paymentLabel,
         quantity: Number(order.quantity || 1),
+        technicianId: frozenRedirectorId,
+        redirectorId: frozenRedirectorId,
         customerStatus: customerClient?.status || "",
         portalOrderCode: portalOrder?.code || "",
         processCode,

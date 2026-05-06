@@ -421,6 +421,8 @@ async function runSmoke({ baseUrl, dataDir, setupToken }) {
   assert.equal(response.status, 200);
   const readyPortalJobs = (response.data.frp?.jobs || []).filter((job) => job.orderId === portalFrpOrder.id && job.status === "LISTO_PARA_TECNICO");
   assert.equal(readyPortalJobs.length, 2, "el panel operador debe recibir dos equipos listos sin desaparecer la orden");
+  assert.equal(readyPortalJobs[0]?.order?.redirectorId, "2000 1122 3344", "job operador debe exponer el Technician ID congelado de la orden");
+  assert.equal(readyPortalJobs[0]?.order?.technicianId, "2000 1122 3344", "job operador mantiene alias technicianId solo dentro de order");
   const canceledPortalJobs = (response.data.frp?.jobs || []).filter((job) => job.orderId === portalFrpOrder.id && job.status === "CANCELADO");
   assert.equal(canceledPortalJobs.length, 1, "el panel operador debe ver el equipo cancelado para trazabilidad");
 
@@ -428,6 +430,7 @@ async function runSmoke({ baseUrl, dataDir, setupToken }) {
     response = await technicianHttp.request("POST", "/api/frp/jobs/take-next");
     assert.equal(response.status, 200, "tecnico activo debe tomar el siguiente equipo portal");
     assert.equal(response.data.job.orderId, portalFrpOrder.id);
+    assert.equal(response.data.job.order?.redirectorId, "2000 1122 3344", "job tomado debe conservar el Technician ID congelado aunque el turno global cambie");
     response = await technicianHttp.request("PATCH", `/api/frp/jobs/${encodeURIComponent(response.data.job.id)}/finalize`, {
       finalLog: `Portal finalizado ${index + 1}`,
     });

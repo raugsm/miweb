@@ -187,3 +187,12 @@ Por que este primero:
 - `data-frp-show-review` ya abre un dialogo de resolucion.
 - `Reportar problema` ya usa dialogo controlado en vez de `window.prompt`.
 - `PATCH /api/frp/jobs/:id/ready` ya tiene camino PostgreSQL granular.
+
+## Actualizacion 2026-05-06 - Technician ID congelado
+
+- El P1 de Technician ID del trabajo actual fue cerrado en `_sesion-22-operador-current-job-frozen-technician-id.md`.
+- `publicFrpJob` ahora expone `order.redirectorId` y `order.technicianId` desde el dato congelado de la orden FRP.
+- `frpOpsV2RenderCurrentActive` prioriza el Technician ID congelado del job/orden y solo cae al tecnico activo global como fallback.
+- Se agregaron guardas en `phase3a.contract.test.js` y `phase4.smoke.test.js`.
+
+Riesgo residual del panel trabajador: ya no es el dato mostrado en `Tu trabajo actual`; lo pendiente es validar UX real con tecnico cambiando de turno mientras mantiene jobs viejos en observacion.
