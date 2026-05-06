@@ -226,3 +226,12 @@ Riesgo residual del panel trabajador: ya no es el dato mostrado en `Tu trabajo a
 - Se agrego prueba runtime en `phase5.technician-swap.test.js`: Jack ve/tiene sesion, el admin cambia tecnico activo a Angelo, Jack intenta tomar el job especifico y recibe 403.
 - La misma prueba confirma que el job queda `LISTO_PARA_TECNICO` y Angelo puede tomarlo.
 - Se agrego guarda frontend en `phase3a.contract.test.js`: el catch de `takeSpecificFrpJob` muestra error y hace `refreshSession()`.
+
+## Actualizacion 2026-05-06 - Finalizar job tomado tras cambio de tecnico activo
+
+- Riesgo revisado: `Finalizar` podia confundirse con `Tomar` y depender del tecnico activo global.
+- Hecho confirmado: `PATCH /api/frp/jobs/:id/finalize` no usa `requireActiveFrpTechnician`; valida el dueno congelado del job (`technicianId`) o rol `ADMIN`.
+- Se agrego prueba runtime en `phase5.technician-swap.test.js`: Jack toma un job, el admin cambia el tecnico activo global a Angelo, y Jack todavia puede finalizar su job.
+- La misma prueba confirma que el job queda `FINALIZADO` y conserva `technicianId` de Jack.
+- Se agrego guarda frontend en `phase3a.contract.test.js`: el trabajo actual se renderiza por ownership (`job.technicianId === session.user?.id`) y las acciones solo se bloquean durante `swapInProgress`.
+- Documento dedicado: `_sesion-22-operador-finalize-owner-after-active-switch-contract.md`.

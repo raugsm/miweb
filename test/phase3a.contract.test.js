@@ -225,6 +225,16 @@ test("operator specific take rejection refreshes stale active technician state",
   assert.match(appJs, /catch \(error\) \{[\s\S]*frpMessage\.textContent = error\.message;[\s\S]*frpMessage\.dataset\.type = "error";[\s\S]*await refreshSession\(\);/);
 });
 
+test("operator current job finalize follows job ownership, not global active technician", async () => {
+  const appJs = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
+
+  assert.match(appJs, /const myActiveJob = jobs\.find\(\(j\) => j\.status === "EN_PROCESO" && j\.technicianId === session\.user\?\.id\);/);
+  assert.match(appJs, /function frpOpsV2RenderCurrentActive\(job, \{ swapInProgress, tech \}\)/);
+  assert.match(appJs, /const actionsDisabled = swapInProgress;/);
+  assert.match(appJs, /data-frp-finalize="\$\{escapeHtml\(job\.id\)\}"/);
+  assert.match(appJs, /currentHtml = frpOpsV2RenderCurrentActive\(myActiveJob, \{ swapInProgress, tech \}\);/);
+});
+
 test("portal proof reader accepts mobile picker files with missing MIME but safe extension", async () => {
   const previousFileReader = globalThis.FileReader;
   globalThis.FileReader = class {

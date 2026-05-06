@@ -287,7 +287,7 @@ Todos llaman `renderFrp({ skipPricing: true })`. Si se nota flicker visual moles
 | Apretar "Tomar siguiente" (card vacío, filtro apagado) | `POST /api/frp/jobs/take-next` | Toma el job más antiguo de la cola |
 | Apretar "Tomar siguiente VIP" (card vacío, filtro VIP activo con VIPs visibles) | `POST /api/frp/jobs/:id/take` | Toma el primer job VIP visible. 409 si ya fue tomado |
 | Apretar "Tomar" en card específica de cola | `POST /api/frp/jobs/:id/take` | Toma ese job específico. 409 si ya fue tomado |
-| Apretar "Marcar finalizado" | `PATCH /api/frp/jobs/:id/finalize` | Cambia estado a `FINALIZADO`, registra `doneAt`, auto-genera log "Finalizado por <user> a las <HH:MM>" Lima, dispara generación de PDF cliente |
+| Apretar "Marcar finalizado" | `PATCH /api/frp/jobs/:id/finalize` | Cambia estado a `FINALIZADO`, registra `doneAt`, auto-genera log "Finalizado por <user> a las <HH:MM>" Lima, dispara generación de PDF cliente. El permiso depende del dueno del job, no del tecnico activo global |
 | Apretar "Reportar problema" | Abre modal (otra spec). Modal llama `PATCH /api/frp/jobs/:id/review` con razón + categoría |
 | Apretar "Sigo trabajando" en banner 30 min | (sin endpoint) cierra banner client-side, persiste en localStorage |
 | Apretar "Cancelar job" en banner 30 min | confirm → `PATCH /api/frp/jobs/:id/cancel` con `{reason: 'timeout', note: 'Cancelado tras 30+ min sin finalizar'}` |
@@ -333,6 +333,7 @@ Si hay `notice`, el frontend pinta `#frp-message` con el dataset.type. Sin notic
 ### 5.4 Validaciones antes de actions
 
 - "Marcar finalizado" requiere que `job.technicianId === currentUser.id`. Si no, botón disabled con tooltip "Solo quien tomó el job puede finalizarlo".
+- Si el tecnico activo global cambia despues de tomar el job, el dueno congelado (`job.technicianId`) conserva el boton y puede finalizar. El nuevo activo global no hereda permiso sobre ese job.
 - "Tomar" no permite tomar si ya hay un job en `EN_PROCESO` para este técnico. Botón disabled.
 - "Aprobar comprobante" requiere rol `ADMIN` o `COORDINADOR`. Si rol `ATENCION_TECNICA`, botón disabled con tooltip "Permisos insuficientes".
 - Cuando hay switch en transición (10s), todos los botones de acción están disabled.
@@ -391,7 +392,7 @@ Si hay `notice`, el frontend pinta `#frp-message` con el dataset.type. Sin notic
 **Frontend:**
 - Solo mostrar el panel a usuarios con rol `ADMIN`, `COORDINADOR`, o `ATENCION_TECNICA`.
 - Botones de aprobación de pago solo a `ADMIN` y `COORDINADOR`.
-- Botón "Marcar finalizado" solo si `job.technicianId === currentUser.id`.
+- Botón "Marcar finalizado" solo si `job.technicianId === currentUser.id`, aunque `active_technician_state` haya cambiado despues de tomar el job.
 - Botón "Tomar" disabled si el técnico no es el activo del momento.
 
 **Backend** (ya implementado):
@@ -422,6 +423,7 @@ Si hay `notice`, el frontend pinta `#frp-message` con el dataset.type. Sin notic
 14. Si otro técnico toma un job, el card desaparece de la cola en menos de 2s (vía SSE).
 15. Si el técnico activo cambia entre render y click, `POST /api/frp/jobs/:id/take` devuelve 403, la UI muestra error y refresca sesión sin marcar éxito.
 16. Click en "Marcar finalizado" llama `PATCH /api/frp/jobs/:id/finalize` (auto-log generado), refresca el panel, mueve el job a Finalizados.
+16b. Si el tecnico activo cambia entre tomar y finalizar, el dueno del job todavia puede finalizar; la UI no debe ocultar su trabajo actual por no ser el activo global.
 17. Click en "Reportar problema" abre modal de reportar problema (otra spec).
 18. Click en "Ver comprobante" abre modal con paymentProofs y botones de aprobar/rechazar.
 19. Approve de un comprobante llama `PATCH /api/frp/orders/:id/payment-review` y dispara lock 15min.

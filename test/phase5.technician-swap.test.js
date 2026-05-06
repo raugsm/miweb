@@ -280,6 +280,60 @@ test("phase 5: specific FRP take rejects stale active technician after switch", 
   }
 });
 
+test("phase 5: FRP owner can finalize after active technician changes", { timeout: 30_000 }, async () => {
+  const server = await startIsolatedServer({ swapMs: SWAP_MS });
+  try {
+    const adminHttp = createHttpClient(server.baseUrl, new CookieJar());
+    const { jackId, jackEmail, jackPassword, angeloId } = await setupTwoFrpTechnicians(adminHttp, server.setupToken);
+
+    let response = await adminHttp.request("GET", "/api/operator/technician/status");
+    assert.equal(response.status, 200);
+    assert.equal(response.data.technician.active.userId, jackId);
+
+    const readyJob = await createReadyFrpJob(adminHttp);
+
+    const jackHttp = createHttpClient(server.baseUrl, new CookieJar());
+    response = await jackHttp.request("POST", "/api/login", {
+      email: jackEmail,
+      password: jackPassword,
+      operatorPin: server.setupToken,
+    });
+    assert.equal(response.status, 200);
+
+    response = await jackHttp.request("POST", `/api/frp/jobs/${encodeURIComponent(readyJob.id)}/take`);
+    assert.equal(response.status, 200);
+    assert.equal(response.data.job.status, "EN_PROCESO");
+    assert.equal(response.data.job.technicianId, jackId);
+
+    response = await adminHttp.request("POST", "/api/operator/technician/switch", {
+      targetUserId: angeloId,
+    });
+    assert.equal(response.status, 200);
+    assert.equal(response.data.technician.swap.inProgress, true);
+
+    await delay(SWAP_MS + 80);
+    response = await adminHttp.request("GET", "/api/operator/technician/status");
+    assert.equal(response.status, 200);
+    assert.equal(response.data.technician.active.userId, angeloId);
+
+    response = await jackHttp.request("PATCH", `/api/frp/jobs/${encodeURIComponent(readyJob.id)}/finalize`, {
+      finalLog: "Owner finalized after active technician switch",
+    });
+    assert.equal(response.status, 200);
+    assert.equal(response.data.job.status, "FINALIZADO");
+    assert.equal(response.data.job.technicianId, jackId);
+    assert.ok(response.data.job.doneAt);
+
+    response = await adminHttp.request("GET", "/api/session");
+    assert.equal(response.status, 200);
+    const finalizedJob = response.data.frp.jobs.find((job) => job.id === readyJob.id);
+    assert.equal(finalizedJob.status, "FINALIZADO");
+    assert.equal(finalizedJob.technicianId, jackId);
+  } finally {
+    await server.stop();
+  }
+});
+
 async function startIsolatedServer({ swapMs }) {
   const dataDir = await mkdtemp(path.join(tmpdir(), "ariadgsm-phase5-"));
   const port = await getAvailablePort();
