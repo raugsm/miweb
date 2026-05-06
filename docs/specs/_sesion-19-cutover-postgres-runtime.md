@@ -492,3 +492,39 @@ Lectura:
 Siguiente paso unico:
 
 - Commit y push, luego validar `https://ariadgsm.com/api/health` cuando Render despliegue.
+
+## Validacion Render de health con metadata
+
+Fecha: 2026-05-06
+
+Contexto:
+
+- Commit desplegado esperado: `43ec44f Expose storage runtime in health`.
+- No se cambio `ARIAD_STORAGE_DRIVER`.
+- El runtime esperado sigue siendo `json`.
+
+Resultado de `https://ariadgsm.com/api/health`:
+
+```json
+{
+  "ok": true,
+  "appVersion": "frp-eligibility-v1",
+  "sessionVersion": 7,
+  "customerSessionVersion": 1,
+  "trustedDeviceVersion": 3,
+  "storageDriver": "json",
+  "storageRuntimeImplemented": true,
+  "releaseCommit": "43ec44f87e92"
+}
+```
+
+Lectura:
+
+- Render ya esta corriendo el commit de observabilidad.
+- El driver activo en produccion es `json`.
+- El runtime Postgres sigue desactivado.
+- El health no expone rutas locales, `DATABASE_URL`, hashes, tokens, base64 ni datos de clientes.
+
+Siguiente paso unico:
+
+- Pasar a Fase B: disenar `postgresStorage.readDb()` de compatibilidad sin activar escritura PostgreSQL ni cambiar `ARIAD_STORAGE_DRIVER`.
