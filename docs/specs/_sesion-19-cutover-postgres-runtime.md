@@ -1082,3 +1082,72 @@ Decision:
 Siguiente paso unico:
 
 - Ejecutar sync final de drift permitido y luego `read-check`.
+
+## Resultado Render Fase C - Sync final y read-check alineado
+
+Fecha: 2026-05-06
+
+Contexto:
+
+- Commit desplegado para runtime: `09405d5`.
+- Runtime productivo todavia en `json`.
+- `ARIAD_STORAGE_DRIVER=postgres` no fue activado.
+- Fuente verificada: `/opt/render/project/src/storage/users.json`.
+- `sourceSha256`: `b3006a7212153347db1ddcc0bfe92923fea55facf063edbda32b6f6b2a511138`.
+
+Sync final aplicado:
+
+- `postgres:sync-drift:apply` termino con `ok: true`.
+- `warnings: []`.
+- `plannedCounts`:
+  - `customerDevices: 0`;
+  - `customerDeviceAuthorizations: 0`;
+  - `auditEvents: 2`.
+- Eventos de auditoria sincronizados:
+  - `67b5b5b0-b566-4f2e-9af4-601c7c488cd0` - `PORTAL_ORDERS_STREAM_DISCONNECTED`;
+  - `a3f7a42d-62c4-4f20-9dd1-a22b8bd3a100` - `PORTAL_ORDERS_STREAM_CONNECTED`.
+- `afterCounts`:
+  - `customerDevices: 90`;
+  - `auditEvents: 833`.
+
+Read-check final:
+
+- `postgres:read-check --strict` termino con `ok: true`.
+- `tableProjectionMismatches: []`.
+- `sourceComparison.collectionMismatches: []`.
+- `sourceComparison.projectionMismatches: []`.
+- Conteos principales alineados:
+  - `users: 5`;
+  - `sessions: 2`;
+  - `customerClients: 18`;
+  - `customerUsers: 18`;
+  - `customerDevices: 90`;
+  - `customerOrders: 13`;
+  - `customerOrderItems: 14`;
+  - `frpOrders: 13`;
+  - `frpJobs: 14`;
+  - `paymentProofs: 32`;
+  - `audit: 833`;
+  - `audit_events: 833`.
+- Resumen de integridad:
+  - duplicados de email operador: `0`;
+  - duplicados de email customer: `0`;
+  - proofs sin digest: `0`;
+  - final images sin digest: `0`;
+  - `proofInlinePayloads: 32`;
+  - `finalImageInlinePayloads: 0`.
+
+Decision:
+
+- PostgreSQL quedo alineado con el `users.json` actual.
+- Fase C queda validada para lectura reconstruida y escritura transaccional.
+- No se activa Postgres todavia.
+
+Riesgo restante:
+
+- Mientras produccion siga escribiendo en `json`, puede aparecer nuevo drift antes del cutover.
+- El cutover necesita un gate final inmediatamente antes de cambiar `ARIAD_STORAGE_DRIVER`.
+
+Siguiente paso unico:
+
+- Ejecutar pre-cutover gate: dry-run de drift + read-check final. Si sale limpio, pedir aprobacion explicita para cambiar `ARIAD_STORAGE_DRIVER=postgres`.
