@@ -2908,11 +2908,11 @@ function requirePricingManager(user, res) {
 
 async function denySensitiveRoute(res, db, user, action, targetId, detail = {}, message = "Solo administrador puede realizar esta accion.") {
   if (user?.id) {
-    audit(db, user.id, action, targetId, {
+    const event = audit(db, user.id, action, targetId, {
       role: user.role,
       ...detail,
     });
-    await writeDb(db);
+    await persistAuditEventOnly(event, { db, alreadyInDb: true, label: "permission_denied_admin" });
   }
   return sendJson(res, 403, { error: message });
 }
@@ -2927,8 +2927,8 @@ async function requireAdminWithAudit(user, res, db, action, targetId, detail = {
 async function requireFrpAccess(user, res, db, action = "FRP_ACCESS_DENIED", targetId = "frp") {
   if (!requireUser(user, res)) return false;
   if (canUseFrp(user)) return true;
-  audit(db, user.id, action, targetId, { role: user.role, workChannel: user.workChannel || "" });
-  await writeDb(db);
+  const event = audit(db, user.id, action, targetId, { role: user.role, workChannel: user.workChannel || "" });
+  await persistAuditEventOnly(event, { db, alreadyInDb: true, label: "permission_denied_frp_access" });
   sendJson(res, 403, { error: "FRP Express pertenece a WhatsApp 3." });
   return false;
 }
@@ -2937,12 +2937,12 @@ async function requireActiveFrpTechnician(user, res, db, action = "FRP_ACTIVE_TE
   if (!requireUser(user, res)) return false;
   if (isActiveFrpTechnician(db, user)) return true;
   const active = db.activeTechnician && !db.activeTechnician.swapInProgress ? db.activeTechnician : null;
-  audit(db, user.id, action, targetId, {
+  const event = audit(db, user.id, action, targetId, {
     role: user.role,
     workChannel: user.workChannel || "",
     activeTechnicianUserId: active?.userId || "",
   });
-  await writeDb(db);
+  await persistAuditEventOnly(event, { db, alreadyInDb: true, label: "permission_denied_active_technician" });
   sendJson(res, 403, { error: "Solo el tecnico activo puede tomar trabajos FRP." });
   return false;
 }
@@ -2950,8 +2950,8 @@ async function requireActiveFrpTechnician(user, res, db, action = "FRP_ACTIVE_TE
 async function requireFrpCostManagerWithAudit(user, res, db, action = "FRP_PRICING_UPDATE_DENIED", targetId = "frp-pricing", detail = {}) {
   if (!requireUser(user, res)) return false;
   if (canManageFrpCosts(user)) return true;
-  audit(db, user.id, action, targetId, { role: user.role, workChannel: user.workChannel || "", ...detail });
-  await writeDb(db);
+  const event = audit(db, user.id, action, targetId, { role: user.role, workChannel: user.workChannel || "", ...detail });
+  await persistAuditEventOnly(event, { db, alreadyInDb: true, label: "permission_denied_frp_cost" });
   sendJson(res, 403, { error: "Solo administrador o WhatsApp 3 autorizado puede modificar costos FRP." });
   return false;
 }
@@ -2959,8 +2959,8 @@ async function requireFrpCostManagerWithAudit(user, res, db, action = "FRP_PRICI
 async function requireFrpPaymentReviewer(user, res, db, targetId) {
   if (!requireUser(user, res)) return false;
   if (canReviewFrpPayments(user)) return true;
-  audit(db, user.id, "FRP_PAYMENT_REVIEW_DENIED", targetId, { role: user.role, workChannel: user.workChannel || "" });
-  await writeDb(db);
+  const event = audit(db, user.id, "FRP_PAYMENT_REVIEW_DENIED", targetId, { role: user.role, workChannel: user.workChannel || "" });
+  await persistAuditEventOnly(event, { db, alreadyInDb: true, label: "permission_denied_frp_payment_review" });
   sendJson(res, 403, { error: "Solo administrador, coordinador o tecnico WhatsApp 3 puede validar pagos FRP." });
   return false;
 }
