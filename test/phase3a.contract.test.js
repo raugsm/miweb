@@ -191,7 +191,17 @@ test("operator workbench treats other active jobs as plural observer state", asy
   assert.doesNotMatch(appJs, /otherActiveJob = !myActiveJob[\s\S]{0,180}jobs\.find/);
   assert.match(appJs, /frpOpsV2RenderOtherActiveSection\(\{ jobs: otherActiveJobs, tech \}\)/);
   assert.match(appJs, /frp-ops-v2-other-active-list/);
-  assert.match(appJs, /currentHtml = frpOpsV2RenderCurrentEmpty\(\{ queueState, isMeActive, swapInProgress \}\);/);
+  assert.match(appJs, /currentHtml = frpOpsV2RenderCurrentEmpty\(\{ queueState, isMeActive, hasActiveTechnician, swapInProgress \}\);/);
+});
+
+test("operator empty workbench distinguishes no active technician from another active technician", async () => {
+  const appJs = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
+
+  assert.match(appJs, /const hasActiveTechnician = Boolean\(tech\?\.active\?\.userId\);/);
+  assert.match(appJs, /function frpOpsV2RenderCurrentEmpty\(\{ queueState, isMeActive, hasActiveTechnician, swapInProgress \}\)/);
+  assert.match(appJs, /function frpOpsV2RenderQueueCard\(job, \{ isMeActive, hasActiveTechnician, swapInProgress, hasMyActive \}\)/);
+  assert.match(appJs, /: !hasActiveTechnician \? "Sin tecnico activo"[\s\S]*: !isMeActive \? "No sos el tecnico activo"/);
+  assert.match(appJs, /frpOpsV2RenderQueueCard\(j, \{ isMeActive, hasActiveTechnician, swapInProgress, hasMyActive \}\)/);
 });
 
 test("operator finalized today uses multi-operator technician marks", async () => {

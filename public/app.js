@@ -1664,7 +1664,7 @@ function frpOpsV2RenderOtherActiveSection({ jobs, tech }) {
   `;
 }
 
-function frpOpsV2RenderCurrentEmpty({ queueState, isMeActive, swapInProgress }) {
+function frpOpsV2RenderCurrentEmpty({ queueState, isMeActive, hasActiveTechnician, swapInProgress }) {
   const visibleJobs = queueState?.showJobs || [];
   const hasJobsInQueue = visibleJobs.length > 0;
   const takeSpecificJobId = queueState?.vipOnly && !queueState?.fallbackToAll
@@ -1673,6 +1673,7 @@ function frpOpsV2RenderCurrentEmpty({ queueState, isMeActive, swapInProgress }) 
   const canTake = hasJobsInQueue && isMeActive && !swapInProgress;
   const disabledTip = swapInProgress
     ? "Cambio de tecnico en curso"
+    : !hasActiveTechnician ? "Sin tecnico activo"
     : !isMeActive ? "No sos el tecnico activo"
     : !hasJobsInQueue ? "Sin trabajos listos en cola"
     : "";
@@ -1700,7 +1701,7 @@ function frpOpsV2RenderCurrentEmpty({ queueState, isMeActive, swapInProgress }) 
   `;
 }
 
-function frpOpsV2RenderQueueCard(job, { isMeActive, swapInProgress, hasMyActive }) {
+function frpOpsV2RenderQueueCard(job, { isMeActive, hasActiveTechnician, swapInProgress, hasMyActive }) {
   const order = job.order || {};
   const isVip = order.customerStatus === "VIP";
   const orderCode = order.code || job.code || "";
@@ -1712,6 +1713,7 @@ function frpOpsV2RenderQueueCard(job, { isMeActive, swapInProgress, hasMyActive 
   const disabledTip = hasMyActive
     ? "Ya tenes un FRP en proceso"
     : swapInProgress ? "Cambio de tecnico en curso"
+    : !hasActiveTechnician ? "Sin tecnico activo"
     : !isMeActive ? "No sos el tecnico activo"
     : "";
   return `
@@ -1734,7 +1736,7 @@ function frpOpsV2RenderQueueCard(job, { isMeActive, swapInProgress, hasMyActive 
   `;
 }
 
-function frpOpsV2RenderQueueSection({ queueState, isMeActive, swapInProgress, hasMyActive }) {
+function frpOpsV2RenderQueueSection({ queueState, isMeActive, hasActiveTechnician, swapInProgress, hasMyActive }) {
   const total = queueState?.total || 0;
   const vipOnly = Boolean(queueState?.vipOnly);
   const vipCount = queueState?.vipCount || 0;
@@ -1752,7 +1754,7 @@ function frpOpsV2RenderQueueSection({ queueState, isMeActive, swapInProgress, ha
       </div>
       ${fallbackToAll ? `<p class="frp-ops-v2-queue-empty">No hay VIPs en cola, mostrando todos.</p>` : ""}
       ${!showJobs.length ? `<p class="frp-ops-v2-queue-empty">No hay FRP listos.</p>` : ""}
-      ${showJobs.length ? `<div class="frp-ops-v2-queue">${showJobs.map((j) => frpOpsV2RenderQueueCard(j, { isMeActive, swapInProgress, hasMyActive })).join("")}</div>` : ""}
+      ${showJobs.length ? `<div class="frp-ops-v2-queue">${showJobs.map((j) => frpOpsV2RenderQueueCard(j, { isMeActive, hasActiveTechnician, swapInProgress, hasMyActive })).join("")}</div>` : ""}
     </section>
   `;
 }
@@ -1916,13 +1918,14 @@ function renderFrp({ skipPricing = false } = {}) {
   });
 
   const isMeActive = Boolean(tech?.active?.userId && tech.active.userId === session.user?.id);
+  const hasActiveTechnician = Boolean(tech?.active?.userId);
   const swapInProgress = Boolean(tech?.swap?.inProgress);
 
   let currentHtml;
   if (myActiveJob) {
     currentHtml = frpOpsV2RenderCurrentActive(myActiveJob, { swapInProgress, tech });
   } else {
-    currentHtml = frpOpsV2RenderCurrentEmpty({ queueState, isMeActive, swapInProgress });
+    currentHtml = frpOpsV2RenderCurrentEmpty({ queueState, isMeActive, hasActiveTechnician, swapInProgress });
   }
 
   frpWorkbench.innerHTML = `
@@ -1932,7 +1935,7 @@ function renderFrp({ skipPricing = false } = {}) {
         ${currentHtml}
         ${frpOpsV2RenderOtherActiveSection({ jobs: otherActiveJobs, tech })}
         ${frpOpsV2RenderWaitingConnectionSection({ waitingOrders: waitingConnectionOrders })}
-        ${frpOpsV2RenderQueueSection({ queueState, isMeActive, swapInProgress, hasMyActive: Boolean(myActiveJob) })}
+        ${frpOpsV2RenderQueueSection({ queueState, isMeActive, hasActiveTechnician, swapInProgress, hasMyActive: Boolean(myActiveJob) })}
         ${frpOpsV2RenderAttentionGrid({ pagosRevisar, reviewJobs, swapInProgress })}
         ${frpOpsV2RenderFinalized(finishedToday)}
       </div>

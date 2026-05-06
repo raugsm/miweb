@@ -268,3 +268,13 @@ Riesgo residual del panel trabajador: ya no es el dato mostrado en `Tu trabajo a
 - Se propago `swapInProgress` a esas superficies y ahora muestran `disabled title="Cambio de tecnico en curso"`.
 - No se cambio backend; este corte corrige el contrato visual para que ninguna accion FRP quede operable mientras el tecnico activo esta cambiando.
 - Documento dedicado: `_sesion-22-operador-swap-freezes-actions-contract.md`.
+
+## Actualizacion 2026-05-06 - Sin tecnico activo
+
+- Riesgo revisado: estado del panel cuando no existe `tech.active.userId`.
+- Hecho confirmado: backend ya rechaza `take` y `take-next` sin tecnico activo mediante `requireActiveFrpTechnician`.
+- Gap encontrado: la UI deshabilitaba correctamente `Tomar`, pero explicaba el estado como `No sos el tecnico activo`, aunque no habia ningun tecnico activo.
+- Se separo `hasActiveTechnician` de `isMeActive`.
+- `Tomar siguiente` y las cards `Tomar` ahora muestran `Sin tecnico activo` cuando corresponde.
+- No se bloquearon acciones por ownership congelado ni acciones de rol elevado, porque no dependen del tecnico activo global.
+- Documento dedicado: `_sesion-22-operador-no-active-technician-contract.md`.
