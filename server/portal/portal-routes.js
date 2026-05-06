@@ -52,6 +52,8 @@ export function createPortalRoutes({
   publishFrpOps,
   publicActiveTechnician,
   customerModuleUrl,
+  createAuditEvent,
+  persistAuditEventOnly,
   readDb,
   renderOrderComprobantePdf,
   reconcilePortalClientLink,
@@ -444,19 +446,19 @@ export function createPortalRoutes({
     const context = await getCurrentCustomerContext(req);
     const db = context.db;
     if (!context.user || !context.client) {
-      audit(db, null, "PORTAL_ORDERS_STREAM_BLOCKED", null, {
+      const event = audit(db, null, "PORTAL_ORDERS_STREAM_BLOCKED", null, {
         reason: "missing_customer_session",
         ipHash: hashToken(clientIp(req)),
       });
-      await writeDb(db);
+      await persistAuditEventOnly(event, { db, alreadyInDb: true, label: "portal_orders_stream_blocked" });
       return sendJson(res, 401, { error: "Cuenta de cliente requerida." });
     }
     const streamId = crypto.randomUUID();
-    audit(db, context.user.id, "PORTAL_ORDERS_STREAM_CONNECTED", context.client.id, {
+    const event = audit(db, context.user.id, "PORTAL_ORDERS_STREAM_CONNECTED", context.client.id, {
       streamId,
       ipHash: hashToken(clientIp(req)),
     });
-    await writeDb(db);
+    await persistAuditEventOnly(event, { db, alreadyInDb: true, label: "portal_orders_stream_connected" });
     res.writeHead(200, {
       "Content-Type": "text/event-stream; charset=utf-8",
       "Cache-Control": "no-store, no-transform",
@@ -490,12 +492,11 @@ export function createPortalRoutes({
       removePortalOrderStream(context.client.id, stream);
       (async () => {
         try {
-          const disconnectDb = await readDb();
-          audit(disconnectDb, context.user.id, "PORTAL_ORDERS_STREAM_DISCONNECTED", context.client.id, {
+          const event = createAuditEvent(context.user.id, "PORTAL_ORDERS_STREAM_DISCONNECTED", context.client.id, {
             streamId,
             durationMs: Date.now() - stream.startedAtMs,
           });
-          await writeDb(disconnectDb);
+          await persistAuditEventOnly(event, { label: "portal_orders_stream_disconnected" });
         } catch (error) {
           console.error(error);
         }
@@ -841,11 +842,11 @@ export function createPortalRoutes({
     if (!order) return sendJson(res, 404, { error: "Orden no encontrada." });
     const ownsOrder = context.user && context.client && order.clientId === context.client.id;
     if (!ownsOrder) {
-      audit(db, context.user?.id || null, "PORTAL_ORDER_LOOKUP_BLOCKED", order.id, {
+      const event = audit(db, context.user?.id || null, "PORTAL_ORDER_LOOKUP_BLOCKED", order.id, {
         code: order.code,
         ipHash: hashToken(clientIp(req)),
       });
-      await writeDb(db);
+      await persistAuditEventOnly(event, { db, alreadyInDb: true, label: "portal_order_lookup_blocked" });
       return sendJson(res, 403, { error: "Inicia sesion para consultar esta orden." });
     }
     if (context.deviceToken) {
@@ -1234,8 +1235,6 @@ export function createPortalRoutes({
       "Content-Disposition": `inline; filename="AriadGSM-${order.code}.pdf"`,
       "Cache-Control": "no-store",
     });
-    audit(db, context.user?.id || "", "PORTAL_COMPROBANTE_PDF_GENERATED", order.id, { code: order.code });
-    await writeDb(db);
     return res.end(buffer);
   }
 

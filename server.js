@@ -78,7 +78,7 @@ import {
 } from "./server/config/catalog.js";
 import { limaDateStamp, limaMonthStamp, nowIso } from "./server/core/dates.js";
 import { moneyNumber, percentNumber } from "./server/core/money.js";
-import { audit } from "./server/core/audit.js";
+import { audit, createAuditEvent, pushAuditEvent } from "./server/core/audit.js";
 import { cookieHeader, getCookie } from "./server/core/cookies.js";
 import { parseJson, sendHtml, sendJson, sendNoContent, sendSseEvent } from "./server/core/http.js";
 import {
@@ -110,6 +110,7 @@ import { createFrpRoutes } from "./server/frp/frp-routes.js";
 import { createPortalSerializers } from "./server/portal/serializers.js";
 import { createPortalRoutes } from "./server/portal/portal-routes.js";
 import { createStorage } from "./server/db/storage.js";
+import { insertAuditEvent } from "./server/db/postgres-audit.js";
 import {
   applySwitch as applyTechnicianSwitch,
   eligibleTechnicians,
@@ -461,6 +462,21 @@ async function readDb() {
 
 async function writeDb(db) {
   return storage.writeDb(db);
+}
+
+async function persistAuditEventOnly(event, { db = null, alreadyInDb = false, label = "audit" } = {}) {
+  try {
+    if (!event) return;
+    if (storage.driver === "postgres") {
+      await insertAuditEvent(event);
+      return;
+    }
+    const targetDb = db || await readDb();
+    if (!alreadyInDb) pushAuditEvent(targetDb, event);
+    await writeDb(targetDb);
+  } catch (error) {
+    console.warn(`[${label}] audit persist failed:`, error?.message || error);
+  }
 }
 
 function normalizeUserPermissions(permissions = {}) {
@@ -3532,6 +3548,8 @@ const handlePortalApi = createPortalRoutes({
   publishFrpOps,
   publicActiveTechnician,
   customerModuleUrl,
+  createAuditEvent,
+  persistAuditEventOnly,
   readDb,
   renderOrderComprobantePdf,
   reconcilePortalClientLink,
@@ -3659,12 +3677,12 @@ async function handleApi(req, res, pathname) {
       }
       if (req.method === "GET" && action === "export") {
         const report = buildDailyCloseReport(db, dateStamp);
-        audit(db, user.id, "DAILY_CLOSE_EXPORTED", `daily-close:${dateStamp}`, {
+        const event = audit(db, user.id, "DAILY_CLOSE_EXPORTED", `daily-close:${dateStamp}`, {
           dateStamp,
           status: report.status,
           validatedPayments: report.totals.validatedPayments,
         });
-        await writeDb(db);
+        await persistAuditEventOnly(event, { db, alreadyInDb: true, label: "daily_close_export" });
         const workbook = dailyCloseWorkbookXml(report);
         res.writeHead(200, {
           "Content-Type": "application/vnd.ms-excel; charset=utf-8",
@@ -4810,11 +4828,11 @@ async function handleApi(req, res, pathname) {
     const db = await readDb();
     if (!(await requireFrpAccess(user, res, db, "FRP_OPS_STREAM_DENIED", "frp-ops-stream"))) return;
     const streamId = crypto.randomUUID();
-    audit(db, user.id, "FRP_OPS_STREAM_CONNECTED", user.id, {
+    const event = audit(db, user.id, "FRP_OPS_STREAM_CONNECTED", user.id, {
       streamId,
       ipHash: hashToken(clientIp(req)),
     });
-    await writeDb(db);
+    await persistAuditEventOnly(event, { db, alreadyInDb: true, label: "frp_ops_stream_connected" });
     res.writeHead(200, {
       "Content-Type": "text/event-stream; charset=utf-8",
       "Cache-Control": "no-store, no-transform",
@@ -4848,12 +4866,11 @@ async function handleApi(req, res, pathname) {
       removeFrpOpsStream(user.id, stream);
       (async () => {
         try {
-          const disconnectDb = await readDb();
-          audit(disconnectDb, user.id, "FRP_OPS_STREAM_DISCONNECTED", user.id, {
+          const event = createAuditEvent(user.id, "FRP_OPS_STREAM_DISCONNECTED", user.id, {
             streamId,
             durationMs: Date.now() - stream.startedAtMs,
           });
-          await writeDb(disconnectDb);
+          await persistAuditEventOnly(event, { label: "frp_ops_stream_disconnected" });
         } catch (error) {
           console.error(error);
         }
