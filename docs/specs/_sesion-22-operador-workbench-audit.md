@@ -253,3 +253,9 @@ Riesgo residual del panel trabajador: ya no es el dato mostrado en `Tu trabajo a
 - Backend: `PATCH /api/frp/jobs/:id/ready` devuelve 403 si un tecnico ajeno intenta resolver una revision.
 - Se agregaron pruebas unitarias, contrato frontend y prueba runtime con cambio de tecnico activo.
 - Documento dedicado: `_sesion-22-operador-review-resolver-permission-contract.md`.
+
+### Validacion adicional - roles elevados
+
+- Se agrego prueba runtime para `ADMIN` y `COORDINADOR` resolviendo una revision ajena.
+- La prueba confirma que ambos roles pueden devolver el job a `LISTO_PARA_TECNICO` y que `technicianId` queda limpio.
+- El helper de prueba usa payload unico por comprobante para no saltarse ni falsear la guarda anti-reuso de comprobantes.

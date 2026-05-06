@@ -87,8 +87,12 @@ Ese comportamiento viola el contrato de ownership que ya se habia cerrado para:
   - Jack envia el job a revision;
   - Angelo recibe 403 al resolver;
   - Jack resuelve y el job vuelve a cola.
+  - `ADMIN` resuelve una revision ajena.
+  - `COORDINADOR` resuelve una revision ajena.
 - `test/phase3a.contract.test.js`
   - la card de revision queda deshabilitada para no-duenos sin rol elevado.
+
+Nota de prueba: el helper runtime genera un payload de comprobante distinto por orden. Esto mantiene activa la guarda real anti-reuso de comprobantes sin introducir falsos 409 entre dos casos de prueba en el mismo servidor aislado.
 
 ## Siguiente validacion Render
 

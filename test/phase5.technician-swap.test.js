@@ -397,6 +397,63 @@ test("phase 5: FRP review resolver follows owner, not active technician", { time
   }
 });
 
+test("phase 5: elevated roles can resolve another technician review", { timeout: 30_000 }, async () => {
+  const server = await startIsolatedServer({ swapMs: SWAP_MS });
+  try {
+    const adminHttp = createHttpClient(server.baseUrl, new CookieJar());
+    const { jackId, jackEmail, jackPassword } = await setupTwoFrpTechnicians(adminHttp, server.setupToken);
+
+    const coordinatorEmail = `phase5-review-coordinator-${Date.now()}@example.com`;
+    const coordinatorPassword = "Coord12345!";
+    let response = await adminHttp.request("POST", "/api/register", {
+      name: "Coordinador Revision",
+      email: coordinatorEmail,
+      password: coordinatorPassword,
+      workChannel: "WhatsApp 3",
+    });
+    assert.equal(response.status, 201);
+    const coordinatorId = response.data.user.id;
+
+    response = await adminHttp.request("PATCH", `/api/users/${coordinatorId}`, {
+      role: "COORDINADOR",
+      active: true,
+      workChannel: "WhatsApp 3",
+    });
+    assert.equal(response.status, 200);
+    assert.equal(response.data.user.role, "COORDINADOR");
+
+    const jackHttp = createHttpClient(server.baseUrl, new CookieJar());
+    response = await jackHttp.request("POST", "/api/login", {
+      email: jackEmail,
+      password: jackPassword,
+      operatorPin: server.setupToken,
+    });
+    assert.equal(response.status, 200);
+
+    const coordinatorHttp = createHttpClient(server.baseUrl, new CookieJar());
+    response = await coordinatorHttp.request("POST", "/api/login", {
+      email: coordinatorEmail,
+      password: coordinatorPassword,
+      operatorPin: server.setupToken,
+    });
+    assert.equal(response.status, 200);
+
+    const coordinatorReviewJob = await createReviewedJobOwnedByJack({ adminHttp, jackHttp, jackId, reason: "Coordinator resolver test" });
+    response = await coordinatorHttp.request("PATCH", `/api/frp/jobs/${encodeURIComponent(coordinatorReviewJob.id)}/ready`);
+    assert.equal(response.status, 200);
+    assert.equal(response.data.job.status, "LISTO_PARA_TECNICO");
+    assert.equal(response.data.job.technicianId, "");
+
+    const adminReviewJob = await createReviewedJobOwnedByJack({ adminHttp, jackHttp, jackId, reason: "Admin resolver test" });
+    response = await adminHttp.request("PATCH", `/api/frp/jobs/${encodeURIComponent(adminReviewJob.id)}/ready`);
+    assert.equal(response.status, 200);
+    assert.equal(response.data.job.status, "LISTO_PARA_TECNICO");
+    assert.equal(response.data.job.technicianId, "");
+  } finally {
+    await server.stop();
+  }
+});
+
 test("phase 5: FRP owner can cancel after active technician changes", { timeout: 30_000 }, async () => {
   const server = await startIsolatedServer({ swapMs: SWAP_MS });
   try {
@@ -572,6 +629,22 @@ async function setupJackTakenJobThenSwitchToAngelo(server, adminHttp) {
   return { readyJob, jackId, jackHttp, angeloHttp };
 }
 
+async function createReviewedJobOwnedByJack({ adminHttp, jackHttp, jackId, reason }) {
+  const readyJob = await createReadyFrpJob(adminHttp);
+  let response = await jackHttp.request("POST", `/api/frp/jobs/${encodeURIComponent(readyJob.id)}/take`);
+  assert.equal(response.status, 200);
+  assert.equal(response.data.job.status, "EN_PROCESO");
+  assert.equal(response.data.job.technicianId, jackId);
+
+  response = await jackHttp.request("PATCH", `/api/frp/jobs/${encodeURIComponent(readyJob.id)}/review`, {
+    reason,
+  });
+  assert.equal(response.status, 200);
+  assert.equal(response.data.job.status, "REQUIERE_REVISION");
+  assert.equal(response.data.job.technicianId, jackId);
+  return response.data.job;
+}
+
 async function createReadyFrpJob(http) {
   let response = await http.request("POST", "/api/frp/orders", {
     clientText: `Cliente Race ${Date.now()} Peru`,
@@ -588,7 +661,7 @@ async function createReadyFrpJob(http) {
   }
 
   response = await http.request("PATCH", `/api/frp/orders/${encodeURIComponent(order.id)}/payment-proof`, {
-    paymentProofs: [proofImage("phase5-race-proof.png", onePixelPng)],
+    paymentProofs: [proofImage("phase5-race-proof.png", uniqueProofPayload())],
   });
   assert.equal(response.status, 200);
 
@@ -613,6 +686,10 @@ function proofImage(name, data) {
     size: Buffer.from(data, "base64").length,
     dataUrl: `data:image/png;base64,${data}`,
   };
+}
+
+function uniqueProofPayload() {
+  return Buffer.from(`phase5-proof-${Date.now()}-${Math.random()}`).toString("base64") || onePixelPng;
 }
 
 function createHttpClient(baseUrl, jar) {
