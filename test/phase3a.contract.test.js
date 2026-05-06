@@ -204,6 +204,17 @@ test("operator empty workbench distinguishes no active technician from another a
   assert.match(appJs, /frpOpsV2RenderQueueCard\(j, \{ isMeActive, hasActiveTechnician, swapInProgress, hasMyActive \}\)/);
 });
 
+test("operator technician swap polling repaints workbench and restores normal interval", async () => {
+  const appJs = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
+
+  assert.match(appJs, /const FRP_OPS_TECHNICIAN_POLL_NORMAL_MS = 30_000;/);
+  assert.match(appJs, /const FRP_OPS_TECHNICIAN_POLL_SWAP_MS = 2_000;/);
+  assert.match(appJs, /function paintTechnicianWidget\(status\)/);
+  assert.match(appJs, /if \(status\?\.swap\?\.inProgress\) \{[\s\S]*setTechnicianPollInterval\(FRP_OPS_TECHNICIAN_POLL_SWAP_MS\);[\s\S]*\} else if \(technicianRefreshTimer\) \{[\s\S]*setTechnicianPollInterval\(FRP_OPS_TECHNICIAN_POLL_NORMAL_MS\);[\s\S]*\}/);
+  assert.match(appJs, /if \(frpEnabled\(\)\) renderFrp\(\{ skipPricing: true \}\);/);
+  assert.match(appJs, /function setTechnicianPollInterval\(ms\) \{[\s\S]*if \(currentTechnicianPollMs === ms && technicianRefreshTimer\) return;[\s\S]*technicianRefreshTimer = setInterval\(refreshTechnicianWidget, ms\);[\s\S]*\}/);
+});
+
 test("operator finalized today uses multi-operator technician marks", async () => {
   const appJs = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
   const stylesCss = await readFile(new URL("../public/styles.css", import.meta.url), "utf8");

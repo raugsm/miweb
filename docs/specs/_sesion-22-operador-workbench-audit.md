@@ -278,3 +278,11 @@ Riesgo residual del panel trabajador: ya no es el dato mostrado en `Tu trabajo a
 - `Tomar siguiente` y las cards `Tomar` ahora muestran `Sin tecnico activo` cuando corresponde.
 - No se bloquearon acciones por ownership congelado ni acciones de rol elevado, porque no dependen del tecnico activo global.
 - Documento dedicado: `_sesion-22-operador-no-active-technician-contract.md`.
+
+## Actualizacion 2026-05-06 - Repaint al cerrar swap
+
+- Riesgo revisado: que el workbench quedara visualmente congelado despues de que `swap.inProgress` volviera a `false`.
+- Hecho confirmado: backend ya cubre switch normal y auto-revert en `phase5.technician-swap.test.js`.
+- Hecho confirmado: frontend `paintTechnicianWidget` acelera polling a 2s durante swap, vuelve a 30s al terminar y repinta `renderFrp({ skipPricing: true })`.
+- No se cambio runtime; se agrego guarda contractual en `phase3a.contract.test.js`.
+- Documento dedicado: `_sesion-22-operador-swap-repaint-contract.md`.
