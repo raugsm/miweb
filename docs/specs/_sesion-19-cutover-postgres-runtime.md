@@ -1313,3 +1313,58 @@ Riesgo restante:
 Siguiente paso unico:
 
 - Elegir entre observacion inicial sin escribir datos o una escritura canary controlada con rollback operativo disponible.
+
+## Resultado Render Post-cutover tardio - Estable inicial
+
+Fecha: 2026-05-06
+
+Contexto:
+
+- Runtime productivo en PostgreSQL.
+- Verificacion tardia ejecutada despues del cutover y del smoke read-only.
+- Release reportado por health: `660903609abe`.
+
+Health tardio:
+
+- `GET https://ops.ariadgsm.com/api/health` termino con `ok: true`.
+- `storageDriver: postgres`.
+- `storageRuntimeImplemented: true`.
+
+Read-check tardio:
+
+- `postgres:read-check --strict` termino con `ok: true`.
+- `generatedAt: 2026-05-06T04:00:55.497Z`.
+- `tableProjectionMismatches: []`.
+- `sourceComparison.collectionMismatches: []`.
+- `sourceComparison.projectionMismatches: []`.
+- Conteos de referencia:
+  - `users: 5`;
+  - `sessions: 2`;
+  - `customerClients: 18`;
+  - `customerUsers: 18`;
+  - `customerDevices: 90`;
+  - `customerRequests: 13`;
+  - `customerOrders: 13`;
+  - `customerOrderItems: 14`;
+  - `paymentProofs: 32`;
+  - `frpOrders: 13`;
+  - `frpJobs: 14`;
+  - `paymentLedgerEntries: 13`;
+  - `audit: 833`;
+  - `audit_events: 833`.
+
+Decision:
+
+- La migracion queda cerrada como estable inicial.
+- Mantener `ARIAD_STORAGE_DRIVER=postgres`.
+- No hacer rollback.
+- No borrar `users.json` ni el backup corto todavia.
+
+Riesgo restante:
+
+- Falta observar escritura real de usuario en produccion.
+- La variable `ARIAD_STORAGE_DRIVER` debe limpiarse para quitar el salto de linea, pero eso reinicia/redeploya y no es urgente porque el runtime hace `trim()`.
+
+Siguiente paso unico:
+
+- Mantener observacion operativa y limpiar el salto de linea de `ARIAD_STORAGE_DRIVER` en una ventana no critica.
