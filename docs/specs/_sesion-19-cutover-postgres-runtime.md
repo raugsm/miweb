@@ -1201,3 +1201,59 @@ Riesgo restante:
 Siguiente paso unico:
 
 - Crear backup corto de `storage/users.json`, activar `ARIAD_STORAGE_DRIVER=postgres` en Render y validar arranque con smoke checks.
+
+## Resultado Render Cutover - Runtime PostgreSQL activado
+
+Fecha: 2026-05-06
+
+Contexto:
+
+- Backup previo creado en Render:
+  - `storage/users.pre-postgres-cutover-20260506T033954Z.json`.
+- Hash del backup igual al original:
+  - `b3006a7212153347db1ddcc0bfe92923fea55facf063edbda32b6f6b2a511138`.
+- Tamano del backup: `4.7M`.
+- Se activo `ARIAD_STORAGE_DRIVER=postgres` en Environment Variables del servicio Render.
+- `DATABASE_URL` estaba configurado.
+
+Validacion de entorno:
+
+- `process.env.ARIAD_STORAGE_DRIVER` reporto `postgres\n`.
+- El runtime normaliza el valor con `trim().toLowerCase()` en `server/db/storage.js`, por lo que se resuelve como `postgres`.
+- Aunque no bloquea el runtime, conviene limpiar el salto de linea en una ventana no critica.
+
+Read-check post-cutover:
+
+- `postgres:read-check --strict` termino con `ok: true`.
+- `tableProjectionMismatches: []`.
+- `sourceComparison.collectionMismatches: []`.
+- `sourceComparison.projectionMismatches: []`.
+- Conteos de referencia:
+  - `customerDevices: 90`;
+  - `paymentProofs: 32`;
+  - `audit: 833`;
+  - `audit_events: 833`.
+
+Health del proceso web real:
+
+- URL: `https://ops.ariadgsm.com/api/health`.
+- Resultado:
+  - `ok: true`;
+  - `storageDriver: postgres`;
+  - `storageRuntimeImplemented: true`;
+  - `releaseCommit: 660903609abe`.
+
+Decision:
+
+- Cutover operativo aprobado: el proceso web real esta corriendo con storage PostgreSQL.
+- `users.json` queda como respaldo inmediato, no como runtime primario.
+- No borrar `users.json` ni el backup corto todavia.
+
+Riesgo restante:
+
+- Aun falta smoke funcional minimo post-cutover para probar una ruta real de aplicacion ademas de `/api/health`.
+- Si aparece error de escritura o lectura en flujos reales, rollback: volver `ARIAD_STORAGE_DRIVER=json` y redeploy/restart.
+
+Siguiente paso unico:
+
+- Ejecutar smoke funcional minimo post-cutover y revisar logs de errores.
