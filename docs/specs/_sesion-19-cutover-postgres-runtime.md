@@ -1151,3 +1151,53 @@ Riesgo restante:
 Siguiente paso unico:
 
 - Ejecutar pre-cutover gate: dry-run de drift + read-check final. Si sale limpio, pedir aprobacion explicita para cambiar `ARIAD_STORAGE_DRIVER=postgres`.
+
+## Resultado Render Pre-cutover Gate - Aprobado
+
+Fecha: 2026-05-06
+
+Contexto:
+
+- Commit desplegado para runtime: `09405d5`.
+- Runtime productivo todavia en `json`.
+- `ARIAD_STORAGE_DRIVER=postgres` no fue activado durante este gate.
+- Fuente verificada: `/opt/render/project/src/storage/users.json`.
+- `sourceSha256`: `b3006a7212153347db1ddcc0bfe92923fea55facf063edbda32b6f6b2a511138`.
+
+Dry-run de drift:
+
+- `postgres:sync-drift --strict` termino con `ok: true`.
+- `wouldWrite: false`.
+- `plannedCounts`:
+  - `customerDevices: 0`;
+  - `customerDeviceAuthorizations: 0`;
+  - `auditEvents: 0`.
+- `warnings: []`.
+- `unsupportedCollectionMismatches: []`.
+
+Read-check pre-cutover:
+
+- `postgres:read-check --strict` termino con `ok: true`.
+- `tableProjectionMismatches: []`.
+- `sourceComparison.collectionMismatches: []`.
+- `sourceComparison.projectionMismatches: []`.
+- Conteos de referencia:
+  - `customerDevices: 90`;
+  - `paymentProofs: 32`;
+  - `audit: 833`;
+  - `audit_events: 833`.
+
+Decision:
+
+- El gate pre-cutover esta aprobado.
+- El siguiente cambio ya es operativo: activar el runtime PostgreSQL.
+- Este cambio debe hacerse con backup corto y rollback definido.
+
+Riesgo restante:
+
+- Cambiar `ARIAD_STORAGE_DRIVER` reinicia o redeploya el servicio en Render.
+- Si aparece un error de runtime, el rollback debe ser volver a `ARIAD_STORAGE_DRIVER=json` y reiniciar/redeployar.
+
+Siguiente paso unico:
+
+- Crear backup corto de `storage/users.json`, activar `ARIAD_STORAGE_DRIVER=postgres` en Render y validar arranque con smoke checks.
