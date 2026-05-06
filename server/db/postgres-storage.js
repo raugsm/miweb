@@ -1,16 +1,17 @@
 import { checkPostgresConnection, hasPostgresConfig } from "./postgres.js";
+import { readPostgresLegacyDb } from "./postgres-legacy-read.js";
 
 function notImplementedError() {
-  return new Error("ARIAD_STORAGE_DRIVER=postgres no esta implementado para runtime en Fase A.");
+  return new Error("ARIAD_STORAGE_DRIVER=postgres todavia no tiene escritura runtime implementada en Fase B.");
 }
 
 export function createPostgresStorage({ env = process.env } = {}) {
   async function ensureDb() {
-    throw notImplementedError();
+    await checkPostgresConnection();
   }
 
   async function readDb() {
-    throw notImplementedError();
+    return readPostgresLegacyDb();
   }
 
   async function writeDb() {
@@ -22,6 +23,7 @@ export function createPostgresStorage({ env = process.env } = {}) {
     const report = {
       driver: "postgres",
       runtimeImplemented: false,
+      phase: "B-read-only",
       configured,
     };
     if (configured) {

@@ -528,3 +528,77 @@ Lectura:
 Siguiente paso unico:
 
 - Pasar a Fase B: disenar `postgresStorage.readDb()` de compatibilidad sin activar escritura PostgreSQL ni cambiar `ARIAD_STORAGE_DRIVER`.
+
+## Resultado Fase B - Lector PostgreSQL read-only
+
+Fecha: 2026-05-06
+
+Cambio aplicado:
+
+- Se creo `server/db/postgres-legacy-read.js`.
+- `postgresStorage.readDb()` puede reconstruir el shape legacy de `users.json` desde PostgreSQL.
+- `postgresStorage.writeDb()` sigue bloqueado.
+- `runtimeImplemented` sigue en `false` para el driver `postgres`.
+- Se agrego `npm run postgres:read-check`.
+- No se cambio `ARIAD_STORAGE_DRIVER`.
+
+Decision:
+
+- La Fase B es solo lectura.
+- El lector reconstruye colecciones desde `legacy_json` y recupera campos sensibles necesarios para runtime desde columnas tipadas:
+  - credenciales de usuarios;
+  - digests de sesiones/dispositivos/tokens;
+  - comprobantes y evidencias finales desde `stored_files`.
+- Los reportes del script no imprimen secretos ni archivos inline.
+- El runtime productivo sigue en `json`.
+
+Lectura tecnica:
+
+- `legacy_json` no basta por si solo porque el importador lo sanitiza.
+- Por eso el lector mezcla:
+  - `legacy_json` para compatibilidad del shape viejo;
+  - columnas tipadas para campos que el runtime necesita;
+  - relaciones `payment_proofs`, `stored_files` y `frp_job_files` para reconstruir comprobantes y evidencias.
+- Esto permite comprobar si Postgres puede leer el estado importado antes de escribir sobre la base.
+
+Validacion local ejecutada:
+
+```powershell
+node --check server/db/postgres-legacy-read.js
+node --check server/db/postgres-storage.js
+node --check scripts/postgres/read-db-check.mjs
+npm.cmd test
+```
+
+Resultado:
+
+- Checks de sintaxis: OK.
+- `npm.cmd test`: 14/14 OK.
+- `npm run postgres:read-check` sin `DATABASE_URL`: fallo controlado con `ok: false` y `DATABASE_URL no configurado.`
+- Reporte local sin `DATABASE_URL`: no contiene patrones sensibles.
+
+Validacion en Render esperada:
+
+```bash
+cd /opt/render/project/src
+npm run postgres:read-check -- --input /opt/render/project/src/storage/users.json --report /tmp/postgres-read-check.json --strict
+cat /tmp/postgres-read-check.json
+grep -E 'passwordHash|operatorPinHash|tokenHash|dataUrl|base64|legacy_data_url' /tmp/postgres-read-check.json || true
+```
+
+Resultado aceptable:
+
+- `ok: true`.
+- `tableProjectionMismatches: []`.
+- `sourceComparison.collectionMismatches: []`.
+- `sourceComparison.projectionMismatches: []`.
+- El `grep` de patrones sensibles no imprime nada.
+
+Riesgo restante:
+
+- Si `users.json` de produccion cambio despues del import, el read-check con `--input storage/users.json` debe marcar diferencias.
+- Si marca diferencias, no se debe activar Postgres. El siguiente paso seria decidir entre reimport controlado o sync incremental, con ventana de baja actividad.
+
+Siguiente paso unico:
+
+- Probar Fase B en local sin `DATABASE_URL`, luego subir y ejecutar el read-check en Render contra la base real.
