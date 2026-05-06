@@ -298,3 +298,10 @@ Riesgo residual del panel trabajador: ya no es el dato mostrado en `Tu trabajo a
 - `PATCH /api/users/:id` publica cambios relevantes de permisos para que los streams vivos se revaliden.
 - El frontend cierra `EventSource` y refresca `/api/session` cuando recibe revocacion/logout.
 - Documento dedicado: `_sesion-22-operador-session-permission-revocation-contract.md`.
+
+## Cierre 2026-05-06
+
+- La auditoria del panel trabajador queda cerrada para los contratos revisados.
+- El resumen final de contratos cerrados, evidencia y riesgos residuales queda en `_sesion-22-operador-workbench-closure.md`.
+- No se recomienda seguir metiendo parches al panel trabajador sin una nueva falla concreta.
+- El siguiente frente recomendado queda fuera del panel: bug de Chrome/celular al abrir selector o subir comprobante.
