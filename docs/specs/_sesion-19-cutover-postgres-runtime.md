@@ -796,3 +796,140 @@ Riesgo restante:
 Siguiente paso unico:
 
 - Pasar a Fase C: disenar e implementar `postgresStorage.writeDb(db)` con transaccion, pruebas de rollback y sin activar el driver Postgres en produccion.
+
+## Propuesta ejecutable Fase C - Escritura PostgreSQL
+
+Fecha: 2026-05-06
+
+Hechos del codigo actual:
+
+- `server.js` usa una sola frontera de persistencia:
+  - `readDb()`;
+  - `writeDb(db)`.
+- `readDb()` no es puramente lectura: normaliza datos legacy, limpia sesiones/tokens expirados y puede llamar a `writeDb(db)` si detecta cambios.
+- `postgresStorage.readDb()` ya reconstruye el shape legacy desde PostgreSQL.
+- `postgresStorage.writeDb()` sigue bloqueado con error explicito.
+- El importador `scripts/migration/import-users-json-to-postgres.mjs` ya contiene la transformacion completa de shape legacy a tablas SQL.
+- El esquema tiene relaciones circulares controladas entre:
+  - `customer_orders`;
+  - `frp_orders`;
+  - `customer_order_items`;
+  - `frp_jobs`.
+
+Inferencias:
+
+- Fase C no debe escribir SQL manual duplicado dentro de `postgres-storage.js`.
+- La opcion menos riesgosa es extraer la planificacion del importador a un modulo comun y reutilizarla para:
+  - import inicial;
+  - escritura runtime;
+  - scripts de validacion.
+- La primera escritura runtime viable debe ser reemplazo transaccional del estado completo, equivalente al modelo `users.json`.
+- Ese reemplazo no es la arquitectura final, pero reduce el riesgo de cutover porque mantiene el contrato legacy intacto.
+
+Opinion tecnica:
+
+- Yo no activaria Postgres con updates granulares por dominio todavia. Eso mezclaria dos migraciones:
+  - cambiar motor de persistencia;
+  - redisenar repositorios del dominio.
+- Primero haria un writer transaccional compatible con el shape actual. Despues, con Postgres ya estable, se separan repositorios por dominio.
+
+Supuestos debiles:
+
+- Produccion seguira con una sola instancia escritora durante el cutover.
+- El volumen actual permite reconstruir y reinsertar el estado completo por write.
+- La ventana de activacion tendra baja actividad para minimizar escrituras concurrentes basadas en lecturas viejas.
+
+Riesgos:
+
+- Reemplazo completo hereda el riesgo de "last write wins" que ya existe con `users.json`.
+- Durante una escritura se toman locks sobre tablas runtime.
+- Si el planificador genera warnings de integridad, la escritura debe bloquearse y no intentar "arreglar" datos en silencio.
+- Si se borra `migration_runs` en runtime, se pierde evidencia historica del import. Por eso runtime no debe truncar ni reinsertar `migration_runs`.
+
+Archivos propuestos:
+
+- Nuevo: `server/db/postgres-legacy-plan.js`.
+- Modificado: `scripts/migration/import-users-json-to-postgres.mjs`.
+- Modificado: `server/db/postgres-storage.js`.
+- Nuevo: `scripts/postgres/write-db-check.mjs`.
+- Modificado: `package.json`.
+- Modificado: `docs/specs/_sesion-19-cutover-postgres-runtime.md`.
+
+Cambio exacto propuesto:
+
+1. Extraer del importador a `server/db/postgres-legacy-plan.js`:
+   - lista de tablas runtime;
+   - orden de insercion;
+   - columnas por tabla;
+   - sanitizacion de `legacy_json`;
+   - `buildPostgresLegacyPlan(db, options)`;
+   - `insertPostgresRows(client, table, rows)`;
+   - `applyPostgresLegacyInsert(client, plan, options)`;
+   - `queryPostgresTargetCounts(client, options)`.
+2. Mantener `migration_runs` solo para import inicial:
+   - el importador puede seguir insertando `migration_runs`;
+   - `writeDb(db)` no debe truncar ni reinsertar `migration_runs`.
+3. Implementar `postgresStorage.writeDb(db)`:
+   - construir plan desde `db`;
+   - bloquear si hay warnings;
+   - abrir `withTransaction`;
+   - `set local search_path = ariad, public`;
+   - tomar lock transaccional con advisory lock;
+   - truncar solo tablas runtime allowlisted en un statement;
+   - reinsertar filas en orden controlado;
+   - actualizar FKs circulares despues de insertar;
+   - comparar conteos esperados vs reales;
+   - hacer `COMMIT` solo si todo coincide.
+4. Actualizar `postgresStorage.health()`:
+   - `runtimeImplemented: true`;
+   - `phase: "C-write-ready"`;
+   - sin exponer `DATABASE_URL` ni secretos.
+5. Agregar `npm run postgres:write-check`:
+   - carga un `users.json`;
+   - ejecuta el mismo writer dentro de una transaccion;
+   - fuerza `ROLLBACK` al final;
+   - reporta conteos y mismatches;
+   - bloquea reportes con secretos.
+
+No se hara en Fase C:
+
+- No cambiar `ARIAD_STORAGE_DRIVER` en Render.
+- No activar Postgres en produccion.
+- No escribir dual JSON + Postgres.
+- No reescribir endpoints portal/FRP.
+- No eliminar `storage/users.json`.
+- No borrar `migration_runs` ni `schema_migrations`.
+
+Validacion minima antes de deploy:
+
+```powershell
+node --check server/db/postgres-legacy-plan.js
+node --check server/db/postgres-storage.js
+node --check scripts/migration/import-users-json-to-postgres.mjs
+node --check scripts/postgres/write-db-check.mjs
+npm.cmd test
+```
+
+Validacion Render despues de deploy, aun con runtime `json`:
+
+```bash
+cd /opt/render/project/src
+git rev-parse --short HEAD
+npm run postgres:write-check -- --input /opt/render/project/src/storage/users.json --report /tmp/postgres-write-check.json --strict
+cat /tmp/postgres-write-check.json
+grep -E 'passwordHash|operatorPinHash|tokenHash|dataUrl|base64|legacy_data_url' /tmp/postgres-write-check.json || true
+npm run postgres:read-check -- --input /opt/render/project/src/storage/users.json --report /tmp/postgres-read-check-after-write-check.json --strict
+cat /tmp/postgres-read-check-after-write-check.json
+```
+
+Criterio de aceptacion:
+
+- `postgres:write-check` termina con `ok: true`.
+- El reporte indica rollback intencional.
+- No hay mismatches de conteo.
+- El grep de patrones sensibles no imprime nada.
+- `postgres:read-check` posterior sigue en `ok: true`.
+
+Siguiente paso unico:
+
+- Implementar Fase C exactamente con este alcance y mantener `ARIAD_STORAGE_DRIVER=json` en produccion.
