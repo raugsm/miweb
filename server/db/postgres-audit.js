@@ -32,25 +32,29 @@ export function auditEventToPostgresRow(event) {
 }
 
 export async function insertAuditEvent(event) {
-  const row = auditEventToPostgresRow(event);
   await withPostgresClient(async (client) => {
-    await client.query(
-      `
-        insert into ariad.audit_events
-          (id, actor_id, action, target_id, detail, created_at, legacy_json)
-        values
-          ($1, $2, $3, $4, $5::jsonb, $6, $7::jsonb)
-        on conflict (id) do nothing
-      `,
-      [
-        row.id,
-        row.actor_id,
-        row.action,
-        row.target_id,
-        JSON.stringify(row.detail),
-        row.created_at,
-        JSON.stringify(row.legacy_json),
-      ],
-    );
+    await insertAuditEventWithClient(client, event);
   });
+}
+
+export async function insertAuditEventWithClient(client, event) {
+  const row = auditEventToPostgresRow(event);
+  await client.query(
+    `
+      insert into ariad.audit_events
+        (id, actor_id, action, target_id, detail, created_at, legacy_json)
+      values
+        ($1, $2, $3, $4, $5::jsonb, $6, $7::jsonb)
+      on conflict (id) do nothing
+    `,
+    [
+      row.id,
+      row.actor_id,
+      row.action,
+      row.target_id,
+      JSON.stringify(row.detail),
+      row.created_at,
+      JSON.stringify(row.legacy_json),
+    ],
+  );
 }

@@ -47,6 +47,7 @@ export function createFrpRoutes({
   requireFrpCostManagerWithAudit,
   requireFrpPaymentReviewer,
   requireUser,
+  reviewFrpPaymentPostgres,
   sanitizeFinalLogImages,
   sanitizePaymentProofImages,
   sendJson,
@@ -651,6 +652,22 @@ export function createFrpRoutes({
     if (!order) return sendJson(res, 404, { error: "Orden FRP no encontrada." });
     const action = cleanText(input.action, 20);
     const proofs = Array.isArray(order.paymentProofs) ? order.paymentProofs : [];
+    if (reviewFrpPaymentPostgres) {
+      const result = await reviewFrpPaymentPostgres({
+        orderId: order.id,
+        action,
+        reason: cleanText(input.reason, 160),
+        userId: user.id,
+        reviewedAt: nowIso(),
+      });
+      if (!result.ok) return sendJson(res, result.status || 500, { error: result.error || "Error interno." });
+      const nextDb = await readDb();
+      const nextOrder = nextDb.frpOrders.find((candidate) => candidate.id === result.orderId);
+      if (!nextOrder) return sendJson(res, 404, { error: "Orden FRP no encontrada." });
+      publishPortalOrdersForFrpOrder(nextDb, nextOrder, result.publishReason);
+      publishFrpOps(nextDb, "payment_review_resolved");
+      return sendJson(res, 200, { order: publicFrpOrder(nextOrder, nextDb), frp: publicFrpState(nextDb, user) });
+    }
     if (!proofs.length) return sendJson(res, 400, { error: "No hay comprobante cargado para validar." });
     if (action === "approve") {
       order.paymentStatus = "COMPROBANTE_RECIBIDO";

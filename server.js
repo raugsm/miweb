@@ -111,6 +111,7 @@ import { createPortalSerializers } from "./server/portal/serializers.js";
 import { createPortalRoutes } from "./server/portal/portal-routes.js";
 import { createStorage } from "./server/db/storage.js";
 import { insertAuditEvent } from "./server/db/postgres-audit.js";
+import { reviewFrpPaymentPostgres } from "./server/db/postgres-frp-core.js";
 import {
   applySwitch as applyTechnicianSwitch,
   eligibleTechnicians,
@@ -3619,6 +3620,7 @@ const handleFrpApi = createFrpRoutes({
   requireFrpCostManagerWithAudit,
   requireFrpPaymentReviewer,
   requireUser,
+  reviewFrpPaymentPostgres: storage.driver === "postgres" ? reviewFrpPaymentPostgres : null,
   sanitizeFinalLogImages,
   sanitizePaymentProofImages,
   sendJson,
