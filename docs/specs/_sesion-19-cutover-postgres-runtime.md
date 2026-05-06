@@ -918,8 +918,6 @@ git rev-parse --short HEAD
 npm run postgres:write-check -- --input /opt/render/project/src/storage/users.json --report /tmp/postgres-write-check.json --strict
 cat /tmp/postgres-write-check.json
 grep -E 'passwordHash|operatorPinHash|tokenHash|dataUrl|base64|legacy_data_url' /tmp/postgres-write-check.json || true
-npm run postgres:read-check -- --input /opt/render/project/src/storage/users.json --report /tmp/postgres-read-check-after-write-check.json --strict
-cat /tmp/postgres-read-check-after-write-check.json
 ```
 
 Criterio de aceptacion:
@@ -928,7 +926,7 @@ Criterio de aceptacion:
 - El reporte indica rollback intencional.
 - No hay mismatches de conteo.
 - El grep de patrones sensibles no imprime nada.
-- `postgres:read-check` posterior sigue en `ok: true`.
+- Como el write-check hace rollback, `postgres:read-check` posterior solo debe exigirse despues de un sync final de drift.
 
 Siguiente paso unico:
 
@@ -1002,3 +1000,44 @@ No se hizo:
 Siguiente paso unico:
 
 - Subir Fase C y ejecutar en Render el `postgres:write-check` con rollback contra `/opt/render/project/src/storage/users.json`.
+
+## Resultado Render Fase C - Primer write-check bloqueado
+
+Fecha: 2026-05-06
+
+Contexto:
+
+- Commit desplegado: `ee48a3d`.
+- Runtime productivo todavia en `json`.
+- `ARIAD_STORAGE_DRIVER=postgres` no fue activado.
+
+Resultado:
+
+- `postgres:write-check` fallo con `ok: false`.
+- Error: `relation "sequence_counters" does not exist`.
+- El script reporto `rolledBack: true`.
+- `beforeCounts` pudo leer `sequence_counters: 8`, lo que indica que la tabla existe y el problema esta en la resolucion de nombres durante la operacion de reemplazo.
+- El grep de patrones sensibles no imprimio secretos.
+
+Diagnostico:
+
+- El conteo inicial usa `search_path` dentro de la transaccion y encontro las tablas.
+- El `TRUNCATE` del writer dependia de nombres no calificados.
+- Para no depender de `search_path`, el writer debe usar nombres calificados `ariad.<tabla>` en:
+  - `TRUNCATE`;
+  - conteos runtime usados despues de rollback, porque `SET LOCAL search_path` desaparece al hacer rollback.
+
+Drift observado:
+
+- Mientras la app sigue en `json`, `users.json` recibio nuevos eventos de auditoria.
+- `read-check` posterior marco:
+  - `audit`: JSON `833`, PostgreSQL `831`;
+  - `audit_events`: JSON `833`, PostgreSQL `831`.
+- Esto es drift esperado mientras Postgres no es el runtime activo.
+
+Decision:
+
+- No activar Postgres.
+- Corregir el writer para calificar tablas con schema `ariad`.
+- Repetir `postgres:write-check`.
+- Cuando el writer pase, hacer sync final de drift antes de cualquier cutover.

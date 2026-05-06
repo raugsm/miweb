@@ -1465,6 +1465,11 @@ function tableListForCounts({ includeMigrationRuns = true } = {}) {
   return includeMigrationRuns ? targetTables : targetTables.filter((table) => table !== "migration_runs");
 }
 
+function qualifiedRuntimeTable(table) {
+  if (!targetTables.includes(table)) throw new Error(`Tabla PostgreSQL runtime no permitida: ${table}`);
+  return `ariad.${table}`;
+}
+
 export async function assertPostgresRequiredMigrations(client) {
   const result = await client.query(
     "select version from ariad.schema_migrations where version = any($1::text[])",
@@ -1487,7 +1492,7 @@ export function plannedPostgresTableCounts(plan, options = {}) {
 
 export async function queryPostgresRuntimeCounts(client, options = {}) {
   const tableList = tableListForCounts(options);
-  const selects = tableList.map((table) => `(select count(*)::int from ${table}) as ${table}`).join(",\n");
+  const selects = tableList.map((table) => `(select count(*)::int from ${qualifiedRuntimeTable(table)}) as ${table}`).join(",\n");
   const result = await client.query(`select ${selects}`);
   return result.rows[0] || {};
 }
@@ -1518,7 +1523,7 @@ export async function applyPostgresLegacyRows(client, plan, { includeMigrationRu
 export async function replacePostgresLegacyRuntime(client, plan) {
   await client.query("set local search_path = ariad, public");
   await client.query("select pg_advisory_xact_lock(hashtext($1), hashtext($2))", ["ariadgsm", "legacy-runtime-write"]);
-  const runtimeTables = tableListForCounts({ includeMigrationRuns: false });
+  const runtimeTables = tableListForCounts({ includeMigrationRuns: false }).map(qualifiedRuntimeTable);
   await client.query(`truncate table ${runtimeTables.join(", ")}`);
   const actualTables = await applyPostgresLegacyRows(client, plan, { includeMigrationRuns: false });
   const expectedTables = plannedPostgresTableCounts(plan, { includeMigrationRuns: false });
