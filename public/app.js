@@ -1406,6 +1406,21 @@ function setFrpOpsV2VipFilter(value) {
   } catch { /* sessionStorage no disponible (incognito) — silencioso */ }
 }
 
+function frpOpsV2QueueSortValue(job) {
+  return String(job?.readyAt || job?.updatedAt || job?.createdAt || "");
+}
+
+function frpOpsV2QueueViewState(queueJobs) {
+  const sortedJobs = [...(queueJobs || [])].sort((a, b) => frpOpsV2QueueSortValue(a).localeCompare(frpOpsV2QueueSortValue(b)));
+  const total = sortedJobs.length;
+  const vipOnly = frpOpsV2VipFilterEnabled();
+  const vipJobs = sortedJobs.filter((j) => j.order?.customerStatus === "VIP");
+  const vipCount = vipJobs.length;
+  const fallbackToAll = vipOnly && vipCount === 0 && total > 0;
+  const showJobs = vipOnly && !fallbackToAll ? vipJobs : sortedJobs;
+  return { total, vipOnly, vipJobs, vipCount, fallbackToAll, showJobs };
+}
+
 function frpOpsV2RelativeTime(iso) {
   if (!iso) return "";
   const ms = new Date(iso).getTime();
@@ -1648,14 +1663,19 @@ function frpOpsV2RenderOtherActiveSection({ jobs, tech }) {
   `;
 }
 
-function frpOpsV2RenderCurrentEmpty({ queueLen, isMeActive, swapInProgress }) {
-  const hasJobsInQueue = queueLen > 0;
+function frpOpsV2RenderCurrentEmpty({ queueState, isMeActive, swapInProgress }) {
+  const visibleJobs = queueState?.showJobs || [];
+  const hasJobsInQueue = visibleJobs.length > 0;
+  const takeSpecificJobId = queueState?.vipOnly && !queueState?.fallbackToAll
+    ? visibleJobs[0]?.id || ""
+    : "";
   const canTake = hasJobsInQueue && isMeActive && !swapInProgress;
   const disabledTip = swapInProgress
     ? "Cambio de tecnico en curso"
     : !isMeActive ? "No sos el tecnico activo"
     : !hasJobsInQueue ? "Sin trabajos listos en cola"
     : "";
+  const takeLabel = takeSpecificJobId ? "Tomar siguiente VIP" : "Tomar siguiente";
   return `
     <section class="frp-ops-v2-section">
       <div class="frp-ops-v2-section-header">
@@ -1669,9 +1689,10 @@ function frpOpsV2RenderCurrentEmpty({ queueLen, isMeActive, swapInProgress }) {
         </p>
         <button type="button" class="frp-ops-v2-btn-primary"
           data-frp-take-next
+          ${takeSpecificJobId ? `data-frp-take-next-job-id="${escapeHtml(takeSpecificJobId)}"` : ""}
           ${canTake ? "" : "disabled"}
           ${disabledTip ? `title="${escapeHtml(disabledTip)}"` : ""}>
-          Tomar siguiente
+          ${escapeHtml(takeLabel)}
         </button>
       </div>
     </section>
@@ -1712,14 +1733,12 @@ function frpOpsV2RenderQueueCard(job, { isMeActive, swapInProgress, hasMyActive 
   `;
 }
 
-function frpOpsV2RenderQueueSection({ queueJobs, isMeActive, swapInProgress, hasMyActive }) {
-  const total = queueJobs.length;
-  const vipOnly = frpOpsV2VipFilterEnabled();
-  const vipJobs = queueJobs.filter((j) => j.order?.customerStatus === "VIP");
-  const vipCount = vipJobs.length;
-  // Spec §3.11: si filtro activo pero no hay VIPs, mostrar todos con nota.
-  const fallbackToAll = vipOnly && vipCount === 0 && total > 0;
-  const showJobs = vipOnly && !fallbackToAll ? vipJobs : queueJobs;
+function frpOpsV2RenderQueueSection({ queueState, isMeActive, swapInProgress, hasMyActive }) {
+  const total = queueState?.total || 0;
+  const vipOnly = Boolean(queueState?.vipOnly);
+  const vipCount = queueState?.vipCount || 0;
+  const fallbackToAll = Boolean(queueState?.fallbackToAll);
+  const showJobs = queueState?.showJobs || [];
   const vipBtnLabel = vipCount > 0 ? `Solo VIP · ${vipCount}` : "Solo VIP";
   return `
     <section class="frp-ops-v2-section">
@@ -1875,6 +1894,7 @@ function renderFrp({ skipPricing = false } = {}) {
   const myActiveJob = jobs.find((j) => j.status === "EN_PROCESO" && j.technicianId === session.user?.id);
   const otherActiveJobs = jobs.filter((j) => j.status === "EN_PROCESO" && j.technicianId && j.technicianId !== session.user?.id);
   const queueJobs = jobs.filter((j) => j.status === "LISTO_PARA_TECNICO");
+  const queueState = frpOpsV2QueueViewState(queueJobs);
   const reviewJobs = jobs.filter((j) => j.status === "REQUIERE_REVISION");
   const pagosRevisar = orders.filter((o) => o.paymentStatus === "PAGO_EN_VALIDACION" && (o.paymentProofs?.length || 0) > 0);
   const waitingConnectionOrders = orders.filter((o) => {
@@ -1893,7 +1913,7 @@ function renderFrp({ skipPricing = false } = {}) {
   if (myActiveJob) {
     currentHtml = frpOpsV2RenderCurrentActive(myActiveJob, { swapInProgress, tech });
   } else {
-    currentHtml = frpOpsV2RenderCurrentEmpty({ queueLen: queueJobs.length, isMeActive, swapInProgress });
+    currentHtml = frpOpsV2RenderCurrentEmpty({ queueState, isMeActive, swapInProgress });
   }
 
   frpWorkbench.innerHTML = `
@@ -1903,7 +1923,7 @@ function renderFrp({ skipPricing = false } = {}) {
         ${currentHtml}
         ${frpOpsV2RenderOtherActiveSection({ jobs: otherActiveJobs, tech })}
         ${frpOpsV2RenderWaitingConnectionSection({ waitingOrders: waitingConnectionOrders })}
-        ${frpOpsV2RenderQueueSection({ queueJobs, isMeActive, swapInProgress, hasMyActive: Boolean(myActiveJob) })}
+        ${frpOpsV2RenderQueueSection({ queueState, isMeActive, swapInProgress, hasMyActive: Boolean(myActiveJob) })}
         ${frpOpsV2RenderAttentionGrid({ pagosRevisar, reviewJobs })}
         ${frpOpsV2RenderFinalized(finishedToday)}
       </div>
@@ -3993,7 +4013,9 @@ ticketForm.addEventListener("submit", async (event) => {
 frpWorkbench?.addEventListener("click", async (event) => {
   const takeNextButton = event.target.closest("[data-frp-take-next]");
   if (takeNextButton) {
-    await takeNextFrpJob();
+    const filteredJobId = takeNextButton.dataset.frpTakeNextJobId;
+    if (filteredJobId) await takeSpecificFrpJob(filteredJobId);
+    else await takeNextFrpJob();
     return;
   }
 

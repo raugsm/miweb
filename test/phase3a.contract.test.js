@@ -191,7 +191,7 @@ test("operator workbench treats other active jobs as plural observer state", asy
   assert.doesNotMatch(appJs, /otherActiveJob = !myActiveJob[\s\S]{0,180}jobs\.find/);
   assert.match(appJs, /frpOpsV2RenderOtherActiveSection\(\{ jobs: otherActiveJobs, tech \}\)/);
   assert.match(appJs, /frp-ops-v2-other-active-list/);
-  assert.match(appJs, /currentHtml = frpOpsV2RenderCurrentEmpty\(\{ queueLen: queueJobs\.length, isMeActive, swapInProgress \}\);/);
+  assert.match(appJs, /currentHtml = frpOpsV2RenderCurrentEmpty\(\{ queueState, isMeActive, swapInProgress \}\);/);
 });
 
 test("operator finalized today uses multi-operator technician marks", async () => {
@@ -204,6 +204,18 @@ test("operator finalized today uses multi-operator technician marks", async () =
   assert.match(appJs, /const techMark = frpOpsV2TechMark\(j\.technicianName\);/);
   assert.doesNotMatch(appJs, /frpOpsV2TechInitial/);
   assert.match(stylesCss, /\.frp-ops-v2-tech-mark\s*{[\s\S]*min-width:\s*26px;/);
+});
+
+test("operator VIP queue filter keeps take-next aligned with visible jobs", async () => {
+  const appJs = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
+
+  assert.match(appJs, /function frpOpsV2QueueViewState\(queueJobs\)/);
+  assert.match(appJs, /const queueState = frpOpsV2QueueViewState\(queueJobs\);/);
+  assert.match(appJs, /const showJobs = vipOnly && !fallbackToAll \? vipJobs : sortedJobs;/);
+  assert.match(appJs, /const takeSpecificJobId = queueState\?\.vipOnly && !queueState\?\.fallbackToAll/);
+  assert.match(appJs, /data-frp-take-next-job-id="\$\{escapeHtml\(takeSpecificJobId\)\}"/);
+  assert.match(appJs, /if \(filteredJobId\) await takeSpecificFrpJob\(filteredJobId\);/);
+  assert.match(appJs, /else await takeNextFrpJob\(\);/);
 });
 
 test("portal proof reader accepts mobile picker files with missing MIME but safe extension", async () => {

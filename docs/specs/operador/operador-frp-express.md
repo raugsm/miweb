@@ -107,6 +107,8 @@ Elemento en el header de la sección "COLA". Permite filtrar la cola por jobs de
 | Filtrado VIP | Toggle on, fondo amarillo claro, texto "Solo VIP" + contador (ej. "Solo VIP · 2") |
 | Sin VIPs en cola | Toggle visible pero al activarlo muestra "No hay VIPs en cola" en lugar de la lista |
 
+Contrato del CTA principal: si `Solo VIP` esta activo y existen VIPs visibles, el boton grande "Tomar siguiente" toma el primer job VIP visible usando el endpoint especifico `POST /api/frp/jobs/:id/take`. Si el filtro esta apagado, o si no hay VIPs y la UI cae a "mostrando todos", conserva `POST /api/frp/jobs/take-next`.
+
 ### 2.5 Card de cola (cada item de la lista)
 
 | Estado | Trigger | Apariencia |
@@ -281,7 +283,8 @@ Todos llaman `renderFrp({ skipPricing: true })`. Si se nota flicker visual moles
 
 | Acción UI | Endpoint backend | Resultado |
 |---|---|---|
-| Apretar "Tomar siguiente" (card vacío) | `POST /api/frp/jobs/take-next` | Toma el job más antiguo de la cola |
+| Apretar "Tomar siguiente" (card vacío, filtro apagado) | `POST /api/frp/jobs/take-next` | Toma el job más antiguo de la cola |
+| Apretar "Tomar siguiente VIP" (card vacío, filtro VIP activo con VIPs visibles) | `POST /api/frp/jobs/:id/take` | Toma el primer job VIP visible. 409 si ya fue tomado |
 | Apretar "Tomar" en card específica de cola | `POST /api/frp/jobs/:id/take` | Toma ese job específico. 409 si ya fue tomado |
 | Apretar "Marcar finalizado" | `PATCH /api/frp/jobs/:id/finalize` | Cambia estado a `FINALIZADO`, registra `doneAt`, auto-genera log "Finalizado por <user> a las <HH:MM>" Lima, dispara generación de PDF cliente |
 | Apretar "Reportar problema" | Abre modal (otra spec). Modal llama `PATCH /api/frp/jobs/:id/review` con razón + categoría |

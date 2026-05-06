@@ -210,3 +210,11 @@ Riesgo residual del panel trabajador: ya no es el dato mostrado en `Tu trabajo a
 - El riesgo encontrado no era de backend, sino de representacion: el frontend reducia `technicianName` a una sola inicial, suficiente para Jack/Angelo pero ambiguo con N operadores.
 - La UI ahora usa una marca compacta derivada del nombre completo (`JA`, `BZ`, etc.) y conserva el `title` con el nombre completo.
 - Se agrego guarda en `phase3a.contract.test.js` para impedir que la seccion vuelva a depender de `frpOpsV2TechInitial`.
+
+## Actualizacion 2026-05-06 - Cola Solo VIP y Tomar siguiente
+
+- Riesgo encontrado: `Solo VIP` filtraba la lista client-side, pero el CTA grande `Tomar siguiente` seguia llamando `/api/frp/jobs/take-next`.
+- Eso podia tomar el job mas antiguo global aunque estuviera oculto por el filtro VIP.
+- Se unifico la cola visible en `frpOpsV2QueueViewState`.
+- Si `Solo VIP` esta activo y hay VIPs visibles, el CTA grande llama el endpoint especifico del primer job visible (`POST /api/frp/jobs/:id/take`).
+- Si el filtro esta apagado, o si no hay VIPs y la UI muestra todos por fallback, el CTA conserva `/api/frp/jobs/take-next`.
