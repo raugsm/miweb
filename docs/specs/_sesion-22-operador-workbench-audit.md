@@ -235,3 +235,12 @@ Riesgo residual del panel trabajador: ya no es el dato mostrado en `Tu trabajo a
 - La misma prueba confirma que el job queda `FINALIZADO` y conserva `technicianId` de Jack.
 - Se agrego guarda frontend en `phase3a.contract.test.js`: el trabajo actual se renderiza por ownership (`job.technicianId === session.user?.id`) y las acciones solo se bloquean durante `swapInProgress`.
 - Documento dedicado: `_sesion-22-operador-finalize-owner-after-active-switch-contract.md`.
+
+## Actualizacion 2026-05-06 - Review/cancel de job tomado tras cambio de tecnico activo
+
+- Riesgo revisado: `Reportar problema` y `Cancelar job` podian confundirse con `Tomar` y depender del tecnico activo global.
+- Hecho confirmado: `PATCH /api/frp/jobs/:id/review` y `PATCH /api/frp/jobs/:id/cancel` no usan `requireActiveFrpTechnician`; validan el dueno congelado del job (`technicianId`) o rol `ADMIN`.
+- Se agregaron pruebas runtime en `phase5.technician-swap.test.js`: Jack toma un job, el admin cambia el tecnico activo global a Angelo, Angelo recibe 403 si intenta operar el job, y Jack conserva permiso.
+- Diferencia confirmada: `review` conserva `technicianId` y mueve a `REQUIERE_REVISION`; `cancel` con `timeout` libera a `LISTO_PARA_TECNICO` y limpia `technicianId`.
+- Se amplio el guarda frontend en `phase3a.contract.test.js` para cubrir `Marcar finalizado`, `Reportar problema` y `Cancelar job` desde el trabajo actual del dueno.
+- Documento dedicado: `_sesion-22-operador-review-cancel-owner-after-active-switch-contract.md`.

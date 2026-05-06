@@ -288,9 +288,9 @@ Todos llaman `renderFrp({ skipPricing: true })`. Si se nota flicker visual moles
 | Apretar "Tomar siguiente VIP" (card vacío, filtro VIP activo con VIPs visibles) | `POST /api/frp/jobs/:id/take` | Toma el primer job VIP visible. 409 si ya fue tomado |
 | Apretar "Tomar" en card específica de cola | `POST /api/frp/jobs/:id/take` | Toma ese job específico. 409 si ya fue tomado |
 | Apretar "Marcar finalizado" | `PATCH /api/frp/jobs/:id/finalize` | Cambia estado a `FINALIZADO`, registra `doneAt`, auto-genera log "Finalizado por <user> a las <HH:MM>" Lima, dispara generación de PDF cliente. El permiso depende del dueno del job, no del tecnico activo global |
-| Apretar "Reportar problema" | Abre modal (otra spec). Modal llama `PATCH /api/frp/jobs/:id/review` con razón + categoría |
+| Apretar "Reportar problema" | Abre modal (otra spec). Modal llama `PATCH /api/frp/jobs/:id/review` con razón + categoría. El permiso depende del dueno del job, no del tecnico activo global |
 | Apretar "Sigo trabajando" en banner 30 min | (sin endpoint) cierra banner client-side, persiste en localStorage |
-| Apretar "Cancelar job" en banner 30 min | confirm → `PATCH /api/frp/jobs/:id/cancel` con `{reason: 'timeout', note: 'Cancelado tras 30+ min sin finalizar'}` |
+| Apretar "Cancelar job" en banner 30 min | confirm → `PATCH /api/frp/jobs/:id/cancel` con `{reason: 'timeout', note: 'Cancelado tras 30+ min sin finalizar'}`. El permiso depende del dueno del job, no del tecnico activo global |
 | Toggle "Solo VIP" | (sin endpoint) filtro client-side sobre la cola ya cargada, persiste en sessionStorage |
 | Apretar "Ver comprobante" | Abre modal con `paymentProofs[]` + botones Aprobar/Rechazar |
 | Apretar "Aprobar" en modal de comprobante | `PATCH /api/frp/orders/:id/payment-review` (action: approve) | Aprueba pago, dispara lock 15min |
@@ -334,6 +334,7 @@ Si hay `notice`, el frontend pinta `#frp-message` con el dataset.type. Sin notic
 
 - "Marcar finalizado" requiere que `job.technicianId === currentUser.id`. Si no, botón disabled con tooltip "Solo quien tomó el job puede finalizarlo".
 - Si el tecnico activo global cambia despues de tomar el job, el dueno congelado (`job.technicianId`) conserva el boton y puede finalizar. El nuevo activo global no hereda permiso sobre ese job.
+- "Reportar problema" y "Cancelar job" siguen la misma regla de dueno congelado. El nuevo tecnico activo global no puede operar jobs ya tomados por otro operador.
 - "Tomar" no permite tomar si ya hay un job en `EN_PROCESO` para este técnico. Botón disabled.
 - "Aprobar comprobante" requiere rol `ADMIN` o `COORDINADOR`. Si rol `ATENCION_TECNICA`, botón disabled con tooltip "Permisos insuficientes".
 - Cuando hay switch en transición (10s), todos los botones de acción están disabled.
@@ -392,7 +393,7 @@ Si hay `notice`, el frontend pinta `#frp-message` con el dataset.type. Sin notic
 **Frontend:**
 - Solo mostrar el panel a usuarios con rol `ADMIN`, `COORDINADOR`, o `ATENCION_TECNICA`.
 - Botones de aprobación de pago solo a `ADMIN` y `COORDINADOR`.
-- Botón "Marcar finalizado" solo si `job.technicianId === currentUser.id`, aunque `active_technician_state` haya cambiado despues de tomar el job.
+- Botones "Marcar finalizado", "Reportar problema" y "Cancelar job" solo operan sobre el trabajo actual del usuario (`job.technicianId === currentUser.id`), aunque `active_technician_state` haya cambiado despues de tomar el job.
 - Botón "Tomar" disabled si el técnico no es el activo del momento.
 
 **Backend** (ya implementado):
@@ -425,6 +426,8 @@ Si hay `notice`, el frontend pinta `#frp-message` con el dataset.type. Sin notic
 16. Click en "Marcar finalizado" llama `PATCH /api/frp/jobs/:id/finalize` (auto-log generado), refresca el panel, mueve el job a Finalizados.
 16b. Si el tecnico activo cambia entre tomar y finalizar, el dueno del job todavia puede finalizar; la UI no debe ocultar su trabajo actual por no ser el activo global.
 17. Click en "Reportar problema" abre modal de reportar problema (otra spec).
+17b. Si el tecnico activo cambia despues de tomar el job, el dueno todavia puede enviarlo a revision; el nuevo activo global recibe 403 si intenta operar ese job.
+17c. Si el job se envia a revision, conserva `technicianId` del dueno original.
 18. Click en "Ver comprobante" abre modal con paymentProofs y botones de aprobar/rechazar.
 19. Approve de un comprobante llama `PATCH /api/frp/orders/:id/payment-review` y dispara lock 15min.
 
@@ -441,27 +444,29 @@ Si hay `notice`, el frontend pinta `#frp-message` con el dataset.type. Sin notic
 27. Click en [Cancelar job] dispara confirm dialog. Si OK, llama endpoint con `reason: 'timeout'` y libera el card.
 28. En modo readonly (otro técnico tiene el job), banner observador sin botones "X lleva 30+ min en este job".
 29. Si admin revierte un pago aprobado mientras el job está `EN_PROCESO`, el job se cancela automáticamente y aparece notice "Job cancelado: el pago fue revertido" en frpMessage (mecanismo SSE, sin disparador hasta endpoint admin).
-30. Toggle "Solo VIP" en cola filtra la lista mostrando solo jobs de clientes con `status === 'VIP'`.
-31. Sección "Finalizados hoy" muestra finalizados de todos los tecnicos FRP elegibles, con identificador visual del técnico.
+30. Si el tecnico activo cambia despues de tomar el job, el dueno todavia puede cancelar por timeout/manual; el nuevo activo global recibe 403 si intenta cancelar ese job.
+31. Si el dueno cancela con reason `timeout` o `manual`, el job vuelve a `LISTO_PARA_TECNICO` y queda sin `technicianId`.
+32. Toggle "Solo VIP" en cola filtra la lista mostrando solo jobs de clientes con `status === 'VIP'`.
+33. Sección "Finalizados hoy" muestra finalizados de todos los tecnicos FRP elegibles, con identificador visual del técnico.
 
 **Real-time (SSE):**
-32. Conexión SSE establecida al hacer login, cleanup automático en logout/sesión expirada.
-33. Banner `#frpOpsLiveStatus` muestra estado de la conexión (oculto cuando OK, "Reconectando..." cuando se cae).
-34. Eventos SSE entrantes con notice pintan `#frp-message` con dataset.type.
-35. Eventos sin notice solo refrescan el state (renderFrp silencioso).
-36. Switch técnico: polling acelerado a 2s mientras `swap.inProgress === true`, vuelve a 30s al completarse.
+34. Conexión SSE establecida al hacer login, cleanup automático en logout/sesión expirada.
+35. Banner `#frpOpsLiveStatus` muestra estado de la conexión (oculto cuando OK, "Reconectando..." cuando se cae).
+36. Eventos SSE entrantes con notice pintan `#frp-message` con dataset.type.
+37. Eventos sin notice solo refrescan el state (renderFrp silencioso).
+38. Switch técnico: polling acelerado a 2s mientras `swap.inProgress === true`, vuelve a 30s al completarse.
 
 **Responsive:**
-37. En mobile (<768px), cards de cola se vuelven verticales (info arriba, botón abajo).
-38. En mobile, grid de Pagos+Atención se vuelve 1 columna.
-39. En mobile, data cells del card "Tu trabajo actual" se apilan en 1 columna.
-40. Filtro VIP visible en mobile en línea separada arriba de la cola.
+39. En mobile (<768px), cards de cola se vuelven verticales (info arriba, botón abajo).
+40. En mobile, grid de Pagos+Atención se vuelve 1 columna.
+41. En mobile, data cells del card "Tu trabajo actual" se apilan en 1 columna.
+42. Filtro VIP visible en mobile en línea separada arriba de la cola.
 
 **Edge cases:**
-41. Si la cola está vacía y no hay job tomado, mensaje "Sin trabajo actual. Esperando que clientes conecten equipos."
-42. Si SSE se cae, banner amarillo "Reconectando…" hasta que vuelva.
-43. Texto largo en nombres se trunca con ellipsis.
-44. Cero finalizados hoy: sección oculta o mensaje "Sin finalizados hoy".
+43. Si la cola está vacía y no hay job tomado, mensaje "Sin trabajo actual. Esperando que clientes conecten equipos."
+44. Si SSE se cae, banner amarillo "Reconectando…" hasta que vuelva.
+45. Texto largo en nombres se trunca con ellipsis.
+46. Cero finalizados hoy: sección oculta o mensaje "Sin finalizados hoy".
 
 ---
 

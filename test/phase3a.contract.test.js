@@ -225,13 +225,16 @@ test("operator specific take rejection refreshes stale active technician state",
   assert.match(appJs, /catch \(error\) \{[\s\S]*frpMessage\.textContent = error\.message;[\s\S]*frpMessage\.dataset\.type = "error";[\s\S]*await refreshSession\(\);/);
 });
 
-test("operator current job finalize follows job ownership, not global active technician", async () => {
+test("operator current job actions follow ownership, not global active technician", async () => {
   const appJs = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
 
   assert.match(appJs, /const myActiveJob = jobs\.find\(\(j\) => j\.status === "EN_PROCESO" && j\.technicianId === session\.user\?\.id\);/);
   assert.match(appJs, /function frpOpsV2RenderCurrentActive\(job, \{ swapInProgress, tech \}\)/);
+  assert.match(appJs, /function frpOpsV2RenderActiveBanner\(jobId\)/);
   assert.match(appJs, /const actionsDisabled = swapInProgress;/);
   assert.match(appJs, /data-frp-finalize="\$\{escapeHtml\(job\.id\)\}"/);
+  assert.match(appJs, /data-frp-review="\$\{escapeHtml\(job\.id\)\}"/);
+  assert.match(appJs, /data-frp-cancel-timeout="\$\{escapeHtml\(jobId\)\}"/);
   assert.match(appJs, /currentHtml = frpOpsV2RenderCurrentActive\(myActiveJob, \{ swapInProgress, tech \}\);/);
 });
 

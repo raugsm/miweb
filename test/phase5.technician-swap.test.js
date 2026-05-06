@@ -334,6 +334,69 @@ test("phase 5: FRP owner can finalize after active technician changes", { timeou
   }
 });
 
+test("phase 5: FRP owner can request review after active technician changes", { timeout: 30_000 }, async () => {
+  const server = await startIsolatedServer({ swapMs: SWAP_MS });
+  try {
+    const adminHttp = createHttpClient(server.baseUrl, new CookieJar());
+    const { readyJob, jackId, jackHttp, angeloHttp } = await setupJackTakenJobThenSwitchToAngelo(server, adminHttp);
+
+    let response = await angeloHttp.request("PATCH", `/api/frp/jobs/${encodeURIComponent(readyJob.id)}/review`, {
+      reason: "Angelo should not inherit this job",
+    });
+    assert.equal(response.status, 403);
+    assert.match(response.data.error, /otro tecnico/);
+
+    response = await jackHttp.request("PATCH", `/api/frp/jobs/${encodeURIComponent(readyJob.id)}/review`, {
+      reason: "Owner review after active technician switch",
+    });
+    assert.equal(response.status, 200);
+    assert.equal(response.data.job.status, "REQUIERE_REVISION");
+    assert.equal(response.data.job.technicianId, jackId);
+    assert.equal(response.data.job.reviewReason, "Owner review after active technician switch");
+
+    response = await adminHttp.request("GET", "/api/session");
+    assert.equal(response.status, 200);
+    const reviewJob = response.data.frp.jobs.find((job) => job.id === readyJob.id);
+    assert.equal(reviewJob.status, "REQUIERE_REVISION");
+    assert.equal(reviewJob.technicianId, jackId);
+  } finally {
+    await server.stop();
+  }
+});
+
+test("phase 5: FRP owner can cancel after active technician changes", { timeout: 30_000 }, async () => {
+  const server = await startIsolatedServer({ swapMs: SWAP_MS });
+  try {
+    const adminHttp = createHttpClient(server.baseUrl, new CookieJar());
+    const { readyJob, jackHttp, angeloHttp } = await setupJackTakenJobThenSwitchToAngelo(server, adminHttp);
+
+    let response = await angeloHttp.request("PATCH", `/api/frp/jobs/${encodeURIComponent(readyJob.id)}/cancel`, {
+      reason: "timeout",
+      note: "Angelo should not inherit this job",
+    });
+    assert.equal(response.status, 403);
+    assert.match(response.data.error, /otro tecnico/);
+
+    response = await jackHttp.request("PATCH", `/api/frp/jobs/${encodeURIComponent(readyJob.id)}/cancel`, {
+      reason: "timeout",
+      note: "Owner canceled after active technician switch",
+    });
+    assert.equal(response.status, 200);
+    assert.equal(response.data.job.status, "LISTO_PARA_TECNICO");
+    assert.equal(response.data.job.technicianId, "");
+    assert.equal(response.data.job.cancelReason, "timeout");
+
+    response = await adminHttp.request("GET", "/api/session");
+    assert.equal(response.status, 200);
+    const canceledJob = response.data.frp.jobs.find((job) => job.id === readyJob.id);
+    assert.equal(canceledJob.status, "LISTO_PARA_TECNICO");
+    assert.equal(canceledJob.technicianId, "");
+    assert.equal(canceledJob.cancelReason, "timeout");
+  } finally {
+    await server.stop();
+  }
+});
+
 async function startIsolatedServer({ swapMs }) {
   const dataDir = await mkdtemp(path.join(tmpdir(), "ariadgsm-phase5-"));
   const port = await getAvailablePort();
@@ -430,6 +493,50 @@ async function setupTwoFrpTechnicians(http, setupToken) {
   assert.equal(response.status, 200);
 
   return { jackId, jackEmail, jackPassword, angeloId, angeloEmail, angeloPassword };
+}
+
+async function setupJackTakenJobThenSwitchToAngelo(server, adminHttp) {
+  const { jackId, jackEmail, jackPassword, angeloId, angeloEmail, angeloPassword } = await setupTwoFrpTechnicians(adminHttp, server.setupToken);
+
+  let response = await adminHttp.request("GET", "/api/operator/technician/status");
+  assert.equal(response.status, 200);
+  assert.equal(response.data.technician.active.userId, jackId);
+
+  const readyJob = await createReadyFrpJob(adminHttp);
+
+  const jackHttp = createHttpClient(server.baseUrl, new CookieJar());
+  response = await jackHttp.request("POST", "/api/login", {
+    email: jackEmail,
+    password: jackPassword,
+    operatorPin: server.setupToken,
+  });
+  assert.equal(response.status, 200);
+
+  response = await jackHttp.request("POST", `/api/frp/jobs/${encodeURIComponent(readyJob.id)}/take`);
+  assert.equal(response.status, 200);
+  assert.equal(response.data.job.status, "EN_PROCESO");
+  assert.equal(response.data.job.technicianId, jackId);
+
+  response = await adminHttp.request("POST", "/api/operator/technician/switch", {
+    targetUserId: angeloId,
+  });
+  assert.equal(response.status, 200);
+  assert.equal(response.data.technician.swap.inProgress, true);
+
+  await delay(SWAP_MS + 80);
+  response = await adminHttp.request("GET", "/api/operator/technician/status");
+  assert.equal(response.status, 200);
+  assert.equal(response.data.technician.active.userId, angeloId);
+
+  const angeloHttp = createHttpClient(server.baseUrl, new CookieJar());
+  response = await angeloHttp.request("POST", "/api/login", {
+    email: angeloEmail,
+    password: angeloPassword,
+    operatorPin: server.setupToken,
+  });
+  assert.equal(response.status, 200);
+
+  return { readyJob, jackId, jackHttp, angeloHttp };
 }
 
 async function createReadyFrpJob(http) {
