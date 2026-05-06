@@ -602,3 +602,102 @@ Riesgo restante:
 Siguiente paso unico:
 
 - Probar Fase B en local sin `DATABASE_URL`, luego subir y ejecutar el read-check en Render contra la base real.
+
+## Resultado Fase B.1 - Sync final de drift JSON -> PostgreSQL
+
+Fecha: 2026-05-06
+
+Contexto:
+
+- El read-check en Render con commit `a1f6478` probo que el lector reconstruye bien lo que ya esta en PostgreSQL:
+  - `tableProjectionMismatches: []`.
+- Tambien detecto drift porque `users.json` siguio recibiendo escrituras despues del import:
+  - `customerDevices`: JSON `90`, PostgreSQL `89`;
+  - `audit`: JSON `831`, PostgreSQL `830`.
+- Se inspecciono el drift sin secretos:
+  - 1 `customerDevice` nuevo;
+  - 1 `auditEvent` `PORTAL_ORDERS_STREAM_CONNECTED`.
+
+Decision:
+
+- No activar PostgreSQL con drift pendiente.
+- No insertar registros a mano desde la shell.
+- Crear un sync final controlado con allowlist y transaccion.
+
+Cambio aplicado:
+
+- Se creo `scripts/postgres/sync-json-drift.mjs`.
+- Se agregaron scripts:
+  - `npm run postgres:sync-drift`;
+  - `npm run postgres:sync-drift:apply`.
+
+Contrato:
+
+- El script solo puede sincronizar drift append-only permitido:
+  - `customer_devices`;
+  - `customer_device_authorizations`;
+  - `audit_events`.
+- Si detecta diferencias en cualquier otra coleccion legacy, bloquea.
+- En modo dry-run no escribe.
+- En modo apply usa transaccion.
+- El reporte no imprime:
+  - `passwordHash`;
+  - `operatorPinHash`;
+  - `tokenHash`;
+  - `dataUrl`;
+  - `base64`;
+  - `legacy_data_url`.
+
+Validacion local ejecutada:
+
+```powershell
+node --check scripts/postgres/sync-json-drift.mjs
+npm.cmd test
+```
+
+Resultado:
+
+- `node --check scripts/postgres/sync-json-drift.mjs`: OK.
+- `npm.cmd test`: 14/14 OK.
+- `npm run postgres:sync-drift` sin `DATABASE_URL`: fallo controlado con `ok: false` y `DATABASE_URL no configurado.`
+- Reporte local sin `DATABASE_URL`: no contiene patrones sensibles.
+
+Validacion en Render esperada:
+
+```bash
+cd /opt/render/project/src
+npm run postgres:sync-drift -- --input /opt/render/project/src/storage/users.json --report /tmp/postgres-sync-drift-plan.json --strict
+cat /tmp/postgres-sync-drift-plan.json
+grep -E 'passwordHash|operatorPinHash|tokenHash|dataUrl|base64|legacy_data_url' /tmp/postgres-sync-drift-plan.json || true
+```
+
+Si el dry-run queda OK y solo muestra filas permitidas:
+
+```bash
+cd /opt/render/project/src
+npm run postgres:sync-drift:apply -- --input /opt/render/project/src/storage/users.json --report /tmp/postgres-sync-drift-apply.json --strict
+cat /tmp/postgres-sync-drift-apply.json
+grep -E 'passwordHash|operatorPinHash|tokenHash|dataUrl|base64|legacy_data_url' /tmp/postgres-sync-drift-apply.json || true
+npm run postgres:read-check -- --input /opt/render/project/src/storage/users.json --report /tmp/postgres-read-check-after-sync.json --strict
+cat /tmp/postgres-read-check-after-sync.json
+grep -E 'passwordHash|operatorPinHash|tokenHash|dataUrl|base64|legacy_data_url' /tmp/postgres-read-check-after-sync.json || true
+```
+
+Resultado aceptable:
+
+- Sync dry-run:
+  - `ok: true`;
+  - `unsupportedCollectionMismatches: []`;
+  - `plannedCounts.customerDevices` y `plannedCounts.auditEvents` iguales al drift detectado.
+- Sync apply:
+  - `ok: true`;
+  - sin patrones sensibles.
+- Read-check posterior:
+  - `ok: true`;
+  - `tableProjectionMismatches: []`;
+  - `sourceComparison.collectionMismatches: []`;
+  - `sourceComparison.projectionMismatches: []`.
+
+Siguiente paso unico:
+
+- Subir Fase B.1 y ejecutar dry-run en Render antes de aplicar.

@@ -13,7 +13,9 @@
     "postgres:migrate:apply": "node scripts/postgres/apply-migrations.mjs --apply",
     "postgres:import": "node scripts/migration/import-users-json-to-postgres.mjs",
     "postgres:import:apply": "node scripts/migration/import-users-json-to-postgres.mjs --apply",
-    "postgres:read-check": "node scripts/postgres/read-db-check.mjs"
+    "postgres:read-check": "node scripts/postgres/read-db-check.mjs",
+    "postgres:sync-drift": "node scripts/postgres/sync-json-drift.mjs",
+    "postgres:sync-drift:apply": "node scripts/postgres/sync-json-drift.mjs --apply"
   },
   "engines": {
     "node": ">=20"
