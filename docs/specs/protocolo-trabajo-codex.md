@@ -69,6 +69,12 @@ Si una prueba requiere admin autorizado, se documenta como pendiente y se valida
 
 Si Codex detecta que una correccion puede ser un parche sin entender la causa, debe detenerse y decirlo antes de tocar archivos.
 
+## Regla PostgreSQL runtime
+
+Antes de tocar storage, sesiones, presencia, portal FRP o cualquier llamada a `writeDb(db)`, Codex debe leer `docs/specs/_sesion-20-postgres-runtime-p0-estabilizacion.md`.
+
+Desde el cutover PostgreSQL, `storage/users.json` es snapshot historico pre-cutover. No se usa como fuente esperada para `postgres:read-check --strict`. La salud viva de Postgres se verifica sin `--input`.
+
 ## Regla de alcance por turno
 
 Cada turno debe tener un siguiente paso unico y priorizado. Si aparecen varios problemas, primero se documentan y se elige uno.
