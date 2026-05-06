@@ -152,6 +152,11 @@ Contrato del CTA principal: si `Solo VIP` esta activo y existen VIPs visibles, e
 - Razón del problema (ej. "Modelo no soportado · revisar")
 - Link "Resolver →"
 
+**Permisos de resolucion:**
+- Si el usuario es el tecnico que reporto el caso, `ADMIN` o `COORDINADOR`, la card permite resolver.
+- Si el usuario es otro tecnico regular, la card se muestra como solo lectura y no ejecuta accion.
+- El tecnico activo global no hereda permiso para resolver una revision ajena.
+
 ### 2.8 Tabla de finalizados
 
 Estado único, informativa. Muestra finalizados de **todos los tecnicos FRP elegibles** del día actual. Cada fila:
@@ -428,6 +433,7 @@ Si hay `notice`, el frontend pinta `#frp-message` con el dataset.type. Sin notic
 17. Click en "Reportar problema" abre modal de reportar problema (otra spec).
 17b. Si el tecnico activo cambia despues de tomar el job, el dueno todavia puede enviarlo a revision; el nuevo activo global recibe 403 si intenta operar ese job.
 17c. Si el job se envia a revision, conserva `technicianId` del dueno original.
+17d. Click en "Resolver revision" devuelve `REQUIERE_REVISION -> LISTO_PARA_TECNICO` solo si el usuario es el dueno que reporto el caso, `ADMIN` o `COORDINADOR`; un tecnico regular ajeno recibe 403 aunque sea el tecnico activo global.
 18. Click en "Ver comprobante" abre modal con paymentProofs y botones de aprobar/rechazar.
 19. Approve de un comprobante llama `PATCH /api/frp/orders/:id/payment-review` y dispara lock 15min.
 

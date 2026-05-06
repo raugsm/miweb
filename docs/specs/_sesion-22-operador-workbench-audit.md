@@ -244,3 +244,12 @@ Riesgo residual del panel trabajador: ya no es el dato mostrado en `Tu trabajo a
 - Diferencia confirmada: `review` conserva `technicianId` y mueve a `REQUIERE_REVISION`; `cancel` con `timeout` libera a `LISTO_PARA_TECNICO` y limpia `technicianId`.
 - Se amplio el guarda frontend en `phase3a.contract.test.js` para cubrir `Marcar finalizado`, `Reportar problema` y `Cancelar job` desde el trabajo actual del dueno.
 - Documento dedicado: `_sesion-22-operador-review-cancel-owner-after-active-switch-contract.md`.
+
+## Actualizacion 2026-05-06 - Resolver revision con permisos granulares
+
+- Riesgo revisado: `Resolver revision` opera sobre `REQUIERE_REVISION`, no sobre un job `EN_PROCESO`; por tanto no podia heredar el contrato de tecnico activo global.
+- Decision: solo puede devolver a cola el tecnico que reporto el caso, `ADMIN` o `COORDINADOR`.
+- UI: los tecnicos regulares que ven una revision ajena la reciben como `Solo lectura`, con la card deshabilitada.
+- Backend: `PATCH /api/frp/jobs/:id/ready` devuelve 403 si un tecnico ajeno intenta resolver una revision.
+- Se agregaron pruebas unitarias, contrato frontend y prueba runtime con cambio de tecnico activo.
+- Documento dedicado: `_sesion-22-operador-review-resolver-permission-contract.md`.

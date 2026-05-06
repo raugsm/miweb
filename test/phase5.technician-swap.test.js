@@ -364,6 +364,39 @@ test("phase 5: FRP owner can request review after active technician changes", { 
   }
 });
 
+test("phase 5: FRP review resolver follows owner, not active technician", { timeout: 30_000 }, async () => {
+  const server = await startIsolatedServer({ swapMs: SWAP_MS });
+  try {
+    const adminHttp = createHttpClient(server.baseUrl, new CookieJar());
+    const { readyJob, jackId, jackHttp, angeloHttp } = await setupJackTakenJobThenSwitchToAngelo(server, adminHttp);
+
+    let response = await jackHttp.request("PATCH", `/api/frp/jobs/${encodeURIComponent(readyJob.id)}/review`, {
+      reason: "Owner review before resolver permission test",
+    });
+    assert.equal(response.status, 200);
+    assert.equal(response.data.job.status, "REQUIERE_REVISION");
+    assert.equal(response.data.job.technicianId, jackId);
+
+    response = await angeloHttp.request("PATCH", `/api/frp/jobs/${encodeURIComponent(readyJob.id)}/ready`);
+    assert.equal(response.status, 403);
+    assert.match(response.data.error, /reporto el caso/);
+
+    response = await jackHttp.request("PATCH", `/api/frp/jobs/${encodeURIComponent(readyJob.id)}/ready`);
+    assert.equal(response.status, 200);
+    assert.equal(response.data.job.status, "LISTO_PARA_TECNICO");
+    assert.equal(response.data.job.technicianId, "");
+    assert.equal(response.data.job.takenAt, "");
+
+    response = await adminHttp.request("GET", "/api/session");
+    assert.equal(response.status, 200);
+    const readyAgainJob = response.data.frp.jobs.find((job) => job.id === readyJob.id);
+    assert.equal(readyAgainJob.status, "LISTO_PARA_TECNICO");
+    assert.equal(readyAgainJob.technicianId, "");
+  } finally {
+    await server.stop();
+  }
+});
+
 test("phase 5: FRP owner can cancel after active technician changes", { timeout: 30_000 }, async () => {
   const server = await startIsolatedServer({ swapMs: SWAP_MS });
   try {

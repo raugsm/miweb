@@ -1,3 +1,9 @@
+function canResolveFrpReviewJob(user, job) {
+  if (job?.status !== "REQUIERE_REVISION") return true;
+  if (["ADMIN", "COORDINADOR"].includes(user?.role)) return true;
+  return Boolean(job?.technicianId && job.technicianId === user?.id);
+}
+
 export function createFrpRoutes({
   allowedTicketPaymentMethods,
   audit,
@@ -749,6 +755,7 @@ export function createFrpRoutes({
       const result = await markFrpJobReadyPostgres({
         jobId: frpJobReadyMatch[1],
         userId: user.id,
+        userRole: user.role,
         readyAt: nowIso(),
       });
       if (!result.ok) return sendJson(res, result.status || 500, { error: result.error || "No se pudo enviar el trabajo FRP a tecnico." });
@@ -763,6 +770,9 @@ export function createFrpRoutes({
     const job = db.frpJobs.find((candidate) => candidate.id === frpJobReadyMatch[1]);
     const order = db.frpOrders.find((candidate) => candidate.id === job?.orderId);
     if (!job || !order) return sendJson(res, 404, { error: "Trabajo FRP no encontrado." });
+    if (!canResolveFrpReviewJob(user, job)) {
+      return sendJson(res, 403, { error: "Solo quien reporto el caso, coordinador o administrador puede devolverlo a cola." });
+    }
     if (!frpOrderIsReady(order)) return sendJson(res, 400, { error: "Falta pago validado, conexion enviada o autorizacion confirmada." });
     if (!frpJobChecklistComplete(job)) return sendJson(res, 400, { error: "Completa conexion, estado requerido y modelo soportado." });
     if (!["ESPERANDO_PREPARACION", "ESPERANDO_CLIENTE", "REQUIERE_REVISION"].includes(job.status)) {

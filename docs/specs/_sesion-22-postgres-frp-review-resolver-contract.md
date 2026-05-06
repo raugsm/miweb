@@ -43,7 +43,7 @@ PATCH /api/frp/jobs/:id/ready
 3. Migrar `ready` a camino PostgreSQL granular:
 
 ```js
-markFrpJobReadyPostgres({ jobId, userId, readyAt })
+markFrpJobReadyPostgres({ jobId, userId, userRole, readyAt })
 ```
 
 4. Publicar SSE despues del commit, desde la ruta.
@@ -71,6 +71,28 @@ Cambio intencional:
 - `takenAt` se limpia.
 
 Razon: un caso devuelto desde Atencion debe volver a la cola sin propiedad del tecnico que lo reporto. Si se deja asignado, la cola queda semanticamente ambigua aunque el status sea `LISTO_PARA_TECNICO`.
+
+## Contrato de permisos para `REQUIERE_REVISION`
+
+Cuando `ready` resuelve un job en `REQUIERE_REVISION`, no basta con tener acceso FRP general ni ser el tecnico activo global.
+
+Puede devolverlo a cola:
+
+- el tecnico dueno que lo reporto (`job.technicianId === user.id`);
+- `ADMIN`;
+- `COORDINADOR`.
+
+No puede devolverlo:
+
+- otro tecnico regular;
+- el tecnico activo global si no es dueno del caso;
+- un observador de la cola.
+
+El contrato dedicado queda documentado en:
+
+```text
+docs/specs/_sesion-22-operador-review-resolver-permission-contract.md
+```
 
 ## Archivos modificados
 

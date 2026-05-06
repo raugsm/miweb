@@ -1803,15 +1803,19 @@ function frpOpsV2RenderAttentionGrid({ pagosRevisar, reviewJobs }) {
     `).join("")
     : `<p class="frp-ops-v2-alert-empty">Sin pagos pendientes.</p>`;
   const reviewHtml = reviewJobs.length
-    ? reviewJobs.map((j) => `
+    ? reviewJobs.map((j) => {
+      const canResolve = canResolveFrpReviewJob(j);
+      return `
       <button type="button" class="frp-ops-v2-alert-card is-danger"
-        data-frp-show-review="${escapeHtml(j.id)}">
+        data-frp-show-review="${escapeHtml(j.id)}"
+        ${canResolve ? "" : `disabled title="Solo quien reporto el caso, coordinador o administrador puede resolverlo"`}>
         <div class="frp-ops-v2-alert-card-id">${escapeHtml(j.order?.code || j.code)}</div>
         <div class="frp-ops-v2-alert-card-title">${escapeHtml(j.order?.clientName || j.clientName || "-")}</div>
         <div class="frp-ops-v2-alert-card-detail">${escapeHtml(j.reviewReason || "Requiere atencion")}</div>
-        <div class="frp-ops-v2-alert-card-action">Resolver →</div>
+        <div class="frp-ops-v2-alert-card-action">${canResolve ? "Resolver ->" : "Solo lectura"}</div>
       </button>
-    `).join("")
+    `;
+    }).join("")
     : `<p class="frp-ops-v2-alert-empty">Sin casos en revision.</p>`;
   return `
     <section class="frp-ops-v2-section">
@@ -2020,6 +2024,11 @@ function canReviewPayments() {
 
 function canReviewFrpPayments() {
   return canReviewPayments() || frpEnabled();
+}
+
+function canResolveFrpReviewJob(job) {
+  if (["ADMIN", "COORDINADOR"].includes(session.user?.role)) return true;
+  return Boolean(job?.technicianId && job.technicianId === session.user?.id);
 }
 
 function canMoveTicketToStatus(ticket, operationalStatus) {

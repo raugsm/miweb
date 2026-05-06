@@ -370,6 +370,8 @@ test("Postgres FRP ready resolves review back to the technician queue", () => {
         status: "REQUIERE_REVISION",
       },
     ],
+    userId: "44444444-4444-4444-8444-444444444444",
+    userRole: "ATENCION_TECNICA",
     readyAt,
   });
 
@@ -382,6 +384,83 @@ test("Postgres FRP ready resolves review back to the technician queue", () => {
   assert.equal(result.order.orderStatus, "LISTA_PARA_TECNICO");
   assert.equal(result.auditAction, "FRP_JOB_READY");
   assert.equal(result.publishReason, "frp_job_ready");
+});
+
+test("Postgres FRP ready rejects unrelated technician resolving a reviewed job", () => {
+  const result = applyFrpJobReadyLegacyState({
+    job: {
+      id: "55555555-5555-4555-8555-555555555555",
+      code: "ORD-20260506-001-1",
+      orderId: baseOrder.id,
+      status: "REQUIERE_REVISION",
+      technicianId: "44444444-4444-4444-8444-444444444444",
+      takenAt: "2026-05-06T17:00:00.000Z",
+      reviewReason: "Cliente no conectado",
+      checklist: {
+        clientConnected: true,
+        requiredStateConfirmed: true,
+        modelSupported: true,
+      },
+    },
+    order: {
+      ...baseOrder,
+      checklist: {
+        priceSent: true,
+        paymentValidated: true,
+        connectionDataSent: true,
+        authorizationConfirmed: true,
+      },
+      orderStatus: "LISTA_PARA_TECNICO",
+    },
+    jobs: [],
+    userId: "77777777-7777-4777-8777-777777777777",
+    userRole: "ATENCION_TECNICA",
+    readyAt: "2026-05-06T17:37:00.000Z",
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 403);
+  assert.match(result.error, /reporto el caso/);
+});
+
+test("Postgres FRP ready allows coordinator resolving a reviewed job", () => {
+  const readyAt = "2026-05-06T17:38:00.000Z";
+  const result = applyFrpJobReadyLegacyState({
+    job: {
+      id: "55555555-5555-4555-8555-555555555555",
+      code: "ORD-20260506-001-1",
+      orderId: baseOrder.id,
+      status: "REQUIERE_REVISION",
+      technicianId: "44444444-4444-4444-8444-444444444444",
+      takenAt: "2026-05-06T17:00:00.000Z",
+      reviewReason: "Cliente no conectado",
+      checklist: {
+        clientConnected: true,
+        requiredStateConfirmed: true,
+        modelSupported: true,
+      },
+    },
+    order: {
+      ...baseOrder,
+      checklist: {
+        priceSent: true,
+        paymentValidated: true,
+        connectionDataSent: true,
+        authorizationConfirmed: true,
+      },
+      orderStatus: "LISTA_PARA_TECNICO",
+    },
+    jobs: [],
+    userId: "77777777-7777-4777-8777-777777777777",
+    userRole: "COORDINADOR",
+    readyAt,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.job.status, "LISTO_PARA_TECNICO");
+  assert.equal(result.job.technicianId, "");
+  assert.equal(result.job.takenAt, "");
+  assert.equal(result.job.readyAt, readyAt);
 });
 
 test("Postgres FRP ready rejects incomplete readiness state before mutation", () => {
@@ -408,6 +487,7 @@ test("Postgres FRP ready rejects incomplete readiness state before mutation", ()
       orderStatus: "LISTA_PARA_TECNICO",
     },
     jobs: [],
+    userRole: "ADMIN",
     readyAt: "2026-05-06T17:40:00.000Z",
   });
 

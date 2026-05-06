@@ -432,9 +432,18 @@ export function applyFrpJobReviewLegacyState({ job, order = null, jobs = [], use
   };
 }
 
-export function applyFrpJobReadyLegacyState({ job, order = null, jobs = [], readyAt }) {
+function canResolveFrpReviewJob({ job, userId = "", userRole = "" }) {
+  if (job?.status !== "REQUIERE_REVISION") return true;
+  if (["ADMIN", "COORDINADOR"].includes(userRole)) return true;
+  return Boolean(job.technicianId && job.technicianId === userId);
+}
+
+export function applyFrpJobReadyLegacyState({ job, order = null, jobs = [], readyAt, userId = "", userRole = "" }) {
   if (!job || !order) {
     return { ok: false, status: 404, error: "Trabajo FRP no encontrado." };
+  }
+  if (!canResolveFrpReviewJob({ job, userId, userRole })) {
+    return { ok: false, status: 403, error: "Solo quien reporto el caso, coordinador o administrador puede devolverlo a cola." };
   }
   if (!frpOrderIsReadyLegacy(order)) {
     return { ok: false, status: 400, error: "Falta pago validado, conexion enviada o autorizacion confirmada." };
@@ -964,7 +973,7 @@ export async function reviewFrpJobPostgres({ jobId, userId, userRole = "", reaso
   });
 }
 
-export async function markFrpJobReadyPostgres({ jobId, userId, readyAt }) {
+export async function markFrpJobReadyPostgres({ jobId, userId, userRole = "", readyAt }) {
   return withTransaction(async (client) => {
     const { jobRow, orderRow, jobRows } = await readLockedFrpJobWithOrder(client, jobId);
     if (!jobRow || !orderRow) return { ok: false, status: 404, error: "Trabajo FRP no encontrado." };
@@ -972,6 +981,8 @@ export async function markFrpJobReadyPostgres({ jobId, userId, readyAt }) {
       job: jobFromRow(jobRow),
       order: frpOrderFromRow(orderRow),
       jobs: jobRows.map(jobFromRow),
+      userId,
+      userRole,
       readyAt,
     });
     if (!state.ok) return state;

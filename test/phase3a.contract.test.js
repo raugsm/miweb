@@ -238,6 +238,17 @@ test("operator current job actions follow ownership, not global active technicia
   assert.match(appJs, /currentHtml = frpOpsV2RenderCurrentActive\(myActiveJob, \{ swapInProgress, tech \}\);/);
 });
 
+test("operator review resolver cards are readonly for non-owner technicians", async () => {
+  const appJs = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
+
+  assert.match(appJs, /function canResolveFrpReviewJob\(job\)/);
+  assert.match(appJs, /\["ADMIN", "COORDINADOR"\]\.includes\(session\.user\?\.role\)/);
+  assert.match(appJs, /job\?\.technicianId && job\.technicianId === session\.user\?\.id/);
+  assert.match(appJs, /const canResolve = canResolveFrpReviewJob\(j\);/);
+  assert.match(appJs, /disabled title="Solo quien reporto el caso, coordinador o administrador puede resolverlo"/);
+  assert.match(appJs, /canResolve \? "Resolver ->" : "Solo lectura"/);
+});
+
 test("portal proof reader accepts mobile picker files with missing MIME but safe extension", async () => {
   const previousFileReader = globalThis.FileReader;
   globalThis.FileReader = class {
