@@ -1257,3 +1257,59 @@ Riesgo restante:
 Siguiente paso unico:
 
 - Ejecutar smoke funcional minimo post-cutover y revisar logs de errores.
+
+## Resultado Render Smoke post-cutover - Read-only aprobado
+
+Fecha: 2026-05-06
+
+Contexto:
+
+- Runtime productivo en PostgreSQL.
+- Endpoint base probado: `https://ops.ariadgsm.com`.
+- Release reportado por health: `660903609abe`.
+
+Checks ejecutados:
+
+- `GET /api/health`.
+- `GET /api/portal/catalog`.
+- `GET /api/portal/active-technician`.
+
+Resultado:
+
+- `health.status: 200`.
+- `health.ok: true`.
+- `health.storageDriver: postgres`.
+- `health.storageRuntimeImplemented: true`.
+- `catalog.status: 200`.
+- `catalog.ok: true`.
+- `catalog.hasCatalog: true`.
+- `catalog.catalogKeys` incluyo:
+  - `countries`;
+  - `customerModuleUrl`;
+  - `eligibilityHints`;
+  - `exchangeRates`;
+  - `monthlyTiers`;
+  - `paymentMethods`;
+  - `phoneCountries`;
+  - `quantityTiers`;
+  - `services`;
+  - `statuses`;
+  - `turnstileEnabled`;
+  - `turnstileSiteKey`.
+- `activeTechnician.status: 200`.
+- `activeTechnician.ok: true`.
+- `activeTechnician.hasTechnicianField: true`.
+
+Decision:
+
+- El smoke read-only post-cutover queda aprobado.
+- El proceso web real lee desde el runtime PostgreSQL y sirve rutas publicas de aplicacion.
+
+Riesgo restante:
+
+- Este smoke no prueba una escritura HTTP real del runtime web.
+- La escritura transaccional fue validada por `postgres:write-check`, pero una ruta HTTP de aplicacion puede fallar por permisos, validaciones, cookies, CSRF/origin o datos del request.
+
+Siguiente paso unico:
+
+- Elegir entre observacion inicial sin escribir datos o una escritura canary controlada con rollback operativo disponible.
