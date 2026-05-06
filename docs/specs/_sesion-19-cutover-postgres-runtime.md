@@ -701,3 +701,98 @@ Resultado aceptable:
 Siguiente paso unico:
 
 - Subir Fase B.1 y ejecutar dry-run en Render antes de aplicar.
+
+## Validacion Render Fase B.1 aplicada
+
+Fecha: 2026-05-06
+
+Contexto:
+
+- Commit desplegado: `093a3d8 Add Postgres JSON drift sync gate`.
+- Runtime productivo todavia en `json`.
+- PostgreSQL no esta activo como storage runtime.
+
+Dry-run ejecutado en Render:
+
+```bash
+cd /opt/render/project/src
+git rev-parse --short HEAD
+npm run postgres:sync-drift -- --input /opt/render/project/src/storage/users.json --report /tmp/postgres-sync-drift-plan.json --strict
+cat /tmp/postgres-sync-drift-plan.json
+grep -E 'passwordHash|operatorPinHash|tokenHash|dataUrl|base64|legacy_data_url' /tmp/postgres-sync-drift-plan.json || true
+```
+
+Resultado dry-run:
+
+- `ok: true`.
+- `wouldWrite: true`.
+- `unsupportedCollectionMismatches: []`.
+- `warnings: []`.
+- Drift permitido detectado:
+  - `customerDevices`: `1`;
+  - `customerDeviceAuthorizations`: `0`;
+  - `auditEvents`: `1`.
+- Filas planeadas:
+  - `customerDevice`: `8dd1e33a-3979-4ec8-94db-591f76aee32b`.
+  - `auditEvent`: `34be4da9-0ab0-41c6-bbfe-ec782602479a`, accion `PORTAL_ORDERS_STREAM_CONNECTED`.
+- El grep de patrones sensibles no imprimio secretos.
+
+Apply ejecutado en Render:
+
+```bash
+cd /opt/render/project/src
+npm run postgres:sync-drift:apply -- --input /opt/render/project/src/storage/users.json --report /tmp/postgres-sync-drift-apply.json --strict
+cat /tmp/postgres-sync-drift-apply.json
+grep -E 'passwordHash|operatorPinHash|tokenHash|dataUrl|base64|legacy_data_url' /tmp/postgres-sync-drift-apply.json || true
+```
+
+Resultado apply:
+
+- `ok: true`.
+- `apply: true`.
+- `afterCounts.customerDevices`: `90`.
+- `afterCounts.auditEvents`: `831`.
+- `warnings: []`.
+- El reporte no expuso patrones sensibles.
+
+Read-check posterior ejecutado en Render:
+
+```bash
+cd /opt/render/project/src
+npm run postgres:read-check -- --input /opt/render/project/src/storage/users.json --report /tmp/postgres-read-check-after-sync.json --strict
+cat /tmp/postgres-read-check-after-sync.json
+grep -E 'passwordHash|operatorPinHash|tokenHash|dataUrl|base64|legacy_data_url' /tmp/postgres-read-check-after-sync.json || true
+```
+
+Resultado read-check posterior:
+
+- `ok: true`.
+- `tableProjectionMismatches: []`.
+- `sourceComparison.collectionMismatches: []`.
+- `sourceComparison.projectionMismatches: []`.
+- Conteos alineados entre `users.json` y PostgreSQL:
+  - `customerDevices`: `90`;
+  - `audit`: `831`;
+  - `customerOrders`: `13`;
+  - `frpOrders`: `13`;
+  - `frpJobs`: `14`;
+  - `payment_proofs`: `32`.
+- `proofMissingDigest: 0`.
+- `finalImageMissingDigest: 0`.
+- El reporte no expuso patrones sensibles.
+
+Decision:
+
+- La base PostgreSQL quedo alineada con el `users.json` activo en el momento del check.
+- Fase B y Fase B.1 quedan aceptadas como evidencia de lectura y sync controlado.
+- No se aprueba activar `ARIAD_STORAGE_DRIVER=postgres` todavia.
+
+Riesgo restante:
+
+- Mientras produccion siga en `json`, puede volver a aparecer drift antes del cutover.
+- Antes de activar Postgres se debe repetir un read-check o sync final en ventana de baja actividad.
+- La activacion sigue bloqueada porque `postgresStorage.writeDb()` todavia no implementa escritura runtime.
+
+Siguiente paso unico:
+
+- Pasar a Fase C: disenar e implementar `postgresStorage.writeDb(db)` con transaccion, pruebas de rollback y sin activar el driver Postgres en produccion.
