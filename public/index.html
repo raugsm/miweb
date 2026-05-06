@@ -266,6 +266,40 @@
               </form>
             </dialog>
 
+            <dialog id="frpReviewDialog" class="frp-review-dialog" aria-labelledby="frpReviewDialogTitle" aria-describedby="frpReviewDialogSubtitle">
+              <form method="dialog" class="frp-review-dialog-form">
+                <header>
+                  <span class="section-kicker" data-review-kicker>Atencion FRP</span>
+                  <h3 id="frpReviewDialogTitle" data-review-title>Revisar caso</h3>
+                  <p id="frpReviewDialogSubtitle" data-review-subtitle></p>
+                </header>
+                <div class="frp-review-dialog-facts">
+                  <div>
+                    <span>Orden</span>
+                    <strong data-review-order>-</strong>
+                  </div>
+                  <div>
+                    <span>Cliente</span>
+                    <strong data-review-client>-</strong>
+                  </div>
+                  <div>
+                    <span>Equipo</span>
+                    <strong data-review-job>-</strong>
+                  </div>
+                </div>
+                <label class="frp-review-dialog-reason">
+                  Motivo
+                  <textarea name="reason" minlength="8" maxlength="180" rows="4" placeholder="Ej: Cliente no conectado / revisar estado"></textarea>
+                </label>
+                <p class="frp-review-dialog-note" data-review-note></p>
+                <p class="frp-review-dialog-message" data-review-message aria-live="polite"></p>
+                <div class="dialog-actions">
+                  <button type="button" class="secondary-btn" data-review-action="cancel">Cerrar</button>
+                  <button type="button" class="primary-btn" data-review-action="submit">Confirmar</button>
+                </div>
+              </form>
+            </dialog>
+
             <dialog id="newProviderDialog" class="vip-dialog">
               <form id="newProviderForm" method="dialog" class="vip-dialog-form">
                 <header><h3>Agregar proveedor FRP</h3></header>

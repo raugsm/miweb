@@ -153,3 +153,12 @@ El siguiente riesgo ya no es el snapshot destructivo del nucleo FRP, sino el con
 - que estado recupera el job al resolver;
 - que auditoria debe dejar.
 
+## Actualizacion 2026-05-06
+
+El contrato funcional de resolver trabajos en `REQUIERE_REVISION` fue movido al documento:
+
+```text
+docs/specs/_sesion-22-postgres-frp-review-resolver-contract.md
+```
+
+Ese corte migra `PATCH /api/frp/jobs/:id/ready` a camino PostgreSQL granular y conecta la card `data-frp-show-review` con un dialogo de resolucion.

@@ -2541,6 +2541,121 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
   animation: none;
 }
 
+.frp-review-dialog {
+  width: min(520px, calc(100vw - 32px));
+  max-height: min(720px, calc(100vh - 32px));
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.28);
+  color: #0F172A;
+}
+
+.frp-review-dialog::backdrop {
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.frp-review-dialog-form {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+}
+
+.frp-review-dialog-form header {
+  display: grid;
+  gap: 4px;
+}
+
+.frp-review-dialog-form h3 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.15;
+}
+
+.frp-review-dialog-form header p {
+  margin: 0;
+  color: #56657A;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.frp-review-dialog-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.frp-review-dialog-facts > div,
+.frp-review-dialog-reason textarea,
+.frp-review-dialog-note {
+  border: 1px solid #D5DCEB;
+  border-radius: 8px;
+  background: #F8FAFC;
+}
+
+.frp-review-dialog-facts > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px;
+}
+
+.frp-review-dialog-facts span,
+.frp-review-dialog-reason {
+  color: #56657A;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.frp-review-dialog-facts strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: #0F172A;
+  font-size: 13px;
+}
+
+.frp-review-dialog-reason {
+  display: grid;
+  gap: 8px;
+}
+
+.frp-review-dialog-reason[hidden] {
+  display: none;
+}
+
+.frp-review-dialog-reason textarea {
+  width: 100%;
+  min-height: 96px;
+  resize: vertical;
+  padding: 10px;
+  color: #0F172A;
+  font: inherit;
+}
+
+.frp-review-dialog-note {
+  margin: 0;
+  padding: 10px;
+  color: #364152;
+  font-size: 13px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.frp-review-dialog-message {
+  min-height: 20px;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.frp-review-dialog-message[data-type="success"] {
+  color: #067647;
+}
+
+.frp-review-dialog-message[data-type="error"] {
+  color: #B42318;
+}
+
 /* Responsive — mobile <768px */
 @media (max-width: 768px) {
   .frp-ops-v2-body { padding: 16px; }
@@ -2561,6 +2676,7 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
     gap: 8px;
   }
   .frp-ops-v2-finalized-row { flex-wrap: wrap; }
+  .frp-review-dialog-facts { grid-template-columns: 1fr; }
 }
 
 /* ============================================================

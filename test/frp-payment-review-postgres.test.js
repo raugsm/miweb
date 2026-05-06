@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   applyFrpJobCancelLegacyState,
   applyFrpJobFinalizeLegacyState,
+  applyFrpJobReadyLegacyState,
   applyFrpJobReviewLegacyState,
   applyFrpJobTakeLegacyState,
   applyFrpPaymentReviewLegacyState,
@@ -332,4 +333,85 @@ test("Postgres FRP review rejects stale requests after finalize or cancel wins",
   assert.equal(result.ok, false);
   assert.equal(result.status, 400);
   assert.match(result.error, /trabajo en proceso/);
+});
+
+test("Postgres FRP ready resolves review back to the technician queue", () => {
+  const readyAt = "2026-05-06T17:35:00.000Z";
+  const result = applyFrpJobReadyLegacyState({
+    job: {
+      id: "55555555-5555-4555-8555-555555555555",
+      code: "ORD-20260506-001-1",
+      orderId: baseOrder.id,
+      status: "REQUIERE_REVISION",
+      technicianId: "44444444-4444-4444-8444-444444444444",
+      takenAt: "2026-05-06T17:00:00.000Z",
+      reviewReason: "Cliente no conectado",
+      checklist: {
+        clientConnected: true,
+        requiredStateConfirmed: true,
+        modelSupported: true,
+      },
+    },
+    order: {
+      ...baseOrder,
+      checklist: {
+        priceSent: true,
+        paymentValidated: true,
+        connectionDataSent: true,
+        authorizationConfirmed: true,
+      },
+      orderStatus: "LISTA_PARA_TECNICO",
+    },
+    jobs: [
+      {
+        id: "55555555-5555-4555-8555-555555555555",
+        code: "ORD-20260506-001-1",
+        orderId: baseOrder.id,
+        status: "REQUIERE_REVISION",
+      },
+    ],
+    readyAt,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.job.status, "LISTO_PARA_TECNICO");
+  assert.equal(result.job.technicianId, "");
+  assert.equal(result.job.takenAt, "");
+  assert.equal(result.job.readyAt, readyAt);
+  assert.equal(result.job.updatedAt, readyAt);
+  assert.equal(result.order.orderStatus, "LISTA_PARA_TECNICO");
+  assert.equal(result.auditAction, "FRP_JOB_READY");
+  assert.equal(result.publishReason, "frp_job_ready");
+});
+
+test("Postgres FRP ready rejects incomplete readiness state before mutation", () => {
+  const result = applyFrpJobReadyLegacyState({
+    job: {
+      id: "55555555-5555-4555-8555-555555555555",
+      code: "ORD-20260506-001-1",
+      orderId: baseOrder.id,
+      status: "REQUIERE_REVISION",
+      checklist: {
+        clientConnected: true,
+        requiredStateConfirmed: false,
+        modelSupported: true,
+      },
+    },
+    order: {
+      ...baseOrder,
+      checklist: {
+        priceSent: true,
+        paymentValidated: true,
+        connectionDataSent: true,
+        authorizationConfirmed: true,
+      },
+      orderStatus: "LISTA_PARA_TECNICO",
+    },
+    jobs: [],
+    readyAt: "2026-05-06T17:40:00.000Z",
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 400);
+  assert.match(result.error, /Completa conexion/);
 });

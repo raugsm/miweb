@@ -91,6 +91,7 @@ const finalLogDropzone = document.querySelector("#final-log-dropzone");
 const finalLogFiles = document.querySelector("#final-log-files");
 const finalLogImages = document.querySelector("#final-log-images");
 const finalLogHelp = document.querySelector("#final-log-help");
+const frpReviewDialog = document.querySelector("#frpReviewDialog");
 
 function emptySession() {
   return {
@@ -2537,6 +2538,114 @@ async function markFrpJobReady(jobId) {
   }
 }
 
+function frpReviewDialogMessage() {
+  return frpReviewDialog?.querySelector("[data-review-message]") || null;
+}
+
+function setFrpReviewDialogMessage(text, type = "") {
+  const message = frpReviewDialogMessage();
+  if (!message) return;
+  message.textContent = text;
+  message.dataset.type = type;
+}
+
+function frpReviewJobTitle(job) {
+  const order = job?.order || {};
+  const orderCode = order.code || job?.code || "-";
+  const clientName = order.clientName || job?.clientName || "-";
+  const jobCode = job?.code || "-";
+  return { orderCode, clientName, jobCode };
+}
+
+function openFrpReviewDialog(jobId, mode) {
+  if (!frpReviewDialog) return;
+  const job = frpJobs().find((candidate) => candidate.id === jobId);
+  if (!job) return;
+  const { orderCode, clientName, jobCode } = frpReviewJobTitle(job);
+  const reasonRow = frpReviewDialog.querySelector(".frp-review-dialog-reason");
+  const reasonInput = frpReviewDialog.querySelector("[name='reason']");
+  const submitButton = frpReviewDialog.querySelector("[data-review-action='submit']");
+  frpReviewDialog.dataset.jobId = jobId;
+  frpReviewDialog.dataset.mode = mode;
+  frpReviewDialog.querySelector("[data-review-order]").textContent = orderCode;
+  frpReviewDialog.querySelector("[data-review-client]").textContent = clientName;
+  frpReviewDialog.querySelector("[data-review-job]").textContent = jobCode;
+  setFrpReviewDialogMessage("");
+  if (mode === "resolve") {
+    frpReviewDialog.querySelector("[data-review-kicker]").textContent = "Caso en revision";
+    frpReviewDialog.querySelector("[data-review-title]").textContent = "Resolver revision";
+    frpReviewDialog.querySelector("[data-review-subtitle]").textContent = "Devuelve este equipo a la cola cuando ya esta corregido y listo para tecnico.";
+    frpReviewDialog.querySelector("[data-review-note]").textContent = job.reviewReason || "Sin motivo registrado.";
+    reasonRow.hidden = true;
+    reasonInput.value = "";
+    submitButton.textContent = "Devolver a cola";
+  } else {
+    frpReviewDialog.querySelector("[data-review-kicker]").textContent = "Reportar problema";
+    frpReviewDialog.querySelector("[data-review-title]").textContent = "Enviar a revision";
+    frpReviewDialog.querySelector("[data-review-subtitle]").textContent = "Registra por que este equipo no puede finalizarse ahora.";
+    frpReviewDialog.querySelector("[data-review-note]").textContent = "El equipo saldra de tu trabajo actual y quedara visible en Atencion.";
+    reasonRow.hidden = false;
+    reasonInput.value = job.reviewReason || "Cliente no conectado / revisar estado";
+    submitButton.textContent = "Enviar a revision";
+    setTimeout(() => reasonInput.focus(), 0);
+  }
+  if (typeof frpReviewDialog.showModal === "function") frpReviewDialog.showModal();
+  else frpReviewDialog.setAttribute("open", "");
+}
+
+function closeFrpReviewDialog() {
+  if (!frpReviewDialog) return;
+  if (typeof frpReviewDialog.close === "function") frpReviewDialog.close();
+  else frpReviewDialog.removeAttribute("open");
+  frpReviewDialog.dataset.jobId = "";
+  frpReviewDialog.dataset.mode = "";
+  frpReviewDialog.dataset.busy = "";
+}
+
+async function submitFrpReviewDialog() {
+  if (!frpReviewDialog) return;
+  if (frpReviewDialog.dataset.busy === "true") return;
+  const jobId = frpReviewDialog.dataset.jobId || "";
+  const mode = frpReviewDialog.dataset.mode || "";
+  const job = frpJobs().find((candidate) => candidate.id === jobId);
+  if (!job) return;
+  setFrpReviewDialogMessage("");
+  const submitButton = frpReviewDialog.querySelector("[data-review-action='submit']");
+  frpReviewDialog.dataset.busy = "true";
+  if (submitButton) submitButton.disabled = true;
+  try {
+    if (mode === "resolve") {
+      await api(`/api/frp/jobs/${jobId}/ready`, { method: "PATCH" });
+      setFrpReviewDialogMessage(`Trabajo ${job.code} devuelto a cola.`, "success");
+      frpMessage.textContent = `Trabajo ${job.code} devuelto a cola.`;
+      frpMessage.dataset.type = "success";
+    } else {
+      const reason = String(frpReviewDialog.querySelector("[name='reason']")?.value || "").trim();
+      if (!reason) {
+        setFrpReviewDialogMessage("Indica motivo de revision.", "error");
+        return;
+      }
+      await api(`/api/frp/jobs/${jobId}/review`, {
+        method: "PATCH",
+        body: JSON.stringify({ reason }),
+      });
+      setFrpReviewDialogMessage(`FRP ${job.code} enviado a revision.`, "success");
+      frpMessage.textContent = `FRP ${job.code} enviado a revision.`;
+      frpMessage.dataset.type = "neutral";
+    }
+    setTimeout(() => closeFrpReviewDialog(), 450);
+    await refreshSession();
+  } catch (error) {
+    setFrpReviewDialogMessage(error.message, "error");
+    frpMessage.textContent = error.message;
+    frpMessage.dataset.type = "error";
+    await refreshSession();
+  } finally {
+    frpReviewDialog.dataset.busy = "";
+    if (submitButton) submitButton.disabled = false;
+  }
+}
+
 async function takeNextFrpJob() {
   frpMessage.textContent = "";
   try {
@@ -2898,6 +3007,16 @@ frpProofDialog?.addEventListener("click", (event) => {
   }
 });
 
+frpReviewDialog?.addEventListener("click", async (event) => {
+  const action = event.target.closest("[data-review-action]")?.dataset?.reviewAction;
+  if (!action) return;
+  if (action === "cancel") {
+    closeFrpReviewDialog();
+  } else if (action === "submit") {
+    await submitFrpReviewDialog();
+  }
+});
+
 frpProofStageEl()?.addEventListener("wheel", (event) => {
   if (!event.currentTarget.querySelector("[data-proof-page]")) return;
   event.preventDefault();
@@ -2936,21 +3055,7 @@ frpProofStageEl()?.addEventListener("dblclick", () => updateFrpProofZoom(1));
 async function requestFrpReview(jobId) {
   const job = frpJobs().find((candidate) => candidate.id === jobId);
   if (!job) return;
-  const reason = window.prompt("Motivo de revision:", "Cliente no conectado / revisar estado") || "";
-  if (!reason.trim()) return;
-  frpMessage.textContent = "";
-  try {
-    await api(`/api/frp/jobs/${jobId}/review`, {
-      method: "PATCH",
-      body: JSON.stringify({ reason }),
-    });
-    frpMessage.textContent = `FRP ${job.code} enviado a revision.`;
-    frpMessage.dataset.type = "neutral";
-    await refreshSession();
-  } catch (error) {
-    frpMessage.textContent = error.message;
-    frpMessage.dataset.type = "error";
-  }
+  openFrpReviewDialog(jobId, "report");
 }
 
 function closeFinalLogModal(value = "", includeImages = true) {
@@ -3891,6 +3996,12 @@ frpWorkbench?.addEventListener("click", async (event) => {
   const showProofButton = event.target.closest("[data-frp-show-proof]");
   if (showProofButton) {
     openFrpProofDialog(showProofButton.dataset.frpShowProof);
+    return;
+  }
+
+  const showReviewButton = event.target.closest("[data-frp-show-review]");
+  if (showReviewButton) {
+    openFrpReviewDialog(showReviewButton.dataset.frpShowReview, "resolve");
     return;
   }
 

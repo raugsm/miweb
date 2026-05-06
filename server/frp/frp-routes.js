@@ -43,6 +43,7 @@ export function createFrpRoutes({
   readDb,
   cancelFrpJobPostgres,
   finalizeFrpJobPostgres,
+  markFrpJobReadyPostgres,
   reviewFrpJobPostgres,
   requireActiveFrpTechnician,
   requireAdminWithAudit,
@@ -744,6 +745,21 @@ export function createFrpRoutes({
     if (!requireUser(user, res)) return;
     const db = await readDb();
     if (!(await requireFrpAccess(user, res, db, "FRP_JOB_READY_DENIED", frpJobReadyMatch[1]))) return;
+    if (markFrpJobReadyPostgres) {
+      const result = await markFrpJobReadyPostgres({
+        jobId: frpJobReadyMatch[1],
+        userId: user.id,
+        readyAt: nowIso(),
+      });
+      if (!result.ok) return sendJson(res, result.status || 500, { error: result.error || "No se pudo enviar el trabajo FRP a tecnico." });
+      const nextDb = await readDb();
+      const nextJob = nextDb.frpJobs.find((candidate) => candidate.id === result.jobId);
+      const nextOrder = nextDb.frpOrders.find((candidate) => candidate.id === result.orderId);
+      if (!nextJob) return sendJson(res, 500, { error: "Trabajo FRP enviado a tecnico, pero la lectura reconstruida no lo encontro." });
+      publishPortalOrdersForFrpOrder(nextDb, nextOrder, result.publishReason || "frp_job_ready");
+      publishFrpOps(nextDb, result.publishReason || "frp_job_ready");
+      return sendJson(res, 200, { job: publicFrpJob(nextJob, nextDb), frp: publicFrpState(nextDb, user) });
+    }
     const job = db.frpJobs.find((candidate) => candidate.id === frpJobReadyMatch[1]);
     const order = db.frpOrders.find((candidate) => candidate.id === job?.orderId);
     if (!job || !order) return sendJson(res, 404, { error: "Trabajo FRP no encontrado." });
@@ -753,6 +769,8 @@ export function createFrpRoutes({
       return sendJson(res, 400, { error: "Este trabajo no puede enviarse a tecnico desde su estado actual." });
     }
     job.status = "LISTO_PARA_TECNICO";
+    job.technicianId = "";
+    job.takenAt = "";
     job.readyAt = nowIso();
     job.updatedAt = job.readyAt;
     syncFrpOrderStatus(db, order);

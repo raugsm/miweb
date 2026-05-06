@@ -180,3 +180,10 @@ Por que este primero:
 - El siguiente corte aplicado fue `review`, documentado en `_sesion-22-postgres-frp-review-transactional.md`.
 - El nucleo FRP critico ya no depende de escritura legacy por snapshot completo para `payment-review`, `take/take-next`, `finalize`, `cancel` ni `review`.
 - Riesgo restante del workbench: contrato funcional de `REQUIERE_REVISION` (`data-frp-show-review`, modal real de problema y flujo resolver), no el snapshot destructivo del nucleo.
+
+## Actualizacion 2026-05-06 - resolver revision
+
+- El contrato funcional de `REQUIERE_REVISION` fue implementado en `_sesion-22-postgres-frp-review-resolver-contract.md`.
+- `data-frp-show-review` ya abre un dialogo de resolucion.
+- `Reportar problema` ya usa dialogo controlado en vez de `window.prompt`.
+- `PATCH /api/frp/jobs/:id/ready` ya tiene camino PostgreSQL granular.

@@ -147,7 +147,9 @@ function jobFromRow(row) {
     code: stringValue(row.code || legacy.code),
     orderId: stringValue(row.order_id || legacy.orderId),
     status: stringValue(row.status || legacy.status),
+    checklist: { ...jsonObject(row.checklist), ...jsonObject(legacy.checklist) },
     technicianId: stringValue(row.technician_id || legacy.technicianId),
+    takenAt: stringValue(legacy.takenAt),
     finalLog: stringValue(row.final_log || legacy.finalLog),
     ardCode: stringValue(row.ard_code || legacy.ardCode),
     reviewReason: stringValue(row.review_reason || legacy.reviewReason),
@@ -158,6 +160,14 @@ function jobFromRow(row) {
     createdAt: isoOrEmpty(row.created_at) || stringValue(legacy.createdAt),
     updatedAt: isoOrEmpty(row.updated_at) || stringValue(legacy.updatedAt),
   };
+}
+
+function frpOrderIsReadyLegacy(order) {
+  return Boolean(order?.checklist?.paymentValidated && order?.checklist?.connectionDataSent && order?.checklist?.authorizationConfirmed);
+}
+
+function frpJobChecklistCompleteLegacy(job) {
+  return Boolean(job?.checklist?.clientConnected && job?.checklist?.requiredStateConfirmed && job?.checklist?.modelSupported);
 }
 
 function syncFrpOrderStatusLegacy(order, jobs, now) {
@@ -419,6 +429,49 @@ export function applyFrpJobReviewLegacyState({ job, order = null, jobs = [], use
     auditAction: "FRP_JOB_REVIEW_REQUIRED",
     auditDetail: { code: nextJob.code, order: nextOrder.code, reason },
     publishReason: "frp_job_review_required",
+  };
+}
+
+export function applyFrpJobReadyLegacyState({ job, order = null, jobs = [], readyAt }) {
+  if (!job || !order) {
+    return { ok: false, status: 404, error: "Trabajo FRP no encontrado." };
+  }
+  if (!frpOrderIsReadyLegacy(order)) {
+    return { ok: false, status: 400, error: "Falta pago validado, conexion enviada o autorizacion confirmada." };
+  }
+  if (!frpJobChecklistCompleteLegacy(job)) {
+    return { ok: false, status: 400, error: "Completa conexion, estado requerido y modelo soportado." };
+  }
+  if (!["ESPERANDO_PREPARACION", "ESPERANDO_CLIENTE", "REQUIERE_REVISION"].includes(job.status)) {
+    return { ok: false, status: 400, error: "Este trabajo no puede enviarse a tecnico desde su estado actual." };
+  }
+
+  const nextJob = {
+    ...job,
+    status: "LISTO_PARA_TECNICO",
+    technicianId: "",
+    takenAt: "",
+    readyAt,
+    updatedAt: readyAt,
+  };
+  const nextJobs = jobs.length
+    ? jobs.map((candidate) => (candidate.id === nextJob.id ? nextJob : candidate))
+    : [nextJob];
+  const nextOrder = {
+    ...order,
+    checklist: { ...jsonObject(order.checklist) },
+  };
+  const previousOrderStatus = nextOrder.orderStatus;
+  syncFrpOrderStatusLegacy(nextOrder, nextJobs, readyAt);
+  if (nextOrder.orderStatus !== previousOrderStatus) nextOrder.updatedAt = readyAt;
+
+  return {
+    ok: true,
+    job: nextJob,
+    order: nextOrder,
+    auditAction: "FRP_JOB_READY",
+    auditDetail: { code: nextJob.code, order: nextOrder.code },
+    publishReason: "frp_job_ready",
   };
 }
 
@@ -709,6 +762,30 @@ async function persistFrpReviewState(client, state, reviewedAt, userId) {
   );
 }
 
+async function persistFrpReadyState(client, state, readyAt, userId) {
+  await client.query(
+    `
+      update ariad.frp_jobs
+      set status = $2,
+          technician_id = null,
+          updated_at = $3,
+          legacy_json = $4::jsonb
+      where id = $1
+    `,
+    [
+      state.job.id,
+      state.job.status,
+      state.job.updatedAt || readyAt,
+      JSON.stringify(state.job),
+    ],
+  );
+  await persistFrpOrderStatus(client, state.order, readyAt);
+  await insertAuditEventWithClient(
+    client,
+    createAuditEvent(userId, state.auditAction, state.job.id, state.auditDetail),
+  );
+}
+
 async function takeFrpJobRowPostgres(client, { jobRow, activeJobRow = null, userId, takenAt, specific }) {
   const orderRow = await readFrpOrder(client, jobRow?.order_id);
   const job = jobRow ? jobFromRow(jobRow) : null;
@@ -878,6 +955,27 @@ export async function reviewFrpJobPostgres({ jobId, userId, userRole = "", reaso
     });
     if (!state.ok) return state;
     await persistFrpReviewState(client, state, reviewedAt, userId);
+    return {
+      ok: true,
+      jobId: state.job.id,
+      orderId: state.job.orderId,
+      publishReason: state.publishReason,
+    };
+  });
+}
+
+export async function markFrpJobReadyPostgres({ jobId, userId, readyAt }) {
+  return withTransaction(async (client) => {
+    const { jobRow, orderRow, jobRows } = await readLockedFrpJobWithOrder(client, jobId);
+    if (!jobRow || !orderRow) return { ok: false, status: 404, error: "Trabajo FRP no encontrado." };
+    const state = applyFrpJobReadyLegacyState({
+      job: jobFromRow(jobRow),
+      order: frpOrderFromRow(orderRow),
+      jobs: jobRows.map(jobFromRow),
+      readyAt,
+    });
+    if (!state.ok) return state;
+    await persistFrpReadyState(client, state, readyAt, userId);
     return {
       ok: true,
       jobId: state.job.id,
