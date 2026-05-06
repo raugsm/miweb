@@ -65,13 +65,14 @@ export function createJsonStorage({ dataDir, defaultDb, fileName = "users.json" 
   async function health() {
     return {
       driver: "json",
-      dataDir,
+      runtimeImplemented: true,
       dbFile: fileName,
     };
   }
 
   return {
     driver: "json",
+    runtimeImplemented: true,
     ensureDb,
     readDb,
     writeDb,

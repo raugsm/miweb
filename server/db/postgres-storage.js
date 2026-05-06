@@ -1,4 +1,4 @@
-import { checkPostgresConnection, hasPostgresConfig, redactedPostgresUrl } from "./postgres.js";
+import { checkPostgresConnection, hasPostgresConfig } from "./postgres.js";
 
 function notImplementedError() {
   return new Error("ARIAD_STORAGE_DRIVER=postgres no esta implementado para runtime en Fase A.");
@@ -21,9 +21,8 @@ export function createPostgresStorage({ env = process.env } = {}) {
     const configured = hasPostgresConfig(env);
     const report = {
       driver: "postgres",
-      implemented: false,
+      runtimeImplemented: false,
       configured,
-      connection: configured ? redactedPostgresUrl(env.DATABASE_URL || env.POSTGRES_URL || "") : "",
     };
     if (configured) {
       try {
@@ -42,6 +41,7 @@ export function createPostgresStorage({ env = process.env } = {}) {
 
   return {
     driver: "postgres",
+    runtimeImplemented: false,
     ensureDb,
     readDb,
     writeDb,

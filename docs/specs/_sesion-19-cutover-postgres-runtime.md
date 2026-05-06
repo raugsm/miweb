@@ -419,3 +419,76 @@ Riesgo:
 Siguiente paso unico:
 
 - Agregar observabilidad minima y sanitizada a `/api/health`: `storageDriver`, `storageRuntimeImplemented` y, si se define por env, `releaseCommit`; sin exponer rutas locales, `DATABASE_URL`, hashes ni secretos.
+
+## Resultado observabilidad minima de health
+
+Fecha: 2026-05-06
+
+Cambio aplicado:
+
+- `/api/health` ahora incluye:
+  - `storageDriver`;
+  - `storageRuntimeImplemented`;
+  - `releaseCommit` solo si existe una variable de entorno compatible.
+- `server/db/json-storage.js` declara `runtimeImplemented: true`.
+- `server/db/postgres-storage.js` declara `runtimeImplemented: false`.
+- El health publico no expone:
+  - rutas locales;
+  - `DATABASE_URL`;
+  - URLs de conexion;
+  - hashes;
+  - tokens;
+  - base64;
+  - datos de clientes.
+
+Decision:
+
+- `storageDriver` sirve para confirmar si runtime esta en `json` o `postgres`.
+- `storageRuntimeImplemented` evita confundir `DATABASE_URL configurado` con `runtime Postgres listo`.
+- `releaseCommit` se sanitiza a un SHA corto si Render u otro entorno lo define.
+
+Validacion local:
+
+```powershell
+node --check server.js
+node --check server/db/json-storage.js
+node --check server/db/storage.js
+node --check server/db/postgres-storage.js
+npm.cmd test
+```
+
+Resultado:
+
+- Checks de sintaxis: OK.
+- `npm.cmd test`: 14/14 OK.
+
+Prueba local directa de `/api/health`:
+
+- Servidor temporal con:
+  - `ARIAD_STORAGE_DRIVER=json`;
+  - `ARIAD_DATA_DIR` aislado en `%TEMP%`;
+  - `RENDER_GIT_COMMIT=71d3357abcdef1234567890`.
+- Respuesta:
+
+```json
+{
+  "ok": true,
+  "appVersion": "frp-eligibility-v1",
+  "sessionVersion": 7,
+  "customerSessionVersion": 1,
+  "trustedDeviceVersion": 3,
+  "storageDriver": "json",
+  "storageRuntimeImplemented": true,
+  "releaseCommit": "71d3357abcde"
+}
+```
+
+Lectura:
+
+- La observabilidad minima funciona sin activar Postgres.
+- La respuesta mantiene el runtime en JSON.
+- La respuesta no incluye secretos ni rutas locales.
+
+Siguiente paso unico:
+
+- Commit y push, luego validar `https://ariadgsm.com/api/health` cuando Render despliegue.

@@ -130,6 +130,7 @@ const ownerRecoveryEmail = normalizeEmail(process.env.ARIAD_OWNER_RECOVERY_EMAIL
 const publicBaseUrl = String(process.env.ARIAD_PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || `http://localhost:${port}`).replace(/\/+$/, "");
 const mailFrom = process.env.ARIAD_MAIL_FROM || '"AriadGSM Soporte" <soporte@ariadgsm.com>';
 const customerPortalBaseUrl = resolveCustomerPortalBaseUrl();
+const releaseCommit = releaseCommitFromEnv(process.env);
 const portalOrderStreams = new Map();
 // QUE: streams SSE del panel operador FRP. Map<userId, Set<stream>>.
 // Multiples streams por user son validos (laptop + movil del mismo operador).
@@ -329,6 +330,26 @@ function defaultDb() {
 }
 
 const storage = createStorage({ dataDir, defaultDb });
+
+function releaseCommitFromEnv(env = process.env) {
+  const raw = String(env.RENDER_GIT_COMMIT || env.RENDER_COMMIT || env.GIT_COMMIT || env.SOURCE_VERSION || "").trim();
+  const match = raw.match(/[a-f0-9]{7,40}/i);
+  return match ? match[0].slice(0, 12) : "";
+}
+
+function publicHealthPayload() {
+  const payload = {
+    ok: true,
+    appVersion,
+    sessionVersion,
+    customerSessionVersion,
+    trustedDeviceVersion,
+    storageDriver: storage.driver,
+    storageRuntimeImplemented: storage.runtimeImplemented === true,
+  };
+  if (releaseCommit) payload.releaseCommit = releaseCommit;
+  return payload;
+}
 
 async function ensureDb() {
   await storage.ensureDb();
@@ -3593,7 +3614,7 @@ async function handleApi(req, res, pathname) {
   const user = await getCurrentUser(req);
 
   if (req.method === "GET" && pathname === "/api/health") {
-    return sendJson(res, 200, { ok: true, appVersion, sessionVersion, customerSessionVersion, trustedDeviceVersion });
+    return sendJson(res, 200, publicHealthPayload());
   }
 
   if (pathname.startsWith("/api/portal/")) {
