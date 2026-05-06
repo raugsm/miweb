@@ -1911,6 +1911,11 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
 .frp-ops-v2-current--readonly {
   opacity: 0.85;
 }
+.frp-ops-v2-other-active-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 .frp-ops-v2-current-empty-text {
   font-size: 13px;
   color: var(--text-secondary);

@@ -1603,28 +1603,42 @@ function frpOpsV2RenderCurrentActive(job, { swapInProgress, tech }) {
   `;
 }
 
-function frpOpsV2RenderCurrentReadonly(job, otherName) {
+function frpOpsV2OperatorNameForJob(job, tech) {
+  return (tech?.eligible || []).find((candidate) => candidate.userId === job.technicianId)?.name
+    || job.technicianName
+    || "otro tecnico";
+}
+
+function frpOpsV2RenderOtherActiveCard(job, tech) {
   const order = job.order || {};
-  // Modo observador: si el job lleva 30+ min se muestra banner sin botones,
-  // tono observador (no "¿necesitás ayuda?"). NO respeta localStorage del
-  // [Sigo trabajando] del titular — eso es del actor, no del observador.
+  const otherName = frpOpsV2OperatorNameForJob(job, tech);
   const bannerHtml = frpOpsV2ShouldShow30MinBanner(job, { respectMute: false })
     ? frpOpsV2RenderObserverBanner(otherName)
     : "";
   return `
+    ${bannerHtml}
+    <div class="frp-ops-v2-current frp-ops-v2-current--readonly">
+      <div class="frp-ops-v2-current-head">
+        <div>
+          <div class="frp-ops-v2-current-meta">${escapeHtml(order.code || job.code || "")} &middot; ${escapeHtml(job.sequence || 1)} de ${escapeHtml(order.quantity || 1)} equipos</div>
+          <div class="frp-ops-v2-current-name">${escapeHtml(order.clientName || job.clientName || "-")}</div>
+        </div>
+        <span class="frp-ops-v2-readonly-tag">Tomado por ${escapeHtml(otherName)}</span>
+      </div>
+    </div>
+  `;
+}
+
+function frpOpsV2RenderOtherActiveSection({ jobs, tech }) {
+  if (!jobs.length) return "";
+  const sortedJobs = [...jobs].sort((a, b) => String(a.takenAt || a.updatedAt || "").localeCompare(String(b.takenAt || b.updatedAt || "")));
+  return `
     <section class="frp-ops-v2-section">
       <div class="frp-ops-v2-section-header">
-        <div class="frp-ops-v2-section-label">Tu trabajo actual</div>
+        <div class="frp-ops-v2-section-label">Trabajos en curso por otros</div>
       </div>
-      ${bannerHtml}
-      <div class="frp-ops-v2-current frp-ops-v2-current--readonly">
-        <div class="frp-ops-v2-current-head">
-          <div>
-            <div class="frp-ops-v2-current-meta">${escapeHtml(order.code || job.code || "")} · ${escapeHtml(job.sequence || 1)} de ${escapeHtml(order.quantity || 1)} equipos</div>
-            <div class="frp-ops-v2-current-name">${escapeHtml(order.clientName || job.clientName || "-")}</div>
-          </div>
-          <span class="frp-ops-v2-readonly-tag">Tomado por ${escapeHtml(otherName)}</span>
-        </div>
+      <div class="frp-ops-v2-other-active-list">
+        ${sortedJobs.map((job) => frpOpsV2RenderOtherActiveCard(job, tech)).join("")}
       </div>
     </section>
   `;
@@ -1855,9 +1869,7 @@ function renderFrp({ skipPricing = false } = {}) {
   const tech = technicianStatusCache;
 
   const myActiveJob = jobs.find((j) => j.status === "EN_PROCESO" && j.technicianId === session.user?.id);
-  const otherActiveJob = !myActiveJob
-    ? jobs.find((j) => j.status === "EN_PROCESO" && j.technicianId && j.technicianId !== session.user?.id)
-    : null;
+  const otherActiveJobs = jobs.filter((j) => j.status === "EN_PROCESO" && j.technicianId && j.technicianId !== session.user?.id);
   const queueJobs = jobs.filter((j) => j.status === "LISTO_PARA_TECNICO");
   const reviewJobs = jobs.filter((j) => j.status === "REQUIERE_REVISION");
   const pagosRevisar = orders.filter((o) => o.paymentStatus === "PAGO_EN_VALIDACION" && (o.paymentProofs?.length || 0) > 0);
@@ -1876,11 +1888,6 @@ function renderFrp({ skipPricing = false } = {}) {
   let currentHtml;
   if (myActiveJob) {
     currentHtml = frpOpsV2RenderCurrentActive(myActiveJob, { swapInProgress, tech });
-  } else if (otherActiveJob) {
-    const otherName = (tech?.eligible || []).find((e) => e.userId === otherActiveJob.technicianId)?.name
-      || otherActiveJob.technicianName
-      || "otro tecnico";
-    currentHtml = frpOpsV2RenderCurrentReadonly(otherActiveJob, otherName);
   } else {
     currentHtml = frpOpsV2RenderCurrentEmpty({ queueLen: queueJobs.length, isMeActive, swapInProgress });
   }
@@ -1890,6 +1897,7 @@ function renderFrp({ skipPricing = false } = {}) {
       ${frpOpsV2RenderHeader(tech)}
       <div class="frp-ops-v2-body">
         ${currentHtml}
+        ${frpOpsV2RenderOtherActiveSection({ jobs: otherActiveJobs, tech })}
         ${frpOpsV2RenderWaitingConnectionSection({ waitingOrders: waitingConnectionOrders })}
         ${frpOpsV2RenderQueueSection({ queueJobs, isMeActive, swapInProgress, hasMyActive: Boolean(myActiveJob) })}
         ${frpOpsV2RenderAttentionGrid({ pagosRevisar, reviewJobs })}

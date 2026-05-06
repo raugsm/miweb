@@ -196,3 +196,10 @@ Por que este primero:
 - Se agregaron guardas en `phase3a.contract.test.js` y `phase4.smoke.test.js`.
 
 Riesgo residual del panel trabajador: ya no es el dato mostrado en `Tu trabajo actual`; lo pendiente es validar UX real con tecnico cambiando de turno mientras mantiene jobs viejos en observacion.
+
+## Actualizacion 2026-05-06 - observacion multioperador
+
+- El caso observador fue generalizado de Jack/Angelo a N operadores en `_sesion-22-operador-multi-operator-observer-contract.md`.
+- `Tu trabajo actual` queda reservado al job propio del usuario actual.
+- Jobs de otros operadores en `EN_PROCESO` se listan en una seccion separada: `Trabajos en curso por otros`.
+- El CTA `Tomar siguiente` ya no queda bloqueado por jobs ajenos si el operador actual no tiene job propio.

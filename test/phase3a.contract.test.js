@@ -184,6 +184,16 @@ test("operator current job renders frozen redirector before active technician fa
   assert.match(appJs, /frpOpsV2JobRedirectorId\(job, \{ swapInProgress, tech \}\)/);
 });
 
+test("operator workbench treats other active jobs as plural observer state", async () => {
+  const appJs = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
+
+  assert.match(appJs, /const otherActiveJobs = jobs\.filter\(\(j\) => j\.status === "EN_PROCESO"/);
+  assert.doesNotMatch(appJs, /otherActiveJob = !myActiveJob[\s\S]{0,180}jobs\.find/);
+  assert.match(appJs, /frpOpsV2RenderOtherActiveSection\(\{ jobs: otherActiveJobs, tech \}\)/);
+  assert.match(appJs, /frp-ops-v2-other-active-list/);
+  assert.match(appJs, /currentHtml = frpOpsV2RenderCurrentEmpty\(\{ queueLen: queueJobs\.length, isMeActive, swapInProgress \}\);/);
+});
+
 test("portal proof reader accepts mobile picker files with missing MIME but safe extension", async () => {
   const previousFileReader = globalThis.FileReader;
   globalThis.FileReader = class {

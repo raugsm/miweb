@@ -45,7 +45,7 @@ Archivo: `docs/specs/operador/mockups/operador-frp-express.html`
 3. **Sección "TU TRABAJO ACTUAL":** card grande con el job que el técnico tomó. Muestra orden + cliente + servicio + Technician ID + Código del proceso + dos botones (Marcar finalizado / Reportar problema). Si no hay job tomado, card vacía con CTA grande "Tomar siguiente". Banner amarillo de timeout 30 min cuando aplica.
 4. **Sección "COLA · X listos":** lista vertical de jobs en estado `LISTO_PARA_TECNICO` con botón "Tomar" en cada uno + filtro VIP en el header.
 5. **Sección "PAGOS POR REVISAR" + "ATENCIÓN":** grid de 2 columnas. A la izquierda, comprobantes de pago pendientes de revisar (color amber). A la derecha, jobs con problemas que requieren atención (color rojo).
-6. **Sección "FINALIZADOS HOY":** tabla compacta con los jobs finalizados del día (de **ambos** técnicos). Sin acciones — es informativa pura.
+6. **Sección "FINALIZADOS HOY":** tabla compacta con los jobs finalizados del día (de todos los tecnicos FRP elegibles). Sin acciones — es informativa pura.
 7. **Acordeón "COSTOS FRP" (colapsado):** al final del panel, contenedor colapsable que esconde la tabla de pricing por proveedor. Estilo coherente con el resto del panel (label uppercase, chevron rotable, hover sutil). Contenido interno tiene rediseño visual pendiente como spec separada.
 
 ---
@@ -82,7 +82,7 @@ Banner sibling de `#frp-workbench` (afuera del re-render) que indica el estado d
 |---|---|---|
 | Con job tomado (normal) | Job en `EN_PROCESO` con `technicianId === currentUser.id`, tomado hace <30 min | Card blanco con border 0.5px, datos del job, botones Finalizar (primary) + Reportar problema (secondary) |
 | Con job tomado (timeout 30 min) | Mismo job pero `(now - takenAt) > 30 min` | Mismo card pero con **banner amarillo arriba**: "Este job lleva 30+ min. ¿Necesitás ayuda?" + botones [Sigo trabajando] (cierra banner por 30 min más, persiste en localStorage) y [Cancelar job] (confirm dialog → cancela el job con `reason: 'timeout'`) |
-| Con job tomado por otro (visible solo al ver de Jack como Angelo) | Job en `EN_PROCESO` con `technicianId !== currentUser.id` | Card en modo lectura: datos visibles, botones disabled con texto "Tomado por [Jack]". Si el job lleva +30 min, aparece banner observador "Jack lleva 30+ min en este job" sin botones |
+| Jobs tomados por otros operadores | Jobs en `EN_PROCESO` con `technicianId !== currentUser.id` | Seccion separada "Trabajos en curso por otros", cards en modo lectura, sin botones operables. `Tu trabajo actual` no debe ser ocupado por jobs ajenos. |
 | Sin job + cola con jobs | No hay job tomado y la cola tiene `LISTO_PARA_TECNICO` | Card dasheado gris con texto "Sin trabajo actual" + botón grande "Tomar siguiente" (primary, full-width) |
 | Sin job + cola vacía | No hay job tomado y la cola está vacía | Card dasheado gris con texto "Sin trabajo actual. Esperando que clientes conecten equipos." + botón "Tomar siguiente" disabled |
 | Loading (al apretar Marcar finalizado) | Click en Finalizar enviado al backend | Botón primario muestra spinner, ambos botones disabled hasta respuesta |
@@ -151,7 +151,7 @@ Elemento en el header de la sección "COLA". Permite filtrar la cola por jobs de
 
 ### 2.8 Tabla de finalizados
 
-Estado único, informativa. Muestra finalizados de **ambos técnicos** (Jack y Angelo) del día actual. Cada fila:
+Estado único, informativa. Muestra finalizados de **todos los tecnicos FRP elegibles** del día actual. Cada fila:
 - Order code (formato corto)
 - Cliente + ARD code (ej. "RAUL GSM · ARD012-AL")
 - Hora de finalización (ej. "14:32")
@@ -184,9 +184,9 @@ Acordeón colapsable al final del panel.
 
 ## 3. Edge cases
 
-### 3.1 Switch técnico mientras tenés job tomado
+### 3.1 Switch tecnico mientras hay jobs tomados
 
-El job mantiene `technicianId = jack.id` aunque Angelo sea el activo. Angelo ve el job en modo lectura con botones disabled. Cuando Jack vuelve a estar activo, retoma su job desde donde lo dejó. Razón: el equipo está físicamente conectado en la PC de Jack.
+Cada job mantiene `technicianId` del operador que lo tomo aunque otro operador pase a ser el tecnico activo global. El operador activo puede tomar cola si no tiene job propio; los jobs de terceros se ven en una seccion informativa separada, sin botones operables. Razon: el equipo sigue fisicamente conectado a la PC del operador que tomo ese job.
 
 ### 3.2 Pago revertido mientras el job está `EN_PROCESO`
 
@@ -426,7 +426,7 @@ Si hay `notice`, el frontend pinta `#frp-message` con el dataset.type. Sin notic
 20. Si rol es `ATENCION_TECNICA`, los botones de aprobar/rechazar pago están disabled.
 21. Durante el switch (10s ventana), badge del header dice "Cambiando técnico…" en gris y todos los botones de acción están disabled. Polling acelerado a 2s para confirmar fin del swap rápido.
 22. Si la sesión del técnico expira, `renderLayout(!loggedIn)` dispara `stopFrpOpsLive()` y redirige a `/login`.
-23. Si Jack tiene un job y Angelo es activo, Angelo ve el card de trabajo actual en modo lectura con texto "Tomado por Jack".
+23. Si otros operadores tienen jobs en proceso, el operador actual los ve en "Trabajos en curso por otros"; `Tu trabajo actual` sigue libre para su job propio o para `Tomar siguiente`.
 
 **Decisiones de producto v1.1+v1.2:**
 24. Cuando un job lleva 30 min en `EN_PROCESO`, banner amarillo "Este job lleva 30+ min" aparece arriba del card con botones [Sigo trabajando] y [Cancelar job].
@@ -435,7 +435,7 @@ Si hay `notice`, el frontend pinta `#frp-message` con el dataset.type. Sin notic
 27. En modo readonly (otro técnico tiene el job), banner observador sin botones "X lleva 30+ min en este job".
 28. Si admin revierte un pago aprobado mientras el job está `EN_PROCESO`, el job se cancela automáticamente y aparece notice "Job cancelado: el pago fue revertido" en frpMessage (mecanismo SSE, sin disparador hasta endpoint admin).
 29. Toggle "Solo VIP" en cola filtra la lista mostrando solo jobs de clientes con `status === 'VIP'`.
-30. Sección "Finalizados hoy" muestra finalizados de Jack y Angelo, con identificador visual del técnico.
+30. Sección "Finalizados hoy" muestra finalizados de todos los tecnicos FRP elegibles, con identificador visual del técnico.
 
 **Real-time (SSE):**
 31. Conexión SSE establecida al hacer login, cleanup automático en logout/sesión expirada.
