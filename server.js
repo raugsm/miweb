@@ -330,6 +330,8 @@ function defaultDb() {
 }
 
 const storage = createStorage({ dataDir, defaultDb });
+// PostgreSQL runtime must not persist incidental full-snapshot rewrites from read/session paths.
+const runtimeSnapshotWritesEnabled = storage.driver !== "postgres";
 
 function releaseCommitFromEnv(env = process.env) {
   const raw = String(env.RENDER_GIT_COMMIT || env.RENDER_COMMIT || env.GIT_COMMIT || env.SOURCE_VERSION || "").trim();
@@ -453,7 +455,7 @@ async function readDb() {
       changed = true;
     }
   }
-  if (changed) await writeDb(db);
+  if (changed && runtimeSnapshotWritesEnabled) await writeDb(db);
   return db;
 }
 
@@ -2739,12 +2741,12 @@ async function getCurrentUser(req) {
   const session = db.sessions.find((candidate) => candidate.tokenHash === hashToken(token));
   let shouldWrite = db.sessions.length !== before;
   if (!session) {
-    if (shouldWrite) await writeDb(db);
+    if (shouldWrite && runtimeSnapshotWritesEnabled) await writeDb(db);
     return null;
   }
   const user = db.users.find((candidate) => candidate.id === session.userId);
   if (!user || !user.active) {
-    if (shouldWrite) await writeDb(db);
+    if (shouldWrite && runtimeSnapshotWritesEnabled) await writeDb(db);
     return null;
   }
   if (user.role === "ADMIN") {
@@ -2757,7 +2759,7 @@ async function getCurrentUser(req) {
         sessionDeviceId: session.deviceId || "",
         currentDeviceId: device?.id || "",
       });
-      await writeDb(db);
+      if (runtimeSnapshotWritesEnabled) await writeDb(db);
       return null;
     }
   }
@@ -2766,7 +2768,7 @@ async function getCurrentUser(req) {
     session.lastSeenAt = new Date(now).toISOString();
     shouldWrite = true;
   }
-  if (shouldWrite) await writeDb(db);
+  if (shouldWrite && runtimeSnapshotWritesEnabled) await writeDb(db);
   return user;
 }
 
@@ -2776,7 +2778,7 @@ async function getCurrentCustomerContext(req) {
   const { token: deviceToken, device } = ensureCustomerDevice(db, req);
   let shouldWrite = true;
   if (!token) {
-    await writeDb(db);
+    if (shouldWrite && runtimeSnapshotWritesEnabled) await writeDb(db);
     return { db, user: null, client: null, device, deviceToken };
   }
   const now = Date.now();
@@ -2785,21 +2787,21 @@ async function getCurrentCustomerContext(req) {
   const session = db.customerSessions.find((candidate) => candidate.tokenHash === hashToken(token));
   shouldWrite = shouldWrite || before !== db.customerSessions.length;
   if (!session) {
-    await writeDb(db);
+    if (shouldWrite && runtimeSnapshotWritesEnabled) await writeDb(db);
     return { db, user: null, client: null, device, deviceToken };
   }
   const user = db.customerUsers.find((candidate) => candidate.id === session.userId && candidate.active !== false);
   const client = user ? db.customerClients.find((candidate) => candidate.id === user.clientId && candidate.status !== "BLOQUEADO") : null;
   if (!user || !client) {
     db.customerSessions = db.customerSessions.filter((candidate) => candidate.id !== session.id);
-    await writeDb(db);
+    if (runtimeSnapshotWritesEnabled) await writeDb(db);
     return { db, user: null, client: null, device, deviceToken };
   }
   if (now - Number(session.lastSeenAtMs || 0) > presenceWriteIntervalMs) {
     session.lastSeenAtMs = now;
     session.lastSeenAt = new Date(now).toISOString();
   }
-  await writeDb(db);
+  if (shouldWrite && runtimeSnapshotWritesEnabled) await writeDb(db);
   return { db, user, client, device, session, deviceToken };
 }
 
