@@ -153,7 +153,7 @@ const columnsByTable = {
   customer_users: ["id", "client_id", "name", "email", "password_hash", "role", "active", "email_verified_at", "created_at", "updated_at", "legacy_json"],
   internal_clients: ["id", "master_client_id", "name", "whatsapp", "country", "work_channel", "created_by", "created_by_actor", "created_at", "updated_at", "legacy_json"],
   client_links: ["id", "master_client_id", "source_type", "source_id", "confidence", "signals", "active", "unlinked_at", "unlinked_by", "unlinked_by_actor", "created_by", "created_by_actor", "created_at", "updated_at", "legacy_json"],
-  client_link_suggestions: ["id", "source_type", "source_id", "candidate_master_client_id", "status", "reason", "signals", "reviewed_by", "reviewed_at", "review_reason", "created_at", "updated_at", "legacy_json"],
+  client_link_suggestions: ["id", "source_type", "source_id", "candidate_master_client_id", "status", "reason", "signals", "reviewed_by", "reviewed_by_actor", "reviewed_at", "review_reason", "created_at", "updated_at", "legacy_json"],
   customer_benefits: ["id", "client_id", "master_client_id", "quantity_discount_enabled", "monthly_discount_enabled", "goal_discount_enabled", "vip_unit_margin", "monthly_goal", "device_required", "active", "created_at", "updated_at", "legacy_json"],
   customer_devices: ["id", "token_hash", "user_agent", "first_ip_hash", "last_seen_at", "created_at", "legacy_json"],
   customer_device_authorizations: ["device_id", "client_id", "authorized_at"],
@@ -404,8 +404,12 @@ function actorUuid(value, userIds, warnings, detail) {
   return refUuid(value, userIds, warnings, detail);
 }
 
-function actorText(value) {
-  return uuidOrNull(value) ? "" : stringValue(value);
+function legacyActor(value, userIds) {
+  const raw = stringValue(value).trim();
+  if (!raw) return { userId: null, actor: "" };
+  const id = uuidOrNull(raw);
+  if (id && userIds.has(id)) return { userId: id, actor: "" };
+  return { userId: null, actor: raw };
 }
 
 function credentialDigest(value, table, id, warnings) {
@@ -688,6 +692,7 @@ function buildImportPlan(db, sourceName, sourceSha256) {
   }
 
   for (const client of internalClients) {
+    const createdByActor = legacyActor(client.createdBy, userIds);
     rows.internal_clients.push({
       id: requiredUuid(client.id, "clients.id"),
       master_client_id: refUuid(client.masterClientId, masterClientIds, warnings, { table: "internal_clients", field: "master_client_id", id: client.id, target: "master_clients" }),
@@ -695,8 +700,8 @@ function buildImportPlan(db, sourceName, sourceSha256) {
       whatsapp: stringValue(client.whatsapp),
       country: stringValue(client.country),
       work_channel: stringValue(client.workChannel),
-      created_by: actorUuid(client.createdBy, userIds, warnings, { table: "internal_clients", field: "created_by", id: client.id, target: "operator_users" }),
-      created_by_actor: actorText(client.createdBy),
+      created_by: createdByActor.userId,
+      created_by_actor: createdByActor.actor,
       created_at: timestampValue(client.createdAt, nowIso),
       updated_at: timestampValue(client.updatedAt || client.createdAt, nowIso),
       legacy_json: legacyJson(client),
@@ -704,6 +709,8 @@ function buildImportPlan(db, sourceName, sourceSha256) {
   }
 
   for (const link of clientLinks) {
+    const unlinkedByActor = legacyActor(link.unlinkedBy, userIds);
+    const createdByActor = legacyActor(link.createdBy, userIds);
     rows.client_links.push({
       id: requiredUuid(link.id, "clientLinks.id"),
       master_client_id: refUuid(link.masterClientId, masterClientIds, warnings, { table: "client_links", field: "master_client_id", id: link.id, target: "master_clients" }),
@@ -713,10 +720,10 @@ function buildImportPlan(db, sourceName, sourceSha256) {
       signals: jsonb(link.signals || {}),
       active: boolValue(link.active, true),
       unlinked_at: timestampOrNull(link.unlinkedAt),
-      unlinked_by: actorUuid(link.unlinkedBy, userIds, warnings, { table: "client_links", field: "unlinked_by", id: link.id, target: "operator_users" }),
-      unlinked_by_actor: actorText(link.unlinkedBy),
-      created_by: actorUuid(link.createdBy, userIds, warnings, { table: "client_links", field: "created_by", id: link.id, target: "operator_users" }),
-      created_by_actor: actorText(link.createdBy),
+      unlinked_by: unlinkedByActor.userId,
+      unlinked_by_actor: unlinkedByActor.actor,
+      created_by: createdByActor.userId,
+      created_by_actor: createdByActor.actor,
       created_at: timestampValue(link.createdAt, nowIso),
       updated_at: timestampValue(link.updatedAt || link.createdAt, nowIso),
       legacy_json: legacyJson(link),
@@ -724,6 +731,7 @@ function buildImportPlan(db, sourceName, sourceSha256) {
   }
 
   for (const suggestion of clientLinkSuggestions) {
+    const reviewedByActor = legacyActor(suggestion.reviewedBy, userIds);
     rows.client_link_suggestions.push({
       id: requiredUuid(suggestion.id, "clientLinkSuggestions.id"),
       source_type: enumValue(suggestion.sourceType, ["INTERNAL_CLIENT", "PORTAL_CLIENT"], "PORTAL_CLIENT"),
@@ -732,7 +740,8 @@ function buildImportPlan(db, sourceName, sourceSha256) {
       status: enumValue(suggestion.status, ["PENDING", "REJECTED", "BLOCKED", "LINKED"], "PENDING"),
       reason: stringValue(suggestion.reason),
       signals: jsonb(suggestion.signals || {}),
-      reviewed_by: actorUuid(suggestion.reviewedBy, userIds, warnings, { table: "client_link_suggestions", field: "reviewed_by", id: suggestion.id, target: "operator_users" }),
+      reviewed_by: reviewedByActor.userId,
+      reviewed_by_actor: reviewedByActor.actor,
       reviewed_at: timestampOrNull(suggestion.reviewedAt),
       review_reason: stringValue(suggestion.reviewReason),
       created_at: timestampValue(suggestion.createdAt, nowIso),

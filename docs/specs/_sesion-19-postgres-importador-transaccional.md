@@ -177,3 +177,91 @@ npm run postgres:import -- --input /opt/render/project/src/storage/users.json --
 cat /tmp/postgres-render-import-plan.json
 grep -E 'passwordHash|operatorPinHash|tokenHash|dataUrl|base64|legacy_data_url' /tmp/postgres-render-import-plan.json || true
 ```
+
+## Resultado Render import dry-run
+
+Fecha: 2026-05-06
+
+Reporte recibido desde Render Shell:
+
+- commit Render: `ae95058`;
+- `DATABASE_URL`: conectado;
+- `targetEmpty: true`;
+- `nonEmptyTables: []`;
+- `mismatches: []`;
+- `wouldWrite: false`;
+- `ok: false`;
+- error: `Dry-run detecto warnings de integridad.`
+
+Warnings:
+
+```json
+[
+  {
+    "code": "droppedMissingReference",
+    "table": "client_links",
+    "field": "created_by",
+    "target": "operator_users"
+  },
+  {
+    "code": "droppedMissingReference",
+    "table": "client_links",
+    "field": "unlinked_by",
+    "target": "operator_users"
+  },
+  {
+    "code": "droppedMissingReference",
+    "table": "client_link_suggestions",
+    "field": "reviewed_by",
+    "target": "operator_users"
+  }
+]
+```
+
+Lectura:
+
+- La DB destino esta limpia.
+- Los conteos principales estan listos.
+- El bloqueo fue correcto: esos campos tienen IDs de operadores que ya no existen en `operator_users`.
+- Hacer apply con esos warnings perderia trazabilidad historica.
+
+Decision:
+
+- No usar `postgres:import:apply` todavia.
+- Preservar actor legacy como texto cuando la FK no puede resolverse.
+- Mantener FK nullable cuando el operador si existe.
+
+Cambio aplicado:
+
+- Nueva migracion: `migrations/002_preserve_client_link_suggestion_actor.sql`.
+- Nuevo campo: `client_link_suggestions.reviewed_by_actor`.
+- `client_links.created_by_actor` y `client_links.unlinked_by_actor` ahora reciben tambien UUID legacy huerfano, no solo actores texto como `portal` o `system`.
+- `client_link_suggestions.reviewed_by_actor` conserva el valor legacy cuando `reviewed_by` no puede apuntar a `operator_users`.
+
+Validacion local del caso Render:
+
+- Se genero un fixture local con los tres actores huerfanos del reporte de Render.
+- `npm.cmd run postgres:import -- --input .local-preview-data\users-import-legacy-actor-fixture.json --report .local-preview-data\postgres-import-legacy-actor-fixture-report.json`
+- Resultado: `warnings: []`.
+- El comando termina con `DATABASE_URL no configurado` porque la validacion local no apunta a PostgreSQL; ese fallo es esperado y controlado.
+- El reporte no contiene patrones sensibles.
+
+Nuevo gate en Render despues del deploy:
+
+```sh
+cd /opt/render/project/src
+npm run postgres:migrate
+npm run postgres:migrate:apply
+npm run postgres:migrate
+npm run postgres:import -- --input /opt/render/project/src/storage/users.json --report /tmp/postgres-render-import-plan.json
+cat /tmp/postgres-render-import-plan.json
+grep -E 'passwordHash|operatorPinHash|tokenHash|dataUrl|base64|legacy_data_url' /tmp/postgres-render-import-plan.json || true
+```
+
+No correr `postgres:import:apply` hasta que el nuevo dry-run diga:
+
+- `ok: true`;
+- `warnings: []`;
+- `targetEmpty: true`;
+- `nonEmptyTables: []`;
+- `mismatches: []`.

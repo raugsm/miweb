@@ -981,3 +981,30 @@ Crear los archivos reales de migracion y script dry-run:
 Completado localmente. El siguiente paso ahora es ejecutar el dry-run contra una copia respaldada del `users.json` real de Render.
 
 No tocar todavia `server.js`, rutas HTTP ni frontend.
+
+## Ajuste 2026-05-06: actores legacy en enlaces
+
+Hecho detectado en Render:
+
+- `client_links.created_by`, `client_links.unlinked_by` y `client_link_suggestions.reviewed_by` pueden contener IDs de operadores que ya no existen en `operator_users`.
+- El importador inicial bloqueaba esos casos como `droppedMissingReference`.
+
+Decision:
+
+- No relajar FK.
+- No crear operadores falsos.
+- Preservar el actor legacy en columnas texto cuando no haya fila de operador.
+
+DDL agregado:
+
+- `migrations/002_preserve_client_link_suggestion_actor.sql`
+
+Campo agregado:
+
+- `client_link_suggestions.reviewed_by_actor text not null default ''`
+
+Importador:
+
+- si el actor existe en `operator_users`, se guarda FK;
+- si no existe, se guarda `null` en FK y el valor original en `*_actor`;
+- el dry-run debe volver a `warnings: []` antes de aplicar import.
