@@ -151,6 +151,131 @@ Resultado:
 
 - No hubo coincidencias.
 
+## Resultado Render real despues de fase 1
+
+Comando ejecutado en Render Shell:
+
+```sh
+node scripts/migration/users-json-to-postgres.mjs --input /opt/render/project/src/storage/users.json --strict --report /tmp/postgres-render-data-dry-run.json
+```
+
+Reporte recibido:
+
+```json
+{
+  "kind": "ariadgsm-postgres-migration-dry-run",
+  "generatedAt": "2026-05-06T00:20:26.539Z",
+  "sourceName": "users.json",
+  "sourceSha256": "e028b631850729c1447154274f5e101956b7d590e5b7a3739cb63d78fdcd6a51",
+  "sanitized": true,
+  "collections": {
+    "users": 5,
+    "sessions": 2,
+    "devices": 4,
+    "deviceApprovals": 0,
+    "customerClients": 18,
+    "customerUsers": 18,
+    "customerSessions": 23,
+    "customerDevices": 87,
+    "customerRequests": 13,
+    "customerOrders": 13,
+    "customerOrderItems": 14,
+    "customerBenefits": 34,
+    "customerEmailVerificationTokens": 6,
+    "masterClients": 19,
+    "clientLinks": 25,
+    "clientLinkSuggestions": 2,
+    "paymentLedgerEntries": 13,
+    "dailyCloses": 0,
+    "dailyCloseLines": 0,
+    "dailyAdjustments": 0,
+    "portalRateLimits": 0,
+    "clients": 5,
+    "tickets": 0,
+    "frpOrders": 13,
+    "frpJobs": 14,
+    "frpProviderCostHistory": 8,
+    "frpPendingCostChanges": 0,
+    "passwordResetTokens": 0,
+    "passwordResetRequests": 0,
+    "audit": 830
+  },
+  "tables": {
+    "migration_runs": 1,
+    "sequence_counters": 8,
+    "operator_users": 5,
+    "operator_devices": 4,
+    "operator_device_admin_users": 2,
+    "operator_device_approvals": 0,
+    "operator_sessions": 2,
+    "password_reset_tokens": 0,
+    "password_reset_requests": 0,
+    "master_clients": 19,
+    "customer_clients": 18,
+    "customer_users": 18,
+    "internal_clients": 5,
+    "client_links": 25,
+    "client_link_suggestions": 2,
+    "customer_benefits": 34,
+    "customer_devices": 87,
+    "customer_device_authorizations": 18,
+    "customer_sessions": 23,
+    "customer_email_verification_tokens": 6,
+    "exchange_rates": 5,
+    "service_pricing_rules": 14,
+    "payment_method_overrides": 0,
+    "frp_pricing_policy": 1,
+    "frp_pricing_providers": 3,
+    "frp_provider_cost_history": 8,
+    "frp_pending_cost_changes": 0,
+    "customer_requests": 13,
+    "customer_orders": 13,
+    "customer_order_items": 14,
+    "service_tickets": 0,
+    "stored_files": 17,
+    "payment_proofs": 32,
+    "frp_orders": 13,
+    "frp_jobs": 14,
+    "frp_job_files": 0,
+    "active_technician_state": 1,
+    "payment_ledger_entries": 13,
+    "daily_closes": 0,
+    "daily_close_lines": 0,
+    "daily_adjustments": 0,
+    "portal_rate_limits": 0,
+    "audit_events": 830
+  },
+  "summaryChecks": {
+    "customerUsersMatch": true,
+    "customerClientsMatch": true,
+    "customerOrdersMatch": true,
+    "customerOrderItemsMatch": true,
+    "frpOrdersMatch": true,
+    "frpJobsMatch": true,
+    "ticketsMatch": true,
+    "operatorEmailDuplicates": 0,
+    "customerEmailDuplicates": 0,
+    "proofMissingHash": 0,
+    "finalImageMissingHash": 0
+  },
+  "warnings": []
+}
+```
+
+Lectura:
+
+- El `users.json` real actual de Render parsea correctamente.
+- El dry-run estricto no encontro warnings.
+- No hay duplicados de email operador ni cliente.
+- No hay comprobantes/final images sin hash.
+- La proyeccion de tablas esta lista para importador real.
+- Esto todavia no escribio datos en PostgreSQL.
+
+Siguiente gate:
+
+- Crear importador `users.json -> PostgreSQL` que escriba en transaccion y genere reporte de conteos post-import.
+- Ejecutarlo primero contra la DB recien creada, sin cutover de runtime.
+
 ## Validacion del repo
 
 - `node --check scripts\migration\users-json-to-postgres.mjs`: OK.
@@ -193,3 +318,26 @@ No usar todavia Postgres en produccion. No conectar rutas.
 Runbook operativo creado:
 
 - `docs/specs/_sesion-19-render-users-json-dry-run.md`
+
+## Continuacion: importador transaccional
+
+Se creo el siguiente gate:
+
+- `scripts/migration/import-users-json-to-postgres.mjs`
+- `docs/specs/_sesion-19-postgres-importador-transaccional.md`
+
+Lectura:
+
+- El dry-run de este documento fue solo proyeccion sin escritura.
+- El importador nuevo usa la misma proyeccion de conteos esperados.
+- Validacion local contra `data/users.json`: `diffCount: 0` entre `users-json-to-postgres.mjs` y `import-users-json-to-postgres.mjs`.
+- La escritura real queda protegida por `--apply`, transaccion y bloqueo de DB no vacia.
+
+Siguiente gate:
+
+```sh
+cd /opt/render/project/src
+npm run postgres:import -- --input /opt/render/project/src/storage/users.json --report /tmp/postgres-render-import-plan.json
+cat /tmp/postgres-render-import-plan.json
+grep -E 'passwordHash|operatorPinHash|tokenHash|dataUrl|base64|legacy_data_url' /tmp/postgres-render-import-plan.json || true
+```

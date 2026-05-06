@@ -10,7 +10,9 @@
     "test:smoke": "node --test test/phase4.smoke.test.js",
     "postgres:check": "node scripts/postgres/check-connection.mjs",
     "postgres:migrate": "node scripts/postgres/apply-migrations.mjs",
-    "postgres:migrate:apply": "node scripts/postgres/apply-migrations.mjs --apply"
+    "postgres:migrate:apply": "node scripts/postgres/apply-migrations.mjs --apply",
+    "postgres:import": "node scripts/migration/import-users-json-to-postgres.mjs",
+    "postgres:import:apply": "node scripts/migration/import-users-json-to-postgres.mjs --apply"
   },
   "engines": {
     "node": ">=20"

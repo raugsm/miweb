@@ -193,3 +193,180 @@ Resultado esperado pendiente:
 - Ejecutar `postgres:check` con `DATABASE_URL` real de Render Postgres.
 - Ejecutar `postgres:migrate` contra staging.
 - Ejecutar `postgres:migrate:apply` solo contra DB vacia/staging aprobada.
+
+## Validacion Render Postgres
+
+Reporte recibido desde Render Shell de `ariadgsm-ops`:
+
+```json
+{
+  "kind": "ariadgsm-postgres-connection-check",
+  "generatedAt": "2026-05-06T00:16:29.840Z",
+  "sanitized": true,
+  "connection": "postgresql://user:redacted@dpg-d7t8dld7vvec73fdp9e0-a/ariadgsm_postgres",
+  "ok": true,
+  "postgres": {
+    "database": "ariadgsm_postgres",
+    "user": "ariadgsm_app",
+    "schema": "public",
+    "serverTime": "2026-05-06T00:16:29.865Z",
+    "serverVersion": "18.3 (Debian 18.3-1.pgdg12+1)"
+  }
+}
+```
+
+Lectura:
+
+- `DATABASE_URL` esta configurado y funciona desde el servicio web.
+- La URL usada es interna y fue reportada con credenciales redactadas.
+- PostgreSQL 18.3 esta disponible.
+- Todavia no se aplico DDL.
+
+Siguiente gate:
+
+- Ejecutar `npm run postgres:migrate` para listar migraciones pendientes sin escribir.
+
+## Dry-run migraciones Render Postgres
+
+Reporte recibido desde Render Shell:
+
+```json
+{
+  "kind": "ariadgsm-postgres-migration-gate",
+  "generatedAt": "2026-05-06T00:17:18.729Z",
+  "sanitized": true,
+  "apply": false,
+  "connection": "postgresql://user:redacted@dpg-d7t8dld7vvec73fdp9e0-a/ariadgsm_postgres",
+  "migrationsDir": "/opt/render/project/src/migrations",
+  "dryRunWrites": false,
+  "migrations": [
+    {
+      "version": "001_initial_postgres.sql",
+      "status": "PENDING",
+      "checksum": "121d0a86b9290df1e6aa9b271f4adeb255ee6bb0948a109c793016ce101c5065"
+    }
+  ],
+  "ok": true
+}
+```
+
+Lectura:
+
+- El script ve correctamente el directorio `/opt/render/project/src/migrations`.
+- La migracion inicial esta pendiente.
+- El modo fue solo lectura: `apply: false`, `dryRunWrites: false`.
+- El checksum queda como evidencia previa a aplicar DDL.
+
+Siguiente gate sensible:
+
+- Aplicar `001_initial_postgres.sql` con `npm run postgres:migrate:apply` solo si se acepta que la DB esta vacia/staging.
+
+## Aplicacion DDL inicial
+
+Reporte recibido desde Render Shell:
+
+```json
+{
+  "kind": "ariadgsm-postgres-migration-gate",
+  "generatedAt": "2026-05-06T00:18:52.436Z",
+  "sanitized": true,
+  "apply": true,
+  "connection": "postgresql://user:redacted@dpg-d7t8dld7vvec73fdp9e0-a/ariadgsm_postgres",
+  "migrationsDir": "/opt/render/project/src/migrations",
+  "dryRunWrites": false,
+  "migrations": [
+    {
+      "version": "001_initial_postgres.sql",
+      "status": "APPLIED_NOW",
+      "checksum": "121d0a86b9290df1e6aa9b271f4adeb255ee6bb0948a109c793016ce101c5065"
+    }
+  ],
+  "ok": true
+}
+```
+
+Lectura:
+
+- El DDL inicial se aplico en Render Postgres.
+- La migracion quedo registrada con checksum.
+- No se hizo cutover de runtime.
+- `users.json` sigue siendo fuente de verdad hasta migrar datos y cambiar repositorios.
+
+Siguiente gate:
+
+- Ejecutar `npm run postgres:migrate` otra vez para confirmar que la migracion aparece como `APPLIED`.
+
+## Verificacion de idempotencia
+
+Reporte recibido desde Render Shell despues de aplicar DDL:
+
+```json
+{
+  "kind": "ariadgsm-postgres-migration-gate",
+  "generatedAt": "2026-05-06T00:19:29.151Z",
+  "sanitized": true,
+  "apply": false,
+  "connection": "postgresql://user:redacted@dpg-d7t8dld7vvec73fdp9e0-a/ariadgsm_postgres",
+  "migrationsDir": "/opt/render/project/src/migrations",
+  "dryRunWrites": false,
+  "migrations": [
+    {
+      "version": "001_initial_postgres.sql",
+      "status": "APPLIED",
+      "checksum": "121d0a86b9290df1e6aa9b271f4adeb255ee6bb0948a109c793016ce101c5065",
+      "appliedAt": "2026-05-06T00:18:52.501Z"
+    }
+  ],
+  "ok": true
+}
+```
+
+Lectura:
+
+- El migrador es idempotente para la migracion inicial.
+- `schema_migrations` registra `001_initial_postgres.sql`.
+- No hay checksum mismatch.
+
+Conclusion fase 1:
+
+- Conexion PostgreSQL: OK.
+- DDL inicial aplicado: OK.
+- Idempotencia de migracion: OK.
+- Runtime sigue en `users.json`.
+
+Siguiente fase:
+
+- Ejecutar migracion de datos a PostgreSQL staging sin cutover.
+- Comparar conteos y relaciones antes de tocar rutas HTTP.
+
+## Gate creado para import de datos
+
+Archivo nuevo:
+
+- `scripts/migration/import-users-json-to-postgres.mjs`
+
+Scripts nuevos:
+
+- `npm run postgres:import`
+- `npm run postgres:import:apply`
+
+Decision:
+
+- `postgres:import` valida DB, conteos esperados y DB vacia sin escribir.
+- `postgres:import:apply` escribe solo con `--apply` dentro de una transaccion.
+- El importador bloquea tablas no vacias salvo `--allow-non-empty`.
+- Los reportes no deben contener `passwordHash`, `operatorPinHash`, `tokenHash`, `dataUrl`, `base64` ni `legacy_data_url`.
+- El runtime sigue en `users.json`; este gate no cambia rutas HTTP.
+
+Runbook:
+
+- `docs/specs/_sesion-19-postgres-importador-transaccional.md`
+
+Siguiente paso unico:
+
+```sh
+cd /opt/render/project/src
+npm run postgres:import -- --input /opt/render/project/src/storage/users.json --report /tmp/postgres-render-import-plan.json
+cat /tmp/postgres-render-import-plan.json
+grep -E 'passwordHash|operatorPinHash|tokenHash|dataUrl|base64|legacy_data_url' /tmp/postgres-render-import-plan.json || true
+```
