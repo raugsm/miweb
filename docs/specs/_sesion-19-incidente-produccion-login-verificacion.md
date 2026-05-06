@@ -476,3 +476,46 @@ Cambios:
 - `node --check server.js`
 - prueba local de escrituras concurrentes contra una copia temporal de DB
 - prueba de deep link `?verifyEmail=` donde `/api/portal/session` falla pero el POST de verificacion se intenta primero
+
+## Actualizacion post-cutover PostgreSQL - Deep link de verificacion
+
+Fecha: 2026-05-06
+
+Sintoma observado:
+
+- Registro cliente envio correo de verificacion.
+- El boton del correo abrio `https://ariadgsm.com/cliente?verifyEmail=...`.
+- La cuenta no quedo verificada.
+
+Hechos:
+
+- `sendCustomerVerificationEmail()` construye el enlace con `customerPortalBaseUrl`.
+- En produccion, el fallback esperado para portal cliente es `https://ariadgsm.com`.
+- `ariadgsm.com/cliente` sirve el portal cliente publico; por tanto el dominio del enlace no es, por si solo, el bug.
+- `public/portal.js` ejecutaba `loadSession()` antes de `applyEmailVerification()`.
+- `loadSession()` llama `/api/portal/session` y `loadActiveTechnician()` antes de procesar `verifyEmail`.
+
+Inferencia:
+
+- Si `loadSession()` falla, se bloquea el `POST /api/portal/verify-email`.
+- Durante el cutover se observaron errores de escritura PostgreSQL por deadlock; esto pudo impedir el procesamiento del token aunque el enlace fuera correcto.
+- El flujo era fragil porque una verificacion de correo dependia de una hidratacion de sesion que no es necesaria para validar el token.
+
+Cambio aplicado:
+
+- `public/portal.js` ahora detecta `?verifyEmail=` y ejecuta `applyEmailVerification()` antes de `loadSession()`.
+- `public/portal-modules/deep-links.js` ya no llama `loadSession()` internamente.
+- `applyEmailVerification()` retorna booleano y deja que el boot principal hidrate la sesion despues.
+- Se actualizo el query string del modulo a `s19-verify001` para evitar cache del deep link viejo.
+
+Validacion local:
+
+- `node --check public/portal.js`: OK.
+- `node --check public/portal-modules/deep-links.js`: OK.
+- `node --check server.js`: OK.
+- `npm.cmd test`: 14/14 OK.
+
+Riesgo residual:
+
+- El token compartido en chat debe tratarse como expuesto.
+- Para validar el flujo final, reenviar correo de verificacion y usar un token nuevo despues del deploy.

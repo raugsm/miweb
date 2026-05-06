@@ -1,11 +1,10 @@
 import { api } from "./api.js";
 import { $, setMessage } from "./dom.js";
-import { loadSession } from "./session.js";
 
 export async function applyEmailVerification() {
   const params = new URLSearchParams(location.search);
   const token = params.get("verifyEmail");
-  if (!token) return;
+  if (!token) return false;
   try {
     const payload = await api("/api/portal/verify-email", {
       method: "POST",
@@ -13,8 +12,9 @@ export async function applyEmailVerification() {
     });
     setMessage($("#authMessage"), payload.message || "Correo verificado.", "success");
     history.replaceState({}, "", location.pathname);
-    await loadSession();
+    return true;
   } catch (error) {
     setMessage($("#authMessage"), error.message, "error");
+    return false;
   }
 }
