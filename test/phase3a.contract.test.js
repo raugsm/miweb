@@ -215,6 +215,17 @@ test("operator technician swap polling repaints workbench and restores normal in
   assert.match(appJs, /function setTechnicianPollInterval\(ms\) \{[\s\S]*if \(currentTechnicianPollMs === ms && technicianRefreshTimer\) return;[\s\S]*technicianRefreshTimer = setInterval\(refreshTechnicianWidget, ms\);[\s\S]*\}/);
 });
 
+test("operator FRP live stream revalidates access and closes stale sessions", async () => {
+  const serverJs = await readFile(new URL("../server.js", import.meta.url), "utf8");
+  const appJs = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
+
+  assert.match(serverJs, /function canUseFrp\(user\) \{[\s\S]*user\.active !== false/);
+  assert.match(serverJs, /if \(!streamUser \|\| !canUseFrp\(streamUser\)\) \{[\s\S]*closeFrpOpsStreamsForUser\(userId, db\);/);
+  assert.match(serverJs, /publishFrpOps\(db, "operator_permissions_updated"/);
+  assert.match(appJs, /const frpAccessRevoked = payload\.frp[\s\S]*payload\.frp\.enabled === false[\s\S]*\["frp_access_revoked", "operator_permissions_updated", "operator_logged_out"\]\.includes\(payload\.reason\);/);
+  assert.match(appJs, /if \(frpAccessRevoked\) \{[\s\S]*stopFrpOpsLive\(\);[\s\S]*refreshSession\(\)\.catch/);
+});
+
 test("operator finalized today uses multi-operator technician marks", async () => {
   const appJs = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
   const stylesCss = await readFile(new URL("../public/styles.css", import.meta.url), "utf8");

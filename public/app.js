@@ -4390,6 +4390,16 @@ function frpOpsHandleEvent(rawData) {
     frpMessage.textContent = String(payload.notice.message || "");
     frpMessage.dataset.type = type;
   }
+  const frpAccessRevoked = payload.frp
+    && payload.frp.enabled === false
+    && ["frp_access_revoked", "operator_permissions_updated", "operator_logged_out"].includes(payload.reason);
+  if (frpAccessRevoked) {
+    stopFrpOpsLive();
+    refreshSession().catch(() => {
+      session = emptySession();
+      renderLayout();
+    });
+  }
 }
 
 function startFrpOpsLive() {

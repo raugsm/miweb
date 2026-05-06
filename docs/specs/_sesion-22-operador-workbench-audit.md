@@ -286,3 +286,15 @@ Riesgo residual del panel trabajador: ya no es el dato mostrado en `Tu trabajo a
 - Hecho confirmado: frontend `paintTechnicianWidget` acelera polling a 2s durante swap, vuelve a 30s al terminar y repinta `renderFrp({ skipPricing: true })`.
 - No se cambio runtime; se agrego guarda contractual en `phase3a.contract.test.js`.
 - Documento dedicado: `_sesion-22-operador-swap-repaint-contract.md`.
+
+## Actualizacion 2026-05-06 - Perdida de sesion y revocacion de permisos
+
+- Riesgo revisado: el panel FRP quedaba abierto mientras el usuario perdia sesion, hacia logout en otra pestana o un admin revocaba permisos.
+- Hecho confirmado: las mutaciones FRP ya estaban protegidas por `requireFrpAccess`.
+- Gap encontrado: un SSE `/api/operator/frp/events` ya conectado solo validaba al abrir; `publishFrpOps` podia seguir enviando estado a un stream stale.
+- Se endurecio `canUseFrp(user)` para exigir usuario activo.
+- `publishFrpOps` ahora revalida cada stream antes de emitir; si el usuario ya no puede usar FRP, envia un ultimo evento `frp_access_revoked` con `frp.enabled=false` y cierra el stream.
+- `POST /api/logout` cierra streams FRP abiertos para ese usuario.
+- `PATCH /api/users/:id` publica cambios relevantes de permisos para que los streams vivos se revaliden.
+- El frontend cierra `EventSource` y refresca `/api/session` cuando recibe revocacion/logout.
+- Documento dedicado: `_sesion-22-operador-session-permission-revocation-contract.md`.

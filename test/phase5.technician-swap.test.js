@@ -454,6 +454,81 @@ test("phase 5: elevated roles can resolve another technician review", { timeout:
   }
 });
 
+test("phase 5: FRP SSE closes when operator loses FRP access", { timeout: 30_000 }, async () => {
+  const server = await startIsolatedServer({ swapMs: SWAP_MS });
+  try {
+    const adminHttp = createHttpClient(server.baseUrl, new CookieJar());
+    const { jackId, jackEmail, jackPassword } = await setupTwoFrpTechnicians(adminHttp, server.setupToken);
+
+    const jackJar = new CookieJar();
+    const jackHttp = createHttpClient(server.baseUrl, jackJar);
+    let response = await jackHttp.request("POST", "/api/login", {
+      email: jackEmail,
+      password: jackPassword,
+      operatorPin: server.setupToken,
+    });
+    assert.equal(response.status, 200);
+
+    response = await jackHttp.request("GET", "/api/session");
+    assert.equal(response.status, 200);
+    assert.equal(response.data.frp.enabled, true);
+
+    const event = await readFrpOpsEventAfter(server.baseUrl, jackJar, async () => {
+      const update = await adminHttp.request("PATCH", `/api/users/${jackId}`, {
+        workChannel: "WhatsApp 1",
+      });
+      assert.equal(update.status, 200);
+    }, "frp_access_revoked");
+
+    assert.equal(event.status, 200);
+    assert.match(event.text, /event: frp/);
+    assert.match(event.text, /"reason":"frp_access_revoked"/);
+    assert.match(event.text, /"enabled":false/);
+
+    response = await jackHttp.request("GET", "/api/session");
+    assert.equal(response.status, 200);
+    assert.equal(response.data.frp.enabled, false);
+
+    response = await jackHttp.request("POST", "/api/frp/jobs/take-next");
+    assert.equal(response.status, 403);
+  } finally {
+    await server.stop();
+  }
+});
+
+test("phase 5: FRP SSE closes when operator logs out", { timeout: 30_000 }, async () => {
+  const server = await startIsolatedServer({ swapMs: SWAP_MS });
+  try {
+    const adminHttp = createHttpClient(server.baseUrl, new CookieJar());
+    const { jackEmail, jackPassword } = await setupTwoFrpTechnicians(adminHttp, server.setupToken);
+
+    const jackJar = new CookieJar();
+    const jackHttp = createHttpClient(server.baseUrl, jackJar);
+    let response = await jackHttp.request("POST", "/api/login", {
+      email: jackEmail,
+      password: jackPassword,
+      operatorPin: server.setupToken,
+    });
+    assert.equal(response.status, 200);
+
+    const event = await readFrpOpsEventAfter(server.baseUrl, jackJar, async () => {
+      const logout = await jackHttp.request("POST", "/api/logout");
+      assert.equal(logout.status, 204);
+    }, "operator_logged_out");
+
+    assert.equal(event.status, 200);
+    assert.match(event.text, /event: frp/);
+    assert.match(event.text, /"reason":"operator_logged_out"/);
+    assert.match(event.text, /"enabled":false/);
+
+    response = await jackHttp.request("GET", "/api/session");
+    assert.equal(response.status, 200);
+    assert.equal(response.data.user, null);
+  } finally {
+    await server.stop();
+  }
+});
+
 test("phase 5: FRP owner can cancel after active technician changes", { timeout: 30_000 }, async () => {
   const server = await startIsolatedServer({ swapMs: SWAP_MS });
   try {
@@ -690,6 +765,46 @@ function proofImage(name, data) {
 
 function uniqueProofPayload() {
   return Buffer.from(`phase5-proof-${Date.now()}-${Math.random()}`).toString("base64") || onePixelPng;
+}
+
+async function readFrpOpsEventAfter(baseUrl, jar, trigger, expectedReason) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5_000);
+  let reader;
+  try {
+    const res = await fetch(`${baseUrl}/api/operator/frp/events`, {
+      headers: { cookie: jar.header() },
+      signal: controller.signal,
+    });
+    assert.equal(res.status, 200);
+    assert.match(res.headers.get("content-type") || "", /text\/event-stream/);
+    reader = res.body.getReader();
+    await trigger();
+
+    const decoder = new TextDecoder();
+    const deadline = Date.now() + 5_000;
+    let text = "";
+    while (Date.now() < deadline) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      text += decoder.decode(value || new Uint8Array(), { stream: true });
+      if (text.includes(`"reason":"${expectedReason}"`)) {
+        await reader.cancel().catch(() => {});
+        return {
+          status: res.status,
+          contentType: res.headers.get("content-type") || "",
+          text,
+        };
+      }
+    }
+    throw new Error(`Expected FRP SSE reason ${expectedReason}, got:\n${text}`);
+  } finally {
+    clearTimeout(timer);
+    controller.abort();
+    if (reader) {
+      try { await reader.cancel(); } catch {}
+    }
+  }
 }
 
 function createHttpClient(baseUrl, jar) {

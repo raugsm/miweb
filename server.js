@@ -939,7 +939,7 @@ function normalizeFrpRecords(db) {
 }
 
 function canUseFrp(user) {
-  return Boolean(user && (user.role === "ADMIN" || normalizeWorkChannel(user.workChannel) === frpWorkChannel));
+  return Boolean(user && user.active !== false && (user.role === "ADMIN" || normalizeWorkChannel(user.workChannel) === frpWorkChannel));
 }
 
 function canManageFrpCosts(user) {
@@ -2620,6 +2620,37 @@ function removeFrpOpsStream(userId, stream) {
   if (!streams.size) frpOpsStreams.delete(userId);
 }
 
+function closeFrpOpsStream(stream) {
+  stream.closed = true;
+  try { stream.res.end(); } catch { /* ignore */ }
+}
+
+function closeFrpOpsStreamsForUser(userId, db, reason = "frp_access_revoked", message = "Tu acceso FRP cambio. Actualizando sesion.") {
+  const streams = frpOpsStreams.get(userId);
+  if (!streams) return;
+  const safeDb = db || { users: [], frpOrders: [], frpJobs: [] };
+  const payload = {
+    reason,
+    updatedAt: nowIso(),
+    frp: publicFrpState(safeDb, null),
+    notice: {
+      type: "error",
+      message,
+    },
+  };
+  for (const stream of [...streams]) {
+    if (!stream.closed && !stream.res.destroyed && !stream.res.writableEnded) {
+      try {
+        sendSseEvent(stream.res, "frp", payload, `${Date.now()}`);
+      } catch {
+        // If the final event cannot be sent, still close the stale stream.
+      }
+    }
+    closeFrpOpsStream(stream);
+    removeFrpOpsStream(userId, stream);
+  }
+}
+
 // QUE: emite un evento SSE "frp" a todos los streams operador conectados.
 // El payload incluye reason (string corto) y frp (publicFrpState calculado
 // por user). Si opts.notice = { type: 'info'|'error', message } se
@@ -2637,9 +2668,8 @@ function publishFrpOps(db, reason = "frp_updated", opts = {}) {
   } : null;
   for (const [userId, streams] of [...frpOpsStreams.entries()]) {
     const streamUser = (db.users || []).find((candidate) => candidate.id === userId);
-    if (!streamUser) {
-      // Usuario desactivado o eliminado entre conexion y publish — limpiar.
-      for (const stream of [...streams]) removeFrpOpsStream(userId, stream);
+    if (!streamUser || !canUseFrp(streamUser)) {
+      closeFrpOpsStreamsForUser(userId, db);
       continue;
     }
     const payload = {
@@ -4278,6 +4308,7 @@ async function handleApi(req, res, pathname) {
     if (token) {
       const db = await readDb();
       db.sessions = db.sessions.filter((session) => session.tokenHash !== hashToken(token));
+      if (user?.id) closeFrpOpsStreamsForUser(user.id, db, "operator_logged_out", "Sesion cerrada.");
       await writeDb(db);
     }
     res.setHeader("Set-Cookie", `ariad_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${isProduction ? "; Secure" : ""}`);
@@ -4889,7 +4920,12 @@ async function handleApi(req, res, pathname) {
       target.technicianRedirectorId = normalizedTechnicianId;
     }
     target.updatedAt = nowIso();
-    audit(db, user.id, "USER_UPDATED", target.id, { before: previous, after: publicUser(target) });
+    const nextPublicUser = publicUser(target);
+    const frpAccessRelevantChanged = previous.active !== nextPublicUser.active
+      || previous.role !== nextPublicUser.role
+      || previous.workChannel !== nextPublicUser.workChannel
+      || JSON.stringify(previous.permissions || {}) !== JSON.stringify(nextPublicUser.permissions || {});
+    audit(db, user.id, "USER_UPDATED", target.id, { before: previous, after: nextPublicUser });
     const technicianResolution = resolveActiveTechnician(db, Date.now(), technicianSwapMs);
     if (technicianResolution.changed) {
       db.activeTechnician = technicianResolution.state;
@@ -4899,7 +4935,12 @@ async function handleApi(req, res, pathname) {
       });
     }
     await writeDb(db);
-    return sendJson(res, 200, { user: publicUser(target) });
+    if (frpAccessRelevantChanged) {
+      publishFrpOps(db, "operator_permissions_updated", {
+        notice: { type: "info", message: "Permisos de operador actualizados." },
+      });
+    }
+    return sendJson(res, 200, { user: nextPublicUser });
   }
 
   // Spec operador-frp-express.md §5.2 + AC #9, #13, #36 — SSE del panel
