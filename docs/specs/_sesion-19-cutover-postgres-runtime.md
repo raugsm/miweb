@@ -326,3 +326,57 @@ Antes de editar runtime:
 4. Implementar adapter con default `json`.
 5. Probar.
 6. Documentar resultado.
+
+## Resultado Fase A - Adapter sin activar
+
+Fecha: 2026-05-06
+
+Cambio aplicado:
+
+- Se creo `server/db/json-storage.js`.
+- Se creo `server/db/postgres-storage.js`.
+- Se creo `server/db/storage.js`.
+- `server.js` ya no contiene la escritura atomica directa de `users.json`; delega en `storage`.
+- `readDb()` mantiene la normalizacion legacy en `server.js`.
+- `writeDb(db)` delega en el adapter activo.
+
+Decision implementada:
+
+- `ARIAD_STORAGE_DRIVER=json` usa el storage JSON actual.
+- Si `ARIAD_STORAGE_DRIVER` no existe, el default es `json`.
+- `ARIAD_STORAGE_DRIVER=postgres` queda como stub bloqueado en Fase A.
+- Activar `postgres` ahora falla de forma explicita: `ARIAD_STORAGE_DRIVER=postgres no esta implementado para runtime en Fase A.`
+
+Lo que no se hizo:
+
+- No se activo PostgreSQL en runtime.
+- No se tocaron endpoints portal ni FRP.
+- No se cambio `/api/health`.
+- No se reimportaron datos.
+- No se modificaron migraciones.
+
+Lectura tecnica:
+
+- La persistencia fisica quedo separada de la normalizacion de dominio.
+- La frontera sigue siendo compatible con `readDb()` y `writeDb(db)`.
+- El deploy con default `json` debe comportarse igual que antes.
+- La siguiente fase ya puede trabajar sobre `postgresStorage.readDb()` sin arrastrar toda la logica de `server.js`.
+
+Validacion local:
+
+```sh
+node --check server.js
+node --check server/db/json-storage.js
+node --check server/db/storage.js
+node --check server/db/postgres-storage.js
+npm.cmd test
+```
+
+Resultado:
+
+- Checks de sintaxis: OK.
+- `npm.cmd test`: 14/14 OK.
+
+Siguiente paso unico:
+
+- Commit y push de Fase A.

@@ -109,6 +109,7 @@ import { createFrpSerializers } from "./server/frp/serializers.js";
 import { createFrpRoutes } from "./server/frp/frp-routes.js";
 import { createPortalSerializers } from "./server/portal/serializers.js";
 import { createPortalRoutes } from "./server/portal/portal-routes.js";
+import { createStorage } from "./server/db/storage.js";
 import {
   applySwitch as applyTechnicianSwitch,
   eligibleTechnicians,
@@ -122,9 +123,6 @@ import {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, "public");
 const dataDir = process.env.ARIAD_DATA_DIR || path.join(__dirname, "data");
-const dbPath = path.join(dataDir, "users.json");
-const dbLastGoodPath = path.join(dataDir, "users.json.last-good.bak");
-let dbWriteQueue = Promise.resolve();
 const port = Number(process.env.PORT || 4173);
 const setupToken = process.env.ARIAD_SETUP_TOKEN || "";
 const enableSetupPasswordReset = ["true", "1", "yes"].includes(String(process.env.ARIAD_ENABLE_SETUP_RESET || "").toLowerCase());
@@ -330,50 +328,14 @@ function defaultDb() {
   };
 }
 
-async function backupLastGoodDb() {
-  try {
-    const current = await fs.readFile(dbPath, "utf8");
-    JSON.parse(current);
-    await fs.copyFile(dbPath, dbLastGoodPath);
-  } catch {
-    // No sobrescribimos last-good si el archivo activo ya esta corrupto.
-  }
-}
-
-async function replaceDbAtomically(db) {
-  await fs.mkdir(dataDir, { recursive: true });
-  const payload = `${JSON.stringify(db, null, 2)}\n`;
-  JSON.parse(payload);
-  const tempPath = `${dbPath}.${process.pid}.${Date.now()}.${crypto.randomUUID()}.tmp`;
-  try {
-    const handle = await fs.open(tempPath, "w");
-    try {
-      await handle.writeFile(payload, "utf8");
-      await handle.sync();
-    } finally {
-      await handle.close();
-    }
-    await backupLastGoodDb();
-    await fs.rename(tempPath, dbPath);
-  } catch (error) {
-    await fs.rm(tempPath, { force: true }).catch(() => {});
-    throw error;
-  }
-}
+const storage = createStorage({ dataDir, defaultDb });
 
 async function ensureDb() {
-  await fs.mkdir(dataDir, { recursive: true });
-  try {
-    await fs.access(dbPath);
-  } catch {
-    await writeDb(defaultDb());
-  }
+  await storage.ensureDb();
 }
 
 async function readDb() {
-  await ensureDb();
-  const raw = await fs.readFile(dbPath, "utf8");
-  const db = JSON.parse(raw);
+  const db = await storage.readDb();
   db.users ||= [];
   db.sessions ||= [];
   db.devices ||= [];
@@ -475,9 +437,7 @@ async function readDb() {
 }
 
 async function writeDb(db) {
-  const write = dbWriteQueue.then(() => replaceDbAtomically(db));
-  dbWriteQueue = write.catch(() => {});
-  return write;
+  return storage.writeDb(db);
 }
 
 function normalizeUserPermissions(permissions = {}) {
