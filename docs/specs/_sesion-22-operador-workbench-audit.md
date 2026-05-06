@@ -218,3 +218,11 @@ Riesgo residual del panel trabajador: ya no es el dato mostrado en `Tu trabajo a
 - Se unifico la cola visible en `frpOpsV2QueueViewState`.
 - Si `Solo VIP` esta activo y hay VIPs visibles, el CTA grande llama el endpoint especifico del primer job visible (`POST /api/frp/jobs/:id/take`).
 - Si el filtro esta apagado, o si no hay VIPs y la UI muestra todos por fallback, el CTA conserva `/api/frp/jobs/take-next`.
+
+## Actualizacion 2026-05-06 - Tomar card especifico con tecnico activo stale
+
+- Riesgo revisado: el operador podia ver un card con boton `Tomar`, pero el tecnico activo global podia cambiar antes del click.
+- Hecho confirmado: `POST /api/frp/jobs/:id/take` exige `requireActiveFrpTechnician` en backend justo antes de mutar.
+- Se agrego prueba runtime en `phase5.technician-swap.test.js`: Jack ve/tiene sesion, el admin cambia tecnico activo a Angelo, Jack intenta tomar el job especifico y recibe 403.
+- La misma prueba confirma que el job queda `LISTO_PARA_TECNICO` y Angelo puede tomarlo.
+- Se agrego guarda frontend en `phase3a.contract.test.js`: el catch de `takeSpecificFrpJob` muestra error y hace `refreshSession()`.

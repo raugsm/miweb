@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
 const SWAP_MS = 200;
+const onePixelPng = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=";
 
 test("phase 5: operator login throttles repeated failed attempts", { timeout: 30_000 }, async () => {
   const server = await startIsolatedServer({ swapMs: SWAP_MS });
@@ -221,6 +222,64 @@ test("phase 5: technician switch with swap window and auto-revert", { timeout: 3
   }
 });
 
+test("phase 5: specific FRP take rejects stale active technician after switch", { timeout: 30_000 }, async () => {
+  const server = await startIsolatedServer({ swapMs: SWAP_MS });
+  try {
+    const adminHttp = createHttpClient(server.baseUrl, new CookieJar());
+    const { jackId, jackEmail, jackPassword, angeloId, angeloEmail, angeloPassword } = await setupTwoFrpTechnicians(adminHttp, server.setupToken);
+
+    let response = await adminHttp.request("GET", "/api/operator/technician/status");
+    assert.equal(response.status, 200);
+    assert.equal(response.data.technician.active.userId, jackId);
+
+    const readyJob = await createReadyFrpJob(adminHttp);
+
+    const jackHttp = createHttpClient(server.baseUrl, new CookieJar());
+    response = await jackHttp.request("POST", "/api/login", {
+      email: jackEmail,
+      password: jackPassword,
+      operatorPin: server.setupToken,
+    });
+    assert.equal(response.status, 200);
+
+    response = await adminHttp.request("POST", "/api/operator/technician/switch", {
+      targetUserId: angeloId,
+    });
+    assert.equal(response.status, 200);
+    assert.equal(response.data.technician.swap.inProgress, true);
+
+    await delay(SWAP_MS + 80);
+    response = await adminHttp.request("GET", "/api/operator/technician/status");
+    assert.equal(response.status, 200);
+    assert.equal(response.data.technician.active.userId, angeloId);
+
+    response = await jackHttp.request("POST", `/api/frp/jobs/${encodeURIComponent(readyJob.id)}/take`);
+    assert.equal(response.status, 403);
+    assert.match(response.data.error, /tecnico activo/);
+
+    response = await adminHttp.request("GET", "/api/session");
+    assert.equal(response.status, 200);
+    const stillReady = response.data.frp.jobs.find((job) => job.id === readyJob.id);
+    assert.equal(stillReady.status, "LISTO_PARA_TECNICO");
+    assert.equal(stillReady.technicianId, "");
+
+    const angeloHttp = createHttpClient(server.baseUrl, new CookieJar());
+    response = await angeloHttp.request("POST", "/api/login", {
+      email: angeloEmail,
+      password: angeloPassword,
+      operatorPin: server.setupToken,
+    });
+    assert.equal(response.status, 200);
+
+    response = await angeloHttp.request("POST", `/api/frp/jobs/${encodeURIComponent(readyJob.id)}/take`);
+    assert.equal(response.status, 200);
+    assert.equal(response.data.job.status, "EN_PROCESO");
+    assert.equal(response.data.job.technicianId, angeloId);
+  } finally {
+    await server.stop();
+  }
+});
+
 async function startIsolatedServer({ swapMs }) {
   const dataDir = await mkdtemp(path.join(tmpdir(), "ariadgsm-phase5-"));
   const port = await getAvailablePort();
@@ -257,6 +316,108 @@ async function startIsolatedServer({ swapMs }) {
       await onceExit(child);
       await rm(dataDir, { recursive: true, force: true });
     },
+  };
+}
+
+async function setupTwoFrpTechnicians(http, setupToken) {
+  const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const adminEmail = `phase5-race-admin-${suffix}@example.com`;
+  const adminPassword = "Admin12345!";
+  let response = await http.request("POST", "/api/register", {
+    name: "Admin Race",
+    email: adminEmail,
+    password: adminPassword,
+    workChannel: "WhatsApp 3",
+    setupToken,
+  });
+  assert.equal(response.status, 201);
+
+  response = await http.request("POST", "/api/login", {
+    email: adminEmail,
+    password: adminPassword,
+    operatorPin: setupToken,
+  });
+  assert.equal(response.status, 200);
+
+  const jackEmail = `phase5-race-jack-${suffix}@example.com`;
+  const jackPassword = "Jack12345!";
+  response = await http.request("POST", "/api/register", {
+    name: "Jack",
+    email: jackEmail,
+    password: jackPassword,
+    workChannel: "WhatsApp 3",
+  });
+  assert.equal(response.status, 201);
+  const jackId = response.data.user.id;
+
+  response = await http.request("PATCH", `/api/users/${jackId}`, {
+    role: "ATENCION_TECNICA",
+    active: true,
+    technicianRedirectorId: "1000 9983 5478",
+  });
+  assert.equal(response.status, 200);
+
+  const angeloEmail = `phase5-race-angelo-${suffix}@example.com`;
+  const angeloPassword = "Angelo12345!";
+  response = await http.request("POST", "/api/register", {
+    name: "Angelo",
+    email: angeloEmail,
+    password: angeloPassword,
+    workChannel: "WhatsApp 3",
+  });
+  assert.equal(response.status, 201);
+  const angeloId = response.data.user.id;
+
+  response = await http.request("PATCH", `/api/users/${angeloId}`, {
+    role: "ATENCION_TECNICA",
+    active: true,
+    technicianRedirectorId: "2000 4422 1188",
+  });
+  assert.equal(response.status, 200);
+
+  return { jackId, jackEmail, jackPassword, angeloId, angeloEmail, angeloPassword };
+}
+
+async function createReadyFrpJob(http) {
+  let response = await http.request("POST", "/api/frp/orders", {
+    clientText: `Cliente Race ${Date.now()} Peru`,
+    quantity: 1,
+    paymentMethod: "PE_YAPE_BRYAMS",
+  });
+  assert.equal(response.status, 201);
+  const order = response.data.order;
+  const job = order.jobs[0];
+
+  for (const key of ["priceSent", "connectionDataSent", "authorizationConfirmed"]) {
+    response = await http.request("PATCH", `/api/frp/orders/${encodeURIComponent(order.id)}/checklist`, { key, value: true });
+    assert.equal(response.status, 200);
+  }
+
+  response = await http.request("PATCH", `/api/frp/orders/${encodeURIComponent(order.id)}/payment-proof`, {
+    paymentProofs: [proofImage("phase5-race-proof.png", onePixelPng)],
+  });
+  assert.equal(response.status, 200);
+
+  response = await http.request("PATCH", `/api/frp/orders/${encodeURIComponent(order.id)}/payment-review`, { action: "approve" });
+  assert.equal(response.status, 200);
+
+  for (const key of ["clientConnected", "requiredStateConfirmed", "modelSupported"]) {
+    response = await http.request("PATCH", `/api/frp/jobs/${encodeURIComponent(job.id)}/checklist`, { key, value: true });
+    assert.equal(response.status, 200);
+  }
+
+  response = await http.request("PATCH", `/api/frp/jobs/${encodeURIComponent(job.id)}/ready`);
+  assert.equal(response.status, 200);
+  assert.equal(response.data.job.status, "LISTO_PARA_TECNICO");
+  return response.data.job;
+}
+
+function proofImage(name, data) {
+  return {
+    name,
+    type: "image/png",
+    size: Buffer.from(data, "base64").length,
+    dataUrl: `data:image/png;base64,${data}`,
   };
 }
 

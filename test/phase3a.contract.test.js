@@ -218,6 +218,13 @@ test("operator VIP queue filter keeps take-next aligned with visible jobs", asyn
   assert.match(appJs, /else await takeNextFrpJob\(\);/);
 });
 
+test("operator specific take rejection refreshes stale active technician state", async () => {
+  const appJs = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
+
+  assert.match(appJs, /async function takeSpecificFrpJob\(jobId\)/);
+  assert.match(appJs, /catch \(error\) \{[\s\S]*frpMessage\.textContent = error\.message;[\s\S]*frpMessage\.dataset\.type = "error";[\s\S]*await refreshSession\(\);/);
+});
+
 test("portal proof reader accepts mobile picker files with missing MIME but safe extension", async () => {
   const previousFileReader = globalThis.FileReader;
   globalThis.FileReader = class {
