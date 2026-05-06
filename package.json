@@ -7,7 +7,10 @@
   "scripts": {
     "start": "node server.js",
     "test": "node --test test/phase3a.contract.test.js test/phase4.smoke.test.js test/phase5.technician-swap.test.js",
-    "test:smoke": "node --test test/phase4.smoke.test.js"
+    "test:smoke": "node --test test/phase4.smoke.test.js",
+    "postgres:check": "node scripts/postgres/check-connection.mjs",
+    "postgres:migrate": "node scripts/postgres/apply-migrations.mjs",
+    "postgres:migrate:apply": "node scripts/postgres/apply-migrations.mjs --apply"
   },
   "engines": {
     "node": ">=20"
@@ -17,6 +20,7 @@
     "nodemailer": "^8.0.7",
     "pdfjs-dist": "^4.10.38",
     "pdfkit": "^0.18.0",
+    "pg": "^8.20.0",
     "qrcode": "^1.5.4"
   }
 }

@@ -14,6 +14,24 @@ Crear artefactos ejecutables para validar la migracion desde `users.json` hacia 
 - `scripts/migration/users-json-to-postgres.mjs`
 - `docs/specs/_sesion-19-migracion-postgres-dry-run.md`
 
+## Fase 1 gate agregada
+
+Documento relacionado:
+
+- `docs/specs/_sesion-19-postgres-fase-1-gate.md`
+
+Archivos agregados despues del incidente de corrupcion repetida:
+
+- `server/db/postgres.js`
+- `scripts/postgres/check-connection.mjs`
+- `scripts/postgres/apply-migrations.mjs`
+
+Decision:
+
+- Se agrega conexion PostgreSQL y aplicador de migraciones, pero no se cambia runtime todavia.
+- `npm run postgres:migrate` es solo lectura.
+- `npm run postgres:migrate:apply` es el unico comando que aplica DDL.
+
 ## Alcance confirmado
 
 - Lee un `users.json` local o copia.
