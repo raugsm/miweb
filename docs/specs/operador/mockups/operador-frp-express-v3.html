@@ -518,14 +518,14 @@
   <main class="shell" aria-label="Wireframe panel trabajador FRP v3">
     <header class="topbar">
       <div>
-        <p class="eyebrow">Panel trabajador</p>
+        <p class="eyebrow">Operador</p>
         <h1>FRP Express</h1>
       </div>
       <div class="status-strip" aria-label="Estado del panel">
         <span class="chip green"><span class="dot"></span><strong>Jack activo</strong></span>
-        <span class="chip teal">Live conectado</span>
+        <span class="chip teal">Live</span>
         <span class="chip"><strong>Cola</strong> 4</span>
-        <span class="chip amber"><strong>Revision</strong> 1</span>
+        <span class="chip amber"><strong>Rev</strong> 1</span>
       </div>
     </header>
 
@@ -533,16 +533,16 @@
       <div class="main-stack">
         <section class="section" aria-labelledby="current-title">
           <div class="section-head">
-            <h2 id="current-title" class="section-title">Tu trabajo actual</h2>
-            <span class="section-note">Ownership congelado: Jack</span>
+            <h2 id="current-title" class="section-title">Trabajo actual</h2>
+            <span class="section-note">Dueno: Jack</span>
           </div>
           <article class="job-card">
             <div class="job-grid">
               <div>
                 <div class="job-meta">
                   <span class="tag blue">ARD-20260507-034</span>
-                  <span class="tag">1 de 2 equipos</span>
-                  <span class="tag teal">tomado hace 3 min</span>
+                  <span class="tag">1/2 equipos</span>
+                  <span class="tag teal">3 min</span>
                 </div>
                 <h3 class="job-title">Maria Gonzalez</h3>
                 <p class="job-subtitle">Xiaomi Cuenta Google - Redmi Note 13 - Peru</p>
@@ -561,7 +561,7 @@
                 <button type="button" class="primary-action">Marcar finalizado</button>
                 <button type="button" class="secondary-action">Reportar problema</button>
                 <button type="button" class="plain-action">Copiar datos</button>
-                <div class="reason" role="status">Si el tecnico activo cambia, este job sigue siendo de Jack hasta finalizar, cancelar o enviar a revision.</div>
+                <div class="reason" role="status">Asignado a Jack aunque cambie el tecnico activo.</div>
               </aside>
             </div>
           </article>
@@ -569,29 +569,29 @@
 
         <section class="section" aria-labelledby="other-title">
           <div class="section-head">
-            <h2 id="other-title" class="section-title">Trabajos en curso por otros</h2>
+            <h2 id="other-title" class="section-title">En curso</h2>
             <span class="section-note">Solo lectura</span>
           </div>
           <div class="other-grid">
             <article class="readonly-card">
               <span class="tag violet">Angelo</span>
               <h3>ARD-20260507-033</h3>
-              <p>Cliente Ivan R. - tomado hace 8 min. Sin acciones para Jack.</p>
+              <p>Ivan R. - 8 min. Solo lectura.</p>
             </article>
             <article class="readonly-card">
               <span class="tag amber">30+ min</span>
               <h3>ARD-20260507-029</h3>
-              <p>Worker remoto - revisar si sigue trabajando. No heredar ownership.</p>
+              <p>Worker remoto. Revisar actividad.</p>
             </article>
           </div>
         </section>
 
         <section class="section" aria-labelledby="queue-title">
           <div class="section-head">
-            <h2 id="queue-title" class="section-title">Cola lista para tecnico</h2>
+            <h2 id="queue-title" class="section-title">Cola lista</h2>
             <div class="queue-toolbar">
               <button type="button" class="toggle" aria-pressed="true">Solo VIP - 2</button>
-              <button type="button" class="primary-action">Tomar siguiente visible</button>
+              <button type="button" class="primary-action">Tomar siguiente</button>
             </div>
           </div>
           <div class="queue-list">
@@ -600,10 +600,10 @@
                 <div class="job-meta">
                   <span class="tag amber">VIP</span>
                   <span class="tag blue">ARD-20260507-035</span>
-                  <span class="tag">conectado hace 1 min</span>
+                  <span class="tag">1 min</span>
                 </div>
                 <h3>Carlos Mendoza - Xiaomi Cuenta Google</h3>
-                <p>Primer job visible. El CTA grande debe tomar este job especifico.</p>
+                <p>Primero visible. Toma este job.</p>
               </div>
               <button type="button" class="take-action">Tomar</button>
             </article>
@@ -612,10 +612,10 @@
                 <div class="job-meta">
                   <span class="tag amber">VIP</span>
                   <span class="tag blue">ARD-20260507-036</span>
-                  <span class="tag">conectado hace 4 min</span>
+                  <span class="tag">4 min</span>
                 </div>
                 <h3>Lucia Vega - Xiaomi Cuenta Google</h3>
-                <p>Visible por filtro VIP. No ocultar trabajos normales sin aviso.</p>
+                <p>VIP activo. Hay normales ocultos.</p>
               </div>
               <button type="button" class="take-action">Tomar</button>
             </article>
@@ -627,20 +627,20 @@
         <section class="section" aria-labelledby="attention-title">
           <div class="section-head">
             <h2 id="attention-title" class="section-title">Excepciones</h2>
-            <span class="section-note">Resolver sin adivinar</span>
+            <span class="section-note">Accion clara</span>
           </div>
           <div class="split-grid">
             <div class="notice-list">
               <article class="notice-card pay">
                 <span class="tag amber">Pago</span>
                 <h3>ARD-20260507-031</h3>
-                <p>Comprobante pendiente. Abrir modal con foco controlado.</p>
+                <p>Comprobante pendiente.</p>
                 <a href="#" class="card-link">Ver comprobante</a>
               </article>
               <article class="notice-card pay">
                 <span class="tag amber">Pago</span>
                 <h3>ARD-20260507-032</h3>
-                <p>Monto coincide, falta aprobacion manual.</p>
+                <p>Monto coincide. Falta aprobar.</p>
                 <a href="#" class="card-link">Revisar</a>
               </article>
             </div>
@@ -648,13 +648,13 @@
               <article class="notice-card review">
                 <span class="tag red">Revision</span>
                 <h3>ARD-20260507-030</h3>
-                <p>Solo quien reporto, coordinador o admin puede resolver.</p>
+                <p>Dueno, coordinador o admin.</p>
                 <a href="#" class="card-link">Resolver</a>
               </article>
               <article class="notice-card blocked">
                 <span class="tag violet">Cliente</span>
                 <h3>Cuenta no confirmada</h3>
-                <p>No es fallo de imagen. Falta confirmar cuenta antes de subir comprobante.</p>
+                <p>Falta confirmar cuenta. No es fallo de imagen.</p>
                 <a href="#" class="card-link">Ver cliente</a>
               </article>
             </div>
@@ -664,7 +664,7 @@
         <section class="section" aria-labelledby="done-title">
           <div class="section-head">
             <h2 id="done-title" class="section-title">Finalizados hoy</h2>
-            <span class="section-note">Tabla compacta</span>
+            <span class="section-note">Compacto</span>
           </div>
           <div class="table-wrap">
             <table>
@@ -706,7 +706,7 @@
           </div>
           <div class="cost-bar">
             <span>Costos FRP</span>
-            <span>Colapsado por defecto</span>
+            <span>Colapsado</span>
           </div>
         </section>
       </aside>
