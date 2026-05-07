@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FRP - Pagos aprobados y Redirector</title>
+  <style>
+    :root {
+      --page: #EEF2F6;
+      --surface: #FFFFFF;
+      --soft-surface: #F7F9FC;
+      --line: #D7E1ED;
+      --line-strong: #B8C7DA;
+      --text: #141D2B;
+      --muted: #617289;
+      --soft: #8796AA;
+      --blue: #2563EB;
+      --blue-dark: #1747A6;
+      --blue-soft: #EAF1FF;
+      --green: #08785D;
+      --green-soft: #E7F6F0;
+      --amber: #956300;
+      --amber-soft: #FFF4DA;
+      --red: #A43A3A;
+      --red-soft: #FDECEC;
+      --radius: 8px;
+      --shadow: 0 18px 48px rgba(23, 37, 61, 0.08);
+      --font: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+      --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--page);
+      color: var(--text);
+      font-family: var(--font);
+    }
+
+    button {
+      border: 0;
+      font: inherit;
+      cursor: pointer;
+    }
+
+    .shell {
+      display: grid;
+      grid-template-columns: 260px minmax(0, 1fr);
+      gap: 20px;
+      width: min(1320px, calc(100vw - 32px));
+      margin: 24px auto;
+    }
+
+    .sidebar,
+    .workspace {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+    }
+
+    .sidebar {
+      min-height: calc(100vh - 48px);
+      border-radius: 20px;
+      padding: 24px 18px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 34px;
+    }
+
+    .brand-mark {
+      display: grid;
+      place-items: center;
+      width: 108px;
+      height: 34px;
+      border-radius: 7px;
+      background: linear-gradient(135deg, #2E72FF, #6AA9FF);
+      color: white;
+      font-weight: 900;
+      font-style: italic;
+    }
+
+    .brand strong,
+    .brand small {
+      display: block;
+    }
+
+    .brand small {
+      color: var(--muted);
+      font-weight: 750;
+    }
+
+    .nav {
+      display: grid;
+      gap: 10px;
+    }
+
+    .nav a,
+    .logout {
+      display: block;
+      width: 100%;
+      padding: 14px 12px;
+      border-radius: var(--radius);
+      color: #4B5A70;
+      font-weight: 850;
+      text-decoration: none;
+      text-align: left;
+    }
+
+    .nav a.active {
+      background: var(--blue-soft);
+      color: var(--blue);
+      border: 1px solid #B9CEF9;
+    }
+
+    .logout {
+      margin-top: 34px;
+      border: 1px solid var(--line-strong);
+      background: var(--soft-surface);
+      text-align: center;
+    }
+
+    .workspace {
+      min-height: calc(100vh - 48px);
+      border-radius: 18px;
+      overflow: hidden;
+    }
+
+    .topbar {
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) auto;
+      gap: 18px;
+      align-items: start;
+      padding: 28px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .eyebrow,
+    .section-label {
+      margin: 0;
+      color: var(--soft);
+      text-transform: uppercase;
+      font-size: 12px;
+      line-height: 1.15;
+      font-weight: 900;
+    }
+
+    .eyebrow.blue {
+      color: var(--blue);
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin-top: 0;
+    }
+
+    h1 {
+      margin-bottom: 0;
+      font-size: 36px;
+      line-height: 1.1;
+    }
+
+    h2 {
+      margin-bottom: 10px;
+      font-size: 24px;
+      line-height: 1.15;
+    }
+
+    h3 {
+      margin-bottom: 6px;
+      font-size: 17px;
+      line-height: 1.2;
+    }
+
+    .tech-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: flex-end;
+      max-width: 650px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 6px 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--soft-surface);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 850;
+      white-space: nowrap;
+    }
+
+    .pill.green {
+      color: var(--green);
+      background: var(--green-soft);
+      border-color: #B9E0D2;
+    }
+
+    .pill.amber {
+      color: var(--amber);
+      background: var(--amber-soft);
+      border-color: #E9C77F;
+    }
+
+    .pill.blue {
+      color: var(--blue);
+      background: var(--blue-soft);
+      border-color: #B9CEF9;
+    }
+
+    .pill.red {
+      color: var(--red);
+      background: var(--red-soft);
+      border-color: #F1BBBB;
+    }
+
+    .tech-action,
+    .primary-btn,
+    .secondary-btn,
+    .quiet-btn,
+    .danger-btn {
+      min-height: 38px;
+      padding: 0 14px;
+      border-radius: var(--radius);
+      font-size: 13px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .tech-action,
+    .quiet-btn {
+      background: white;
+      color: #405167;
+      border: 1px solid var(--line-strong);
+    }
+
+    .primary-btn {
+      background: var(--blue);
+      color: white;
+    }
+
+    .secondary-btn {
+      background: white;
+      color: var(--blue);
+      border: 1px solid #B9CEF9;
+    }
+
+    .danger-btn {
+      background: white;
+      color: var(--red);
+      border: 1px solid #F0B9B9;
+    }
+
+    .content {
+      padding: 24px 28px 30px;
+    }
+
+    .work-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 330px;
+      gap: 20px;
+      align-items: start;
+    }
+
+    .stack {
+      display: grid;
+      gap: 18px;
+    }
+
+    .section,
+    .side-card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      overflow: hidden;
+    }
+
+    .section-header,
+    .side-card header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      background: var(--soft-surface);
+    }
+
+    .section-body,
+    .side-card-body {
+      padding: 16px;
+    }
+
+    .inline-status {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .paid-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .paid-card {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 14px;
+      align-items: start;
+      padding: 14px;
+      border: 1px solid #BBD3F7;
+      border-radius: var(--radius);
+      background: #F1F7FF;
+    }
+
+    .paid-card.is-confirmed {
+      border-color: #B8E0D1;
+      background: #F0FAF6;
+    }
+
+    .paid-main {
+      min-width: 0;
+    }
+
+    .code-line {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 7px;
+    }
+
+    .code-main {
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 17px;
+      font-weight: 950;
+      line-height: 1.1;
+    }
+
+    .code-real {
+      color: #5C708E;
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 800;
+      line-height: 1.1;
+    }
+
+    .paid-title {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 15px;
+      font-weight: 900;
+      line-height: 1.25;
+    }
+
+    .paid-sub,
+    .device-meta,
+    .work-meta,
+    .note {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    .device-preview {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .device-chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      padding: 5px 8px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: white;
+      color: #51627A;
+      font-size: 12px;
+      font-weight: 850;
+    }
+
+    .device-chip.next {
+      color: var(--blue);
+      border-color: #AFC7F7;
+      background: #F7FAFF;
+    }
+
+    .paid-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .current-work {
+      display: grid;
+      gap: 14px;
+      padding: 16px;
+      border: 1px solid #BBD3F7;
+      border-radius: var(--radius);
+      background: #F7FAFF;
+    }
+
+    .current-work-header {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: start;
+    }
+
+    .work-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .steps {
+      display: grid;
+      gap: 8px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: white;
+    }
+
+    .step-row {
+      display: grid;
+      grid-template-columns: 28px minmax(0, 1fr);
+      gap: 10px;
+      align-items: start;
+      color: #43536A;
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .step-index {
+      display: grid;
+      place-items: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 999px;
+      background: var(--blue-soft);
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 950;
+    }
+
+    .ready-empty,
+    .mini-empty {
+      display: grid;
+      place-items: center;
+      min-height: 54px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      color: var(--soft);
+      font-size: 13px;
+      font-weight: 750;
+      background: white;
+    }
+
+    .review-stat {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 44px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: white;
+      font-size: 13px;
+      font-weight: 850;
+    }
+
+    .review-stat span {
+      color: var(--muted);
+      font-weight: 750;
+    }
+
+    .finished-list {
+      display: grid;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .finished-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      font-size: 12px;
+    }
+
+    .finished-row:last-child {
+      border-bottom: 0;
+    }
+
+    .finished-row strong {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .finished-row span {
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+
+    @media (max-width: 1040px) {
+      .shell,
+      .work-layout,
+      .topbar {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        min-height: auto;
+      }
+
+      .tech-bar {
+        justify-content: flex-start;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .shell {
+        width: min(100vw - 16px, 480px);
+        margin: 8px auto;
+      }
+
+      .workspace,
+      .sidebar {
+        border-radius: 14px;
+      }
+
+      .topbar,
+      .content {
+        padding-left: 16px;
+        padding-right: 16px;
+      }
+
+      h1 {
+        font-size: 30px;
+      }
+
+      .paid-card,
+      .current-work-header {
+        grid-template-columns: 1fr;
+      }
+
+      .paid-actions,
+      .work-actions {
+        justify-content: stretch;
+      }
+
+      .paid-actions button,
+      .work-actions button {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <aside class="sidebar" aria-label="Navegacion">
+      <div class="brand">
+        <div class="brand-mark">ARIADGSM</div>
+        <div>
+          <strong>AriadGSM</strong>
+          <small>Ops</small>
+        </div>
+      </div>
+
+      <nav class="nav">
+        <a href="#">Inicio</a>
+        <a href="#">Tickets</a>
+        <a class="active" href="#">FRP Express</a>
+        <a href="#">Clientes</a>
+      </nav>
+
+      <button class="logout" type="button">Salir</button>
+    </aside>
+
+    <section class="workspace">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow blue">Sesion activa</p>
+          <h1>Hola,<br>Jack</h1>
+        </div>
+
+        <div class="tech-bar">
+          <span class="pill">Tecnico activo <strong>&nbsp;gloria&nbsp;</strong> 1082 4732 3799</span>
+          <span class="pill amber">Desconectado</span>
+          <button class="tech-action" type="button">Pausar 30 min</button>
+          <button class="tech-action" type="button">Cambiar permanentemente</button>
+          <span class="pill green">Atencion tecnica</span>
+        </div>
+      </header>
+
+      <div class="content">
+        <p class="eyebrow blue">WhatsApp 3</p>
+        <h2>FRP Express</h2>
+
+        <div class="work-layout">
+          <div class="stack">
+            <section class="section">
+              <div class="section-header">
+                <p class="section-label">Pagos aprobados · verificar en Redirector · 3</p>
+                <span class="pill blue">Cola operativa</span>
+              </div>
+              <div class="section-body paid-list">
+                <div class="inline-status">
+                  <span class="pill green">Pago ya validado</span>
+                  <span class="pill">El panel organiza; Redirector confirma conexion</span>
+                </div>
+
+                <article class="paid-card">
+                  <div class="paid-main">
+                    <div class="code-line">
+                      <span class="code-main">ARD-0001</span>
+                      <span class="code-real">real: ARD-20260506-007</span>
+                      <span class="pill blue">1 equipo</span>
+                    </div>
+                    <strong class="paid-title">Will Zubieta · Pago aprobado</strong>
+                    <p class="paid-sub">Verificar conexion en Redirector · hace 8 h · Yape</p>
+                    <div class="device-preview">
+                      <span class="device-chip next">ARD-0001-01 · Equipo 1</span>
+                    </div>
+                  </div>
+                  <div class="paid-actions">
+                    <button class="primary-btn" type="button">Tomar</button>
+                    <button class="secondary-btn" type="button">WhatsApp</button>
+                    <button class="quiet-btn" type="button">Pendiente</button>
+                  </div>
+                </article>
+
+                <article class="paid-card">
+                  <div class="paid-main">
+                    <div class="code-line">
+                      <span class="code-main">ARD-0002</span>
+                      <span class="code-real">real: ARD-20260506-023</span>
+                      <span class="pill blue">3 equipos</span>
+                    </div>
+                    <strong class="paid-title">JHOJAN TAFUR · Pago aprobado</strong>
+                    <p class="paid-sub">Orden agrupada · tomar equipo 1 y verificar en Redirector</p>
+                    <div class="device-preview">
+                      <span class="device-chip next">ARD-0002-01 · verificar</span>
+                      <span class="device-chip">ARD-0002-02 · espera</span>
+                      <span class="device-chip">ARD-0002-03 · espera</span>
+                    </div>
+                  </div>
+                  <div class="paid-actions">
+                    <button class="primary-btn" type="button">Tomar equipo 1</button>
+                    <button class="secondary-btn" type="button">WhatsApp</button>
+                    <button class="quiet-btn" type="button">Pendiente</button>
+                  </div>
+                </article>
+
+                <article class="paid-card is-confirmed">
+                  <div class="paid-main">
+                    <div class="code-line">
+                      <span class="code-main">ARD-0003</span>
+                      <span class="code-real">real: ARD-20260506-031</span>
+                      <span class="pill green">cliente confirmo</span>
+                    </div>
+                    <strong class="paid-title">Daniel Gonzalez · Pago aprobado</strong>
+                    <p class="paid-sub">El cliente presiono "Ya conecte este equipo"; verificar igual en Redirector.</p>
+                    <div class="device-preview">
+                      <span class="device-chip next">ARD-0003-01 · confirmado</span>
+                    </div>
+                  </div>
+                  <div class="paid-actions">
+                    <button class="primary-btn" type="button">Tomar listo</button>
+                    <button class="secondary-btn" type="button">WhatsApp</button>
+                  </div>
+                </article>
+              </div>
+            </section>
+
+            <section class="section">
+              <div class="section-header">
+                <p class="section-label">Trabajo actual · ejemplo al tomar</p>
+                <span class="pill amber">Simulacion</span>
+              </div>
+              <div class="section-body">
+                <article class="current-work">
+                  <div class="current-work-header">
+                    <div>
+                      <div class="code-line">
+                        <span class="code-main">ARD-0002-01</span>
+                        <span class="code-real">real: ARD-20260506-023 · equipo 1 de 3</span>
+                      </div>
+                      <h3>JHOJAN TAFUR · Pago aprobado</h3>
+                      <p class="work-meta">Abre Redirector y confirma si el equipo esta conectado antes de procesar.</p>
+                    </div>
+                    <span class="pill amber">Conexion por verificar</span>
+                  </div>
+
+                  <div class="steps">
+                    <div class="step-row">
+                      <span class="step-index">1</span>
+                      <div>Buscar en Redirector el Technician ID activo y el codigo de proceso.</div>
+                    </div>
+                    <div class="step-row">
+                      <span class="step-index">2</span>
+                      <div>Si aparece conectado, marcar "Conectado, procesar".</div>
+                    </div>
+                    <div class="step-row">
+                      <span class="step-index">3</span>
+                      <div>Si no aparece, marcar "Pendiente cliente" y enviar WhatsApp.</div>
+                    </div>
+                  </div>
+
+                  <div class="work-actions">
+                    <button class="primary-btn" type="button">Conectado, procesar</button>
+                    <button class="secondary-btn" type="button">WhatsApp</button>
+                    <button class="danger-btn" type="button">Pendiente cliente</button>
+                  </div>
+                </article>
+              </div>
+            </section>
+
+            <section class="section">
+              <div class="section-header">
+                <p class="section-label">Cola - listos actuales</p>
+                <button class="quiet-btn" type="button">Solo VIP</button>
+              </div>
+              <div class="section-body">
+                <div class="ready-empty">Los listos confirmados tambien pueden entrar por esta cola si el cliente uso el paso 4.</div>
+              </div>
+            </section>
+          </div>
+
+          <aside class="stack">
+            <section class="side-card">
+              <header>
+                <p class="section-label">Excepciones</p>
+              </header>
+              <div class="side-card-body stack">
+                <div class="review-stat">Pagos por revisar <span>0</span></div>
+                <div class="review-stat">Atencion <span>0</span></div>
+                <div class="mini-empty">Sin casos bloqueantes.</div>
+              </div>
+            </section>
+
+            <section class="side-card">
+              <header>
+                <p class="section-label">Finalizados hoy · 12</p>
+              </header>
+              <div class="side-card-body">
+                <div class="finished-list">
+                  <div class="finished-row"><strong>ARD-0012 · JHOJAN TAFUR</strong><span>19:11</span></div>
+                  <div class="finished-row"><strong>ARD-0011 · Alexander Guarin</strong><span>18:52</span></div>
+                  <div class="finished-row"><strong>ARD-0010 · Mike Robayo</strong><span>16:40</span></div>
+                  <div class="finished-row"><strong>ARD-0009 · Duvier Tavera</strong><span>16:26</span></div>
+                  <div class="finished-row"><strong>ARD-0008 · Luis Cervantes</strong><span>16:07</span></div>
+                </div>
+              </div>
+            </section>
+          </aside>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

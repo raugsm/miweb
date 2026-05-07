@@ -159,9 +159,8 @@ export function wireEvents() {
     event.preventDefault();
   });
 
-  // Click delegado para el boton "Equipo conectado" (#panel4EquipoConectado).
-  // Confirma que el cliente ya pego los datos en Redirector y mueve el job
-  // hacia la cola tecnica mediante notify-connected.
+  // Compatibilidad temporal para caches antiguas con el boton "Equipo conectado".
+  // El flujo visual vigente ya no muestra este boton ni depende de notify-connected.
   $("#orderForm")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-flow-action='notify-connected']");
     if (!button) return;

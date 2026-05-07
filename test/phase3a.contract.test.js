@@ -175,6 +175,52 @@ test("portal proof upload picker keeps mobile-safe file input contract", async (
   assert.match(panel3Css, /\.panel-3-proof-input\s*{[\s\S]*clip-path:\s*inset\(50%\);/);
 });
 
+test("portal Mis Ordenes follows the post-payment tracking contract", async () => {
+  const ordersJs = await readFile(new URL("../public/portal-modules/orders.js", import.meta.url), "utf8");
+  const orderStateJs = await readFile(new URL("../public/portal-modules/order-state.js", import.meta.url), "utf8");
+  const portalSerializerJs = await readFile(new URL("../server/portal/serializers.js", import.meta.url), "utf8");
+  const ordersCss = await readFile(new URL("../public/portal-styles/10-orders-tracking-proofs.css", import.meta.url), "utf8");
+
+  assert.match(ordersJs, /"PAGO_EN_REVISION"/);
+  assert.match(ordersJs, /"PAGO_RECHAZADO"/);
+  assert.match(ordersJs, /"EN_PREPARACION"/);
+  assert.match(ordersJs, /const ORDER_STATUS = \{/);
+  assert.match(ordersJs, /const shortCode = order\.shortCode \|\| order\.code \|\| order\.id;/);
+  assert.match(ordersJs, /class="order-real-code">real:/);
+  assert.match(ordersJs, /card\.dataset\.operatorStatus = order\.operatorStatus \|\| "";/);
+  assert.doesNotMatch(ordersJs, /data-order-item-ready=/);
+  assert.doesNotMatch(ordersJs, /data-order-item-cancel=/);
+  assert.match(orderStateJs, /Pago confirmado\. Prepara USB Redirector y manten el equipo disponible\./);
+  assert.match(portalSerializerJs, /function portalOperatorOrderStatus\(order, db\)/);
+  assert.match(portalSerializerJs, /operatorStatus,/);
+  assert.match(portalSerializerJs, /paymentApprovedAt,/);
+  assert.match(portalSerializerJs, /noConnectionAlertAt,/);
+  assert.match(ordersCss, /\.order-card-v1\.is-approved\s*{/);
+  assert.match(ordersCss, /\.order-status-pill\.is-attention/);
+  assert.match(ordersCss, /\.order-equipment-row\.is-approved\s*{/);
+});
+
+test("portal step 4 is an instruction/status panel, not a required connected button", async () => {
+  const portalHtml = await readFile(new URL("../public/portal.html", import.meta.url), "utf8");
+  const panel4Js = await readFile(new URL("../public/portal-modules/panel-4-connection.js", import.meta.url), "utf8");
+  const panel4Css = await readFile(new URL("../public/portal-styles/14-panel-4.css", import.meta.url), "utf8");
+  const flowStateJs = await readFile(new URL("../public/portal-modules/flow-state.js", import.meta.url), "utf8");
+  const authFormsJs = await readFile(new URL("../public/portal-modules/auth-forms.js", import.meta.url), "utf8");
+  const panel3Js = await readFile(new URL("../public/portal-modules/panel-3-account.js", import.meta.url), "utf8");
+
+  assert.match(portalHtml, /id="panel4Status" role="status" aria-live="polite"/);
+  assert.match(portalHtml, /id="panel4EquipoConectado"[^>]+hidden[^>]+aria-hidden="true"[^>]+tabindex="-1"/);
+  assert.match(panel4Js, /const PREPARATION_STATES = new Set\(\[/);
+  assert.match(panel4Js, /order\?\.shortCode \|\| order\?\.code/);
+  assert.match(panel4Js, /panel4InstructionCopy\(order, visualState\)/);
+  assert.match(panel4Css, /\.panel\.panel-4\[data-state="C"\] \.panel-4-equipo-conectado-btn \{ display: none; \}/);
+  assert.match(panel4Css, /\.panel-4-status\s*{/);
+  assert.doesNotMatch(flowStateJs, /return "awaiting_connection"/);
+  assert.match(authFormsJs, /const lockPanels12 = \["awaiting_proof", "in_review"\]\.includes\(flowState\);/);
+  assert.match(authFormsJs, /const lockPanel3 = false;/);
+  assert.doesNotMatch(panel3Js, /const orderValidated = orders\.find/);
+});
+
 test("operator current job renders frozen redirector before active technician fallback", async () => {
   const appJs = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
 
@@ -184,24 +230,24 @@ test("operator current job renders frozen redirector before active technician fa
   assert.match(appJs, /frpOpsV2JobRedirectorId\(job, \{ swapInProgress, tech \}\)/);
 });
 
-test("operator workbench treats other active jobs as plural observer state", async () => {
+test("operator workbench treats active jobs as grouped order state", async () => {
   const appJs = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
 
-  assert.match(appJs, /const otherActiveJobs = jobs\.filter\(\(j\) => j\.status === "EN_PROCESO"/);
-  assert.doesNotMatch(appJs, /otherActiveJob = !myActiveJob[\s\S]{0,180}jobs\.find/);
-  assert.match(appJs, /frpOpsV2RenderOtherActiveSection\(\{ jobs: otherActiveJobs, tech \}\)/);
-  assert.match(appJs, /frp-ops-v2-other-active-list/);
-  assert.match(appJs, /currentHtml = frpOpsV2RenderCurrentEmpty\(\{ queueState, isMeActive, hasActiveTechnician, swapInProgress \}\);/);
+  assert.match(appJs, /const activeOrders = operatorOrders\.filter\(\(order\) => order\.operatorStatus !== "FINISHED"\);/);
+  assert.match(appJs, /if \(status === "IN_PROCESS"\) return \{ label: "En proceso", className: "is-approved" \};/);
+  assert.match(appJs, /frpOpsV2RenderOperatorOrderItems\(order\)/);
+  assert.match(appJs, /const items = Array\.isArray\(order\.items\) \? order\.items : \[\];/);
+  assert.match(appJs, /item\.shortCode \|\| item\.code \|\| ""/);
 });
 
-test("operator empty workbench distinguishes no active technician from another active technician", async () => {
+test("operator order actions distinguish no active technician from another active technician", async () => {
   const appJs = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
 
   assert.match(appJs, /const hasActiveTechnician = Boolean\(tech\?\.active\?\.userId\);/);
-  assert.match(appJs, /function frpOpsV2RenderCurrentEmpty\(\{ queueState, isMeActive, hasActiveTechnician, swapInProgress \}\)/);
-  assert.match(appJs, /function frpOpsV2RenderQueueCard\(job, \{ isMeActive, hasActiveTechnician, swapInProgress, hasMyActive \}\)/);
-  assert.match(appJs, /: !hasActiveTechnician \? "Sin tecnico activo"[\s\S]*: !isMeActive \? "No sos el tecnico activo"/);
-  assert.match(appJs, /frpOpsV2RenderQueueCard\(j, \{ isMeActive, hasActiveTechnician, swapInProgress, hasMyActive \}\)/);
+  assert.match(appJs, /const disabledTip = swapInProgress[\s\S]*\? "Cambio de tecnico en curso"[\s\S]*: !hasActiveTechnician \? "Sin tecnico activo"[\s\S]*: !isMeActive \? "No sos el tecnico activo"/);
+  assert.match(appJs, /const canFinalize = Boolean\(item\?\.id && order\.finalizeAllowed && isApprovedLike && isMeActive && !swapInProgress\);/);
+  assert.match(appJs, /const canNotify = Boolean\(order\.notifyCustomerAllowed && order\.operatorStatus === "NO_CONNECTION" && !swapInProgress\);/);
+  assert.match(appJs, /disabledTip \? `title="\$\{escapeHtml\(disabledTip\)\}"` : ""/);
 });
 
 test("operator technician swap polling repaints workbench and restores normal interval", async () => {
@@ -238,37 +284,37 @@ test("operator finalized today uses multi-operator technician marks", async () =
   assert.match(stylesCss, /\.frp-ops-v2-tech-mark\s*{[\s\S]*min-width:\s*26px;/);
 });
 
-test("operator VIP queue filter keeps take-next aligned with visible jobs", async () => {
+test("operator workbench consumes the post-payment operatorOrders contract", async () => {
   const appJs = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
 
-  assert.match(appJs, /function frpOpsV2QueueViewState\(queueJobs\)/);
-  assert.match(appJs, /const queueState = frpOpsV2QueueViewState\(queueJobs\);/);
-  assert.match(appJs, /const showJobs = vipOnly && !fallbackToAll \? vipJobs : sortedJobs;/);
-  assert.match(appJs, /const takeSpecificJobId = queueState\?\.vipOnly && !queueState\?\.fallbackToAll/);
-  assert.match(appJs, /data-frp-take-next-job-id="\$\{escapeHtml\(takeSpecificJobId\)\}"/);
-  assert.match(appJs, /if \(filteredJobId\) await takeSpecificFrpJob\(filteredJobId\);/);
-  assert.match(appJs, /else await takeNextFrpJob\(\);/);
+  assert.match(appJs, /function frpOperatorOrders\(\)/);
+  assert.match(appJs, /return session\.frp\?\.operatorOrders \|\| \[\];/);
+  assert.match(appJs, /const operatorOrders = frpOperatorOrders\(\);/);
+  assert.match(appJs, /function frpOpsV2RenderOperatorOrdersSection\(\{ operatorOrders, isMeActive, hasActiveTechnician, swapInProgress \}\)/);
+  assert.match(appJs, /const activeOrders = operatorOrders\.filter\(\(order\) => order\.operatorStatus !== "FINISHED"\);/);
+  assert.match(appJs, /frpOpsV2RenderOperatorOrdersSection\(\{ operatorOrders, isMeActive, hasActiveTechnician, swapInProgress \}\)/);
 });
 
-test("operator workbench v3 layout keeps existing action hooks", async () => {
+test("operator workbench v3 layout keeps post-payment action hooks", async () => {
   const appJs = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
   const stylesCss = await readFile(new URL("../public/styles.css", import.meta.url), "utf8");
 
   assert.match(appJs, /function frpOpsV2RenderHeaderV3\(tech, \{ queueCount = 0, reviewCount = 0 \} = \{\}\)/);
-  assert.match(appJs, /frpOpsV2RenderHeaderV3\(tech, \{ queueCount: queueState\.total, reviewCount: reviewJobs\.length \}\)/);
+  assert.match(appJs, /frpOpsV2RenderHeaderV3\(tech, \{ queueCount: approvedCount, reviewCount \}\)/);
   assert.match(appJs, /frp-ops-v2-workspace/);
   assert.match(appJs, /frp-ops-v2-main-stack/);
   assert.match(appJs, /frp-ops-v2-side-stack/);
-  assert.match(appJs, /data-frp-finalize="\$\{escapeHtml\(job\.id\)\}"/);
-  assert.match(appJs, /data-frp-review="\$\{escapeHtml\(job\.id\)\}"/);
-  assert.match(appJs, /data-frp-take-specific="\$\{escapeHtml\(job\.id\)\}"/);
-  assert.match(appJs, /data-frp-show-proof="\$\{escapeHtml\(o\.id\)\}"/);
-  assert.match(appJs, /data-frp-show-review="\$\{escapeHtml\(j\.id\)\}"/);
+  assert.match(appJs, /data-frp-direct-finalize="\$\{escapeHtml\(item\?\.id \|\| ""\)\}"/);
+  assert.match(appJs, /data-frp-show-proof="\$\{escapeHtml\(order\.id\)\}"/);
+  assert.match(appJs, /data-frp-notify-customer="\$\{escapeHtml\(order\.id\)\}"/);
+  assert.match(appJs, /async function directFinalizeFrpJob\(jobId\)/);
+  assert.match(appJs, /\/api\/frp\/jobs\/\$\{jobId\}\/direct-finalize/);
   assert.match(stylesCss, /\.frp-workbench\s*{[\s\S]*display:\s*block;/);
   assert.match(stylesCss, /\.frp-ops-v2\s*{[\s\S]*background:\s*transparent;[\s\S]*border:\s*0;/);
   assert.match(stylesCss, /\.frp-ops-v2-header\s*{[\s\S]*display:\s*none;/);
   assert.match(stylesCss, /\.frp-ops-v2-workspace\s*{[\s\S]*grid-template-columns:\s*repeat\(auto-fit, minmax\(min\(100%, 620px\), 1fr\)\);/);
-  assert.match(stylesCss, /\.frp-ops-v2-status-strip\s*{[\s\S]*display:\s*flex;/);
+  assert.match(stylesCss, /\.frp-ops-v2-order-card\.is-approved\s*{/);
+  assert.match(stylesCss, /\.frp-ops-v2-order-status\.is-no-connection\s*{/);
   assert.match(stylesCss, /\.technician-widget-actions \.mini-btn\s*{[\s\S]*white-space:\s*nowrap;/);
 });
 
@@ -279,34 +325,26 @@ test("operator specific take rejection refreshes stale active technician state",
   assert.match(appJs, /catch \(error\) \{[\s\S]*frpMessage\.textContent = error\.message;[\s\S]*frpMessage\.dataset\.type = "error";[\s\S]*await refreshSession\(\);/);
 });
 
-test("operator current job actions follow ownership, not global active technician", async () => {
+test("operator direct finalize actions require the active technician UI contract", async () => {
   const appJs = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
 
-  assert.match(appJs, /const myActiveJob = jobs\.find\(\(j\) => j\.status === "EN_PROCESO" && j\.technicianId === session\.user\?\.id\);/);
-  assert.match(appJs, /function frpOpsV2RenderCurrentActive\(job, \{ swapInProgress, tech \}\)/);
-  assert.match(appJs, /function frpOpsV2RenderActiveBanner\(jobId, \{ actionsDisabled = false \} = \{\}\)/);
-  assert.match(appJs, /const actionsDisabled = swapInProgress;/);
-  assert.match(appJs, /const disabledAttrs = actionsDisabled \? `disabled title="Cambio de tecnico en curso"` : "";/);
-  assert.match(appJs, /frpOpsV2RenderActiveBanner\(job\.id, \{ actionsDisabled \}\)/);
-  assert.match(appJs, /data-frp-finalize="\$\{escapeHtml\(job\.id\)\}"/);
-  assert.match(appJs, /data-frp-review="\$\{escapeHtml\(job\.id\)\}"/);
-  assert.match(appJs, /data-frp-cancel-timeout="\$\{escapeHtml\(jobId\)\}"/);
-  assert.match(appJs, /currentHtml = frpOpsV2RenderCurrentActive\(myActiveJob, \{ swapInProgress, tech \}\);/);
+  assert.match(appJs, /const isMeActive = Boolean\(tech\?\.active\?\.userId && tech\.active\.userId === session\.user\?\.id\);/);
+  assert.match(appJs, /const canFinalize = Boolean\(item\?\.id && order\.finalizeAllowed && isApprovedLike && isMeActive && !swapInProgress\);/);
+  assert.match(appJs, /!hasActiveTechnician \? "Sin tecnico activo"/);
+  assert.match(appJs, /!isMeActive \? "No sos el tecnico activo"/);
+  assert.match(appJs, /data-frp-direct-finalize="\$\{escapeHtml\(item\?\.id \|\| ""\)\}"/);
+  assert.match(appJs, /await directFinalizeFrpJob\(directFinalizeButton\.dataset\.frpDirectFinalize\);/);
 });
 
-test("operator review resolver cards are readonly for non-owner technicians", async () => {
+test("operator review cards only expose proof review when payment review is allowed", async () => {
   const appJs = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
 
-  assert.match(appJs, /function canResolveFrpReviewJob\(job\)/);
-  assert.match(appJs, /\["ADMIN", "COORDINADOR"\]\.includes\(session\.user\?\.role\)/);
-  assert.match(appJs, /job\?\.technicianId && job\.technicianId === session\.user\?\.id/);
-  assert.match(appJs, /function frpOpsV2RenderAttentionGrid\(\{ pagosRevisar, reviewJobs, swapInProgress \}\)/);
-  assert.match(appJs, /const canReview = canReviewFrpPayments\(\) && !swapInProgress;/);
-  assert.match(appJs, /const disabledTitle = swapInProgress \? "Cambio de tecnico en curso" : "Permisos insuficientes";/);
-  assert.match(appJs, /const canResolve = canResolveFrpReviewJob\(j\) && !swapInProgress;/);
-  assert.match(appJs, /const reviewDisabledTitle = swapInProgress[\s\S]*\? "Cambio de tecnico en curso"[\s\S]*: "Solo quien reporto el caso, coordinador o administrador puede resolverlo";/);
-  assert.match(appJs, /frpOpsV2RenderAttentionGrid\(\{ pagosRevisar, reviewJobs, swapInProgress \}\)/);
-  assert.match(appJs, /canResolve \? "Resolver ->" : "Solo lectura"/);
+  assert.match(appJs, /const isReviewLike = \["AI_REVIEWING", "PAYMENT_REJECTED", "NEEDS_ATTENTION"\]\.includes\(order\.operatorStatus\);/);
+  assert.match(appJs, /const canReview = Boolean\(order\.reviewAllowed && isReviewLike && canReviewFrpPayments\(\) && !swapInProgress\);/);
+  assert.match(appJs, /data-frp-show-proof="\$\{escapeHtml\(order\.id\)\}"/);
+  assert.match(appJs, />\s*Revisar\s*<\/button>/);
+  assert.match(appJs, /const showProofButton = event\.target\.closest\("\[data-frp-show-proof\]"\);/);
+  assert.match(appJs, /openFrpProofDialog\(showProofButton\.dataset\.frpShowProof\);/);
 });
 
 test("portal proof reader accepts mobile picker files with missing MIME but safe extension", async () => {

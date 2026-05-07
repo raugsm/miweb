@@ -6,13 +6,166 @@ export function createFrpSerializers({
   limaDateStamp,
   publicFrpPricingState,
 }) {
+  const noConnectionWindowMs = 5 * 60 * 1000;
+
+  function lastNumericSegment(value) {
+    const matches = String(value || "").match(/\d+/g);
+    return matches?.length ? matches[matches.length - 1] : "";
+  }
+
+  function publicShortOrderCode(order) {
+    const stored = String(order?.shortCode || order?.operatorShortCode || "").trim();
+    if (stored) return stored;
+    const numeric = lastNumericSegment(order?.code || "");
+    return numeric ? `ARD-${numeric.padStart(4, "0").slice(-4)}` : "";
+  }
+
+  function publicShortJobCode(job, order) {
+    const stored = String(job?.shortCode || job?.operatorShortCode || "").trim();
+    if (stored) return stored;
+    const base = publicShortOrderCode(order);
+    if (!base) return "";
+    const sequence = Number(job?.sequence || lastNumericSegment(job?.code || ""));
+    return Number.isFinite(sequence) && sequence > 0
+      ? `${base}-${String(sequence).padStart(2, "0")}`
+      : base;
+  }
+
+  function timestampMs(value) {
+    const parsed = Date.parse(value || "");
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  function isoAfter(value, ms) {
+    const base = timestampMs(value);
+    return base ? new Date(base + ms).toISOString() : "";
+  }
+
+  function paymentApproved(order) {
+    return Boolean(
+      order?.checklist?.paymentValidated
+      || order?.paymentStatus === "PAGO_VALIDADO"
+      || order?.paymentStatus === "COMPROBANTE_RECIBIDO"
+    );
+  }
+
+  function paymentRejected(order) {
+    return order?.paymentStatus === "COMPROBANTE_RECHAZADO";
+  }
+
+  function operatorOrderStatus(order, jobs, portalOrder) {
+    const activeJobs = jobs.filter((job) => job.status !== "CANCELADO");
+    const allDone = activeJobs.length > 0 && activeJobs.every((job) => job.status === "FINALIZADO");
+    if (allDone) return "FINISHED";
+    if (paymentRejected(order)) return "PAYMENT_REJECTED";
+    if (!paymentApproved(order)) return "AI_REVIEWING";
+    if (activeJobs.some((job) => job.status === "REQUIERE_REVISION" || job.status === "ESPERANDO_CLIENTE")) return "NEEDS_ATTENTION";
+    if (activeJobs.some((job) => job.status === "EN_PROCESO")) return "IN_PROCESS";
+
+    const approvedAt = order.paymentReviewedAt || portalOrder?.paymentReviewedAt || order.priceLockedAt || portalOrder?.priceLockedAt || "";
+    const hasOperationalProgress = activeJobs.some((job) => (
+      job.status === "LISTO_PARA_TECNICO"
+      || job.status === "EN_PROCESO"
+      || job.status === "FINALIZADO"
+      || job.readyAt
+      || job.takenAt
+      || job.doneAt
+    ));
+    if (approvedAt && !hasOperationalProgress && Date.now() - timestampMs(approvedAt) >= noConnectionWindowMs) {
+      return "NO_CONNECTION";
+    }
+    return "PAYMENT_APPROVED";
+  }
+
+  function operatorOrderPrimaryAction(status) {
+    if (status === "AI_REVIEWING" || status === "PAYMENT_REJECTED" || status === "NEEDS_ATTENTION") return "review";
+    if (status === "NO_CONNECTION") return "notify_customer";
+    if (status === "PAYMENT_APPROVED" || status === "IN_PROCESS") return "finalize";
+    return "";
+  }
+
+  function operatorOrderVisible(order, db) {
+    const proofCount = Array.isArray(order?.paymentProofs) ? order.paymentProofs.length : 0;
+    const jobs = db.frpJobs.filter((job) => job.orderId === order.id);
+    const hasOperationalProgress = jobs.some((job) => !["ESPERANDO_PREPARACION", "CANCELADO"].includes(job.status));
+    return Boolean(
+      proofCount > 0
+      || paymentApproved(order)
+      || paymentRejected(order)
+      || hasOperationalProgress
+      || ["PAGO_EN_VALIDACION", "COMPROBANTE_RECIBIDO", "PAGO_VALIDADO", "COMPROBANTE_RECHAZADO"].includes(order?.paymentStatus)
+    );
+  }
+
+  function publicOperatorOrder(order, db) {
+    const jobs = db.frpJobs
+      .filter((job) => job.orderId === order.id)
+      .sort((a, b) => Number(a.sequence || 0) - Number(b.sequence || 0));
+    const portalOrder = order.portalOrderId
+      ? db.customerOrders.find((candidate) => candidate.id === order.portalOrderId)
+      : null;
+    const customerClient = portalOrder?.clientId
+      ? db.customerClients.find((candidate) => candidate.id === portalOrder.clientId)
+      : null;
+    const status = operatorOrderStatus(order, jobs, portalOrder);
+    const approvedAt = order.paymentReviewedAt || portalOrder?.paymentReviewedAt || order.priceLockedAt || portalOrder?.priceLockedAt || "";
+    const noConnectionAlertAt = order.noConnectionAlertAt || portalOrder?.noConnectionAlertAt || isoAfter(approvedAt, noConnectionWindowMs);
+    const shortCode = publicShortOrderCode(order);
+    return {
+      id: order.id,
+      code: order.code,
+      realCode: order.code,
+      shortCode,
+      portalOrderId: order.portalOrderId || "",
+      portalOrderCode: portalOrder?.code || "",
+      customerId: portalOrder?.clientId || order.clientId || "",
+      clientId: order.clientId || "",
+      customerStatus: customerClient?.status || "",
+      clientName: order.clientName,
+      clientWhatsapp: order.clientWhatsapp || "",
+      country: order.country,
+      quantity: Number(order.quantity || jobs.length || 1),
+      paymentStatus: order.paymentStatus || "",
+      orderStatus: order.orderStatus || "",
+      operatorStatus: status,
+      primaryAction: operatorOrderPrimaryAction(status),
+      paymentApprovedAt: approvedAt,
+      noConnectionAlertAt,
+      priceRevalidationStatus: order.priceRevalidationStatus || portalOrder?.priceDecisionAction || "",
+      paymentVerification: order.paymentVerification || portalOrder?.paymentVerification || null,
+      reviewAllowed: ["AI_REVIEWING", "PAYMENT_REJECTED", "NEEDS_ATTENTION"].includes(status),
+      finalizeAllowed: paymentApproved(order) && !["FINISHED", "PAYMENT_REJECTED"].includes(status),
+      notifyCustomerAllowed: status === "NO_CONNECTION",
+      createdAt: order.createdAt,
+      updatedAt: order.updatedAt,
+      items: jobs.map((job) => ({
+        id: job.id,
+        orderId: job.orderId,
+        portalOrderItemId: job.portalOrderItemId || "",
+        deviceIndex: Number(job.sequence || 0),
+        sequence: Number(job.sequence || 0),
+        code: job.code,
+        realCode: job.code,
+        shortCode: publicShortJobCode(job, order),
+        status: job.status,
+        technicianId: job.technicianId || "",
+        startedAt: job.takenAt || "",
+        readyAt: job.readyAt || "",
+        doneAt: job.doneAt || "",
+        reviewReason: job.reviewReason || "",
+        ardCode: job.ardCode || "",
+      })),
+    };
+  }
+
   function publicFrpOrder(order, db) {
     const creator = db.users.find((user) => user.id === order.createdBy);
     const jobs = db.frpJobs.filter((job) => job.orderId === order.id);
     return {
       ...order,
+      shortCode: publicShortOrderCode(order),
       createdByName: creator?.name || "Sistema",
-      jobs: jobs.map((job) => publicFrpJob(job, db, false)),
+      jobs: jobs.map((job) => publicFrpJob(job, db, false, order)),
       jobCounts: frpJobStatuses.reduce((acc, status) => {
         acc[status.code] = jobs.filter((job) => job.status === status.code).length;
         return acc;
@@ -20,9 +173,9 @@ export function createFrpSerializers({
     };
   }
 
-  function publicFrpJob(job, db, includeOrder = true) {
+  function publicFrpJob(job, db, includeOrder = true, parentOrder = null) {
     const technician = db.users.find((user) => user.id === job.technicianId);
-    const order = includeOrder ? db.frpOrders.find((candidate) => candidate.id === job.orderId) : null;
+    const order = parentOrder || (includeOrder ? db.frpOrders.find((candidate) => candidate.id === job.orderId) : null);
     // QUE: lookup hasta el customerClient para exponer status VIP y el code
     // del lado portal (CL-...) que se usa para "Codigo del proceso" y filtro
     // VIP del panel operador rediseñado.
@@ -43,10 +196,12 @@ export function createFrpSerializers({
     const frozenRedirectorId = order?.redirectorId || order?.technicianId || "";
     return {
       ...job,
+      shortCode: publicShortJobCode(job, order),
       technicianName: technician?.name || "",
       order: order ? {
         id: order.id,
         code: order.code,
+        shortCode: publicShortOrderCode(order),
         clientName: order.clientName,
         country: order.country,
         unitPrice: order.unitPrice,
@@ -64,9 +219,10 @@ export function createFrpSerializers({
 
   function publicFrpState(db, user) {
     if (!canUseFrp(user)) {
-      return { enabled: false, orders: [], jobs: [], metrics: {}, statuses: { orders: frpOrderStatuses, jobs: frpJobStatuses }, pricing: publicFrpPricingState(db, user) };
+      return { enabled: false, orders: [], jobs: [], operatorOrders: [], metrics: {}, statuses: { orders: frpOrderStatuses, jobs: frpJobStatuses }, pricing: publicFrpPricingState(db, user) };
     }
     const orders = db.frpOrders.filter((order) => user.role === "ADMIN" || order.workChannel === frpWorkChannel);
+    const operatorOrders = orders.filter((order) => operatorOrderVisible(order, db));
     const jobs = db.frpJobs.filter((job) => user.role === "ADMIN" || job.workChannel === frpWorkChannel);
     const today = limaDateStamp();
     const todaysJobs = jobs.filter((job) => limaDateStamp(job.createdAt) === today || limaDateStamp(job.doneAt) === today);
@@ -86,6 +242,7 @@ export function createFrpSerializers({
       enabled: true,
       orders: orders.slice(0, 80).map((order) => publicFrpOrder(order, db)),
       jobs: jobs.slice(0, 200).map((job) => publicFrpJob(job, db)),
+      operatorOrders: operatorOrders.slice(0, 80).map((order) => publicOperatorOrder(order, db)),
       finishedTodayJobs,
       metrics: {
         ordersToday: orders.filter((order) => limaDateStamp(order.createdAt) === today).length,

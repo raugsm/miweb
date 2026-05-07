@@ -197,9 +197,6 @@ function renderProofBlock() {
   const orders = customer?.orders || [];
   const orderInReview = orders.find((order) => order.publicStatus === "PAGO_EN_REVISION") || null;
   const orderRejected = orders.find((order) => order.publicStatus === "PAGO_RECHAZADO") || null;
-  const orderValidated = orders.find((order) => (
-    order.publicStatus === "EN_PREPARACION" && !order.customerConnectedAt
-  )) || null;
   const authenticated = Boolean(customer?.user && customer?.client);
   const emailVerified = Boolean(customer?.client?.emailVerified);
   const lock = !authenticated || !emailVerified;
@@ -223,15 +220,6 @@ function renderProofBlock() {
     if (dropHint) dropHint.hidden = true;
     if (dropzone) dropzone.hidden = false;
   };
-
-  if (orderValidated) {
-    // Cajón verde "Comprobante validado". Thumbnail oculto (spec §2.6).
-    proof.dataset.state = "validated";
-    hideAll();
-    if (dropzone) dropzone.hidden = true;
-    if (validated) validated.hidden = false;
-    return;
-  }
 
   if (orderInReview) {
     // Estado "Subido (esperando validación)" — thumbnail + Reemplazar.

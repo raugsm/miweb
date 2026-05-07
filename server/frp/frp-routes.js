@@ -1,4 +1,5 @@
 import { assessPaymentProofsForAutomation } from "../payments/payment-verification.js";
+import { applyFrpJobDirectFinalizeLegacyState } from "../db/postgres-frp-core.js";
 
 function canResolveFrpReviewJob(user, job) {
   if (job?.status !== "REQUIERE_REVISION") return true;
@@ -50,6 +51,7 @@ export function createFrpRoutes({
   computeProviderBaseline,
   readDb,
   cancelFrpJobPostgres,
+  finalizeFrpJobDirectPostgres,
   finalizeFrpJobPostgres,
   markFrpJobReadyPostgres,
   reviewFrpJobPostgres,
@@ -967,6 +969,84 @@ export function createFrpRoutes({
   // El handler de "admin revierte pago" (no implementado aun) deberia llamar
   // este endpoint con reason 'payment_reverted'. Por ahora el endpoint esta
   // disponible para los otros dos flows (timeout/manual desde banner UI).
+  const frpJobDirectFinalizeMatch = pathname.match(/^\/api\/frp\/jobs\/([^/]+)\/direct-finalize$/);
+  if (req.method === "PATCH" && frpJobDirectFinalizeMatch) {
+    if (!requireUser(user, res)) return;
+    const input = await parseJson(req);
+    const db = await readDb();
+    if (!(await requireFrpAccess(user, res, db, "FRP_JOB_DIRECT_FINALIZE_DENIED", frpJobDirectFinalizeMatch[1]))) return;
+    const job = db.frpJobs.find((candidate) => candidate.id === frpJobDirectFinalizeMatch[1]);
+    const order = db.frpOrders.find((candidate) => candidate.id === job?.orderId);
+    if (!job || !order) return sendJson(res, 404, { error: "Trabajo FRP no encontrado." });
+    if (job.technicianId && job.technicianId !== user.id && user.role !== "ADMIN") {
+      return sendJson(res, 403, { error: "Este trabajo lo tomo otro tecnico." });
+    }
+    if (!job.technicianId && !(await requireActiveFrpTechnician(user, res, db, "FRP_JOB_DIRECT_FINALIZE_NOT_ACTIVE", job.id))) return;
+    const inputLog = cleanText(input.finalLog, 500);
+    const finalImages = sanitizeFinalLogImages(input.finalImages);
+    const limaTime = new Intl.DateTimeFormat("es-PE", {
+      timeZone: "America/Lima",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).format(new Date());
+    const finalLog = inputLog || job.finalLog || `Finalizado directo por ${user.name || "operador"} a las ${limaTime}`;
+    if (finalizeFrpJobDirectPostgres) {
+      const result = await finalizeFrpJobDirectPostgres({
+        jobId: job.id,
+        userId: user.id,
+        userRole: user.role,
+        finalLog,
+        finalImages,
+        doneAt: nowIso(),
+      });
+      if (!result.ok) return sendJson(res, result.status || 500, { error: result.error || "No se pudo finalizar el trabajo FRP." });
+      const nextDb = await readDb();
+      const nextJob = nextDb.frpJobs.find((candidate) => candidate.id === result.jobId);
+      const nextOrder = nextDb.frpOrders.find((candidate) => candidate.id === result.orderId);
+      if (!nextJob) return sendJson(res, 500, { error: "Trabajo FRP finalizado, pero la lectura reconstruida no lo encontro." });
+      publishPortalOrdersForFrpOrder(nextDb, nextOrder, result.publishReason || "frp_job_done");
+      publishFrpOps(nextDb, result.publishReason || "frp_job_done");
+      return sendJson(res, 200, { job: publicFrpJob(nextJob, nextDb), frp: publicFrpState(nextDb, user) });
+    }
+    const jobs = db.frpJobs.filter((candidate) => candidate.orderId === order.id);
+    const portalItem = job.portalOrderItemId
+      ? db.customerOrderItems.find((candidate) => candidate.id === job.portalOrderItemId)
+      : db.customerOrderItems.find((candidate) => candidate.frpJobId === job.id);
+    const portalOrder = order.portalOrderId
+      ? db.customerOrders.find((candidate) => candidate.id === order.portalOrderId)
+      : null;
+    const result = applyFrpJobDirectFinalizeLegacyState({
+      job,
+      order,
+      jobs,
+      portalItem,
+      portalOrder,
+      userId: user.id,
+      userRole: user.role,
+      finalLog,
+      finalImages,
+      doneAt: nowIso(),
+      ardCode: job.ardCode || "",
+    });
+    if (!result.ok) return sendJson(res, result.status || 500, { error: result.error || "No se pudo finalizar el trabajo FRP." });
+    if (!result.alreadyFinalized && !result.job.ardCode) {
+      result.job.ardCode = nextFrpArdCode(db);
+      result.auditDetail.ardCode = result.job.ardCode;
+    }
+    if (!result.alreadyFinalized) {
+      Object.assign(job, result.job);
+      Object.assign(order, result.order);
+      if (portalItem && result.portalItem) Object.assign(portalItem, result.portalItem);
+      if (portalOrder && result.portalOrder) Object.assign(portalOrder, result.portalOrder);
+      audit(db, user.id, result.auditAction, job.id, result.auditDetail);
+      await writeDb(db);
+    }
+    publishPortalOrdersForFrpOrder(db, order, result.publishReason || "frp_job_done");
+    publishFrpOps(db, result.publishReason || "frp_job_done");
+    return sendJson(res, 200, { job: publicFrpJob(job, db), frp: publicFrpState(db, user) });
+  }
+
   const frpJobCancelMatch = pathname.match(/^\/api\/frp\/jobs\/([^/]+)\/cancel$/);
   if (req.method === "PATCH" && frpJobCancelMatch) {
     if (!requireUser(user, res)) return;

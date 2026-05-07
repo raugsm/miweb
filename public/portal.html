@@ -258,14 +258,14 @@
                 </div>
               </article>
 
-              <!-- Panel 4 — Conexión (sub-commit 15c.1-bis).
+              <!-- Panel 4 - Conexion (sesion 24 corte 5).
                    Spec docs/specs/cliente/panel-4-conexion.md v1.2 §2.1-§2.8.
                    Modelo de 3 estados (A/B/C):
                      A — Inicial: Card Código en placeholder, sin Copiar Código,
                          sin "Equipo conectado".
                      B — Comprobante en validación o rechazado: Card Código con
                          valor real + Copiar, sin "Equipo conectado".
-                     C — Validado pre-clic: igual que B + "Equipo conectado".
+                     C - Pago aprobado: codigo real + instrucciones; sin boton obligatorio.
                    Cards Tech ID + Código + botón "¿Dónde pegar?" + botón
                    Descargar son SIEMPRE visibles desde login. -->
               <article class="panel panel-4" id="panel4" data-panel="4" data-state="A">
@@ -290,7 +290,13 @@
                     </div>
                   </div>
 
-                  <button type="button" class="panel-4-equipo-conectado-btn" id="panel4EquipoConectado" data-flow-action="notify-connected" aria-label="Confirmar equipo conectado y crear orden">
+                  <div class="panel-4-status" id="panel4Status" role="status" aria-live="polite">
+                    <span class="panel-4-status-kicker" id="panel4StatusKicker">Paso 4</span>
+                    <p class="panel-4-status-title" id="panel4StatusTitle">Prepara el equipo</p>
+                    <p class="panel-4-status-text" id="panel4StatusText">Descarga Redirector y ten el equipo listo. Cuando el pago quede aprobado, AriadGSM podra procesar la orden sin otro boton.</p>
+                  </div>
+
+                  <button type="button" class="panel-4-equipo-conectado-btn" id="panel4EquipoConectado" data-flow-action="notify-connected" aria-label="Compatibilidad: confirmar equipo conectado" hidden aria-hidden="true" tabindex="-1">
                     Equipo conectado
                   </button>
 

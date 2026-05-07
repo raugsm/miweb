@@ -116,10 +116,26 @@ function portalOrderFromRow(row) {
   return {
     ...legacy,
     id: stringValue(row.id || legacy.id),
+    publicStatus: stringValue(row.public_status || legacy.publicStatus),
     unitPrice: numberValue(row.unit_price_usdt ?? legacy.unitPrice, 0),
     totalPrice: numberValue(row.total_price_usdt ?? legacy.totalPrice, 0),
     debtAmountUsdt: numberValue(row.debt_amount_usdt ?? legacy.debtAmountUsdt, 0),
     debtClearedAt: isoOrEmpty(row.debt_cleared_at) || stringValue(legacy.debtClearedAt),
+    updatedAt: isoOrEmpty(row.updated_at) || stringValue(legacy.updatedAt),
+  };
+}
+
+function customerOrderItemFromRow(row) {
+  if (!row) return null;
+  const legacy = legacyObject(row);
+  return {
+    ...legacy,
+    id: stringValue(row.id || legacy.id),
+    orderId: stringValue(row.order_id || legacy.orderId),
+    sequence: integerValue(row.sequence ?? legacy.sequence, 1),
+    status: stringValue(row.status || legacy.status),
+    frpOrderId: stringValue(row.frp_order_id || legacy.frpOrderId),
+    frpJobId: stringValue(row.frp_job_id || legacy.frpJobId),
     updatedAt: isoOrEmpty(row.updated_at) || stringValue(legacy.updatedAt),
   };
 }
@@ -146,10 +162,13 @@ function jobFromRow(row) {
     id: stringValue(row.id || legacy.id),
     code: stringValue(row.code || legacy.code),
     orderId: stringValue(row.order_id || legacy.orderId),
+    sequence: integerValue(row.sequence ?? legacy.sequence, 1),
+    totalJobs: integerValue(row.total_jobs ?? legacy.totalJobs, 1),
     status: stringValue(row.status || legacy.status),
     checklist: { ...jsonObject(row.checklist), ...jsonObject(legacy.checklist) },
     technicianId: stringValue(row.technician_id || legacy.technicianId),
     takenAt: stringValue(legacy.takenAt),
+    portalOrderItemId: stringValue(row.portal_order_item_id || legacy.portalOrderItemId),
     finalLog: stringValue(row.final_log || legacy.finalLog),
     ardCode: stringValue(row.ard_code || legacy.ardCode),
     reviewReason: stringValue(row.review_reason || legacy.reviewReason),
@@ -335,6 +354,126 @@ export function applyFrpJobFinalizeLegacyState({ job, order = null, jobs = [], u
     auditAction: "FRP_JOB_DONE",
     auditDetail: { code: nextJob.code, order: nextOrder.code, ardCode: nextJob.ardCode },
     publishReason: "frp_job_done",
+  };
+}
+
+function frpPaymentApprovedLegacy(order) {
+  return Boolean(
+    order?.checklist?.paymentValidated
+    || order?.paymentStatus === "PAGO_VALIDADO"
+    || order?.paymentStatus === "COMPROBANTE_RECIBIDO"
+  );
+}
+
+function activeJobsForDirectFinalize(jobs) {
+  return jobs.filter((candidate) => candidate.status !== "CANCELADO");
+}
+
+export function applyFrpJobDirectFinalizeLegacyState({
+  job,
+  order = null,
+  jobs = [],
+  portalItem = null,
+  portalOrder = null,
+  userId,
+  userRole = "",
+  finalLog = "",
+  finalImages = [],
+  doneAt,
+  ardCode = "",
+}) {
+  if (!job || !order) {
+    return { ok: false, status: 404, error: "Trabajo FRP no encontrado." };
+  }
+  if (!frpPaymentApprovedLegacy(order)) {
+    return { ok: false, status: 400, error: "El pago debe estar aprobado antes de finalizar." };
+  }
+  if (job.technicianId && job.technicianId !== userId && userRole !== "ADMIN") {
+    return { ok: false, status: 403, error: "Este trabajo lo tomo otro tecnico." };
+  }
+  if (job.status === "FINALIZADO") {
+    return {
+      ok: true,
+      alreadyFinalized: true,
+      job,
+      order,
+      portalItem,
+      portalOrder,
+      auditAction: "",
+      auditDetail: { code: job.code, order: order.code, ardCode: job.ardCode || "" },
+      publishReason: "frp_job_done",
+    };
+  }
+  const allowedStatuses = ["ESPERANDO_PREPARACION", "LISTO_PARA_TECNICO", "EN_PROCESO"];
+  if (!allowedStatuses.includes(job.status)) {
+    return { ok: false, status: 400, error: "Solo puedes finalizar un equipo aprobado y accionable." };
+  }
+  const activeJobs = activeJobsForDirectFinalize(jobs.length ? jobs : [job]);
+  const jobSequence = Number(job.sequence || 0);
+  if (jobSequence > 1) {
+    const blockingPrior = activeJobs.find((candidate) => (
+      Number(candidate.sequence || 0) > 0
+      && Number(candidate.sequence || 0) < jobSequence
+      && candidate.status !== "FINALIZADO"
+    ));
+    if (blockingPrior) {
+      return { ok: false, status: 409, error: "Primero finaliza el equipo anterior de esta orden." };
+    }
+  }
+
+  const nextJob = {
+    ...job,
+    status: "FINALIZADO",
+    finalLog: finalLog || job.finalLog || "",
+    ardCode: job.ardCode || ardCode || "",
+    doneAt,
+    updatedAt: doneAt,
+    technicianId: job.technicianId || userId,
+  };
+  if (finalImages.length) nextJob.finalImages = finalImages;
+  const nextJobs = jobs.length
+    ? jobs.map((candidate) => (candidate.id === nextJob.id ? nextJob : candidate))
+    : [nextJob];
+  const nextOrder = {
+    ...order,
+    checklist: { ...jsonObject(order.checklist) },
+  };
+  const previousOrderStatus = nextOrder.orderStatus;
+  syncFrpOrderStatusLegacy(nextOrder, nextJobs, doneAt);
+  if (nextOrder.orderStatus !== previousOrderStatus) nextOrder.updatedAt = doneAt;
+
+  const activeNextJobs = activeJobsForDirectFinalize(nextJobs);
+  const allDone = activeNextJobs.length > 0 && activeNextJobs.every((candidate) => candidate.status === "FINALIZADO");
+  const nextPortalItem = portalItem
+    ? {
+        ...portalItem,
+        status: "FINALIZADO",
+        doneAt,
+        updatedAt: doneAt,
+      }
+    : null;
+  const nextPortalOrder = portalOrder
+    ? {
+        ...portalOrder,
+        publicStatus: allDone ? "FINALIZADO" : (portalOrder.publicStatus || "EN_PREPARACION"),
+        updatedAt: allDone ? doneAt : (portalOrder.updatedAt || doneAt),
+      }
+    : null;
+
+  return {
+    ok: true,
+    job: nextJob,
+    order: nextOrder,
+    portalItem: nextPortalItem,
+    portalOrder: nextPortalOrder,
+    auditAction: "FRP_JOB_DIRECT_DONE",
+    auditDetail: {
+      code: nextJob.code,
+      order: nextOrder.code,
+      ardCode: nextJob.ardCode,
+      direct: true,
+    },
+    publishReason: allDone ? "frp_order_done" : "frp_job_done",
   };
 }
 
@@ -716,6 +855,48 @@ async function persistFrpFinalizeState(client, state, doneAt, userId) {
   );
 }
 
+async function persistCustomerItemDirectFinalizeState(client, state, doneAt) {
+  if (state.portalItem?.id) {
+    await client.query(
+      `
+        update ariad.customer_order_items
+        set status = $2,
+            updated_at = $3,
+            legacy_json = $4::jsonb
+        where id = $1
+      `,
+      [
+        state.portalItem.id,
+        state.portalItem.status,
+        state.portalItem.updatedAt || doneAt,
+        JSON.stringify(state.portalItem),
+      ],
+    );
+  }
+  if (state.portalOrder?.id) {
+    await client.query(
+      `
+        update ariad.customer_orders
+        set public_status = $2,
+            updated_at = $3,
+            legacy_json = $4::jsonb
+        where id = $1
+      `,
+      [
+        state.portalOrder.id,
+        state.portalOrder.publicStatus || "",
+        state.portalOrder.updatedAt || doneAt,
+        JSON.stringify(state.portalOrder),
+      ],
+    );
+  }
+}
+
+async function persistFrpDirectFinalizeState(client, state, doneAt, userId) {
+  await persistFrpFinalizeState(client, state, doneAt, userId);
+  await persistCustomerItemDirectFinalizeState(client, state, doneAt);
+}
+
 async function persistFrpCancelState(client, state, canceledAt, userId) {
   await client.query(
     `
@@ -915,6 +1096,71 @@ export async function finalizeFrpJobPostgres({ jobId, userId, userRole = "", fin
       state.auditDetail.ardCode = state.job.ardCode;
     }
     await persistFrpFinalizeState(client, state, doneAt, userId);
+    return {
+      ok: true,
+      jobId: state.job.id,
+      orderId: state.job.orderId,
+      publishReason: state.publishReason,
+    };
+  });
+}
+
+export async function finalizeFrpJobDirectPostgres({ jobId, userId, userRole = "", finalLog = "", finalImages = [], doneAt }) {
+  return withTransaction(async (client) => {
+    const { jobRow, orderRow, jobRows } = await readLockedFrpJobWithOrder(client, jobId);
+    if (!jobRow || !orderRow) return { ok: false, status: 404, error: "Trabajo FRP no encontrado." };
+    const currentJob = jobFromRow(jobRow);
+    const portalItemResult = currentJob.portalOrderItemId
+      ? await client.query(
+          `
+            select *
+            from ariad.customer_order_items
+            where id = $1
+            for update
+          `,
+          [currentJob.portalOrderItemId],
+        )
+      : { rows: [] };
+    const currentOrder = frpOrderFromRow(orderRow);
+    const portalOrderResult = currentOrder.portalOrderId
+      ? await client.query(
+          `
+            select *
+            from ariad.customer_orders
+            where id = $1
+            for update
+          `,
+          [currentOrder.portalOrderId],
+        )
+      : { rows: [] };
+    const state = applyFrpJobDirectFinalizeLegacyState({
+      job: currentJob,
+      order: currentOrder,
+      jobs: jobRows.map(jobFromRow),
+      portalItem: customerOrderItemFromRow(portalItemResult.rows[0]),
+      portalOrder: portalOrderFromRow(portalOrderResult.rows[0]),
+      userId,
+      userRole,
+      finalLog,
+      finalImages,
+      doneAt,
+      ardCode: currentJob.ardCode,
+    });
+    if (!state.ok) return state;
+    if (state.alreadyFinalized) {
+      return {
+        ok: true,
+        alreadyFinalized: true,
+        jobId: state.job.id,
+        orderId: state.job.orderId,
+        publishReason: state.publishReason,
+      };
+    }
+    if (!state.job.ardCode) {
+      state.job.ardCode = await nextFrpArdCodePostgres(client, doneAt);
+      state.auditDetail.ardCode = state.job.ardCode;
+    }
+    await persistFrpDirectFinalizeState(client, state, doneAt, userId);
     return {
       ok: true,
       jobId: state.job.id,

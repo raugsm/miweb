@@ -375,6 +375,16 @@ async function runSmoke({ baseUrl, dataDir, setupToken }) {
   assert.equal(response.status, 200);
   assert.equal(response.data.order.checklist.paymentValidated, true);
 
+  response = await http.request("GET", "/api/portal/orders");
+  assert.equal(response.status, 200);
+  const approvedTrackingOrder = (response.data.orders || []).find((order) => order.id === portalOrder.id);
+  assert.ok(approvedTrackingOrder, "Mis Ordenes debe exponer la orden creada desde el comprobante");
+  assert.match(approvedTrackingOrder.shortCode, /^ARD-\d{4}$/);
+  assert.equal(approvedTrackingOrder.publicStatus, "EN_PREPARACION");
+  assert.equal(approvedTrackingOrder.operatorStatus, "PAYMENT_APPROVED");
+  assert.ok(approvedTrackingOrder.paymentApprovedAt, "seguimiento cliente debe exponer timestamp de aprobacion");
+  assert.equal(approvedTrackingOrder.items[0].shortCode, `${approvedTrackingOrder.shortCode}-01`);
+
   response = await technicianHttp.request("GET", "/api/session");
   assert.equal(response.status, 200);
   const waitingConnectionOrder = (response.data.frp?.orders || []).find((order) => order.id === portalFrpOrder.id);

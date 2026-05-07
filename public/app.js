@@ -1133,6 +1133,10 @@ function frpJobs() {
   return session.frp?.jobs || [];
 }
 
+function frpOperatorOrders() {
+  return session.frp?.operatorOrders || [];
+}
+
 function frpQuantityTier(quantity) {
   const qty = Number(quantity || 1);
   const tiers = session.frp?.pricing?.quantityTiers?.length
@@ -1580,7 +1584,7 @@ function frpOpsV2RenderHeaderV3(tech, { queueCount = 0, reviewCount = 0 } = {}) 
           ${escapeHtml(badgeText)}
         </div>
         <div class="frp-ops-v2-status-chip is-live">Live</div>
-        <div class="frp-ops-v2-status-chip"><strong>Cola</strong> ${escapeHtml(queueCount)}</div>
+        <div class="frp-ops-v2-status-chip"><strong>Ok</strong> ${escapeHtml(queueCount)}</div>
         <div class="frp-ops-v2-status-chip is-warning"><strong>Rev</strong> ${escapeHtml(reviewCount)}</div>
       </div>
     </div>
@@ -1826,6 +1830,147 @@ function frpOpsV2RenderWaitingConnectionSection({ waitingOrders }) {
   `;
 }
 
+function frpOpsV2OperatorStatusMeta(status) {
+  if (status === "PAYMENT_APPROVED") return { label: "Pago aprobado", className: "is-approved" };
+  if (status === "NO_CONNECTION") return { label: "No conecto", className: "is-no-connection" };
+  if (status === "AI_REVIEWING") return { label: "IA revisando", className: "is-ai-reviewing" };
+  if (status === "IN_PROCESS") return { label: "En proceso", className: "is-approved" };
+  if (status === "NEEDS_ATTENTION") return { label: "Atencion", className: "is-no-connection" };
+  if (status === "PAYMENT_REJECTED") return { label: "Pago rechazado", className: "is-ai-reviewing" };
+  return { label: status || "Pendiente", className: "is-ai-reviewing" };
+}
+
+function frpOpsV2ActionableOperatorItem(order) {
+  const items = Array.isArray(order?.items) ? order.items : [];
+  return items.find((item) => !["FINALIZADO", "CANCELADO"].includes(item.status)) || items[0] || null;
+}
+
+function frpOpsV2OperatorOrderDetail(order, item) {
+  if (order.operatorStatus === "AI_REVIEWING") return "Comprobante pendiente de aprobacion.";
+  if (order.operatorStatus === "PAYMENT_REJECTED") return "Comprobante rechazado o requiere nueva revision.";
+  if (order.operatorStatus === "NO_CONNECTION") return "Pago aprobado. Cliente sin conexion visible en el plazo.";
+  if (order.operatorStatus === "NEEDS_ATTENTION") return item?.reviewReason || "Requiere atencion.";
+  if (order.quantity > 1) return `Equipo ${item?.sequence || 1} de ${order.quantity} listo para cerrar.`;
+  return "Orden lista para finalizar.";
+}
+
+function frpOpsV2RenderOperatorOrderItems(order) {
+  const items = Array.isArray(order.items) ? order.items : [];
+  if (!items.length) return "";
+  return `
+    <div class="frp-ops-v2-order-items" aria-label="Equipos de ${escapeHtml(order.shortCode || order.code)}">
+      ${items.map((item) => {
+        const done = item.status === "FINALIZADO";
+        const blocked = order.quantity > 1 && !done && item.id !== frpOpsV2ActionableOperatorItem(order)?.id;
+        return `
+          <div class="frp-ops-v2-order-item ${done ? "is-done" : ""} ${blocked ? "is-waiting" : ""}">
+            <span>${escapeHtml(item.shortCode || item.code || "")}</span>
+            <strong>${done ? "finalizado" : blocked ? "espera" : "actual"}</strong>
+          </div>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function frpOpsV2RenderOperatorOrderCard(order, { isMeActive, hasActiveTechnician, swapInProgress }) {
+  const statusMeta = frpOpsV2OperatorStatusMeta(order.operatorStatus);
+  const item = frpOpsV2ActionableOperatorItem(order);
+  const quantity = Number(order.quantity || order.items?.length || 1);
+  const isApprovedLike = ["PAYMENT_APPROVED", "IN_PROCESS"].includes(order.operatorStatus);
+  const isReviewLike = ["AI_REVIEWING", "PAYMENT_REJECTED", "NEEDS_ATTENTION"].includes(order.operatorStatus);
+  const canFinalize = Boolean(item?.id && order.finalizeAllowed && isApprovedLike && isMeActive && !swapInProgress);
+  const canReview = Boolean(order.reviewAllowed && isReviewLike && canReviewFrpPayments() && !swapInProgress);
+  const canNotify = Boolean(order.notifyCustomerAllowed && order.operatorStatus === "NO_CONNECTION" && !swapInProgress);
+  const disabledTip = swapInProgress
+    ? "Cambio de tecnico en curso"
+    : !hasActiveTechnician ? "Sin tecnico activo"
+    : !isMeActive ? "No sos el tecnico activo"
+    : "";
+  const title = order.shortCode || order.code || "-";
+  const realCode = order.portalOrderCode || order.realCode || order.code || "";
+  return `
+    <article class="frp-ops-v2-order-card ${statusMeta.className}">
+      <div class="frp-ops-v2-order-card-head">
+        <div>
+          <div class="frp-ops-v2-order-card-code">
+            <strong>${escapeHtml(title)}</strong>
+            ${realCode && realCode !== title ? `<span>real: ${escapeHtml(realCode)}</span>` : ""}
+          </div>
+          <div class="frp-ops-v2-order-card-client">${escapeHtml(order.clientName || "-")}</div>
+          <div class="frp-ops-v2-order-card-detail">${escapeHtml(frpOpsV2OperatorOrderDetail(order, item))}</div>
+        </div>
+        <div class="frp-ops-v2-order-card-badges">
+          <span class="frp-ops-v2-order-chip">${escapeHtml(quantity)} equipo${quantity === 1 ? "" : "s"}</span>
+          <span class="frp-ops-v2-order-status ${statusMeta.className}">${escapeHtml(statusMeta.label)}</span>
+        </div>
+      </div>
+      ${frpOpsV2RenderOperatorOrderItems(order)}
+      <div class="frp-ops-v2-order-actions">
+        ${isApprovedLike ? `
+          <button type="button" class="frp-ops-v2-btn-primary"
+            data-frp-direct-finalize="${escapeHtml(item?.id || "")}"
+            ${canFinalize ? "" : "disabled"}
+            ${disabledTip ? `title="${escapeHtml(disabledTip)}"` : ""}>
+            ${quantity > 1 ? `Finalizar equipo ${escapeHtml(item?.sequence || 1)}` : "Finalizar"}
+          </button>
+        ` : ""}
+        ${isReviewLike ? `
+          <button type="button" class="frp-ops-v2-btn-secondary"
+            data-frp-show-proof="${escapeHtml(order.id)}"
+            ${canReview ? "" : "disabled"}
+            ${swapInProgress ? `title="Cambio de tecnico en curso"` : ""}>
+            Revisar
+          </button>
+        ` : ""}
+        ${order.operatorStatus === "NO_CONNECTION" ? `
+          <button type="button" class="frp-ops-v2-btn-secondary"
+            data-frp-notify-customer="${escapeHtml(order.id)}"
+            ${canNotify ? "" : "disabled"}
+            ${swapInProgress ? `title="Cambio de tecnico en curso"` : ""}>
+            Avisar cliente
+          </button>
+        ` : ""}
+      </div>
+    </article>
+  `;
+}
+
+function frpOpsV2RenderOperatorOrdersSection({ operatorOrders, isMeActive, hasActiveTechnician, swapInProgress }) {
+  const activeOrders = operatorOrders.filter((order) => order.operatorStatus !== "FINISHED");
+  return `
+    <section class="frp-ops-v2-section">
+      <div class="frp-ops-v2-section-header">
+        <div class="frp-ops-v2-section-label">Ordenes FRP · ${escapeHtml(activeOrders.length)}</div>
+      </div>
+      ${activeOrders.length ? `
+        <div class="frp-ops-v2-order-list">
+          ${activeOrders.map((order) => frpOpsV2RenderOperatorOrderCard(order, { isMeActive, hasActiveTechnician, swapInProgress })).join("")}
+        </div>
+      ` : `<p class="frp-ops-v2-queue-empty">No hay ordenes FRP activas.</p>`}
+    </section>
+  `;
+}
+
+function frpOpsV2RenderOperatorSummary(operatorOrders) {
+  const approved = operatorOrders.filter((order) => ["PAYMENT_APPROVED", "IN_PROCESS"].includes(order.operatorStatus)).length;
+  const reviewing = operatorOrders.filter((order) => ["AI_REVIEWING", "PAYMENT_REJECTED"].includes(order.operatorStatus)).length;
+  const noConnection = operatorOrders.filter((order) => order.operatorStatus === "NO_CONNECTION").length;
+  return `
+    <section class="frp-ops-v2-section">
+      <div class="frp-ops-v2-section-header">
+        <div class="frp-ops-v2-section-label">Resumen operativo</div>
+        <div class="frp-ops-v2-section-note">Accion clara</div>
+      </div>
+      <div class="frp-ops-v2-summary">
+        <div><span>Aprobadas</span><strong>${escapeHtml(approved)}</strong></div>
+        <div><span>IA revisando</span><strong>${escapeHtml(reviewing)}</strong></div>
+        <div><span>No conecto</span><strong>${escapeHtml(noConnection)}</strong></div>
+      </div>
+    </section>
+  `;
+}
+
 function frpOpsV2RenderAttentionGrid({ pagosRevisar, reviewJobs, swapInProgress }) {
   const canReview = canReviewFrpPayments() && !swapInProgress;
   const disabledTitle = swapInProgress ? "Cambio de tecnico en curso" : "Permisos insuficientes";
@@ -1897,7 +2042,7 @@ function frpOpsV2RenderFinalized(jobs) {
   const rowsHtml = items.map((j) => {
     const techMark = frpOpsV2TechMark(j.technicianName);
     const time = frpOpsV2LimaTime(j.doneAt);
-    const idText = j.code || j.order?.code || "";
+    const idText = j.shortCode || j.order?.shortCode || j.code || j.order?.code || "";
     const nameText = `${j.order?.clientName || j.clientName || "-"}${j.ardCode ? ` · ${j.ardCode}` : ""}`;
     return `
       <div class="frp-ops-v2-finalized-row">
@@ -1935,49 +2080,24 @@ function renderFrp({ skipPricing = false } = {}) {
   }
   if (!skipPricing) renderFrpPricingBox();
 
-  const orders = frpOrders();
-  const jobs = frpJobs();
+  const operatorOrders = frpOperatorOrders();
   const finishedToday = session.frp?.finishedTodayJobs || [];
   const tech = technicianStatusCache;
-
-  const myActiveJob = jobs.find((j) => j.status === "EN_PROCESO" && j.technicianId === session.user?.id);
-  const otherActiveJobs = jobs.filter((j) => j.status === "EN_PROCESO" && j.technicianId && j.technicianId !== session.user?.id);
-  const queueJobs = jobs.filter((j) => j.status === "LISTO_PARA_TECNICO");
-  const queueState = frpOpsV2QueueViewState(queueJobs);
-  const reviewJobs = jobs.filter((j) => j.status === "REQUIERE_REVISION");
-  const pagosRevisar = orders.filter((o) => o.paymentStatus === "PAGO_EN_VALIDACION" && (o.paymentProofs?.length || 0) > 0);
-  const waitingConnectionOrders = orders.filter((o) => {
-    const paymentApproved = o.checklist?.paymentValidated
-      || ["COMPROBANTE_RECIBIDO", "PAGO_VALIDADO"].includes(o.paymentStatus)
-      || o.orderStatus === "PAGO_VALIDADO";
-    const connectionReady = o.checklist?.connectionDataSent && o.checklist?.authorizationConfirmed;
-    const hasWaitingJobs = (o.jobs || []).some((job) => ["ESPERANDO_PREPARACION", "ESPERANDO_CLIENTE"].includes(job.status));
-    return paymentApproved && !connectionReady && hasWaitingJobs;
-  });
-
   const isMeActive = Boolean(tech?.active?.userId && tech.active.userId === session.user?.id);
   const hasActiveTechnician = Boolean(tech?.active?.userId);
   const swapInProgress = Boolean(tech?.swap?.inProgress);
-
-  let currentHtml;
-  if (myActiveJob) {
-    currentHtml = frpOpsV2RenderCurrentActive(myActiveJob, { swapInProgress, tech });
-  } else {
-    currentHtml = frpOpsV2RenderCurrentEmpty({ queueState, isMeActive, hasActiveTechnician, swapInProgress });
-  }
+  const approvedCount = operatorOrders.filter((order) => ["PAYMENT_APPROVED", "IN_PROCESS"].includes(order.operatorStatus)).length;
+  const reviewCount = operatorOrders.filter((order) => ["AI_REVIEWING", "PAYMENT_REJECTED", "NEEDS_ATTENTION"].includes(order.operatorStatus)).length;
 
   frpWorkbench.innerHTML = `
     <div class="frp-ops-v2">
-      ${frpOpsV2RenderHeaderV3(tech, { queueCount: queueState.total, reviewCount: reviewJobs.length })}
+      ${frpOpsV2RenderHeaderV3(tech, { queueCount: approvedCount, reviewCount })}
       <div class="frp-ops-v2-workspace">
         <div class="frp-ops-v2-main-stack">
-          ${currentHtml}
-          ${frpOpsV2RenderOtherActiveSection({ jobs: otherActiveJobs, tech })}
-          ${frpOpsV2RenderWaitingConnectionSection({ waitingOrders: waitingConnectionOrders })}
-          ${frpOpsV2RenderQueueSection({ queueState, isMeActive, hasActiveTechnician, swapInProgress, hasMyActive: Boolean(myActiveJob) })}
+          ${frpOpsV2RenderOperatorOrdersSection({ operatorOrders, isMeActive, hasActiveTechnician, swapInProgress })}
         </div>
         <aside class="frp-ops-v2-side-stack" aria-label="Excepciones e historial">
-          ${frpOpsV2RenderAttentionGrid({ pagosRevisar, reviewJobs, swapInProgress })}
+          ${frpOpsV2RenderOperatorSummary(operatorOrders)}
           ${frpOpsV2RenderFinalized(finishedToday)}
         </aside>
       </div>
@@ -2779,6 +2899,43 @@ async function finalizeFrpJob(jobId) {
     frpMessage.textContent = error.message;
     frpMessage.dataset.type = "error";
   }
+}
+
+async function directFinalizeFrpJob(jobId) {
+  const item = frpOperatorOrders()
+    .flatMap((order) => order.items || [])
+    .find((candidate) => candidate.id === jobId);
+  if (!jobId) return;
+  frpMessage.textContent = "";
+  try {
+    await api(`/api/frp/jobs/${jobId}/direct-finalize`, {
+      method: "PATCH",
+      body: JSON.stringify({}),
+    });
+    frpMessage.textContent = `FRP ${item?.shortCode || item?.code || ""} finalizado.`;
+    frpMessage.dataset.type = "success";
+    await refreshSession();
+  } catch (error) {
+    frpMessage.textContent = error.message;
+    frpMessage.dataset.type = "error";
+    await refreshSession();
+  }
+}
+
+function notifyFrpCustomer(orderId) {
+  const order = frpOperatorOrders().find((candidate) => candidate.id === orderId);
+  if (!order) return;
+  const phone = String(order.clientWhatsapp || "").replace(/\D/g, "");
+  const code = order.shortCode || order.code || "tu orden";
+  const message = `Hola ${order.clientName || ""}, tu pago FRP ya fue aprobado para ${code}. Por favor conecta el equipo en USB Redirector para continuar.`.trim();
+  if (!phone) {
+    frpMessage.textContent = `No hay WhatsApp registrado para ${order.clientName || code}.`;
+    frpMessage.dataset.type = "error";
+    return;
+  }
+  window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank", "noopener");
+  frpMessage.textContent = `Aviso preparado para ${order.shortCode || order.code}.`;
+  frpMessage.dataset.type = "neutral";
 }
 
 async function takeSpecificFrpJob(jobId) {
@@ -4131,6 +4288,18 @@ frpWorkbench?.addEventListener("click", async (event) => {
   const finalizeButton = event.target.closest("[data-frp-finalize]");
   if (finalizeButton) {
     await finalizeFrpJob(finalizeButton.dataset.frpFinalize);
+    return;
+  }
+
+  const directFinalizeButton = event.target.closest("[data-frp-direct-finalize]");
+  if (directFinalizeButton) {
+    await directFinalizeFrpJob(directFinalizeButton.dataset.frpDirectFinalize);
+    return;
+  }
+
+  const notifyCustomerButton = event.target.closest("[data-frp-notify-customer]");
+  if (notifyCustomerButton) {
+    notifyFrpCustomer(notifyCustomerButton.dataset.frpNotifyCustomer);
     return;
   }
 

@@ -2520,6 +2520,195 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
   box-shadow: inset 4px 0 0 var(--vip-border);
 }
 
+.frp-ops-v2-order-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.frp-ops-v2-order-card {
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  background: var(--bg-card);
+  padding: 14px;
+}
+
+.frp-ops-v2-order-card.is-approved {
+  background: var(--success-bg);
+  border-color: #B8DFC8;
+}
+
+.frp-ops-v2-order-card.is-ai-reviewing {
+  background: #EEF5FF;
+  border-color: #BBD4FF;
+}
+
+.frp-ops-v2-order-card.is-no-connection {
+  background: var(--warning-bg);
+  border-color: var(--warning-border);
+}
+
+.frp-ops-v2-order-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.frp-ops-v2-order-card-code {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+.frp-ops-v2-order-card-code strong {
+  font-size: 16px;
+  color: var(--text-primary);
+}
+
+.frp-ops-v2-order-card-code span {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.frp-ops-v2-order-card-client {
+  margin-top: 8px;
+  font-size: 16px;
+  font-weight: 850;
+  color: var(--text-primary);
+}
+
+.frp-ops-v2-order-card-detail {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.frp-ops-v2-order-card-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.frp-ops-v2-order-chip,
+.frp-ops-v2-order-status {
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.frp-ops-v2-order-chip {
+  color: var(--primary);
+  background: #EAF2FF;
+  border: 1px solid #BBD4FF;
+}
+
+.frp-ops-v2-order-status.is-approved {
+  color: #047857;
+  background: #DFF6EC;
+  border: 1px solid #A8E0C6;
+}
+
+.frp-ops-v2-order-status.is-ai-reviewing {
+  color: #1D4ED8;
+  background: #DBEAFE;
+  border: 1px solid #BBD4FF;
+}
+
+.frp-ops-v2-order-status.is-no-connection {
+  color: var(--warning-text);
+  background: #FFE9A8;
+  border: 1px solid #E4BF62;
+}
+
+.frp-ops-v2-order-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.frp-ops-v2-order-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+  min-height: 34px;
+  padding: 7px 9px;
+  border: 1px solid var(--border-light);
+  border-radius: 7px;
+  background: var(--bg-card);
+  font-size: 12px;
+}
+
+.frp-ops-v2-order-item span {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-weight: 800;
+  color: var(--primary);
+}
+
+.frp-ops-v2-order-item strong {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.frp-ops-v2-order-item.is-done {
+  background: #EAFBF2;
+  border-color: #B8DFC8;
+}
+
+.frp-ops-v2-order-item.is-done strong {
+  color: #047857;
+}
+
+.frp-ops-v2-order-item.is-waiting {
+  opacity: 0.82;
+}
+
+.frp-ops-v2-order-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.frp-ops-v2-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.frp-ops-v2-summary > div {
+  min-height: 44px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  background: var(--bg-card);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.frp-ops-v2-summary span {
+  color: var(--text-primary);
+}
+
+.frp-ops-v2-summary strong {
+  color: var(--primary);
+}
+
 .frp-ops-v2-queue-card-vip-badge {
   font-weight: 850;
 }

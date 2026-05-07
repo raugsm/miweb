@@ -3,12 +3,32 @@ import test from "node:test";
 
 import {
   applyFrpJobCancelLegacyState,
+  applyFrpJobDirectFinalizeLegacyState,
   applyFrpJobFinalizeLegacyState,
   applyFrpJobReadyLegacyState,
   applyFrpJobReviewLegacyState,
   applyFrpJobTakeLegacyState,
   applyFrpPaymentReviewLegacyState,
 } from "../server/db/postgres-frp-core.js";
+import { createFrpSerializers } from "../server/frp/serializers.js";
+
+function createTestFrpSerializers() {
+  return createFrpSerializers({
+    canUseFrp: () => true,
+    frpJobStatuses: [
+      { code: "ESPERANDO_PREPARACION" },
+      { code: "LISTO_PARA_TECNICO" },
+      { code: "EN_PROCESO" },
+      { code: "REQUIERE_REVISION" },
+      { code: "FINALIZADO" },
+      { code: "CANCELADO" },
+    ],
+    frpOrderStatuses: [],
+    frpWorkChannel: "WHATSAPP_3",
+    limaDateStamp: (value = new Date().toISOString()) => String(value || new Date().toISOString()).slice(0, 10),
+    publicFrpPricingState: () => ({ available: true }),
+  });
+}
 
 const baseOrder = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -215,6 +235,140 @@ test("Postgres FRP finalize closes the job and preserves one generated ARD code"
   assert.equal(result.job.doneAt, doneAt);
   assert.equal(result.order.orderStatus, "CERRADA");
   assert.equal(result.auditAction, "FRP_JOB_DONE");
+});
+
+test("Postgres FRP direct finalize closes an approved untaken job and customer item", () => {
+  const doneAt = "2026-05-06T17:16:00.000Z";
+  const result = applyFrpJobDirectFinalizeLegacyState({
+    job: {
+      id: "55555555-5555-4555-8555-555555555555",
+      code: "ORD-20260506-001-1",
+      orderId: baseOrder.id,
+      sequence: 1,
+      status: "ESPERANDO_PREPARACION",
+      technicianId: "",
+      portalOrderItemId: "item-1",
+    },
+    order: {
+      ...baseOrder,
+      checklist: {
+        priceSent: true,
+        paymentValidated: true,
+        connectionDataSent: false,
+        authorizationConfirmed: false,
+      },
+      paymentStatus: "COMPROBANTE_RECIBIDO",
+      orderStatus: "PAGO_VALIDADO",
+    },
+    jobs: [
+      {
+        id: "55555555-5555-4555-8555-555555555555",
+        code: "ORD-20260506-001-1",
+        orderId: baseOrder.id,
+        sequence: 1,
+        status: "ESPERANDO_PREPARACION",
+      },
+    ],
+    portalItem: { id: "item-1", status: "PENDIENTE", sequence: 1 },
+    portalOrder: { id: "portal-1", publicStatus: "EN_PREPARACION" },
+    userId: "44444444-4444-4444-8444-444444444444",
+    userRole: "ATENCION_TECNICA",
+    finalLog: "Finalizado directo por Jack",
+    doneAt,
+    ardCode: "ARD002-AB",
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.job.status, "FINALIZADO");
+  assert.equal(result.job.technicianId, "44444444-4444-4444-8444-444444444444");
+  assert.equal(result.job.doneAt, doneAt);
+  assert.equal(result.job.ardCode, "ARD002-AB");
+  assert.equal(result.portalItem.status, "FINALIZADO");
+  assert.equal(result.portalItem.doneAt, doneAt);
+  assert.equal(result.portalOrder.publicStatus, "FINALIZADO");
+  assert.equal(result.auditAction, "FRP_JOB_DIRECT_DONE");
+  assert.equal(result.publishReason, "frp_order_done");
+});
+
+test("Postgres FRP direct finalize enforces sequential multi-device processing", () => {
+  const result = applyFrpJobDirectFinalizeLegacyState({
+    job: {
+      id: "job-2",
+      code: "ORD-20260506-023-2",
+      orderId: baseOrder.id,
+      sequence: 2,
+      status: "ESPERANDO_PREPARACION",
+    },
+    order: {
+      ...baseOrder,
+      checklist: { ...baseOrder.checklist, paymentValidated: true },
+      paymentStatus: "COMPROBANTE_RECIBIDO",
+      orderStatus: "PAGO_VALIDADO",
+    },
+    jobs: [
+      { id: "job-1", code: "ORD-20260506-023-1", orderId: baseOrder.id, sequence: 1, status: "ESPERANDO_PREPARACION" },
+      { id: "job-2", code: "ORD-20260506-023-2", orderId: baseOrder.id, sequence: 2, status: "ESPERANDO_PREPARACION" },
+    ],
+    userId: "44444444-4444-4444-8444-444444444444",
+    userRole: "ATENCION_TECNICA",
+    doneAt: "2026-05-06T17:16:30.000Z",
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 409);
+  assert.match(result.error, /equipo anterior/);
+});
+
+test("Postgres FRP direct finalize is idempotent after a job is already done", () => {
+  const result = applyFrpJobDirectFinalizeLegacyState({
+    job: {
+      id: "job-1",
+      code: "ORD-20260506-023-1",
+      orderId: baseOrder.id,
+      sequence: 1,
+      status: "FINALIZADO",
+      ardCode: "ARD003-AC",
+    },
+    order: {
+      ...baseOrder,
+      checklist: { ...baseOrder.checklist, paymentValidated: true },
+      paymentStatus: "COMPROBANTE_RECIBIDO",
+      orderStatus: "CERRADA",
+    },
+    jobs: [{ id: "job-1", code: "ORD-20260506-023-1", orderId: baseOrder.id, sequence: 1, status: "FINALIZADO" }],
+    userId: "44444444-4444-4444-8444-444444444444",
+    userRole: "ATENCION_TECNICA",
+    doneAt: "2026-05-06T17:17:00.000Z",
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.alreadyFinalized, true);
+  assert.equal(result.job.ardCode, "ARD003-AC");
+});
+
+test("Postgres FRP direct finalize rejects unapproved payment", () => {
+  const result = applyFrpJobDirectFinalizeLegacyState({
+    job: {
+      id: "job-1",
+      code: "ORD-20260506-023-1",
+      orderId: baseOrder.id,
+      sequence: 1,
+      status: "ESPERANDO_PREPARACION",
+    },
+    order: {
+      ...baseOrder,
+      checklist: { ...baseOrder.checklist, paymentValidated: false },
+      paymentStatus: "PAGO_EN_VALIDACION",
+    },
+    jobs: [],
+    userId: "44444444-4444-4444-8444-444444444444",
+    userRole: "ATENCION_TECNICA",
+    doneAt: "2026-05-06T17:18:00.000Z",
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 400);
+  assert.match(result.error, /pago debe estar aprobado/i);
 });
 
 test("Postgres FRP cancel manual releases an active job back to the ready queue", () => {
@@ -494,4 +648,191 @@ test("Postgres FRP ready rejects incomplete readiness state before mutation", ()
   assert.equal(result.ok, false);
   assert.equal(result.status, 400);
   assert.match(result.error, /Completa conexion/);
+});
+
+test("FRP serializer exposes approved operatorOrders with stable short codes", () => {
+  const now = new Date().toISOString();
+  const { publicFrpState } = createTestFrpSerializers();
+  const db = {
+    users: [],
+    frpOrders: [{
+      id: "order-7",
+      code: "ORD-20260506-007",
+      portalOrderId: "portal-7",
+      clientId: "internal-7",
+      clientName: "Will Zubieta",
+      clientWhatsapp: "51999999999",
+      country: "PE",
+      workChannel: "WHATSAPP_3",
+      quantity: 1,
+      paymentStatus: "COMPROBANTE_RECIBIDO",
+      orderStatus: "PAGO_VALIDADO",
+      checklist: { paymentValidated: true },
+      paymentReviewedAt: now,
+      createdAt: now,
+      updatedAt: now,
+    }],
+    frpJobs: [{
+      id: "job-7-1",
+      code: "ORD-20260506-007-1",
+      orderId: "order-7",
+      sequence: 1,
+      totalJobs: 1,
+      status: "ESPERANDO_PREPARACION",
+      workChannel: "WHATSAPP_3",
+      createdAt: now,
+      updatedAt: now,
+    }],
+    customerOrders: [{ id: "portal-7", code: "ORD-20260506-007", clientId: "customer-7", priceLockedAt: now }],
+    customerClients: [{ id: "customer-7", status: "VIP" }],
+  };
+
+  const state = publicFrpState(db, { id: "tech-1", role: "ATENCION_TECNICA" });
+
+  assert.equal(state.orders[0].shortCode, "ARD-0007");
+  assert.equal(state.jobs[0].shortCode, "ARD-0007-01");
+  assert.equal(state.operatorOrders.length, 1);
+  assert.equal(state.operatorOrders[0].shortCode, "ARD-0007");
+  assert.equal(state.operatorOrders[0].items[0].shortCode, "ARD-0007-01");
+  assert.equal(state.operatorOrders[0].operatorStatus, "PAYMENT_APPROVED");
+  assert.equal(state.operatorOrders[0].primaryAction, "finalize");
+  assert.equal(state.operatorOrders[0].reviewAllowed, false);
+  assert.equal(state.operatorOrders[0].finalizeAllowed, true);
+  assert.equal(state.operatorOrders[0].customerId, "customer-7");
+});
+
+test("FRP serializer hides no-proof drafts from operatorOrders", () => {
+  const now = new Date().toISOString();
+  const { publicFrpState } = createTestFrpSerializers();
+  const db = {
+    users: [],
+    frpOrders: [{
+      id: "draft-order-1",
+      code: "ORD-20260506-009",
+      portalOrderId: "portal-draft-1",
+      clientId: "internal-draft-1",
+      clientName: "Cliente sin comprobante",
+      country: "PE",
+      workChannel: "WHATSAPP_3",
+      quantity: 1,
+      paymentStatus: "ESPERANDO_COMPROBANTE",
+      paymentProofs: [],
+      orderStatus: "COTIZADA",
+      checklist: { paymentValidated: false },
+      createdAt: now,
+      updatedAt: now,
+    }],
+    frpJobs: [{
+      id: "draft-job-1",
+      code: "ORD-20260506-009-1",
+      orderId: "draft-order-1",
+      sequence: 1,
+      totalJobs: 1,
+      status: "ESPERANDO_PREPARACION",
+      workChannel: "WHATSAPP_3",
+      createdAt: now,
+      updatedAt: now,
+    }],
+    customerOrders: [{ id: "portal-draft-1", code: "ORD-20260506-009", clientId: "customer-draft-1" }],
+    customerClients: [{ id: "customer-draft-1", status: "REGULAR" }],
+  };
+
+  const state = publicFrpState(db, { id: "tech-1", role: "ATENCION_TECNICA" });
+
+  assert.equal(state.orders.length, 1, "legacy orders remain available for compatibility");
+  assert.equal(state.operatorOrders.length, 0, "new operator panel must not show drafts without proof");
+});
+
+test("FRP serializer keeps a seven-device order grouped in one operator card", () => {
+  const now = new Date().toISOString();
+  const { publicFrpState } = createTestFrpSerializers();
+  const jobs = Array.from({ length: 7 }, (_, index) => ({
+    id: `job-23-${index + 1}`,
+    code: `ORD-20260506-023-${index + 1}`,
+    orderId: "order-23",
+    sequence: index + 1,
+    totalJobs: 7,
+    status: "ESPERANDO_PREPARACION",
+    workChannel: "WHATSAPP_3",
+    createdAt: now,
+    updatedAt: now,
+  }));
+  const db = {
+    users: [],
+    frpOrders: [{
+      id: "order-23",
+      code: "ORD-20260506-023",
+      portalOrderId: "portal-23",
+      clientId: "internal-23",
+      clientName: "Jhojan Tafur",
+      country: "PE",
+      workChannel: "WHATSAPP_3",
+      quantity: 7,
+      paymentStatus: "PAGO_EN_VALIDACION",
+      orderStatus: "ESPERANDO_PAGO",
+      checklist: { paymentValidated: false },
+      paymentVerification: { mode: "shadow", decision: "review" },
+      createdAt: now,
+      updatedAt: now,
+    }],
+    frpJobs: jobs,
+    customerOrders: [{ id: "portal-23", code: "ORD-20260506-023", clientId: "customer-23" }],
+    customerClients: [{ id: "customer-23", status: "REGULAR" }],
+  };
+
+  const state = publicFrpState(db, { id: "tech-1", role: "ATENCION_TECNICA" });
+
+  assert.equal(state.operatorOrders.length, 1);
+  assert.equal(state.operatorOrders[0].quantity, 7);
+  assert.equal(state.operatorOrders[0].operatorStatus, "AI_REVIEWING");
+  assert.equal(state.operatorOrders[0].primaryAction, "review");
+  assert.equal(state.operatorOrders[0].reviewAllowed, true);
+  assert.equal(state.operatorOrders[0].finalizeAllowed, false);
+  assert.equal(state.operatorOrders[0].items.length, 7);
+  assert.equal(state.operatorOrders[0].items[0].shortCode, "ARD-0023-01");
+  assert.equal(state.operatorOrders[0].items[6].shortCode, "ARD-0023-07");
+});
+
+test("FRP serializer derives no-connection alert after approved payment window", () => {
+  const reviewedAt = "2026-05-06T10:00:00.000Z";
+  const { publicFrpState } = createTestFrpSerializers();
+  const db = {
+    users: [],
+    frpOrders: [{
+      id: "order-31",
+      code: "ORD-20260506-031",
+      portalOrderId: "portal-31",
+      clientId: "internal-31",
+      clientName: "Daniel Gonzalez",
+      country: "PE",
+      workChannel: "WHATSAPP_3",
+      quantity: 1,
+      paymentStatus: "COMPROBANTE_RECIBIDO",
+      orderStatus: "PAGO_VALIDADO",
+      checklist: { paymentValidated: true },
+      paymentReviewedAt: reviewedAt,
+      createdAt: reviewedAt,
+      updatedAt: reviewedAt,
+    }],
+    frpJobs: [{
+      id: "job-31-1",
+      code: "ORD-20260506-031-1",
+      orderId: "order-31",
+      sequence: 1,
+      totalJobs: 1,
+      status: "ESPERANDO_PREPARACION",
+      workChannel: "WHATSAPP_3",
+      createdAt: reviewedAt,
+      updatedAt: reviewedAt,
+    }],
+    customerOrders: [{ id: "portal-31", code: "ORD-20260506-031", clientId: "customer-31" }],
+    customerClients: [{ id: "customer-31", status: "REGULAR" }],
+  };
+
+  const state = publicFrpState(db, { id: "tech-1", role: "ATENCION_TECNICA" });
+
+  assert.equal(state.operatorOrders[0].operatorStatus, "NO_CONNECTION");
+  assert.equal(state.operatorOrders[0].primaryAction, "notify_customer");
+  assert.equal(state.operatorOrders[0].notifyCustomerAllowed, true);
+  assert.equal(state.operatorOrders[0].noConnectionAlertAt, "2026-05-06T10:05:00.000Z");
 });

@@ -1,15 +1,14 @@
 /* ============================================================================
-   PANEL 4 — Conexión (sub-commit 15c.1)
+   PANEL 4 - Conexion (sesion 24 corte 5)
    ============================================================================
    Spec docs/specs/cliente/panel-4-conexion.md v1.1 §1-§7.
 
    El contenedor #panel4 usa data-state para controlar visibilidad y apariencia:
-     "0" / "1" / "2" / "5" : sólo botón Descargar centrado (estados idénticos).
-     "3"                   : botón "Equipo conectado" prominente azul + Descargar abajo.
-     "4"                   : cards Tech ID + Código + botón "¿Dónde pegar?" + Descargar abajo.
+     A : sin orden, codigo placeholder.
+     B : comprobante en revision/rechazado, codigo real.
+     C : pago aprobado, instrucciones de conexion/preparacion.
 
-   Sub-commit 15c.1 NO conecta SSE / descarga real / modal / POST. Eso va en
-   15c.2 / 15c.3 / 15c.4. Acá sólo estructura visual + Copiar.
+   El boton "Equipo conectado" queda oculto y no es umbral operativo.
    ============================================================================ */
 
 .panel-4-content {
@@ -58,14 +57,14 @@
    reorganiza la visibilidad. Las cards Tech ID + Código + botón "¿Dónde
    pegar?" + botón Descargar son SIEMPRE visibles desde login. La diferencia
    por estado:
-     A — Card Código en placeholder, sin botón Copiar de Código, sin "Equipo conectado".
-     B — Card Código con valor real (con Copiar), sin "Equipo conectado".
-     C — Igual que B + botón "Equipo conectado" prominente. */
+     A — Card Codigo en placeholder, sin boton Copiar de Codigo.
+     B — Card Codigo con valor real (con Copiar).
+     C — Pago aprobado/servicio activo con bloque de instrucciones. */
 
-/* Estado 3 — botón "Equipo conectado" prominente azul.
-   Spec §2.3: background #185FA5, color blanco, padding 14-16px, font 14-16px. */
+/* Compatibilidad temporal: el boton viejo existe en DOM para JS/cache antiguo,
+   pero ya no forma parte del flujo visual principal. */
 .panel-4-equipo-conectado-btn {
-  display: inline-flex;
+  display: none;
   align-items: center;
   justify-content: center;
   width: 100%;
@@ -91,6 +90,48 @@
   outline-offset: 2px;
 }
 .panel-4-equipo-conectado-btn[hidden] { display: none; }
+
+.panel-4-status {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 12px;
+  border: 0.5px solid var(--color-border-secondary);
+  border-radius: var(--border-radius-md);
+  background: #F8FBFF;
+}
+
+.panel-4-status-kicker {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+  color: var(--color-text-info);
+}
+
+.panel-4-status-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.panel-4-status-text {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--color-text-secondary);
+}
+
+.panel.panel-4[data-state="B"] .panel-4-status {
+  background: #F8FAFF;
+  border-color: var(--color-border-info);
+}
+
+.panel.panel-4[data-state="C"] .panel-4-status {
+  background: var(--color-bg-success);
+  border-color: var(--color-border-success);
+}
 
 /* Estado 4 — cards apiladas verticalmente con label + valor sombreado +
    botón Copiar. Spec §2.4 + acceptance 17-20. */
@@ -195,17 +236,14 @@
 
 /* Visibilidad por data-state (modelo de 3 estados v1.2). Cards + "¿Dónde
    pegar?" + Descargar son SIEMPRE visibles. Las únicas variaciones:
-     - Botón "Equipo conectado": sólo en estado C.
+     - Boton "Equipo conectado": oculto; compatibilidad temporal solamente.
      - Botón Copiar de la card Código: oculto en estado A (placeholder).
    Animaciones de fade-in para placeholder→código real y aparición del
-   botón "Equipo conectado" (spec §2.8). */
+   bloque de instrucciones (corte 5). */
 .panel.panel-4 .panel-4-equipo-conectado-btn {
   display: none;
 }
-.panel.panel-4[data-state="C"] .panel-4-equipo-conectado-btn {
-  display: inline-flex;
-  animation: panel4FadeIn 200ms ease;
-}
+.panel.panel-4[data-state="C"] .panel-4-equipo-conectado-btn { display: none; }
 
 /* El boton Copiar del codigo solo se oculta cuando realmente no hay codigo.
    En estado A post-clic puede existir orden viva y debe poder copiarse. */
@@ -229,6 +267,9 @@
 @media (max-width: 639.98px) {
   .panel-4-equipo-conectado-btn { padding: 14px 16px; font-size: 14px; }
   .panel-4-card-value { font-size: 12px; }
+  .panel-4-status { padding: 10px; }
+  .panel-4-status-title { font-size: 12px; }
+  .panel-4-status-text { font-size: 11px; }
   .panel-4-where-paste-btn { padding: 8px 10px; font-size: 12px; }
   .panel-4-download-btn { padding: 9px 12px; font-size: 12px; }
 }

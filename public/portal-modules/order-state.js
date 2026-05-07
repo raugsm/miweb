@@ -33,7 +33,7 @@ export function customerNextAction(order) {
     const reason = String(order.paymentRejectedReason || "").trim() || "Comprobante rechazado.";
     return `${reason} Sube un nuevo comprobante.`;
   }
-  if (order?.publicStatus === "EN_PREPARACION") return "Pago confirmado. Conecta tu equipo desde el paso 4 cuando este listo.";
+  if (order?.publicStatus === "EN_PREPARACION") return "Pago confirmado. Prepara USB Redirector y manten el equipo disponible.";
   if (order?.publicStatus === "LISTO_PARA_CONEXION") return "Mantente disponible. El tecnico tomara el equipo.";
   if (order?.publicStatus === "EN_PROCESO") return "No desconectes el equipo. Tecnico procesando.";
   if (order?.publicStatus === "FINALIZADO") return "Servicio finalizado. Revisa el Done.";
@@ -55,12 +55,10 @@ export function trackingStage(order) {
   return "RECEIVED";
 }
 
-// PR-2a-final.bundle2 item 4 — limpieza de estados pre-conexion. Mis Ordenes
-// solo muestra ordenes post-"Equipo conectado" (FINAL §8 actualizado), asi
-// que payment_review / payment_rejected / awaiting_connection ya no se
-// renderizan en el listado — viven inline en pasos 3/4. Solo
-// price_decision_required permanece (puede aparecer post-conexion si el
-// lock vence con costo subido durante procesamiento).
+// Sesion 24: Mis Ordenes muestra el pedido desde que se sube comprobante.
+// "Equipo conectado" ya no es umbral operativo; revision, aprobado y atencion
+// viven en seguimiento. Solo price_decision_required agrega una decision extra
+// si el lock vence con costo subido durante procesamiento.
 export function ordersDisplayState(order) {
   if (!order) return "";
   if (orderRequiresPriceDecision(order)) return "price_decision_required";

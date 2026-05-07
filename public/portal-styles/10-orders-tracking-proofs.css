@@ -685,6 +685,32 @@
   padding: 18px 20px;
 }
 
+.order-card-v1.is-approved {
+  border-color: #b8dfc8;
+  background: #f0fbf5;
+}
+
+.order-card-v1.is-review {
+  border-color: #bbd4ff;
+  background: #eef5ff;
+}
+
+.order-card-v1.is-attention,
+.order-card-v1.is-warn {
+  border-color: #f2c66d;
+  background: #fff8e5;
+}
+
+.order-card-v1.is-process {
+  border-color: #b8d7f2;
+  background: #eef7ff;
+}
+
+.order-card-v1.is-done {
+  border-color: #dbecc8;
+  background: #f2f8ea;
+}
+
 .order-card-v1 .order-card-head {
   align-items: flex-start;
   margin: 0;
@@ -718,18 +744,71 @@
 }
 
 .order-card-v1 .order-code {
-  color: #526078;
+  color: #0f1629;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 16px;
+  font-weight: 900;
   line-height: 1.2;
 }
 
-.order-amount {
-  color: #0f1629;
-  font-size: 20px;
-  font-weight: 700;
-  line-height: 1.15;
+.order-real-code {
+  color: #526078;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.order-card-status {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-end;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.order-status-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #34435c;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.order-status-pill.is-approved {
+  border-color: #a8e0c6;
+  background: #dff6ec;
+  color: #047857;
+}
+
+.order-status-pill.is-review {
+  border-color: #bbd4ff;
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.order-status-pill.is-attention,
+.order-status-pill.is-warn {
+  border-color: #e4bf62;
+  background: #ffe9a8;
+  color: #8a4d00;
+}
+
+.order-status-pill.is-process {
+  border-color: #b8d7f2;
+  background: #dff0ff;
+  color: #0c447c;
+}
+
+.order-status-pill.is-done {
+  border-color: #cce4b6;
+  background: #eaf3de;
+  color: #27500a;
 }
 
 .order-date {
@@ -746,6 +825,14 @@
   font-size: 13px;
   font-weight: 700;
   line-height: 1.35;
+}
+
+.order-next-action {
+  margin: -4px 0 0;
+  color: #526078;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.45;
 }
 
 .order-equipment-list {
@@ -783,6 +870,16 @@
   background: #f4f5f0;
 }
 
+.order-equipment-row.is-approved {
+  border-color: #b8dfc8;
+  background: #f0fbf5;
+}
+
+.order-equipment-row.is-review {
+  border-color: #bbd4ff;
+  background: #eef5ff;
+}
+
 .order-equipment-row.is-warn {
   border-color: #fdba74;
   background: #fffbf5;
@@ -807,6 +904,16 @@
 .order-equipment-row.is-canceled .order-equipment-marker {
   background: #888780;
   border-color: #888780;
+}
+
+.order-equipment-row.is-approved .order-equipment-marker {
+  background: #047857;
+  border-color: #047857;
+}
+
+.order-equipment-row.is-review .order-equipment-marker {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
 }
 
 .order-equipment-row.is-process .order-equipment-marker {
@@ -863,6 +970,14 @@
 
 .order-item-text[data-stage="ready"] {
   color: #6b7280;
+}
+
+.order-item-text[data-stage="approved"] {
+  color: #047857;
+}
+
+.order-item-text[data-stage="review"] {
+  color: #1d4ed8;
 }
 
 .order-item-text[data-stage="process"] {

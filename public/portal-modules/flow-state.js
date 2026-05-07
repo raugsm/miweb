@@ -3,20 +3,17 @@ import { state } from "./state.js";
 
 // PR-2a-final.bundle2 — fix real BUG 16 (BUG B sigue activo).
 //
-// Causa raiz definitiva: customerOrders se almacena newest-first y la version
-// anterior usaba `find()` sobre la primera orden que matcheara ACTIVE_STATES.
-// Si el cliente tiene MULTIPLES ordenes activas en simultaneo (caso comun en
-// testing y permitido por producto excepto ESPERANDO_PAGO/RECHAZADO), find
-// devolvia la mas reciente. Si la nueva estaba en PAGO_EN_REVISION pero la
-// anterior estaba en EN_PREPARACION post-aprobacion, flowState resolvia a
-// "in_review" y el boton "Equipo conectado" para la orden anterior nunca
-// renderizaba. Ahora priorizamos por accionabilidad del cliente.
+// Causa raiz historica: customerOrders se almacena newest-first y `find()`
+// podia mezclar ordenes simultaneas. En sesion 24 dejamos de tratar
+// EN_PREPARACION como accion web del cliente; la orden aprobada vive en
+// seguimiento y el operador puede procesarla sin otro boton.
 //
 // Taxonomia (orden de prioridad de mayor a menor accion del cliente):
 //   rejected            PAGO_RECHAZADO en alguna orden — debe subir nuevo comprobante.
-//   awaiting_connection EN_PREPARACION + sin customerConnectedAt — debe presionar "Equipo conectado".
 //   in_review           PAGO_EN_REVISION — esperar revision del operador.
-//   connected           LISTO_PARA_CONEXION/EN_PROCESO/REQUIERE_ATENCION — ya conectado, en pipeline.
+//   connected           EN_PREPARACION/LISTO_PARA_CONEXION/EN_PROCESO/REQUIERE_ATENCION.
+//                       La conexion fisica se verifica fuera de la web; el cliente
+//                       ya no debe presionar "Equipo conectado" como umbral.
 //   draft               Sin ordenes activas.
 
 const ACTIVE_STATES = new Set([
@@ -33,11 +30,6 @@ export function deriveFlowState(customer) {
 
   if (orders.some((order) => order.publicStatus === "PAGO_RECHAZADO")) return "rejected";
 
-  const awaitingConn = orders.some((order) => (
-    order.publicStatus === "EN_PREPARACION" && !order.customerConnectedAt
-  ));
-  if (awaitingConn) return "awaiting_connection";
-
   if (orders.some((order) => order.publicStatus === "PAGO_EN_REVISION")) return "in_review";
 
   if (orders.some((order) => ACTIVE_STATES.has(order.publicStatus))) return "connected";
@@ -45,11 +37,9 @@ export function deriveFlowState(customer) {
   return "draft";
 }
 
-// QUE: orden sobre la que el cliente puede actuar con "Equipo conectado".
-// El backend solo acepta el evento cuando publicStatus ∈ {EN_PREPARACION,
-// LISTO_PARA_CONEXION} (portal-routes.js:705). Priorizamos la EN_PREPARACION
-// + !customerConnectedAt (la que necesita el click) por encima de cualquier
-// otra activa, sin depender del orden newest-first del array.
+// QUE: orden de compatibilidad para el endpoint viejo "notify-connected".
+// POR QUE: el boton ya no se muestra en el flujo visual principal, pero dejamos
+// esta ruta para clientes/cache antiguo mientras se completa la transicion.
 export function activeOrderForFlow(customer) {
   const orders = customer?.orders || [];
   return (

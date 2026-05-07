@@ -114,6 +114,7 @@ import { confirmPortalCustomerPostgres } from "./server/db/postgres-customer-adm
 import { insertAuditEvent } from "./server/db/postgres-audit.js";
 import {
   cancelFrpJobPostgres,
+  finalizeFrpJobDirectPostgres,
   finalizeFrpJobPostgres,
   markFrpJobReadyPostgres,
   reviewFrpJobPostgres,
@@ -3660,6 +3661,7 @@ const handleFrpApi = createFrpRoutes({
   requireFrpPaymentReviewer,
   requireUser,
   cancelFrpJobPostgres: storage.driver === "postgres" ? cancelFrpJobPostgres : null,
+  finalizeFrpJobDirectPostgres: storage.driver === "postgres" ? finalizeFrpJobDirectPostgres : null,
   finalizeFrpJobPostgres: storage.driver === "postgres" ? finalizeFrpJobPostgres : null,
   markFrpJobReadyPostgres: storage.driver === "postgres" ? markFrpJobReadyPostgres : null,
   reviewFrpJobPostgres: storage.driver === "postgres" ? reviewFrpJobPostgres : null,

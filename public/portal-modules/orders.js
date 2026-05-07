@@ -18,13 +18,14 @@ export function notifyCustomerUpdated() {
 }
 
 const VISIBLE_IN_MY_ORDERS = new Set([
+  "PAGO_EN_REVISION",
+  "PAGO_RECHAZADO",
+  "EN_PREPARACION",
   "LISTO_PARA_CONEXION",
   "EN_PROCESO",
   "FINALIZADO",
   "REQUIERE_ATENCION",
 ]);
-
-const READY_ACTION_STATUSES = new Set(["ESPERANDO_PREPARACION", "ESPERANDO_CLIENTE"]);
 
 const ITEM_STATUS = {
   ESPERANDO_PREPARACION: { label: "Pendiente", stage: "pending" },
@@ -36,6 +37,16 @@ const ITEM_STATUS = {
   CANCELADO: { label: "Cancelado", stage: "canceled" },
 };
 
+const ORDER_STATUS = {
+  PAGO_EN_REVISION: { label: "Pago en revision", stage: "review", detail: "Estamos revisando tu comprobante." },
+  PAGO_RECHAZADO: { label: "Pago rechazado", stage: "review", detail: "Revisa el motivo y sube un nuevo comprobante." },
+  EN_PREPARACION: { label: "Pago aprobado", stage: "approved", detail: "Prepara el equipo para el servicio." },
+  LISTO_PARA_CONEXION: { label: "Pago aprobado", stage: "approved", detail: "Mantente disponible para el servicio." },
+  EN_PROCESO: { label: "En proceso", stage: "process", detail: "Servicio en proceso. No desconectes el equipo." },
+  REQUIERE_ATENCION: { label: "Requiere conexion", stage: "attention", detail: "Necesitamos que conectes el equipo o respondas el aviso." },
+  FINALIZADO: { label: "Finalizado", stage: "done", detail: "Servicio finalizado." },
+};
+
 const ORDER_FLAG_SVGS = {
   Peru: '<svg viewBox="0 0 28 28" width="28" height="28" aria-hidden="true"><circle cx="14" cy="14" r="14" fill="#D91023"/><rect x="9.33" y="0" width="9.34" height="28" fill="#FFFFFF"/></svg>',
   Mexico: '<svg viewBox="0 0 28 28" width="28" height="28" aria-hidden="true"><circle cx="14" cy="14" r="14" fill="#006847"/><rect x="9.33" y="0" width="9.34" height="28" fill="#FFFFFF"/><rect x="18.67" y="0" width="9.33" height="28" fill="#CE1126"/></svg>',
@@ -44,7 +55,19 @@ const ORDER_FLAG_SVGS = {
   Global: '<svg viewBox="0 0 28 28" width="28" height="28" aria-hidden="true"><circle cx="14" cy="14" r="14" fill="#26A17B"/><text x="14" y="19" text-anchor="middle" font-size="16" font-weight="700" fill="#FFFFFF" font-family="Arial,sans-serif">T</text></svg>',
 };
 
-function itemStatusFor(item) {
+function orderStatusFor(order) {
+  return ORDER_STATUS[order?.publicStatus] || { label: order?.publicStatus || "Pedido recibido", stage: "review", detail: order?.nextAction || "Revisa el avance de tu pedido." };
+}
+
+function itemStatusFor(order, item) {
+  if (order?.publicStatus === "PAGO_EN_REVISION") return { label: "En revision", stage: "review" };
+  if (order?.publicStatus === "PAGO_RECHAZADO") return { label: "Revisar pago", stage: "warn" };
+  if (["EN_PREPARACION", "LISTO_PARA_CONEXION"].includes(order?.publicStatus) && ["ESPERANDO_PREPARACION", "ESPERANDO_CLIENTE", "LISTO_PARA_TECNICO"].includes(item?.status)) {
+    return { label: "Pago aprobado", stage: "approved" };
+  }
+  if (order?.publicStatus === "REQUIERE_ATENCION" && ["ESPERANDO_PREPARACION", "ESPERANDO_CLIENTE"].includes(item?.status)) {
+    return { label: "Requiere conexion", stage: "warn" };
+  }
   return ITEM_STATUS[item?.status] || { label: item?.status || "Pendiente", stage: "pending" };
 }
 
@@ -109,16 +132,7 @@ function orderSummaryText(order) {
 }
 
 function itemTitle(item) {
-  return `Equipo ${item.sequence}`;
-}
-
-function canMarkItemReady(order, item) {
-  if (!VISIBLE_IN_MY_ORDERS.has(order?.publicStatus)) return false;
-  return READY_ACTION_STATUSES.has(item?.status);
-}
-
-function canCancelItem(order, item) {
-  return canMarkItemReady(order, item);
+  return item?.shortCode || `Equipo ${item?.sequence || ""}`.trim();
 }
 
 function allProcessableItemsFinalized(order) {
@@ -131,15 +145,7 @@ function canAbortOrder(order) {
   return activeItemsForOrder(order).some((item) => item.status !== "FINALIZADO");
 }
 
-function itemSideHtml(order, item, status) {
-  if (canMarkItemReady(order, item)) {
-    return `
-      <div class="order-equipment-actions">
-        <button type="button" class="order-item-cancel-button" data-order-item-cancel="${escapeHtml(item.id)}" data-item-sequence="${escapeHtml(item.sequence)}">Cancelar este equipo</button>
-        <button type="button" class="order-item-ready-button" data-order-item-ready="${escapeHtml(item.id)}" data-item-sequence="${escapeHtml(item.sequence)}">Equipo listo</button>
-      </div>
-    `;
-  }
+function itemSideHtml(item, status) {
   if (item.status === "FINALIZADO") {
     const doneTime = formatTime(item.doneAt);
     return `<span class="order-item-text" data-stage="${escapeHtml(status.stage)}">Finalizado${doneTime ? ` · ${escapeHtml(doneTime)}` : ""}</span>`;
@@ -149,13 +155,13 @@ function itemSideHtml(order, item, status) {
 
 function itemRowsHtml(order) {
   return itemsForOrder(order).map((item) => {
-    const status = itemStatusFor(item);
+    const status = itemStatusFor(order, item);
     return `
       <li class="order-equipment-row is-${escapeHtml(status.stage)}">
         <span class="order-equipment-marker" aria-hidden="true"></span>
         <strong class="order-equipment-title">${escapeHtml(itemTitle(item))}</strong>
         <div class="order-equipment-side">
-          ${itemSideHtml(order, item, status)}
+          ${itemSideHtml(item, status)}
         </div>
       </li>
     `;
@@ -193,23 +199,31 @@ function orderMenuHtml(order) {
 
 function renderOrderCard(order) {
   const card = document.createElement("article");
+  const status = orderStatusFor(order);
   const receiptEnabled = allProcessableItemsFinalized(order);
   const receiptHref = `/api/portal/orders/${encodeURIComponent(order.id)}/comprobante.pdf`;
-  card.className = "order-card order-card-v1";
+  const shortCode = order.shortCode || order.code || order.id;
+  const realCode = order.code && order.code !== shortCode ? order.code : "";
+  card.className = `order-card order-card-v1 is-${status.stage}`;
   card.dataset.orderId = order.id;
   card.dataset.publicStatus = order.publicStatus || "";
+  card.dataset.operatorStatus = order.operatorStatus || "";
   card.innerHTML = `
     <div class="order-card-head">
       <div class="order-card-identity">
         <span class="order-country-flag">${orderFlagHtml(order)}</span>
         <div class="order-card-titleblock">
-          <strong class="order-code">${escapeHtml(order.code || order.id)}</strong>
-          <span class="order-amount">${escapeHtml(formatOrderAmount(order))}</span>
+          <strong class="order-code">${escapeHtml(shortCode)}</strong>
+          ${realCode ? `<span class="order-real-code">real: ${escapeHtml(realCode)}</span>` : ""}
         </div>
       </div>
-      <time class="order-date">${escapeHtml(formatOrderDate(order))}</time>
+      <div class="order-card-status">
+        <span class="order-status-pill is-${escapeHtml(status.stage)}">${escapeHtml(status.label)}</span>
+        <time class="order-date">${escapeHtml(formatOrderDate(order))}</time>
+      </div>
     </div>
     <p class="order-meta">${escapeHtml(orderSummaryText(order))}</p>
+    <p class="order-next-action">${escapeHtml(order.nextAction || status.detail)}</p>
     ${priceDecisionHtml(order)}
     <ul class="order-equipment-list">
       ${itemRowsHtml(order)}
@@ -231,7 +245,7 @@ function renderOrderCard(order) {
 }
 
 function disableCardActions(card, disabled) {
-  card.querySelectorAll("[data-order-item-ready], [data-order-item-cancel], [data-order-abort]").forEach((node) => {
+  card.querySelectorAll("[data-order-abort]").forEach((node) => {
     node.disabled = disabled;
   });
 }

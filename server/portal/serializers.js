@@ -60,6 +60,77 @@ export function createPortalSerializers({
     };
   }
 
+  function lastNumericSegment(value) {
+    const matches = String(value || "").match(/\d+/g);
+    return matches?.length ? matches[matches.length - 1] : "";
+  }
+
+  function publicShortOrderCode(order, frpOrder = null) {
+    const stored = String(frpOrder?.shortCode || order?.shortCode || order?.operatorShortCode || "").trim();
+    if (stored) return stored;
+    const numeric = lastNumericSegment(frpOrder?.code || order?.code || "");
+    return numeric ? `ARD-${numeric.padStart(4, "0").slice(-4)}` : "";
+  }
+
+  function publicShortItemCode(item, job, order, frpOrder = null) {
+    const stored = String(job?.shortCode || item?.shortCode || item?.operatorShortCode || "").trim();
+    if (stored) return stored;
+    const base = publicShortOrderCode(order, frpOrder);
+    if (!base) return "";
+    const sequence = Number(item?.sequence || job?.sequence || lastNumericSegment(job?.code || ""));
+    return Number.isFinite(sequence) && sequence > 0
+      ? `${base}-${String(sequence).padStart(2, "0")}`
+      : base;
+  }
+
+  const noConnectionWindowMs = 5 * 60 * 1000;
+
+  function timestampMs(value) {
+    const parsed = Date.parse(value || "");
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  function isoAfter(value, ms) {
+    const base = timestampMs(value);
+    return base ? new Date(base + ms).toISOString() : "";
+  }
+
+  function portalPaymentApproved(frpOrder) {
+    return Boolean(
+      frpOrder?.checklist?.paymentValidated
+      || frpOrder?.paymentStatus === "PAGO_VALIDADO"
+      || frpOrder?.paymentStatus === "COMPROBANTE_RECIBIDO"
+    );
+  }
+
+  function portalPaymentRejected(frpOrder) {
+    return frpOrder?.paymentStatus === "COMPROBANTE_RECHAZADO";
+  }
+
+  function portalOperatorOrderStatus(order, db) {
+    const frpOrder = db.frpOrders.find((candidate) => candidate.id === order.frpOrderId);
+    const items = db.customerOrderItems.filter((item) => item.orderId === order.id);
+    const jobs = items.map((item) => db.frpJobs.find((job) => job.id === item.frpJobId)).filter(Boolean);
+    const activeJobs = jobs.filter((job) => job.status !== "CANCELADO");
+    if (activeJobs.length && activeJobs.every((job) => job.status === "FINALIZADO")) return "FINISHED";
+    if (portalPaymentRejected(frpOrder)) return "PAYMENT_REJECTED";
+    if (!portalPaymentApproved(frpOrder)) return "AI_REVIEWING";
+    if (activeJobs.some((job) => job.status === "REQUIERE_REVISION" || job.status === "ESPERANDO_CLIENTE")) return "NEEDS_ATTENTION";
+    if (activeJobs.some((job) => job.status === "EN_PROCESO")) return "IN_PROCESS";
+
+    const approvedAt = frpOrder?.paymentReviewedAt || order.paymentReviewedAt || frpOrder?.priceLockedAt || order.priceLockedAt || "";
+    const hasOperationalProgress = activeJobs.some((job) => (
+      job.status === "LISTO_PARA_TECNICO"
+      || job.status === "EN_PROCESO"
+      || job.status === "FINALIZADO"
+      || job.readyAt
+      || job.takenAt
+      || job.doneAt
+    ));
+    if (approvedAt && !hasOperationalProgress && Date.now() - timestampMs(approvedAt) >= noConnectionWindowMs) return "NO_CONNECTION";
+    return "PAYMENT_APPROVED";
+  }
+
   function publicCustomerBenefit(benefit, canUseBenefits, pricing = null) {
     if (!benefit) return null;
     // PR-2a.5-fix: VIP usa margen sobre costo proveedor, no precio total.
@@ -88,6 +159,7 @@ export function createPortalSerializers({
     const frpOrder = db.frpOrders.find((candidate) => candidate.id === order.frpOrderId);
     const items = db.customerOrderItems.filter((item) => item.orderId === order.id);
     const jobs = items.map((item) => db.frpJobs.find((job) => job.id === item.frpJobId)).filter(Boolean);
+    const operatorStatus = portalOperatorOrderStatus(order, db);
     if (order.publicStatus === "CANCELADO") return "CANCELADO";
     if (order.publicStatus === "REVISION_COMPATIBILIDAD") return "REVISION_COMPATIBILIDAD";
     const activeJobs = jobs.filter((job) => job.status !== "CANCELADO");
@@ -96,6 +168,7 @@ export function createPortalSerializers({
     if (activeJobs.some((job) => job.status === "REQUIERE_REVISION" || job.status === "ESPERANDO_CLIENTE")) return "REQUIERE_ATENCION";
     if (activeJobs.some((job) => job.status === "EN_PROCESO")) return "EN_PROCESO";
     if (activeJobs.some((job) => job.status === "LISTO_PARA_TECNICO")) return "LISTO_PARA_CONEXION";
+    if (operatorStatus === "NO_CONNECTION") return "REQUIERE_ATENCION";
     if ((frpOrder?.checklist?.paymentValidated || frpOrder?.paymentStatus === "PAGO_VALIDADO") && (order.customerConnectionReadyAt || frpOrder?.customerConnectionReadyAt)) return "LISTO_PARA_CONEXION";
     if (frpOrder?.checklist?.paymentValidated || frpOrder?.paymentStatus === "PAGO_VALIDADO") return "EN_PREPARACION";
     // QUE: rechazo de comprobante por el operador antes que "proofs presentes".
@@ -126,7 +199,7 @@ export function createPortalSerializers({
       const reason = cleanText(frpOrder?.paymentRejectedReason || "", 160) || "Comprobante rechazado.";
       return `Pago rechazado: ${reason} Sube un nuevo comprobante.`;
     }
-    if (status === "EN_PREPARACION") return "Pago validado. Prepara USB Redirector y marca que estas listo para conectar.";
+    if (status === "EN_PREPARACION") return "Pago validado. Prepara USB Redirector y manten el equipo disponible para el servicio.";
     if (status === "LISTO_PARA_CONEXION") return "Conexion lista. Mantente disponible para que el tecnico tome el equipo.";
     if (status === "EN_PROCESO") return "Tecnico procesando. No desconectes el equipo hasta recibir el Done.";
     if (status === "REQUIERE_ATENCION") {
@@ -202,6 +275,9 @@ export function createPortalSerializers({
     const publicStatus = deriveCustomerOrderStatus(order, db);
     const hidePaymentDetails = publicStatus === "REVISION_COMPATIBILIDAD";
     const frpOrderForReason = db.frpOrders.find((candidate) => candidate.id === order.frpOrderId);
+    const operatorStatus = portalOperatorOrderStatus(order, db);
+    const paymentApprovedAt = frpOrderForReason?.paymentReviewedAt || order.paymentReviewedAt || frpOrderForReason?.priceLockedAt || order.priceLockedAt || "";
+    const noConnectionAlertAt = frpOrderForReason?.noConnectionAlertAt || order.noConnectionAlertAt || isoAfter(paymentApprovedAt, noConnectionWindowMs);
     const paymentRejectedReason = publicStatus === "PAGO_RECHAZADO"
       ? cleanText(frpOrderForReason?.paymentRejectedReason || "", 160)
       : "";
@@ -225,6 +301,7 @@ export function createPortalSerializers({
     return {
       id: order.id,
       code: order.code,
+      shortCode: publicShortOrderCode(order, frpOrderForReason),
       serviceCode: order.serviceCode,
       serviceName: order.serviceName,
       quantity: order.quantity,
@@ -233,12 +310,14 @@ export function createPortalSerializers({
       priceFormatted: order.priceFormatted,
       discountLabel: order.discountLabel,
       discountLocked: Boolean(order.discountLocked),
+      frpOrderId: order.frpOrderId || "",
       monthlyUsageAtCreation: order.monthlyUsageAtCreation || 0,
       nextMonthlyTier: order.nextMonthlyTier || null,
       paymentMethod: order.paymentMethod,
       paymentLabel: hidePaymentDetails ? "" : order.paymentLabel,
       paymentDetails: hidePaymentDetails ? [] : (Array.isArray(order.paymentDetails) ? order.paymentDetails : payment?.details || []),
       publicStatus,
+      operatorStatus,
       paymentRejectedReason,
       nextAction: publicCustomerOrderNextAction(order, db, publicStatus),
       technicianId: order.technicianId || order.redirectorId || "",
@@ -249,6 +328,9 @@ export function createPortalSerializers({
       // lo usa para timer "¿Listo para conectar?" (2 min post-aprobacion sin
       // customerConnectedAt → banner azul con CTAs).
       paymentReviewedAt: frpOrderForReason?.paymentReviewedAt || "",
+      paymentApprovedAt,
+      noConnectionAlertAt,
+      priceRevalidationStatus: frpOrderForReason?.priceRevalidationStatus || order.priceDecisionAction || "",
       // PR-2a-final.bundle2 item 4: registro de actividad para Mis Ordenes.
       // Eventos timestampeados con actor (tech | customer) — frontend marca
       // los del cliente con "(vos)" al renderizar.
@@ -289,6 +371,7 @@ export function createPortalSerializers({
           imei: item.imei || "",
           status: job?.status || item.status,
           ardCode: job?.ardCode || item.ardCode || "",
+          shortCode: publicShortItemCode(item, job, order, frpOrderForReason),
           finalLog: job?.finalLog || "",
           readyAt: job?.readyAt || "",
           takenAt: job?.takenAt || "",

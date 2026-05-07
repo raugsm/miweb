@@ -1,16 +1,16 @@
-// Sub-commit 15c.1-bis — render del Panel 4 (Conexión) modelo de 3 estados.
-// Spec: docs/specs/cliente/panel-4-conexion.md v1.2 §2.1-§2.8 + §7.
+// Sesion 24 / corte 5 - render del Panel 4 (Conexion) como guia.
+// Spec vigente: docs/specs/cliente/panel-4-conexion.md v2.0.
 //
 // QUE: el Panel 4 muestra SIEMPRE las cards Technician ID + Código del proceso
-// + botón "¿Dónde pegar?" + botón Descargar. La diferencia entre estados es:
+// + boton "¿Dónde pegar?" + boton Descargar. La diferencia entre estados es:
 //   A — Inicial         : Card Código en placeholder ("Aparecerá cuando subas
 //                         tu pago"), sin botón Copiar de Código, sin "Equipo
 //                         conectado".
-//   B — Comprobante     : Card Código con valor real (con botón Copiar), sin
-//      en validación      "Equipo conectado". Aplica también a comprobante
-//      o rechazado        rechazado (el código se queda, ver spec §2.3).
-//   C — Validado        : Igual que B + botón "Equipo conectado" prominente.
-//      pre-clic
+//   B — Comprobante     : Card Codigo con valor real (con boton Copiar), sin
+//      en validacion      boton de conexion. Aplica tambien a comprobante
+//      o rechazado        rechazado.
+//   C — Pago aprobado   : Card Codigo con valor real + instrucciones. Sin
+//      o servicio vivo    boton obligatorio de conexion.
 //
 // El modelo viejo de 6 estados (v1.0/v1.1) se reorganizó en estos 3 según la
 // mini-spec de sesión 15c (commit a5a8a4c).
@@ -28,16 +28,12 @@
 // Si no, el render deriva del estado real de state.customer.orders[]:
 //   - Sin orden                                                        → A
 //   - Orden con publicStatus PAGO_EN_REVISION o PAGO_RECHAZADO          → B
-//   - Orden con publicStatus EN_PREPARACION (post-validación pre-clic)  → C
-//   - Orden con publicStatus LISTO_PARA_CONEXION/EN_PROCESO/FINALIZADO  → A
-//     (el clic en "Equipo conectado" mueve la orden allí — el Panel 4 vuelve
-//     a A; el Tech ID se "freeze-a" en la orden si aplica, ver spec §2.2)
+//   - Orden con publicStatus EN_PREPARACION/LISTO_PARA_CONEXION/
+//     EN_PROCESO/REQUIERE_ATENCION                                      → C
+//   - Orden FINALIZADA o sin orden viva                                  → A
 //
-// 15c.4 reemplaza:
-//   - Tech ID hardcoded por consumo real de GET /api/portal/active-technician
-//     y SSE para refresh en vivo.
-//   - Botón "Equipo conectado" no-op por POST /api/portal/orders/:id/notify-connected.
-//   - Botón Descargar no-op por descarga real del Redirector.
+// Compatibilidad:
+//   - notify-connected queda vivo para cache/clientes antiguos, pero oculto en UI.
 
 import { $ } from "./dom.js";
 import { state } from "./state.js";
@@ -46,6 +42,12 @@ const DEBUG_ORDER_CODE = "CL-20260504-001-2";
 const PLACEHOLDER_CODE_TEXT = "Aparecerá cuando subas tu pago";
 
 const VALID_DEBUG_STATES = new Set(["A", "B", "C"]);
+const PREPARATION_STATES = new Set([
+  "EN_PREPARACION",
+  "LISTO_PARA_CONEXION",
+  "EN_PROCESO",
+  "REQUIERE_ATENCION",
+]);
 
 // Devuelve "A" | "B" | "C". Si hay override de debug en window, lo respeta.
 // Sino deriva del state real.
@@ -58,21 +60,17 @@ function deriveState() {
   const customer = state.customer;
   const orders = customer?.orders || [];
 
-  // C — validado pre-clic: orden EN_PREPARACION sin customerConnectedAt.
-  const orderValidatedPreClick = orders.find((order) => (
-    order.publicStatus === "EN_PREPARACION" && !order.customerConnectedAt
-  ));
-  if (orderValidatedPreClick) return "C";
-
   // B — comprobante en validación o rechazado: PAGO_EN_REVISION o PAGO_RECHAZADO.
   const orderInReviewOrRejected = orders.find((order) => (
     order.publicStatus === "PAGO_EN_REVISION" || order.publicStatus === "PAGO_RECHAZADO"
   ));
   if (orderInReviewOrRejected) return "B";
 
-  // A — todo lo demás: sin orden, post-clic (LISTO_PARA_CONEXION / EN_PROCESO /
-  // FINALIZADO), o estados no contemplados. Spec §2.1 equivalencia: estado 4
-  // antiguo (orden activa post-clic) → vuelve a A.
+  // C - pago aprobado o servicio activo: el cliente prepara/mantiene el equipo.
+  const orderReadyForPreparation = orders.find((order) => PREPARATION_STATES.has(order.publicStatus));
+  if (orderReadyForPreparation) return "C";
+
+  // A — todo lo demás: sin orden, finalizado, o estados no contemplados.
   return "A";
 }
 
@@ -81,17 +79,45 @@ function deriveState() {
 // pre-clic > sin orden (caller decide hardcoded/SSE).
 function orderForCards() {
   const orders = state.customer?.orders || [];
-  // Tech ID congelado: orden post-clic con LISTO_PARA_CONEXION / EN_PROCESO.
+  // Tech ID congelado: orden post-pago o servicio activo.
   const orderActive = orders.find((order) => (
-    ["LISTO_PARA_CONEXION", "EN_PROCESO"].includes(order.publicStatus)
-    || (order.publicStatus === "EN_PREPARACION" && order.customerConnectedAt)
+    PREPARATION_STATES.has(order.publicStatus)
   ));
   if (orderActive) return orderActive;
-  // Pre-clic o validación en curso: orden con código real pero sin freeze.
+  // Validación en curso: orden con código real pero sin freeze.
   const orderWithCode = orders.find((order) => (
-    ["EN_PREPARACION", "PAGO_EN_REVISION", "PAGO_RECHAZADO"].includes(order.publicStatus)
+    ["PAGO_EN_REVISION", "PAGO_RECHAZADO"].includes(order.publicStatus)
   ));
   return orderWithCode || null;
+}
+
+function panel4InstructionCopy(order, visualState) {
+  if (order?.publicStatus === "PAGO_EN_REVISION") {
+    return {
+      kicker: "Pago en revision",
+      title: "Prepara Redirector",
+      text: "Tu comprobante fue recibido. Puedes abrir Redirector y dejar el equipo listo mientras AriadGSM revisa el pago.",
+    };
+  }
+  if (order?.publicStatus === "PAGO_RECHAZADO") {
+    return {
+      kicker: "Pago rechazado",
+      title: "Revisa el comprobante",
+      text: "Sube un nuevo comprobante desde el paso 3. El boton de conexion no desbloquea esta orden.",
+    };
+  }
+  if (visualState === "C") {
+    return {
+      kicker: "Pago aprobado",
+      title: "Manten el equipo conectado",
+      text: "Abre USB Redirector, conecta en modo sideload y no desconectes el equipo. AriadGSM puede procesar la orden sin otro boton.",
+    };
+  }
+  return {
+    kicker: "Paso 4",
+    title: "Prepara el equipo",
+    text: "Descarga Redirector y ten el equipo listo. Cuando subas el comprobante, la orden quedara en seguimiento automaticamente.",
+  };
 }
 
 // Render principal. Llamado desde payments.js#updateQuote y disponible
@@ -119,7 +145,7 @@ export function updatePanel4(_context = {}) {
   // cuando la orden sigue viva en seguimiento.
   let orderCode = "";
   if (visualState === "B" || visualState === "C" || order) {
-    orderCode = String(order?.code || "").trim();
+    orderCode = String(order?.shortCode || order?.code || "").trim();
     if (!orderCode && usingDebug) orderCode = DEBUG_ORDER_CODE;
   }
 
@@ -127,6 +153,9 @@ export function updatePanel4(_context = {}) {
   const tidCopyBtn = $("#panel4TechIdCopy");
   const codeValue = $("#panel4OrderCodeValue");
   const codeCopyBtn = $("#panel4OrderCodeCopy");
+  const statusKicker = $("#panel4StatusKicker");
+  const statusTitle = $("#panel4StatusTitle");
+  const statusText = $("#panel4StatusText");
 
   if (tidValue) {
     tidValue.textContent = technicianText;
@@ -150,6 +179,11 @@ export function updatePanel4(_context = {}) {
     codeCopyBtn.dataset.copyValue = orderCode;
     codeCopyBtn.hidden = !orderCode;
   }
+
+  const instruction = panel4InstructionCopy(order, visualState);
+  if (statusKicker) statusKicker.textContent = instruction.kicker;
+  if (statusTitle) statusTitle.textContent = instruction.title;
+  if (statusText) statusText.textContent = instruction.text;
 }
 
 // Helper de feedback "Copiado ✓" 1500ms — copiado del patrón de

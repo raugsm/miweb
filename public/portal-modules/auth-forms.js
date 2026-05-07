@@ -214,20 +214,19 @@ function applyFlowState(customer) {
   if (previous !== "draft" && flowState === "draft") {
     document.querySelector("#orderForm")?.reset();
   }
-  // Cuando el cliente ya confirmo conexion, la orden pasa a seguimiento y los
-  // paneles 1-3 vuelven a funcionar como borrador para el siguiente pedido.
+  // Compatibilidad con sesiones antiguas: si algun cliente tenia el estado viejo
+  // awaiting_connection en memoria, al pasar a connected limpiamos el borrador.
   if (previous === "awaiting_connection" && flowState === "connected") {
+    resetPostConnectionDraftControls();
+  }
+  if (previous === "in_review" && flowState === "connected") {
     resetPostConnectionDraftControls();
   }
   state.lastFlowState = flowState;
 
   applyStepLocks(flowState);
-  // Sub-commit 15c.1: applyStep4Visibility y renderFlowCta eliminadas. El
-  // botón "Equipo conectado" ahora vive estático dentro del Panel 4 nuevo
-  // (#panel4EquipoConectado) y su visibilidad se controla via [data-state]
-  // del Panel 4 desde panel-4-connection.js#updatePanel4. El Panel 4 ya no
-  // se oculta en estados previos al validado — siempre visible mostrando
-  // como mínimo el botón Descargar Redirector.
+  // Corte 5: Paso 4 queda como guia de preparacion. Ya no hay accion visible
+  // "Equipo conectado" que bloquee paneles 1-3.
 }
 
 function applyStepLocks(flowState) {
@@ -235,8 +234,8 @@ function applyStepLocks(flowState) {
   // Spec panel-3 §3 edge 11: "Paneles 1-2-3 se vuelven a congelar [cuando el
   // nuevo comprobante entra a uploading]" → durante el rechazo NO están
   // congelados, el cliente puede cambiar pill/cantidad antes de re-subir.
-  const lockPanels12 = ["awaiting_proof", "in_review", "awaiting_connection"].includes(flowState);
-  const lockPanel3 = flowState === "awaiting_connection";
+  const lockPanels12 = ["awaiting_proof", "in_review"].includes(flowState);
+  const lockPanel3 = false;
   // Sub-commit 15a.1: selectores actualizados a paneles nuevos. Paneles 1-2-3
   // se congelan cuando hay orden in-flight (mismo comportamiento que antes —
   // mecánica congelar/descongelar de la spec pantalla-principal-cliente.md

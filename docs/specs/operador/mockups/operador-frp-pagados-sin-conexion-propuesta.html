@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FRP - Propuesta pagados sin conexion</title>
+  <style>
+    :root {
+      --page: #EEF2F6;
+      --surface: #FFFFFF;
+      --soft-surface: #F7F9FC;
+      --line: #D8E1EC;
+      --line-strong: #B7C6D8;
+      --text: #151D2A;
+      --muted: #64748B;
+      --soft: #8795A8;
+      --blue: #2563EB;
+      --blue-soft: #EAF1FF;
+      --green: #08785D;
+      --green-soft: #E8F6F1;
+      --amber: #936200;
+      --amber-soft: #FFF4DA;
+      --red: #A33A3A;
+      --red-soft: #FDECEC;
+      --radius: 8px;
+      --shadow: 0 18px 48px rgba(25, 39, 65, 0.08);
+      --font: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+      --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--page);
+      color: var(--text);
+      font-family: var(--font);
+    }
+
+    button {
+      border: 0;
+      font: inherit;
+      cursor: pointer;
+    }
+
+    .shell {
+      display: grid;
+      grid-template-columns: 260px minmax(0, 1fr);
+      gap: 20px;
+      width: min(1280px, calc(100vw - 32px));
+      margin: 24px auto;
+    }
+
+    .sidebar,
+    .workspace {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+    }
+
+    .sidebar {
+      min-height: calc(100vh - 48px);
+      border-radius: 20px;
+      padding: 24px 18px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 34px;
+    }
+
+    .brand-mark {
+      display: grid;
+      place-items: center;
+      width: 108px;
+      height: 34px;
+      border-radius: 7px;
+      background: linear-gradient(135deg, #2E72FF, #6AA9FF);
+      color: white;
+      font-weight: 900;
+      font-style: italic;
+    }
+
+    .brand strong,
+    .brand small {
+      display: block;
+    }
+
+    .brand small {
+      color: var(--muted);
+      font-weight: 750;
+    }
+
+    .nav {
+      display: grid;
+      gap: 10px;
+    }
+
+    .nav a,
+    .logout {
+      display: block;
+      width: 100%;
+      padding: 14px 12px;
+      border-radius: var(--radius);
+      color: #4B5A70;
+      font-weight: 850;
+      text-decoration: none;
+      text-align: left;
+    }
+
+    .nav a.active {
+      background: var(--blue-soft);
+      color: var(--blue);
+      border: 1px solid #B9CEF9;
+    }
+
+    .logout {
+      margin-top: 34px;
+      border: 1px solid var(--line-strong);
+      background: var(--soft-surface);
+      text-align: center;
+    }
+
+    .workspace {
+      min-height: calc(100vh - 48px);
+      border-radius: 18px;
+      overflow: hidden;
+    }
+
+    .topbar {
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) auto;
+      gap: 18px;
+      align-items: start;
+      padding: 28px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .eyebrow,
+    .section-label {
+      margin: 0;
+      color: var(--soft);
+      text-transform: uppercase;
+      font-size: 12px;
+      line-height: 1.15;
+      font-weight: 900;
+    }
+
+    .eyebrow.blue {
+      color: var(--blue);
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin-top: 0;
+    }
+
+    h1 {
+      margin-bottom: 0;
+      font-size: 36px;
+      line-height: 1.1;
+    }
+
+    h2 {
+      margin-bottom: 10px;
+      font-size: 24px;
+      line-height: 1.15;
+    }
+
+    h3 {
+      margin-bottom: 6px;
+      font-size: 17px;
+      line-height: 1.2;
+    }
+
+    .tech-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: flex-end;
+      max-width: 650px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 6px 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--soft-surface);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 850;
+      white-space: nowrap;
+    }
+
+    .pill.green {
+      color: var(--green);
+      background: var(--green-soft);
+      border-color: #B9E0D2;
+    }
+
+    .pill.amber {
+      color: var(--amber);
+      background: var(--amber-soft);
+      border-color: #E9C77F;
+    }
+
+    .pill.blue {
+      color: var(--blue);
+      background: var(--blue-soft);
+      border-color: #B9CEF9;
+    }
+
+    .tech-action,
+    .primary-btn,
+    .secondary-btn,
+    .quiet-btn,
+    .danger-btn {
+      min-height: 38px;
+      padding: 0 14px;
+      border-radius: var(--radius);
+      font-size: 13px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .tech-action,
+    .quiet-btn {
+      background: white;
+      color: #405167;
+      border: 1px solid var(--line-strong);
+    }
+
+    .primary-btn {
+      background: var(--blue);
+      color: white;
+    }
+
+    .secondary-btn {
+      background: white;
+      color: var(--blue);
+      border: 1px solid #B9CEF9;
+    }
+
+    .danger-btn {
+      background: white;
+      color: var(--red);
+      border: 1px solid #F0B9B9;
+    }
+
+    .content {
+      padding: 24px 28px 30px;
+    }
+
+    .work-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 330px;
+      gap: 20px;
+      align-items: start;
+    }
+
+    .stack {
+      display: grid;
+      gap: 18px;
+    }
+
+    .section,
+    .side-card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      overflow: hidden;
+    }
+
+    .section-header,
+    .side-card header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      background: var(--soft-surface);
+    }
+
+    .section-body,
+    .side-card-body {
+      padding: 16px;
+    }
+
+    .current-box {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 16px;
+      border: 1px dashed var(--line-strong);
+      border-radius: var(--radius);
+      background: #FBFCFE;
+    }
+
+    .current-box p,
+    .order-sub,
+    .device-meta {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .paid-list {
+      display: grid;
+      gap: 12px;
+    }
+
+    .paid-card {
+      border: 1px solid #BBD3F7;
+      border-radius: var(--radius);
+      background: #F1F7FF;
+      overflow: hidden;
+    }
+
+    .paid-card-header {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: start;
+      padding: 14px;
+      border-bottom: 1px solid #CEE0F7;
+    }
+
+    .code-line {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+
+    .code-main {
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 16px;
+      font-weight: 950;
+      line-height: 1.1;
+    }
+
+    .code-real {
+      color: #5C708E;
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 800;
+      line-height: 1.1;
+    }
+
+    .order-title {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 15px;
+      font-weight: 900;
+      line-height: 1.25;
+    }
+
+    .order-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    .device-list {
+      display: grid;
+      gap: 0;
+      background: white;
+    }
+
+    .device-row {
+      display: grid;
+      grid-template-columns: 86px minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .device-row:last-child {
+      border-bottom: 0;
+    }
+
+    .device-code {
+      color: var(--blue);
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 950;
+      white-space: nowrap;
+    }
+
+    .device-title {
+      display: block;
+      margin-bottom: 2px;
+      font-size: 13px;
+      font-weight: 900;
+      line-height: 1.25;
+    }
+
+    .device-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .ready-empty,
+    .mini-empty {
+      display: grid;
+      place-items: center;
+      min-height: 54px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      color: var(--soft);
+      font-size: 13px;
+      font-weight: 750;
+      background: white;
+    }
+
+    .review-stat {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 44px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: white;
+      font-size: 13px;
+      font-weight: 850;
+    }
+
+    .review-stat span {
+      color: var(--muted);
+      font-weight: 750;
+    }
+
+    .finished-list {
+      display: grid;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .finished-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      font-size: 12px;
+    }
+
+    .finished-row:last-child {
+      border-bottom: 0;
+    }
+
+    .finished-row strong {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .finished-row span {
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+
+    .note {
+      margin: 14px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    @media (max-width: 1020px) {
+      .shell,
+      .work-layout,
+      .topbar {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        min-height: auto;
+      }
+
+      .tech-bar {
+        justify-content: flex-start;
+      }
+    }
+
+    @media (max-width: 680px) {
+      .shell {
+        width: min(100vw - 16px, 480px);
+        margin: 8px auto;
+      }
+
+      .workspace,
+      .sidebar {
+        border-radius: 14px;
+      }
+
+      .topbar,
+      .content {
+        padding-left: 16px;
+        padding-right: 16px;
+      }
+
+      h1 {
+        font-size: 30px;
+      }
+
+      .paid-card-header,
+      .device-row {
+        grid-template-columns: 1fr;
+      }
+
+      .order-actions,
+      .device-actions {
+        justify-content: stretch;
+      }
+
+      .order-actions button,
+      .device-actions button,
+      .current-box button {
+        width: 100%;
+      }
+
+      .current-box {
+        align-items: stretch;
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <aside class="sidebar" aria-label="Navegacion">
+      <div class="brand">
+        <div class="brand-mark">ARIADGSM</div>
+        <div>
+          <strong>AriadGSM</strong>
+          <small>Ops</small>
+        </div>
+      </div>
+
+      <nav class="nav">
+        <a href="#">Inicio</a>
+        <a href="#">Tickets</a>
+        <a class="active" href="#">FRP Express</a>
+        <a href="#">Clientes</a>
+      </nav>
+
+      <button class="logout" type="button">Salir</button>
+    </aside>
+
+    <section class="workspace">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow blue">Sesion activa</p>
+          <h1>Hola,<br>Jack</h1>
+        </div>
+
+        <div class="tech-bar">
+          <span class="pill">Tecnico activo <strong>&nbsp;gloria&nbsp;</strong> 1082 4732 3799</span>
+          <span class="pill amber">Desconectado</span>
+          <button class="tech-action" type="button">Pausar 30 min</button>
+          <button class="tech-action" type="button">Cambiar permanentemente</button>
+          <span class="pill green">Atencion tecnica</span>
+        </div>
+      </header>
+
+      <div class="content">
+        <p class="eyebrow blue">WhatsApp 3</p>
+        <h2>FRP Express</h2>
+
+        <div class="work-layout">
+          <div class="stack">
+            <section class="section">
+              <div class="section-header">
+                <p class="section-label">Trabajo actual</p>
+                <span class="pill">Sin toma activa</span>
+              </div>
+              <div class="section-body">
+                <div class="current-box">
+                  <div>
+                    <h3>Esperando trabajo</h3>
+                    <p>Puede tomar una orden lista o verificar una orden pagada sin confirmacion del cliente.</p>
+                  </div>
+                  <button class="quiet-btn" type="button">Tomar siguiente listo</button>
+                </div>
+              </div>
+            </section>
+
+            <section class="section">
+              <div class="section-header">
+                <p class="section-label">Pagados sin conexion confirmada · 2 ordenes</p>
+                <span class="pill amber">Pago validado</span>
+              </div>
+              <div class="section-body paid-list">
+                <article class="paid-card">
+                  <header class="paid-card-header">
+                    <div>
+                      <div class="code-line">
+                        <span class="code-main">ARD-0001</span>
+                        <span class="code-real">real: ARD-20260506-007</span>
+                        <span class="pill blue">1 equipo</span>
+                      </div>
+                      <strong class="order-title">Will Zubieta · Pago aprobado</strong>
+                      <p class="order-sub">Cliente no confirmo conexion · hace 8 h · Yape</p>
+                    </div>
+                    <div class="order-actions">
+                      <button class="primary-btn" type="button">Tomar y verificar</button>
+                      <button class="secondary-btn" type="button">WhatsApp</button>
+                      <button class="quiet-btn" type="button">Pendiente</button>
+                    </div>
+                  </header>
+
+                  <div class="device-list">
+                    <div class="device-row">
+                      <span class="device-code">ARD-0001-01</span>
+                      <div>
+                        <strong class="device-title">Equipo 1 de 1</strong>
+                        <p class="device-meta">Sin conexion confirmada por cliente</p>
+                      </div>
+                      <div class="device-actions">
+                        <button class="primary-btn" type="button">Verificar</button>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+
+                <article class="paid-card">
+                  <header class="paid-card-header">
+                    <div>
+                      <div class="code-line">
+                        <span class="code-main">ARD-0002</span>
+                        <span class="code-real">real: ARD-20260506-023</span>
+                        <span class="pill blue">3 equipos</span>
+                      </div>
+                      <strong class="order-title">JHOJAN TAFUR · Pago aprobado</strong>
+                      <p class="order-sub">Orden agrupada · el primer equipo debe verificarse antes de procesar los demas</p>
+                    </div>
+                    <div class="order-actions">
+                      <button class="primary-btn" type="button">Tomar primero</button>
+                      <button class="secondary-btn" type="button">WhatsApp</button>
+                      <button class="quiet-btn" type="button">Pendiente</button>
+                    </div>
+                  </header>
+
+                  <div class="device-list">
+                    <div class="device-row">
+                      <span class="device-code">ARD-0002-01</span>
+                      <div>
+                        <strong class="device-title">Equipo 1 de 3</strong>
+                        <p class="device-meta">Sin conexion confirmada · candidato para verificar ahora</p>
+                      </div>
+                      <div class="device-actions">
+                        <button class="primary-btn" type="button">Verificar</button>
+                      </div>
+                    </div>
+
+                    <div class="device-row">
+                      <span class="device-code">ARD-0002-02</span>
+                      <div>
+                        <strong class="device-title">Equipo 2 de 3</strong>
+                        <p class="device-meta">Pendiente hasta cerrar o confirmar el equipo anterior</p>
+                      </div>
+                      <div class="device-actions">
+                        <button class="quiet-btn" type="button">Esperar</button>
+                      </div>
+                    </div>
+
+                    <div class="device-row">
+                      <span class="device-code">ARD-0002-03</span>
+                      <div>
+                        <strong class="device-title">Equipo 3 de 3</strong>
+                        <p class="device-meta">Pendiente hasta cerrar o confirmar el equipo anterior</p>
+                      </div>
+                      <div class="device-actions">
+                        <button class="quiet-btn" type="button">Esperar</button>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+
+                <p class="note">
+                  Regla visual propuesta: el codigo corto se usa para operar rapido; el codigo real queda visible como referencia secundaria para auditoria, soporte y busqueda.
+                </p>
+              </div>
+            </section>
+
+            <section class="section">
+              <div class="section-header">
+                <p class="section-label">Cola - listos</p>
+                <button class="quiet-btn" type="button">Solo VIP</button>
+              </div>
+              <div class="section-body">
+                <div class="ready-empty">No hay FRP listos.</div>
+              </div>
+            </section>
+          </div>
+
+          <aside class="stack">
+            <section class="side-card">
+              <header>
+                <p class="section-label">Excepciones</p>
+              </header>
+              <div class="side-card-body stack">
+                <div class="review-stat">Pagos por revisar <span>0</span></div>
+                <div class="review-stat">Atencion <span>0</span></div>
+                <div class="mini-empty">Sin casos bloqueantes.</div>
+              </div>
+            </section>
+
+            <section class="side-card">
+              <header>
+                <p class="section-label">Finalizados hoy · 12</p>
+              </header>
+              <div class="side-card-body">
+                <div class="finished-list">
+                  <div class="finished-row"><strong>ARD-0012 · JHOJAN TAFUR</strong><span>19:11</span></div>
+                  <div class="finished-row"><strong>ARD-0011 · Alexander Guarin</strong><span>18:52</span></div>
+                  <div class="finished-row"><strong>ARD-0010 · Mike Robayo</strong><span>16:40</span></div>
+                  <div class="finished-row"><strong>ARD-0009 · Duvier Tavera</strong><span>16:26</span></div>
+                  <div class="finished-row"><strong>ARD-0008 · Luis Cervantes</strong><span>16:07</span></div>
+                </div>
+              </div>
+            </section>
+          </aside>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

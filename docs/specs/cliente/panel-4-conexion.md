@@ -1,5 +1,35 @@
 # Panel 4 — Conexión
 
+## Actualizacion v2.0 - Sesion 24 / Corte 5
+
+**Fecha:** 2026-05-07.
+
+**Decision:** el Panel 4 deja de tener el boton obligatorio `Equipo conectado`.
+Despues de subir comprobante, la orden ya existe en seguimiento. Si el pago se
+aprueba por humano o por IA, el operador puede procesar/finalizar desde el panel
+operador sin esperar otra accion web del cliente.
+
+**Nuevo contrato visual:**
+
+- A: sin orden viva, muestra Technician ID si existe, codigo placeholder e instrucciones de preparacion.
+- B: comprobante en revision o rechazado, muestra codigo real y estado informativo.
+- C: pago aprobado o servicio activo, muestra codigo corto/real e instrucciones para abrir USB Redirector, conectar en sideload y mantener el equipo conectado.
+
+**Compatibilidad temporal:** `POST /api/portal/orders/:id/notify-connected`
+permanece en backend y en un boton oculto del DOM para clientes con JS cacheado,
+pero no forma parte del flujo principal ni desbloquea el trabajo del operador.
+
+**Implicacion de formulario:** al pasar de pago en revision a pago aprobado,
+el pedido queda en `Mis ordenes` y los paneles 1-3 vuelven a quedar disponibles
+para una nueva orden. Panel 3 ya no usa `EN_PREPARACION` para mantener el cajon
+verde como estado bloqueante.
+
+**Nota de lectura:** el contenido v1.3 que sigue queda como historial. Si alguna
+linea posterior contradice esta actualizacion v2.0, prevalece v2.0 hasta que se
+reescriba el documento completo.
+
+---
+
 **Versión:** 1.3 · **Fecha:** 4 de mayo 2026 · **Estado:** spec formal con las 8 piezas, actualizada en sesión 15c. v1.3 ajusta el nombre real del binario del Redirector (`usbredirector-customer-module.exe`) ahora que la descarga está activa en el repo.
 
 **Reemplaza a:** `panel-4-conexion.md` v1.1 (sesión 15c.1) y v1.0 (sesión 14).
