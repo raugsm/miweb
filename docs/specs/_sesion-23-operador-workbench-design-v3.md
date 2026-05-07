@@ -355,6 +355,8 @@ Para aprobar el diseno, debe quedar claro:
 
 ## Implementacion propuesta despues de aprobar
 
+Estado: fase 1 aplicada en runtime. Ver `_sesion-24-operador-workbench-v3-runtime.md`.
+
 Fase 1:
 
 - solo layout HTML/CSS del panel trabajador;

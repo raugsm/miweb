@@ -2236,6 +2236,324 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
   color: var(--text-secondary);
 }
 
+/* FRP Ops v3 visual layer - runtime phase 1.
+   Keeps v2 action hooks/data attributes and changes only layout/copy surface. */
+.frp-ops-v2 {
+  --bg-page: #F7F8FA;
+  --bg-card: #FFFFFF;
+  --bg-secondary: #F1F4F7;
+  --text-primary: #18202A;
+  --text-secondary: #5D6B7A;
+  --text-tertiary: #8290A0;
+  --border-light: #DDE3EA;
+  --border-medium: #B8C4D1;
+  --primary: #195D8F;
+  --primary-light: #EAF4FB;
+  --primary-border: #B8D3E8;
+  --success-bg: #E8F5EE;
+  --success-text: #237044;
+  --success-dot: #237044;
+  --warning-bg: #FFF4D8;
+  --warning-border: #F1D38A;
+  --warning-text: #8A5A00;
+  --warning-text-soft: #8A5A00;
+  --danger-bg: #FCE9E9;
+  --danger-border: #F0B9B9;
+  --danger-text: #9A2727;
+  --vip-bg: #FFF4D8;
+  --vip-border: #C99018;
+  --vip-text: #8A5A00;
+  --neutral-bg: #F1F4F7;
+  --neutral-text: #5D6B7A;
+  --radius-sm: 7px;
+  --radius-md: 8px;
+  --radius-lg: 8px;
+  background: var(--bg-page);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  margin-top: 12px;
+}
+
+.frp-ops-v2-header {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  gap: 16px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--border-light);
+  background: var(--bg-card);
+}
+
+.frp-ops-v2-header-label,
+.frp-ops-v2-section-label,
+.frp-ops-v2-data-cell-label,
+.frp-ops-v2-queue-card-vip-badge {
+  letter-spacing: 0;
+}
+
+.frp-ops-v2-header-label {
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.frp-ops-v2-header-title {
+  font-size: 22px;
+  font-weight: 750;
+  line-height: 1.18;
+}
+
+.frp-ops-v2-status-strip {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.frp-ops-v2-tech-badge,
+.frp-ops-v2-status-chip {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-light);
+  border-radius: 999px;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.frp-ops-v2-status-chip strong {
+  color: var(--text-primary);
+}
+
+.frp-ops-v2-tech-badge {
+  background: var(--success-bg);
+  color: var(--success-text);
+  border-color: #B8DFC8;
+}
+
+.frp-ops-v2-tech-badge.is-swap,
+.frp-ops-v2-status-chip.is-warning {
+  background: var(--warning-bg);
+  color: var(--warning-text);
+  border-color: var(--warning-border);
+}
+
+.frp-ops-v2-tech-badge.is-empty {
+  background: var(--danger-bg);
+  color: var(--danger-text);
+  border-color: var(--danger-border);
+}
+
+.frp-ops-v2-status-chip.is-live {
+  background: #E6F5F3;
+  color: #0E766E;
+  border-color: #B9E1DC;
+}
+
+.frp-ops-v2-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(330px, 0.8fr);
+  gap: 18px;
+  padding: 18px;
+}
+
+.frp-ops-v2-main-stack,
+.frp-ops-v2-side-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
+
+.frp-ops-v2-section {
+  margin-bottom: 0;
+  min-width: 0;
+}
+
+.frp-ops-v2-section-header {
+  margin-bottom: 8px;
+}
+
+.frp-ops-v2-section-label {
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.frp-ops-v2-section-note {
+  color: var(--text-tertiary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.frp-ops-v2-current,
+.frp-ops-v2-queue-card,
+.frp-ops-v2-alert-card,
+.frp-ops-v2-finalized,
+.frp-ops-v2-queue-empty,
+.frp-ops-v2-alert-empty {
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  background: var(--bg-card);
+}
+
+.frp-ops-v2-current {
+  padding: 16px;
+}
+
+.frp-ops-v2-current--empty {
+  padding: 18px;
+  text-align: left;
+}
+
+.frp-ops-v2-current--readonly {
+  opacity: 1;
+  border-style: dashed;
+}
+
+.frp-ops-v2-other-active-list,
+.frp-ops-v2-queue,
+.frp-ops-v2-alert-list {
+  gap: 8px;
+}
+
+.frp-ops-v2-current-head {
+  margin-bottom: 12px;
+}
+
+.frp-ops-v2-current-meta,
+.frp-ops-v2-queue-card-meta,
+.frp-ops-v2-current-time,
+.frp-ops-v2-finalized-row-id,
+.frp-ops-v2-finalized-row-time {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.frp-ops-v2-current-name {
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.frp-ops-v2-current-service,
+.frp-ops-v2-current-empty-text,
+.frp-ops-v2-queue-card-detail {
+  color: var(--text-secondary);
+}
+
+.frp-ops-v2-current-data {
+  gap: 8px;
+}
+
+.frp-ops-v2-data-cell {
+  border: 1px solid var(--border-light);
+  border-radius: 7px;
+}
+
+.frp-ops-v2-data-cell-label {
+  font-weight: 850;
+}
+
+.frp-ops-v2-data-cell-value {
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.frp-ops-v2-current-actions {
+  gap: 8px;
+}
+
+.frp-ops-v2-current-reason {
+  margin-top: 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--warning-border);
+  border-radius: 7px;
+  background: var(--warning-bg);
+  color: var(--warning-text);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.frp-ops-v2-btn-primary,
+.frp-ops-v2-btn-secondary,
+.frp-ops-v2-btn-take {
+  border-radius: 7px;
+  font-weight: 800;
+}
+
+.frp-ops-v2-btn-primary {
+  background: var(--primary);
+}
+
+.frp-ops-v2-btn-secondary,
+.frp-ops-v2-btn-take {
+  color: var(--primary);
+  border-color: var(--primary-border);
+}
+
+.frp-ops-v2-readonly-tag,
+.frp-ops-v2-waiting-pill,
+.frp-ops-v2-tech-mark {
+  border-radius: 999px;
+  font-weight: 800;
+}
+
+.frp-ops-v2-queue-card {
+  padding: 12px;
+}
+
+.frp-ops-v2-queue-card.is-vip {
+  box-shadow: inset 4px 0 0 var(--vip-border);
+}
+
+.frp-ops-v2-queue-card-vip-badge {
+  font-weight: 850;
+}
+
+.frp-ops-v2-grid-attention {
+  gap: 12px;
+}
+
+.frp-ops-v2-alert-card {
+  padding: 12px;
+}
+
+.frp-ops-v2-alert-card-title {
+  font-weight: 800;
+}
+
+.frp-ops-v2-alert-card-action {
+  font-weight: 850;
+}
+
+.frp-ops-v2-finalized-row {
+  padding: 10px 12px;
+}
+
+.frp-costs-collapsed > summary {
+  border-radius: 8px;
+}
+
+@media (max-width: 980px) {
+  .frp-ops-v2-workspace {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .frp-ops-v2-header,
+  .frp-ops-v2-workspace {
+    grid-template-columns: 1fr;
+    padding: 14px;
+  }
+  .frp-ops-v2-status-strip {
+    justify-content: flex-start;
+  }
+}
+
 /* Modal Ver comprobante */
 .frp-proof-dialog {
   border: 0;

@@ -250,6 +250,24 @@ test("operator VIP queue filter keeps take-next aligned with visible jobs", asyn
   assert.match(appJs, /else await takeNextFrpJob\(\);/);
 });
 
+test("operator workbench v3 layout keeps existing action hooks", async () => {
+  const appJs = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
+  const stylesCss = await readFile(new URL("../public/styles.css", import.meta.url), "utf8");
+
+  assert.match(appJs, /function frpOpsV2RenderHeaderV3\(tech, \{ queueCount = 0, reviewCount = 0 \} = \{\}\)/);
+  assert.match(appJs, /frpOpsV2RenderHeaderV3\(tech, \{ queueCount: queueState\.total, reviewCount: reviewJobs\.length \}\)/);
+  assert.match(appJs, /frp-ops-v2-workspace/);
+  assert.match(appJs, /frp-ops-v2-main-stack/);
+  assert.match(appJs, /frp-ops-v2-side-stack/);
+  assert.match(appJs, /data-frp-finalize="\$\{escapeHtml\(job\.id\)\}"/);
+  assert.match(appJs, /data-frp-review="\$\{escapeHtml\(job\.id\)\}"/);
+  assert.match(appJs, /data-frp-take-specific="\$\{escapeHtml\(job\.id\)\}"/);
+  assert.match(appJs, /data-frp-show-proof="\$\{escapeHtml\(o\.id\)\}"/);
+  assert.match(appJs, /data-frp-show-review="\$\{escapeHtml\(j\.id\)\}"/);
+  assert.match(stylesCss, /\.frp-ops-v2-workspace\s*{[\s\S]*grid-template-columns:\s*minmax\(0, 1\.45fr\) minmax\(330px, 0\.8fr\);/);
+  assert.match(stylesCss, /\.frp-ops-v2-status-strip\s*{[\s\S]*display:\s*flex;/);
+});
+
 test("operator specific take rejection refreshes stale active technician state", async () => {
   const appJs = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
 

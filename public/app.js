@@ -1557,6 +1557,36 @@ function frpOpsV2RenderHeader(tech) {
   `;
 }
 
+function frpOpsV2RenderHeaderV3(tech, { queueCount = 0, reviewCount = 0 } = {}) {
+  let badgeClass = "frp-ops-v2-tech-badge";
+  let badgeText = "Sin tecnico activo";
+  if (tech?.swap?.inProgress) {
+    badgeClass += " is-swap";
+    badgeText = "Cambio en curso";
+  } else if (tech?.active?.name) {
+    badgeText = `${tech.active.name} activo`;
+  } else {
+    badgeClass += " is-empty";
+  }
+  return `
+    <div class="frp-ops-v2-header">
+      <div>
+        <div class="frp-ops-v2-header-label">Operador</div>
+        <div class="frp-ops-v2-header-title">FRP Express</div>
+      </div>
+      <div class="frp-ops-v2-status-strip" aria-label="Estado FRP">
+        <div class="${badgeClass}">
+          <span class="frp-ops-v2-tech-dot"></span>
+          ${escapeHtml(badgeText)}
+        </div>
+        <div class="frp-ops-v2-status-chip is-live">Live</div>
+        <div class="frp-ops-v2-status-chip"><strong>Cola</strong> ${escapeHtml(queueCount)}</div>
+        <div class="frp-ops-v2-status-chip is-warning"><strong>Rev</strong> ${escapeHtml(reviewCount)}</div>
+      </div>
+    </div>
+  `;
+}
+
 function frpOpsV2JobRedirectorId(job, { swapInProgress, tech } = {}) {
   const order = job?.order || {};
   const frozenRedirectorId = String(order.redirectorId || order.technicianId || "").trim();
@@ -1583,7 +1613,8 @@ function frpOpsV2RenderCurrentActive(job, { swapInProgress, tech }) {
   return `
     <section class="frp-ops-v2-section">
       <div class="frp-ops-v2-section-header">
-        <div class="frp-ops-v2-section-label">Tu trabajo actual</div>
+        <div class="frp-ops-v2-section-label">Trabajo actual</div>
+        <div class="frp-ops-v2-section-note">Dueno: ${escapeHtml(job.technicianName || session.user?.name || "operador")}</div>
       </div>
       ${bannerHtml}
       <div class="frp-ops-v2-current">
@@ -1618,6 +1649,7 @@ function frpOpsV2RenderCurrentActive(job, { swapInProgress, tech }) {
             Reportar problema
           </button>
         </div>
+        <div class="frp-ops-v2-current-reason" role="status">Asignado aunque cambie el tecnico activo.</div>
       </div>
     </section>
   `;
@@ -1655,7 +1687,8 @@ function frpOpsV2RenderOtherActiveSection({ jobs, tech }) {
   return `
     <section class="frp-ops-v2-section">
       <div class="frp-ops-v2-section-header">
-        <div class="frp-ops-v2-section-label">Trabajos en curso por otros</div>
+        <div class="frp-ops-v2-section-label">En curso</div>
+        <div class="frp-ops-v2-section-note">Solo lectura</div>
       </div>
       <div class="frp-ops-v2-other-active-list">
         ${sortedJobs.map((job) => frpOpsV2RenderOtherActiveCard(job, tech)).join("")}
@@ -1681,13 +1714,13 @@ function frpOpsV2RenderCurrentEmpty({ queueState, isMeActive, hasActiveTechnicia
   return `
     <section class="frp-ops-v2-section">
       <div class="frp-ops-v2-section-header">
-        <div class="frp-ops-v2-section-label">Tu trabajo actual</div>
+        <div class="frp-ops-v2-section-label">Trabajo actual</div>
       </div>
       <div class="frp-ops-v2-current frp-ops-v2-current--empty">
         <p class="frp-ops-v2-current-empty-text">
           ${hasJobsInQueue
             ? "Sin trabajo actual."
-            : "Sin trabajo actual. Esperando que clientes conecten equipos."}
+            : "Esperando equipos conectados."}
         </p>
         <button type="button" class="frp-ops-v2-btn-primary"
           data-frp-take-next
@@ -1696,6 +1729,7 @@ function frpOpsV2RenderCurrentEmpty({ queueState, isMeActive, hasActiveTechnicia
           ${disabledTip ? `title="${escapeHtml(disabledTip)}"` : ""}>
           ${escapeHtml(takeLabel)}
         </button>
+        ${disabledTip ? `<div class="frp-ops-v2-current-reason" role="status">${escapeHtml(disabledTip)}</div>` : ""}
       </div>
     </section>
   `;
@@ -1777,7 +1811,7 @@ function frpOpsV2RenderWaitingConnectionSection({ waitingOrders }) {
                 <div>
                   <div class="frp-ops-v2-queue-card-meta">${escapeHtml(order.code)} · ${escapeHtml(quantity)} equipo${quantity === 1 ? "" : "s"}</div>
                   <div class="frp-ops-v2-queue-card-name">${escapeHtml(order.clientName || "-")} · Pago aprobado</div>
-                  <div class="frp-ops-v2-queue-card-detail">Esperando que el cliente marque equipo conectado.</div>
+                  <div class="frp-ops-v2-queue-card-detail">Cliente pendiente.</div>
                 </div>
                 <div class="frp-ops-v2-queue-card-right">
                   ${approvedRel ? `<span class="frp-ops-v2-queue-card-time">${escapeHtml(approvedRel)}</span>` : ""}
@@ -1826,6 +1860,10 @@ function frpOpsV2RenderAttentionGrid({ pagosRevisar, reviewJobs, swapInProgress 
     : `<p class="frp-ops-v2-alert-empty">Sin casos en revision.</p>`;
   return `
     <section class="frp-ops-v2-section">
+      <div class="frp-ops-v2-section-header">
+        <div class="frp-ops-v2-section-label">Excepciones</div>
+        <div class="frp-ops-v2-section-note">Accion clara</div>
+      </div>
       <div class="frp-ops-v2-grid-attention">
         <div>
           <div class="frp-ops-v2-section-header">
@@ -1930,14 +1968,18 @@ function renderFrp({ skipPricing = false } = {}) {
 
   frpWorkbench.innerHTML = `
     <div class="frp-ops-v2">
-      ${frpOpsV2RenderHeader(tech)}
-      <div class="frp-ops-v2-body">
-        ${currentHtml}
-        ${frpOpsV2RenderOtherActiveSection({ jobs: otherActiveJobs, tech })}
-        ${frpOpsV2RenderWaitingConnectionSection({ waitingOrders: waitingConnectionOrders })}
-        ${frpOpsV2RenderQueueSection({ queueState, isMeActive, hasActiveTechnician, swapInProgress, hasMyActive: Boolean(myActiveJob) })}
-        ${frpOpsV2RenderAttentionGrid({ pagosRevisar, reviewJobs, swapInProgress })}
-        ${frpOpsV2RenderFinalized(finishedToday)}
+      ${frpOpsV2RenderHeaderV3(tech, { queueCount: queueState.total, reviewCount: reviewJobs.length })}
+      <div class="frp-ops-v2-workspace">
+        <div class="frp-ops-v2-main-stack">
+          ${currentHtml}
+          ${frpOpsV2RenderOtherActiveSection({ jobs: otherActiveJobs, tech })}
+          ${frpOpsV2RenderWaitingConnectionSection({ waitingOrders: waitingConnectionOrders })}
+          ${frpOpsV2RenderQueueSection({ queueState, isMeActive, hasActiveTechnician, swapInProgress, hasMyActive: Boolean(myActiveJob) })}
+        </div>
+        <aside class="frp-ops-v2-side-stack" aria-label="Excepciones e historial">
+          ${frpOpsV2RenderAttentionGrid({ pagosRevisar, reviewJobs, swapInProgress })}
+          ${frpOpsV2RenderFinalized(finishedToday)}
+        </aside>
       </div>
     </div>
   `;
