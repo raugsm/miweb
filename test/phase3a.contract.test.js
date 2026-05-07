@@ -242,15 +242,19 @@ test("operator workbench treats active jobs as grouped order state", async () =>
   assert.match(appJs, /item\.shortCode \|\| item\.code \|\| ""/);
 });
 
-test("operator order actions distinguish no active technician from another active technician", async () => {
+test("operator order actions keep direct finalize independent from active technician", async () => {
   const appJs = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
+  const cardStart = appJs.indexOf("function frpOpsV2RenderOperatorOrderCard");
+  const cardEnd = appJs.indexOf("function frpOpsV2RenderOperatorOrdersSection");
+  const cardBlock = appJs.slice(cardStart, cardEnd);
 
   assert.match(appJs, /const hasActiveTechnician = Boolean\(tech\?\.active\?\.userId\);/);
-  assert.match(appJs, /const disabledTip = swapInProgress[\s\S]*\? "Cambio de tecnico en curso"[\s\S]*: !hasActiveTechnician \? "Sin tecnico activo"[\s\S]*: !isMeActive \? "No sos el tecnico activo"/);
-  assert.match(appJs, /const isFinalizableLike = isApprovedLike \|\| order\.operatorStatus === "NO_CONNECTION";/);
-  assert.match(appJs, /const canFinalize = Boolean\(item\?\.id && order\.finalizeAllowed && isFinalizableLike && isMeActive && !swapInProgress\);/);
-  assert.match(appJs, /const canNotify = Boolean\(order\.notifyCustomerAllowed && order\.operatorStatus === "NO_CONNECTION" && !swapInProgress\);/);
-  assert.match(appJs, /disabledTip \? `title="\$\{escapeHtml\(disabledTip\)\}"` : ""/);
+  assert.match(cardBlock, /function frpOpsV2RenderOperatorOrderCard\(order, \{ swapInProgress \}\)/);
+  assert.match(cardBlock, /const isFinalizableLike = isApprovedLike \|\| order\.operatorStatus === "NO_CONNECTION";/);
+  assert.match(cardBlock, /const canFinalize = Boolean\(item\?\.id && order\.finalizeAllowed && isFinalizableLike && !swapInProgress\);/);
+  assert.match(cardBlock, /const canNotify = Boolean\(order\.notifyCustomerAllowed && order\.operatorStatus === "NO_CONNECTION" && !swapInProgress\);/);
+  assert.match(cardBlock, /const disabledTip = swapInProgress \? "Cambio de tecnico en curso" : "";/);
+  assert.doesNotMatch(cardBlock, /isMeActive|hasActiveTechnician|No sos el tecnico activo|Sin tecnico activo/);
 });
 
 test("operator technician swap polling repaints workbench and restores normal interval", async () => {
@@ -328,15 +332,22 @@ test("operator specific take rejection refreshes stale active technician state",
   assert.match(appJs, /catch \(error\) \{[\s\S]*frpMessage\.textContent = error\.message;[\s\S]*frpMessage\.dataset\.type = "error";[\s\S]*await refreshSession\(\);/);
 });
 
-test("operator direct finalize actions require the active technician UI contract", async () => {
+test("operator direct finalize actions no longer require the active technician UI contract", async () => {
   const appJs = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
+  const frpRoutes = await readFile(new URL("../server/frp/frp-routes.js", import.meta.url), "utf8");
+  const cardStart = appJs.indexOf("function frpOpsV2RenderOperatorOrderCard");
+  const cardEnd = appJs.indexOf("function frpOpsV2RenderOperatorOrdersSection");
+  const cardBlock = appJs.slice(cardStart, cardEnd);
+  const routeStart = frpRoutes.indexOf("const frpJobDirectFinalizeMatch");
+  const routeEnd = frpRoutes.indexOf("const frpJobCancelMatch");
+  const directFinalizeRouteBlock = frpRoutes.slice(routeStart, routeEnd);
 
   assert.match(appJs, /const isMeActive = Boolean\(tech\?\.active\?\.userId && tech\.active\.userId === session\.user\?\.id\);/);
-  assert.match(appJs, /const isFinalizableLike = isApprovedLike \|\| order\.operatorStatus === "NO_CONNECTION";/);
-  assert.match(appJs, /const canFinalize = Boolean\(item\?\.id && order\.finalizeAllowed && isFinalizableLike && isMeActive && !swapInProgress\);/);
-  assert.match(appJs, /!hasActiveTechnician \? "Sin tecnico activo"/);
-  assert.match(appJs, /!isMeActive \? "No sos el tecnico activo"/);
-  assert.match(appJs, /data-frp-direct-finalize="\$\{escapeHtml\(item\?\.id \|\| ""\)\}"/);
+  assert.match(cardBlock, /const isFinalizableLike = isApprovedLike \|\| order\.operatorStatus === "NO_CONNECTION";/);
+  assert.match(cardBlock, /const canFinalize = Boolean\(item\?\.id && order\.finalizeAllowed && isFinalizableLike && !swapInProgress\);/);
+  assert.doesNotMatch(cardBlock, /!hasActiveTechnician|!isMeActive|No sos el tecnico activo|Sin tecnico activo/);
+  assert.match(cardBlock, /data-frp-direct-finalize="\$\{escapeHtml\(item\?\.id \|\| ""\)\}"/);
+  assert.doesNotMatch(directFinalizeRouteBlock, /FRP_JOB_DIRECT_FINALIZE_NOT_ACTIVE|requireActiveFrpTechnician/);
   assert.match(appJs, /await directFinalizeFrpJob\(directFinalizeButton\.dataset\.frpDirectFinalize\);/);
 });
 

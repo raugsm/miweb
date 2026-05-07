@@ -100,7 +100,7 @@ Acciones:
 
 - Verde: `Finalizado`.
 - Azul: `Revisar`.
-- Amarillo: `Avisar cliente` o `Avisar ajuste`.
+- Amarillo: `Finalizado` si el operador completo el servicio; `Avisar cliente` o `Avisar ajuste` si no puede procesar.
 
 ### Pedido multi-equipo
 
@@ -134,11 +134,15 @@ Reglas:
 | `Finalizado` | Orden verde de 1 equipo | Cierra el equipo/pedido |
 | `Finalizado equipo N` | Orden verde multi-equipo con equipo accionable | Cierra solo ese equipo |
 | `Revisar` | Orden azul o caso que requiere evidencia | Abre comprobante y monto esperado |
+| `Finalizado` | Orden amarilla de 1 equipo | Cierra el equipo si el operador lo proceso visualmente en Redirector |
+| `Finalizado equipo N` | Orden amarilla multi-equipo con equipo accionable | Cierra solo ese equipo si el operador lo proceso visualmente en Redirector |
 | `Avisar cliente` | Orden amarilla con precio vigente | Dispara aviso/contacto operativo |
 | `Avisar ajuste` | Orden amarilla con precio cambiado | Dispara aviso por cambio de precio |
 | `Ver orden` | Solo si hace falta detalle secundario | Abre detalle no destructivo |
 
 Nota de Corte 6: la orden amarilla conserva el boton `Finalizado` porque la web no puede confirmar por si sola si USB Redirector muestra el equipo conectado. Si el operador procesa el servicio, debe poder cerrar la orden sin moverla a otra caja ni revivir el flujo viejo de `Tomar`.
+
+Nota de Corte 7: `Finalizado` en orden verde o amarilla no depende del tecnico activo global cuando el job todavia no tiene dueno. El backend asigna el dueno al operador que cierra. Si el job ya pertenece a otro operador, se rechaza salvo `ADMIN`.
 
 Botones removidos del contrato principal:
 

@@ -290,6 +290,79 @@ test("Postgres FRP direct finalize closes an approved untaken job and customer i
   assert.equal(result.publishReason, "frp_order_done");
 });
 
+test("Postgres FRP direct finalize assigns an untaken approved job to the closing operator", () => {
+  const doneAt = "2026-05-06T17:16:20.000Z";
+  const result = applyFrpJobDirectFinalizeLegacyState({
+    job: {
+      id: "job-available",
+      code: "ORD-20260506-007-1",
+      orderId: baseOrder.id,
+      sequence: 1,
+      status: "ESPERANDO_PREPARACION",
+      technicianId: "",
+    },
+    order: {
+      ...baseOrder,
+      checklist: { ...baseOrder.checklist, paymentValidated: true },
+      paymentStatus: "COMPROBANTE_RECIBIDO",
+      orderStatus: "PAGO_VALIDADO",
+    },
+    jobs: [
+      {
+        id: "job-available",
+        code: "ORD-20260506-007-1",
+        orderId: baseOrder.id,
+        sequence: 1,
+        status: "ESPERANDO_PREPARACION",
+        technicianId: "",
+      },
+    ],
+    userId: "88888888-8888-4888-8888-888888888888",
+    userRole: "ATENCION_TECNICA",
+    doneAt,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.job.status, "FINALIZADO");
+  assert.equal(result.job.technicianId, "88888888-8888-4888-8888-888888888888");
+});
+
+test("Postgres FRP direct finalize still rejects a job owned by another operator", () => {
+  const result = applyFrpJobDirectFinalizeLegacyState({
+    job: {
+      id: "job-owned",
+      code: "ORD-20260506-008-1",
+      orderId: baseOrder.id,
+      sequence: 1,
+      status: "EN_PROCESO",
+      technicianId: "77777777-7777-4777-8777-777777777777",
+    },
+    order: {
+      ...baseOrder,
+      checklist: { ...baseOrder.checklist, paymentValidated: true },
+      paymentStatus: "COMPROBANTE_RECIBIDO",
+      orderStatus: "PAGO_VALIDADO",
+    },
+    jobs: [
+      {
+        id: "job-owned",
+        code: "ORD-20260506-008-1",
+        orderId: baseOrder.id,
+        sequence: 1,
+        status: "EN_PROCESO",
+        technicianId: "77777777-7777-4777-8777-777777777777",
+      },
+    ],
+    userId: "88888888-8888-4888-8888-888888888888",
+    userRole: "ATENCION_TECNICA",
+    doneAt: "2026-05-06T17:16:25.000Z",
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 403);
+  assert.match(result.error, /otro tecnico/i);
+});
+
 test("Postgres FRP direct finalize enforces sequential multi-device processing", () => {
   const result = applyFrpJobDirectFinalizeLegacyState({
     job: {

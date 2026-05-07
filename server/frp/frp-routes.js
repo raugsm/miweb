@@ -981,7 +981,6 @@ export function createFrpRoutes({
     if (job.technicianId && job.technicianId !== user.id && user.role !== "ADMIN") {
       return sendJson(res, 403, { error: "Este trabajo lo tomo otro tecnico." });
     }
-    if (!job.technicianId && !(await requireActiveFrpTechnician(user, res, db, "FRP_JOB_DIRECT_FINALIZE_NOT_ACTIVE", job.id))) return;
     const inputLog = cleanText(input.finalLog, 500);
     const finalImages = sanitizeFinalLogImages(input.finalImages);
     const limaTime = new Intl.DateTimeFormat("es-PE", {

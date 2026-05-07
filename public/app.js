@@ -1873,21 +1873,17 @@ function frpOpsV2RenderOperatorOrderItems(order) {
   `;
 }
 
-function frpOpsV2RenderOperatorOrderCard(order, { isMeActive, hasActiveTechnician, swapInProgress }) {
+function frpOpsV2RenderOperatorOrderCard(order, { swapInProgress }) {
   const statusMeta = frpOpsV2OperatorStatusMeta(order.operatorStatus);
   const item = frpOpsV2ActionableOperatorItem(order);
   const quantity = Number(order.quantity || order.items?.length || 1);
   const isApprovedLike = ["PAYMENT_APPROVED", "IN_PROCESS"].includes(order.operatorStatus);
   const isFinalizableLike = isApprovedLike || order.operatorStatus === "NO_CONNECTION";
   const isReviewLike = ["AI_REVIEWING", "PAYMENT_REJECTED", "NEEDS_ATTENTION"].includes(order.operatorStatus);
-  const canFinalize = Boolean(item?.id && order.finalizeAllowed && isFinalizableLike && isMeActive && !swapInProgress);
+  const canFinalize = Boolean(item?.id && order.finalizeAllowed && isFinalizableLike && !swapInProgress);
   const canReview = Boolean(order.reviewAllowed && isReviewLike && canReviewFrpPayments() && !swapInProgress);
   const canNotify = Boolean(order.notifyCustomerAllowed && order.operatorStatus === "NO_CONNECTION" && !swapInProgress);
-  const disabledTip = swapInProgress
-    ? "Cambio de tecnico en curso"
-    : !hasActiveTechnician ? "Sin tecnico activo"
-    : !isMeActive ? "No sos el tecnico activo"
-    : "";
+  const disabledTip = swapInProgress ? "Cambio de tecnico en curso" : "";
   const title = order.shortCode || order.code || "-";
   const realCode = order.portalOrderCode || order.realCode || order.code || "";
   return `
