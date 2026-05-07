@@ -82,9 +82,9 @@ reporte: /tmp/postgres-live-after-worker-session-permission-revocation.json
 
    El panel FRP ya cierra SSE, refresca sesion y deniega mutaciones. Eso no equivale a una politica global de invalidacion de todas las sesiones del usuario en todos los modulos.
 
-2. Crash de Chrome al subir comprobante.
+2. Subida de comprobante reportada como bug de Chrome.
 
-   No pertenece al panel trabajador. Es portal cliente / selector de archivos / navegador movil. Debe auditarse con otro protocolo: evidencia del dispositivo, flujo exacto, tipo/peso de archivo, console/network y pruebas en navegador.
+   Reclasificado el 2026-05-07: no hay evidencia actual de crash del navegador. La causa reportada era que algunos clientes creaban cuenta e iniciaban sesion sin confirmar la cuenta; al no estar confirmados, no podian subir comprobantes y lo interpretaban como fallo de imagen. Queda fuera del panel trabajador, pero debe reflejarse como claridad de precondicion en el flujo cliente.
 
 3. Lentitud de carga CSS.
 
@@ -118,22 +118,21 @@ La auditoria del panel trabajador queda suficientemente cerrada para no seguir m
 
 El siguiente trabajo no debe ser otro borde del panel trabajador. Debe ser uno de estos dos frentes, en este orden:
 
-1. bug de Chrome/celular al subir comprobante, porque afecta a clientes reales;
-2. auditoria de lentitud CSS/carga, porque afecta percepcion general pero requiere medicion antes de tocar estilos.
+1. diseno funcional del panel trabajador v3, porque la auditoria ya cerro los contratos de estado;
+2. claridad del flujo cliente cuando la cuenta no esta confirmada;
+3. auditoria de lentitud CSS/carga, porque afecta percepcion general pero requiere medicion antes de tocar estilos.
 
 ## Siguiente paso unico recomendado
 
-Abrir la auditoria del bug:
+Abrir el diseno funcional:
 
 ```text
-Chrome/celular se cierra al abrir selector o subir comprobante.
+Panel trabajador FRP v3.
 ```
 
 Entrada minima:
 
-- modelo del celular;
-- version de Chrome;
-- si ocurre al tocar el boton, al elegir archivo o al confirmar subida;
-- tipo y peso aproximado del comprobante;
-- si pasa con imagen, PDF o ambos;
-- captura o video si el cliente puede enviarlo.
+- contratos cerrados de la auditoria;
+- reglas de bloqueo visibles;
+- estructura desktop/mobile;
+- criterios de aprobacion antes de codificar.
