@@ -1222,9 +1222,7 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
   border-radius: 0 0 var(--radius) var(--radius);
 }
 .frp-workbench {
-  display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(260px, 0.85fr);
-  gap: 14px;
+  display: block;
 }
 .frp-lane {
   display: grid;
@@ -1593,12 +1591,14 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
 .technician-widget {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 8px 12px;
+  gap: 8px;
+  padding: 6px 8px;
   border: 1px solid #d5dfef;
-  border-radius: 10px;
+  border-radius: 8px;
   background: #f6f8fc;
-  font-size: 0.86rem;
+  font-size: 0.8rem;
+  flex-wrap: wrap;
+  max-width: 100%;
 }
 
 .technician-widget.hidden {
@@ -1607,7 +1607,7 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
 
 .technician-widget-info {
   display: grid;
-  grid-template-columns: auto auto auto auto;
+  grid-template-columns: auto auto auto;
   gap: 4px 10px;
   align-items: center;
 }
@@ -1615,9 +1615,9 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
 .technician-widget-label {
   color: #6b7280;
   font-weight: 700;
-  font-size: 0.78rem;
+  font-size: 0.68rem;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0;
 }
 
 .technician-widget-info strong {
@@ -1644,6 +1644,15 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
 .technician-widget-actions {
   display: flex;
   gap: 6px;
+  flex-wrap: wrap;
+}
+
+.technician-widget-actions .mini-btn {
+  width: auto;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 7px;
+  white-space: nowrap;
 }
 
 .technician-modal {
@@ -2268,14 +2277,15 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
   --radius-sm: 7px;
   --radius-md: 8px;
   --radius-lg: 8px;
-  background: var(--bg-page);
-  border: 1px solid var(--border-light);
-  border-radius: 8px;
-  margin-top: 12px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  margin-top: 0;
+  overflow: visible;
 }
 
 .frp-ops-v2-header {
-  display: grid;
+  display: none;
   grid-template-columns: minmax(220px, 1fr) auto;
   gap: 16px;
   padding: 16px 18px;
@@ -2355,9 +2365,10 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
 
 .frp-ops-v2-workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1.45fr) minmax(330px, 0.8fr);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 620px), 1fr));
   gap: 18px;
-  padding: 18px;
+  padding: 0;
+  align-items: start;
 }
 
 .frp-ops-v2-main-stack,
@@ -2514,6 +2525,7 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
 }
 
 .frp-ops-v2-grid-attention {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
   gap: 12px;
 }
 
@@ -2547,7 +2559,7 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
   .frp-ops-v2-header,
   .frp-ops-v2-workspace {
     grid-template-columns: 1fr;
-    padding: 14px;
+    padding: 0;
   }
   .frp-ops-v2-status-strip {
     justify-content: flex-start;

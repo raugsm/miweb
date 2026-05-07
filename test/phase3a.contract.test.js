@@ -264,8 +264,12 @@ test("operator workbench v3 layout keeps existing action hooks", async () => {
   assert.match(appJs, /data-frp-take-specific="\$\{escapeHtml\(job\.id\)\}"/);
   assert.match(appJs, /data-frp-show-proof="\$\{escapeHtml\(o\.id\)\}"/);
   assert.match(appJs, /data-frp-show-review="\$\{escapeHtml\(j\.id\)\}"/);
-  assert.match(stylesCss, /\.frp-ops-v2-workspace\s*{[\s\S]*grid-template-columns:\s*minmax\(0, 1\.45fr\) minmax\(330px, 0\.8fr\);/);
+  assert.match(stylesCss, /\.frp-workbench\s*{[\s\S]*display:\s*block;/);
+  assert.match(stylesCss, /\.frp-ops-v2\s*{[\s\S]*background:\s*transparent;[\s\S]*border:\s*0;/);
+  assert.match(stylesCss, /\.frp-ops-v2-header\s*{[\s\S]*display:\s*none;/);
+  assert.match(stylesCss, /\.frp-ops-v2-workspace\s*{[\s\S]*grid-template-columns:\s*repeat\(auto-fit, minmax\(min\(100%, 620px\), 1fr\)\);/);
   assert.match(stylesCss, /\.frp-ops-v2-status-strip\s*{[\s\S]*display:\s*flex;/);
+  assert.match(stylesCss, /\.technician-widget-actions \.mini-btn\s*{[\s\S]*white-space:\s*nowrap;/);
 });
 
 test("operator specific take rejection refreshes stale active technician state", async () => {

@@ -60,9 +60,43 @@ docs/specs/operador/mockups/operador-frp-express-v3.html
 
 ## Riesgos residuales
 
-- Falta validacion visual real desktop/mobile con navegador despues del deploy.
+- Validacion visual real encontro un bug de fase 1: el workbench parecia un panel dentro de otro panel y el grid no hacia reflow correcto cuando el contenedor quedaba chico.
 - El bloque `Clientes no confirmados` sigue como concepto de diseno; no se implemento porque el panel runtime aun no expone ese dato como lista dedicada.
 - Costos FRP sigue como acordeon separado debajo del workbench; no se movio al side-stack para evitar mezclar pricing editable con renders de estado que se actualizan por SSE.
+
+## Correccion visual post-deploy
+
+Fecha: 2026-05-07
+
+Motivo:
+
+- la captura de produccion mostro doble contenedor visual: panel FRP dentro del panel FRP;
+- en ancho chico, el grid seguia en columnas y partia texto/botones;
+- el widget superior de tecnico activo competia con el contenido y sus botones quedaban fuera del lenguaje visual.
+
+Criterio externo usado:
+
+- CSS Grid debe usar tracks flexibles y contenedores directos para evitar columnas rigidas cuando el espacio cambia.
+  https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_grid_layout/Basic_concepts_of_grid_layout
+- `minmax()` permite definir tracks responsivos con minimo/maximo controlado.
+  https://developer.mozilla.org/en-US/docs/Web/CSS/minmax
+- WCAG Reflow: el contenido debe poder reacomodarse sin perdida de informacion ni scroll en dos direcciones para layouts comunes.
+  https://www.w3.org/WAI/WCAG21/Understanding/reflow.html
+
+Correccion:
+
+- `#frp-workbench` vuelve a ser contenedor plano (`display: block`);
+- `.frp-ops-v2` deja de pintar borde/fondo externo;
+- se oculta el header interno duplicado de FRP v3;
+- `.frp-ops-v2-workspace` usa `auto-fit` + `minmax(min(100%, 620px), 1fr)`;
+- `.frp-ops-v2-grid-attention` usa `auto-fit` para no partir columnas de excepciones;
+- el widget superior de tecnico activo queda mas compacto y sus botones no fuerzan ancho fijo.
+
+Validacion local:
+
+- `git diff --check`;
+- `node --check public\app.js`;
+- `npm.cmd test` (58 tests OK).
 
 ## Siguiente paso unico
 
