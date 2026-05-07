@@ -327,6 +327,50 @@ test("Postgres FRP direct finalize assigns an untaken approved job to the closin
   assert.equal(result.job.technicianId, "88888888-8888-4888-8888-888888888888");
 });
 
+test("Postgres FRP direct finalize accepts approved legacy pending jobs without strict ready status", () => {
+  const doneAt = "2026-05-06T17:16:22.000Z";
+  const cases = [
+    { label: "empty-status", status: "" },
+    { label: "waiting-customer", status: "ESPERANDO_CLIENTE" },
+  ];
+
+  for (const candidate of cases) {
+    const result = applyFrpJobDirectFinalizeLegacyState({
+      job: {
+        id: `job-${candidate.label}`,
+        code: `ORD-20260506-${candidate.label}-1`,
+        orderId: baseOrder.id,
+        sequence: 1,
+        status: candidate.status,
+        technicianId: "",
+      },
+      order: {
+        ...baseOrder,
+        checklist: { ...baseOrder.checklist, paymentValidated: true },
+        paymentStatus: "COMPROBANTE_RECIBIDO",
+        orderStatus: "PAGO_VALIDADO",
+      },
+      jobs: [
+        {
+          id: `job-${candidate.label}`,
+          code: `ORD-20260506-${candidate.label}-1`,
+          orderId: baseOrder.id,
+          sequence: 1,
+          status: candidate.status,
+          technicianId: "",
+        },
+      ],
+      userId: "88888888-8888-4888-8888-888888888888",
+      userRole: "ATENCION_TECNICA",
+      doneAt,
+    });
+
+    assert.equal(result.ok, true, candidate.label);
+    assert.equal(result.job.status, "FINALIZADO", candidate.label);
+    assert.equal(result.job.technicianId, "88888888-8888-4888-8888-888888888888", candidate.label);
+  }
+});
+
 test("Postgres FRP direct finalize still rejects a job owned by another operator", () => {
   const result = applyFrpJobDirectFinalizeLegacyState({
     job: {

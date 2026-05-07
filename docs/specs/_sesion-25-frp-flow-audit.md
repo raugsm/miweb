@@ -274,3 +274,29 @@ Verificacion local de servidor:
 - `GET /api/health` respondio `ok: true`.
 - `GET /app.js` contiene el contrato actualizado:
   `canFinalize = item + finalizeAllowed + estado finalizable + !swapInProgress`.
+
+## Incidente post-deploy Corte 7.1
+
+Fecha: 2026-05-07.
+
+Sintoma reportado:
+
+- El boton `Finalizar` ya aparece habilitado en una orden amarilla.
+- Al hacer click, backend responde: `Solo puedes finalizar un equipo aprobado y accionable.`
+
+Causa:
+
+- Corte 7 quito el bloqueo por tecnico activo, pero dejo vivo otro guard viejo:
+  `direct-finalize` solo aceptaba jobs en `ESPERANDO_PREPARACION`,
+  `LISTO_PARA_TECNICO` o `EN_PROCESO`.
+- Algunas ordenes amarillas vivas pueden derivar `NO_CONNECTION` aunque el job
+  llegue con estado pendiente legacy vacio o `ESPERANDO_CLIENTE`.
+- Esas ordenes son pago aprobado sin avance operativo; para el flujo v2 deben
+  poder cerrarse si el operador confirma visualmente en Redirector.
+
+Correccion aplicada:
+
+- `direct-finalize` normaliza estado vacio/missing como `ESPERANDO_PREPARACION`.
+- `direct-finalize` acepta tambien `ESPERANDO_CLIENTE`.
+- Sigue rechazando jobs no aprobados, cancelados, de otro operador o fuera de
+  secuencia multi-equipo.

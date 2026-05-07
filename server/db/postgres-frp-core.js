@@ -369,6 +369,10 @@ function activeJobsForDirectFinalize(jobs) {
   return jobs.filter((candidate) => candidate.status !== "CANCELADO");
 }
 
+function directFinalizeStatus(job) {
+  return job?.status || "ESPERANDO_PREPARACION";
+}
+
 export function applyFrpJobDirectFinalizeLegacyState({
   job,
   order = null,
@@ -404,8 +408,8 @@ export function applyFrpJobDirectFinalizeLegacyState({
       publishReason: "frp_job_done",
     };
   }
-  const allowedStatuses = ["ESPERANDO_PREPARACION", "LISTO_PARA_TECNICO", "EN_PROCESO"];
-  if (!allowedStatuses.includes(job.status)) {
+  const allowedStatuses = ["ESPERANDO_PREPARACION", "ESPERANDO_CLIENTE", "LISTO_PARA_TECNICO", "EN_PROCESO"];
+  if (!allowedStatuses.includes(directFinalizeStatus(job))) {
     return { ok: false, status: 400, error: "Solo puedes finalizar un equipo aprobado y accionable." };
   }
   const activeJobs = activeJobsForDirectFinalize(jobs.length ? jobs : [job]);
