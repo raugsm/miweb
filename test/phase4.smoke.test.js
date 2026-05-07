@@ -72,6 +72,8 @@ async function runSmoke({ baseUrl, dataDir, setupToken }) {
   });
   assert.equal(response.status, 200);
   assert.equal(response.data.order.paymentProofs.length, 1);
+  assert.equal(response.data.order.paymentVerification.decision, "NEEDS_REVIEW");
+  assert.equal(response.data.order.paymentVerification.autoReviewAllowed, false);
 
   response = await http.request("PATCH", `/api/portal/orders/${encodeURIComponent(portalOrder.id)}/payment-proof`, {
     paymentProofs: [proofImage("portal-proof-replacement.png", onePixelPng.replace("iVBOR", "kVBOR"))],
@@ -79,6 +81,7 @@ async function runSmoke({ baseUrl, dataDir, setupToken }) {
   assert.equal(response.status, 200);
   assert.equal(response.data.order.paymentProofs.length, 1, "Reemplazar comprobante no debe acumular archivos");
   assert.equal(response.data.order.paymentProofs[0].name, "portal-proof-replacement.png");
+  assert.equal(response.data.order.paymentVerification.source, "portal_reupload");
 
   response = await http.request("POST", "/api/portal/orders/frp", {
     quantity: 1,
@@ -105,6 +108,7 @@ async function runSmoke({ baseUrl, dataDir, setupToken }) {
   assert.equal(response.status, 201);
   assert.equal(response.data.order.publicStatus, "PAGO_EN_REVISION");
   assert.equal(response.data.order.paymentProofs.length, 1);
+  assert.equal(response.data.order.paymentVerification.source, "portal_create");
 
   response = await http.request("GET", `/api/portal/orders/${encodeURIComponent(staleDraftOrder.id)}`);
   assert.equal(response.status, 200);
@@ -311,6 +315,8 @@ async function runSmoke({ baseUrl, dataDir, setupToken }) {
   });
   assert.equal(response.status, 200);
   assert.equal(response.data.order.paymentProofs.length, 1);
+  assert.equal(response.data.order.paymentVerification.decision, "NEEDS_REVIEW");
+  assert.equal(response.data.order.paymentVerification.autoReviewAllowed, false);
 
   response = await http.request("PATCH", `/api/frp/orders/${encodeURIComponent(internalOrder.id)}/payment-review`, { action: "approve" });
   assert.equal(response.status, 200);

@@ -1,3 +1,5 @@
+import { assessPaymentProofsForAutomation } from "../payments/payment-verification.js";
+
 function canResolveFrpReviewJob(user, job) {
   if (job?.status !== "REQUIERE_REVISION") return true;
   if (["ADMIN", "COORDINADOR"].includes(user?.role)) return true;
@@ -645,10 +647,21 @@ export function createFrpRoutes({
       const reusedProof = (ticket.paymentProofs || []).find((proof) => proofHashes.includes(proof.hash));
       if (reusedProof) return sendJson(res, 409, { error: `Ese comprobante ya fue usado en el ticket ${ticket.code}.` });
     }
-    order.paymentProofs = existingProofs.concat(proofs.map((proof) => ({ ...proof, uploadedBy: user.id, uploadedAt: nowIso(), reviewStatus: "PENDIENTE" })));
+    const timestamp = nowIso();
+    order.paymentProofs = existingProofs.concat(proofs.map((proof) => ({ ...proof, uploadedBy: user.id, uploadedAt: timestamp, reviewStatus: "PENDIENTE" })));
+    order.paymentVerification = assessPaymentProofsForAutomation({
+      order,
+      proofs: order.paymentProofs,
+      source: "operator_upload",
+      now: timestamp,
+    });
     if (order.paymentStatus !== "COMPROBANTE_RECIBIDO") order.paymentStatus = "PAGO_EN_VALIDACION";
-    order.updatedAt = nowIso();
-    audit(db, user.id, "FRP_PAYMENT_PROOF_UPLOADED", order.id, { code: order.code, proofCount: proofs.length });
+    order.updatedAt = timestamp;
+    audit(db, user.id, "FRP_PAYMENT_PROOF_UPLOADED", order.id, {
+      code: order.code,
+      proofCount: proofs.length,
+      verificationDecision: order.paymentVerification?.decision || "",
+    });
     await writeDb(db);
     publishPortalOrdersForFrpOrder(db, order, "frp_payment_proof_uploaded");
     return sendJson(res, 200, { order: publicFrpOrder(order, db), frp: publicFrpState(db, user) });

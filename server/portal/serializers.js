@@ -269,6 +269,7 @@ export function createPortalSerializers({
       urgentStatus: order.urgentStatus || "",
       postpayRequested: Boolean(order.postpayRequested),
       postpayStatus: order.postpayStatus || "",
+      paymentVerification: publicPaymentVerification(order.paymentVerification),
       paymentProofs: Array.isArray(order.paymentProofs) ? order.paymentProofs.map((proof) => ({
         id: proof.id,
         name: proof.name,
@@ -301,6 +302,23 @@ export function createPortalSerializers({
       }),
       createdAt: order.createdAt,
       updatedAt: order.updatedAt,
+    };
+  }
+
+  function publicPaymentVerification(verification) {
+    if (!verification || typeof verification !== "object") return null;
+    return {
+      version: verification.version || "",
+      mode: verification.mode || "",
+      decision: verification.decision || "",
+      confidence: Number(verification.confidence || 0),
+      autoReviewAllowed: Boolean(verification.autoReviewAllowed),
+      generatedAt: verification.generatedAt || "",
+      source: verification.source || "",
+      proofCount: Number(verification.proofCount || 0),
+      reasons: Array.isArray(verification.reasons)
+        ? verification.reasons.slice(0, 6).map((reason) => String(reason || ""))
+        : [],
     };
   }
 

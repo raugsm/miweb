@@ -1,3 +1,5 @@
+import { assessPaymentProofsForAutomation } from "../payments/payment-verification.js";
+
 export function createPortalRoutes({
   addAdminConfigStream,
   addPortalOrderStream,
@@ -760,10 +762,18 @@ export function createPortalRoutes({
     };
     createFrpOrderFromPortal(db, context.client, order, items);
     if (inputProofs.length) {
+      const paymentVerification = assessPaymentProofsForAutomation({
+        order,
+        proofs: inputProofs,
+        source: "portal_create",
+        now: nowIso(),
+      });
+      order.paymentVerification = paymentVerification;
       const linkedFrpOrder = db.frpOrders.find((candidate) => candidate.id === order.frpOrderId);
       if (linkedFrpOrder) {
         linkedFrpOrder.paymentProofs = inputProofs.slice();
         linkedFrpOrder.paymentStatus = "PAGO_EN_VALIDACION";
+        linkedFrpOrder.paymentVerification = paymentVerification;
         linkedFrpOrder.updatedAt = nowIso();
         syncFrpOrderStatus(db, linkedFrpOrder);
       }
@@ -821,6 +831,7 @@ export function createPortalRoutes({
         code: order.code,
         proofCount: inputProofs.length,
         frpOrderId: order.frpOrderId || "",
+        verificationDecision: order.paymentVerification?.decision || "",
         via: "order_create",
       });
     }
@@ -1274,31 +1285,41 @@ export function createPortalRoutes({
       await writeDb(db);
       return sendJson(res, 409, { error: "Ese comprobante ya fue cargado antes." });
     }
+    const timestamp = nowIso();
+    const paymentVerification = assessPaymentProofsForAutomation({
+      order,
+      proofs,
+      source: "portal_reupload",
+      now: timestamp,
+    });
     order.paymentProofs = proofs.slice();
+    order.paymentVerification = paymentVerification;
     order.publicStatus = "PAGO_EN_REVISION";
-    order.updatedAt = nowIso();
+    order.updatedAt = timestamp;
     // PR-2a-final.1: lock se setea recien al APROBAR. PATCH /payment-proof
     // (re-upload post-rechazo) no toca priceLocked — la aprobacion siguiente
     // creara la ventana fresh.
     const request = db.customerRequests.find((candidate) => candidate.id === order.requestId);
     if (request) {
       request.status = "PAGO_EN_REVISION";
-      request.updatedAt = nowIso();
+      request.updatedAt = timestamp;
     }
     const frpOrder = db.frpOrders.find((candidate) => candidate.id === order.frpOrderId);
     if (frpOrder) {
       frpOrder.paymentProofs = proofs.slice();
+      frpOrder.paymentVerification = paymentVerification;
       frpOrder.paymentStatus = "PAGO_EN_VALIDACION";
       frpOrder.paymentRejectedReason = "";
       frpOrder.paymentReviewedBy = "";
       frpOrder.paymentReviewedAt = "";
-      frpOrder.updatedAt = nowIso();
+      frpOrder.updatedAt = timestamp;
       syncFrpOrderStatus(db, frpOrder);
     }
     audit(db, context.user.id, "PORTAL_PAYMENT_PROOF_UPLOADED", order.id, {
       code: order.code,
       proofCount: proofs.length,
       frpOrderId: order.frpOrderId || "",
+      verificationDecision: paymentVerification.decision,
     });
     await writeDb(db);
     publishPortalOrders(db, context.client.id, "payment_proof_uploaded");
