@@ -860,6 +860,49 @@ test("FRP serializer hides no-proof drafts from operatorOrders", () => {
   assert.equal(state.operatorOrders.length, 0, "new operator panel must not show drafts without proof");
 });
 
+test("FRP serializer excludes all-canceled approved orders from operatorOrders", () => {
+  const reviewedAt = "2026-05-07T10:00:00.000Z";
+  const { publicFrpState } = createTestFrpSerializers();
+  const db = {
+    users: [],
+    frpOrders: [{
+      id: "order-canceled-1",
+      code: "ORD-20260507-001",
+      portalOrderId: "portal-canceled-1",
+      clientId: "internal-canceled-1",
+      clientName: "Cliente cancelado",
+      country: "PE",
+      workChannel: "WHATSAPP_3",
+      quantity: 1,
+      paymentStatus: "COMPROBANTE_RECIBIDO",
+      orderStatus: "",
+      checklist: { paymentValidated: true },
+      paymentReviewedAt: reviewedAt,
+      createdAt: reviewedAt,
+      updatedAt: reviewedAt,
+    }],
+    frpJobs: [{
+      id: "job-canceled-1",
+      code: "ORD-20260507-001-1",
+      orderId: "order-canceled-1",
+      sequence: 1,
+      totalJobs: 1,
+      status: "CANCELADO",
+      canceledAt: "2026-05-07T11:00:00.000Z",
+      workChannel: "WHATSAPP_3",
+      createdAt: reviewedAt,
+      updatedAt: reviewedAt,
+    }],
+    customerOrders: [{ id: "portal-canceled-1", code: "CL-20260507-001", clientId: "customer-canceled-1" }],
+    customerClients: [{ id: "customer-canceled-1", status: "REGULAR" }],
+  };
+
+  const state = publicFrpState(db, { id: "tech-1", role: "ATENCION_TECNICA" });
+
+  assert.equal(state.orders[0].jobCounts.CANCELADO, 1, "historial tecnico conserva el cancelado");
+  assert.equal(state.operatorOrders.length, 0, "panel operativo no debe mostrar cancelados como No conecto");
+});
+
 test("FRP serializer keeps a seven-device order grouped in one operator card", () => {
   const now = new Date().toISOString();
   const { publicFrpState } = createTestFrpSerializers();

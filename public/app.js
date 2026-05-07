@@ -1837,12 +1837,13 @@ function frpOpsV2OperatorStatusMeta(status) {
   if (status === "IN_PROCESS") return { label: "En proceso", className: "is-approved" };
   if (status === "NEEDS_ATTENTION") return { label: "Atencion", className: "is-no-connection" };
   if (status === "PAYMENT_REJECTED") return { label: "Pago rechazado", className: "is-ai-reviewing" };
+  if (status === "CANCELED") return { label: "Cancelado", className: "is-ai-reviewing" };
   return { label: status || "Pendiente", className: "is-ai-reviewing" };
 }
 
 function frpOpsV2ActionableOperatorItem(order) {
   const items = Array.isArray(order?.items) ? order.items : [];
-  return items.find((item) => !["FINALIZADO", "CANCELADO"].includes(item.status)) || items[0] || null;
+  return items.find((item) => !["FINALIZADO", "CANCELADO"].includes(item.status)) || null;
 }
 
 function frpOpsV2OperatorOrderDetail(order, item) {
@@ -1861,11 +1862,13 @@ function frpOpsV2RenderOperatorOrderItems(order) {
     <div class="frp-ops-v2-order-items" aria-label="Equipos de ${escapeHtml(order.shortCode || order.code)}">
       ${items.map((item) => {
         const done = item.status === "FINALIZADO";
-        const blocked = order.quantity > 1 && !done && item.id !== frpOpsV2ActionableOperatorItem(order)?.id;
+        const canceled = item.status === "CANCELADO";
+        const terminal = done || canceled;
+        const blocked = order.quantity > 1 && !terminal && item.id !== frpOpsV2ActionableOperatorItem(order)?.id;
         return `
-          <div class="frp-ops-v2-order-item ${done ? "is-done" : ""} ${blocked ? "is-waiting" : ""}">
+          <div class="frp-ops-v2-order-item ${terminal ? "is-done" : ""} ${blocked ? "is-waiting" : ""}">
             <span>${escapeHtml(item.shortCode || item.code || "")}</span>
-            <strong>${done ? "finalizado" : blocked ? "espera" : "actual"}</strong>
+            <strong>${done ? "finalizado" : canceled ? "cancelado" : blocked ? "espera" : "actual"}</strong>
           </div>
         `;
       }).join("")}
@@ -1934,7 +1937,7 @@ function frpOpsV2RenderOperatorOrderCard(order, { swapInProgress }) {
 }
 
 function frpOpsV2RenderOperatorOrdersSection({ operatorOrders, isMeActive, hasActiveTechnician, swapInProgress }) {
-  const activeOrders = operatorOrders.filter((order) => order.operatorStatus !== "FINISHED");
+  const activeOrders = operatorOrders.filter((order) => !["FINISHED", "CANCELED"].includes(order.operatorStatus));
   return `
     <section class="frp-ops-v2-section">
       <div class="frp-ops-v2-section-header">

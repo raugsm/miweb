@@ -53,8 +53,13 @@ export function createFrpSerializers({
     return order?.paymentStatus === "COMPROBANTE_RECHAZADO";
   }
 
+  function canceledOrderStatus(order) {
+    return ["CANCELADO", "CANCELADA"].includes(order?.orderStatus || order?.status);
+  }
+
   function operatorOrderStatus(order, jobs, portalOrder) {
     const activeJobs = jobs.filter((job) => job.status !== "CANCELADO");
+    if (canceledOrderStatus(order) || (jobs.length > 0 && activeJobs.length === 0)) return "CANCELED";
     const allDone = activeJobs.length > 0 && activeJobs.every((job) => job.status === "FINALIZADO");
     if (allDone) return "FINISHED";
     if (paymentRejected(order)) return "PAYMENT_REJECTED";
@@ -87,7 +92,9 @@ export function createFrpSerializers({
   function operatorOrderVisible(order, db) {
     const proofCount = Array.isArray(order?.paymentProofs) ? order.paymentProofs.length : 0;
     const jobs = db.frpJobs.filter((job) => job.orderId === order.id);
-    const hasOperationalProgress = jobs.some((job) => !["ESPERANDO_PREPARACION", "CANCELADO"].includes(job.status));
+    const activeJobs = jobs.filter((job) => job.status !== "CANCELADO");
+    if (canceledOrderStatus(order) || (jobs.length > 0 && activeJobs.length === 0)) return false;
+    const hasOperationalProgress = activeJobs.some((job) => job.status !== "ESPERANDO_PREPARACION");
     return Boolean(
       proofCount > 0
       || paymentApproved(order)
@@ -134,7 +141,7 @@ export function createFrpSerializers({
       priceRevalidationStatus: order.priceRevalidationStatus || portalOrder?.priceDecisionAction || "",
       paymentVerification: order.paymentVerification || portalOrder?.paymentVerification || null,
       reviewAllowed: ["AI_REVIEWING", "PAYMENT_REJECTED", "NEEDS_ATTENTION"].includes(status),
-      finalizeAllowed: paymentApproved(order) && !["FINISHED", "PAYMENT_REJECTED"].includes(status),
+      finalizeAllowed: paymentApproved(order) && !["FINISHED", "CANCELED", "PAYMENT_REJECTED"].includes(status),
       notifyCustomerAllowed: status === "NO_CONNECTION",
       createdAt: order.createdAt,
       updatedAt: order.updatedAt,

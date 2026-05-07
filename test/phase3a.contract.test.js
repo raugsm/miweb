@@ -235,7 +235,7 @@ test("operator current job renders frozen redirector before active technician fa
 test("operator workbench treats active jobs as grouped order state", async () => {
   const appJs = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
 
-  assert.match(appJs, /const activeOrders = operatorOrders\.filter\(\(order\) => order\.operatorStatus !== "FINISHED"\);/);
+  assert.match(appJs, /const activeOrders = operatorOrders\.filter\(\(order\) => !\["FINISHED", "CANCELED"\]\.includes\(order\.operatorStatus\)\);/);
   assert.match(appJs, /if \(status === "IN_PROCESS"\) return \{ label: "En proceso", className: "is-approved" \};/);
   assert.match(appJs, /frpOpsV2RenderOperatorOrderItems\(order\)/);
   assert.match(appJs, /const items = Array\.isArray\(order\.items\) \? order\.items : \[\];/);
@@ -298,7 +298,7 @@ test("operator workbench consumes the post-payment operatorOrders contract", asy
   assert.match(appJs, /return session\.frp\?\.operatorOrders \|\| \[\];/);
   assert.match(appJs, /const operatorOrders = frpOperatorOrders\(\);/);
   assert.match(appJs, /function frpOpsV2RenderOperatorOrdersSection\(\{ operatorOrders, isMeActive, hasActiveTechnician, swapInProgress \}\)/);
-  assert.match(appJs, /const activeOrders = operatorOrders\.filter\(\(order\) => order\.operatorStatus !== "FINISHED"\);/);
+  assert.match(appJs, /const activeOrders = operatorOrders\.filter\(\(order\) => !\["FINISHED", "CANCELED"\]\.includes\(order\.operatorStatus\)\);/);
   assert.match(appJs, /frpOpsV2RenderOperatorOrdersSection\(\{ operatorOrders, isMeActive, hasActiveTechnician, swapInProgress \}\)/);
 });
 
@@ -349,6 +349,7 @@ test("operator direct finalize actions no longer require the active technician U
   assert.match(cardBlock, /data-frp-direct-finalize="\$\{escapeHtml\(item\?\.id \|\| ""\)\}"/);
   assert.doesNotMatch(directFinalizeRouteBlock, /FRP_JOB_DIRECT_FINALIZE_NOT_ACTIVE|requireActiveFrpTechnician/);
   assert.match(appJs, /await directFinalizeFrpJob\(directFinalizeButton\.dataset\.frpDirectFinalize\);/);
+  assert.match(appJs, /return items\.find\(\(item\) => !\["FINALIZADO", "CANCELADO"\]\.includes\(item\.status\)\) \|\| null;/);
 });
 
 test("operator review cards only expose proof review when payment review is allowed", async () => {

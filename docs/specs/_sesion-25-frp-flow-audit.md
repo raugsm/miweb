@@ -300,3 +300,34 @@ Correccion aplicada:
 - `direct-finalize` acepta tambien `ESPERANDO_CLIENTE`.
 - Sigue rechazando jobs no aprobados, cancelados, de otro operador o fuera de
   secuencia multi-equipo.
+
+## Incidente post-deploy Corte 7.2
+
+Fecha: 2026-05-07.
+
+Sintoma reportado:
+
+- El panel seguia mostrando cards amarillas `No conecto` con boton `Finalizar`.
+- Al inspeccionar las ordenes vivas `CL-20260505-003` y `CL-20260507-001`, los
+  jobs e items ligados ya estaban en `CANCELADO`.
+- El backend rechazo correctamente la accion con
+  `Solo puedes finalizar un equipo aprobado y accionable.`
+
+Causa:
+
+- El serializer del panel operador excluia jobs `CANCELADO` para algunos
+  calculos internos, pero `operatorOrderVisible` seguia considerando visible
+  una orden con pago aprobado aunque todos sus jobs estuvieran cancelados.
+- El frontend tambien tenia un fallback riesgoso: si no encontraba item
+  accionable, podia usar `items[0]`, que en este incidente era un job
+  cancelado.
+
+Correccion aplicada:
+
+- Ordenes FRP con `orderStatus` cancelado o con todos sus jobs en `CANCELADO`
+  ya no entran a `operatorOrders`.
+- El estado derivado `CANCELED` no es finalizable.
+- El frontend ya no renderiza `CANCELED` como orden activa y no usa items
+  cancelados/finalizados como fallback accionable.
+- Se agrego cobertura para que una orden aprobada totalmente cancelada conserve
+  historial tecnico, pero desaparezca del panel operativo.
