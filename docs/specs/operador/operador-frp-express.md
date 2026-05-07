@@ -59,14 +59,14 @@ No debe existir una card principal separada llamada `Trabajo actual`.
 | --- | --- | --- | --- |
 | Verde | `Pago aprobado` | Pago aprobado por humano o futura IA autorizada | `Finalizado` / `Finalizado equipo N` |
 | Azul | `IA revisando` | Comprobante recibido, pago no aprobado | `Revisar` |
-| Amarillo | `No conecto` | Pago aprobado + 5 minutos sin avance operativo | `Avisar cliente` / `Avisar ajuste` |
+| Amarillo | `No conecto` | Pago aprobado + 5 minutos sin avance operativo | `Finalizado` si el operador completa el servicio, o `Avisar cliente` / `Avisar ajuste` |
 | Gris/neutral | `Finalizado` | Equipo o pedido cerrado | Sin accion en la lista activa |
 
 Reglas:
 
 - Verde no muestra `Revisar`.
 - Azul no muestra `Finalizado`.
-- Amarillo no simula conexion automatica.
+- Amarillo no simula conexion automatica, pero no bloquea el cierre si el operador completa el servicio.
 - No se muestran monto, metodo ni vigencia en cards verdes.
 - `Revisar` abre comprobante, monto esperado y evidencia necesaria.
 
@@ -137,6 +137,8 @@ Reglas:
 | `Avisar cliente` | Orden amarilla con precio vigente | Dispara aviso/contacto operativo |
 | `Avisar ajuste` | Orden amarilla con precio cambiado | Dispara aviso por cambio de precio |
 | `Ver orden` | Solo si hace falta detalle secundario | Abre detalle no destructivo |
+
+Nota de Corte 6: la orden amarilla conserva el boton `Finalizado` porque la web no puede confirmar por si sola si USB Redirector muestra el equipo conectado. Si el operador procesa el servicio, debe poder cerrar la orden sin moverla a otra caja ni revivir el flujo viejo de `Tomar`.
 
 Botones removidos del contrato principal:
 

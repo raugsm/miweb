@@ -12,8 +12,10 @@ operador sin esperar otra accion web del cliente.
 **Nuevo contrato visual:**
 
 - A: sin orden viva, muestra Technician ID si existe, codigo placeholder e instrucciones de preparacion.
-- B: comprobante en revision o rechazado, muestra codigo real y estado informativo.
+- B: comprobante en revision o rechazado, mantiene codigo placeholder y estado informativo.
 - C: pago aprobado o servicio activo, muestra codigo corto/real e instrucciones para abrir USB Redirector, conectar en sideload y mantener el equipo conectado.
+
+**Ajuste de sesion 24 / Corte 6:** el `Codigo del proceso` no se muestra al cliente durante `PAGO_EN_REVISION` ni `PAGO_RECHAZADO`. Se muestra cuando el pago queda aprobado o el servicio esta vivo. Motivo: evitar que el cliente confunda comprobante recibido con orden tecnicamente procesable.
 
 **Compatibilidad temporal:** `POST /api/portal/orders/:id/notify-connected`
 permanece en backend y en un boton oculto del DOM para clientes con JS cacheado,

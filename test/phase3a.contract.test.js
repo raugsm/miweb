@@ -211,6 +211,8 @@ test("portal step 4 is an instruction/status panel, not a required connected but
   assert.match(portalHtml, /id="panel4Status" role="status" aria-live="polite"/);
   assert.match(portalHtml, /id="panel4EquipoConectado"[^>]+hidden[^>]+aria-hidden="true"[^>]+tabindex="-1"/);
   assert.match(panel4Js, /const PREPARATION_STATES = new Set\(\[/);
+  assert.match(panel4Js, /const PLACEHOLDER_CODE_TEXT = "Aparecera cuando tu pago sea aprobado";/);
+  assert.match(panel4Js, /const canShowProcessCode = visualState === "C";/);
   assert.match(panel4Js, /order\?\.shortCode \|\| order\?\.code/);
   assert.match(panel4Js, /panel4InstructionCopy\(order, visualState\)/);
   assert.match(panel4Css, /\.panel\.panel-4\[data-state="C"\] \.panel-4-equipo-conectado-btn \{ display: none; \}/);
@@ -245,7 +247,8 @@ test("operator order actions distinguish no active technician from another activ
 
   assert.match(appJs, /const hasActiveTechnician = Boolean\(tech\?\.active\?\.userId\);/);
   assert.match(appJs, /const disabledTip = swapInProgress[\s\S]*\? "Cambio de tecnico en curso"[\s\S]*: !hasActiveTechnician \? "Sin tecnico activo"[\s\S]*: !isMeActive \? "No sos el tecnico activo"/);
-  assert.match(appJs, /const canFinalize = Boolean\(item\?\.id && order\.finalizeAllowed && isApprovedLike && isMeActive && !swapInProgress\);/);
+  assert.match(appJs, /const isFinalizableLike = isApprovedLike \|\| order\.operatorStatus === "NO_CONNECTION";/);
+  assert.match(appJs, /const canFinalize = Boolean\(item\?\.id && order\.finalizeAllowed && isFinalizableLike && isMeActive && !swapInProgress\);/);
   assert.match(appJs, /const canNotify = Boolean\(order\.notifyCustomerAllowed && order\.operatorStatus === "NO_CONNECTION" && !swapInProgress\);/);
   assert.match(appJs, /disabledTip \? `title="\$\{escapeHtml\(disabledTip\)\}"` : ""/);
 });
@@ -329,7 +332,8 @@ test("operator direct finalize actions require the active technician UI contract
   const appJs = await readFile(new URL("../public/app.js", import.meta.url), "utf8");
 
   assert.match(appJs, /const isMeActive = Boolean\(tech\?\.active\?\.userId && tech\.active\.userId === session\.user\?\.id\);/);
-  assert.match(appJs, /const canFinalize = Boolean\(item\?\.id && order\.finalizeAllowed && isApprovedLike && isMeActive && !swapInProgress\);/);
+  assert.match(appJs, /const isFinalizableLike = isApprovedLike \|\| order\.operatorStatus === "NO_CONNECTION";/);
+  assert.match(appJs, /const canFinalize = Boolean\(item\?\.id && order\.finalizeAllowed && isFinalizableLike && isMeActive && !swapInProgress\);/);
   assert.match(appJs, /!hasActiveTechnician \? "Sin tecnico activo"/);
   assert.match(appJs, /!isMeActive \? "No sos el tecnico activo"/);
   assert.match(appJs, /data-frp-direct-finalize="\$\{escapeHtml\(item\?\.id \|\| ""\)\}"/);

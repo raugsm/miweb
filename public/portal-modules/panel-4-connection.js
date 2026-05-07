@@ -3,12 +3,11 @@
 //
 // QUE: el Panel 4 muestra SIEMPRE las cards Technician ID + Código del proceso
 // + boton "¿Dónde pegar?" + boton Descargar. La diferencia entre estados es:
-//   A — Inicial         : Card Código en placeholder ("Aparecerá cuando subas
-//                         tu pago"), sin botón Copiar de Código, sin "Equipo
-//                         conectado".
-//   B — Comprobante     : Card Codigo con valor real (con boton Copiar), sin
-//      en validacion      boton de conexion. Aplica tambien a comprobante
-//      o rechazado        rechazado.
+//   A — Inicial         : Card Código en placeholder, sin botón Copiar de
+//                         Código, sin "Equipo conectado".
+//   B — Comprobante     : Card Código sigue en placeholder, sin botón Copiar
+//      en validacion      de Código, sin botón de conexión. Aplica tambien a
+//      o rechazado        comprobante rechazado.
 //   C — Pago aprobado   : Card Codigo con valor real + instrucciones. Sin
 //      o servicio vivo    boton obligatorio de conexion.
 //
@@ -22,7 +21,7 @@
 //
 //   Datos hardcoded de prueba:
 //     Technician ID:  1000 9983 5478  (siempre visible)
-//     Código proceso: CL-20260504-001-2  (visible en B y C)
+//     Código proceso: CL-20260504-001-2  (visible solo en C)
 //
 // El override sólo se aplica cuando window.__panel4DebugState es "A", "B" o "C".
 // Si no, el render deriva del estado real de state.customer.orders[]:
@@ -39,7 +38,7 @@ import { $ } from "./dom.js";
 import { state } from "./state.js";
 
 const DEBUG_ORDER_CODE = "CL-20260504-001-2";
-const PLACEHOLDER_CODE_TEXT = "Aparecerá cuando subas tu pago";
+const PLACEHOLDER_CODE_TEXT = "Aparecera cuando tu pago sea aprobado";
 
 const VALID_DEBUG_STATES = new Set(["A", "B", "C"]);
 const PREPARATION_STATES = new Set([
@@ -84,7 +83,8 @@ function orderForCards() {
     PREPARATION_STATES.has(order.publicStatus)
   ));
   if (orderActive) return orderActive;
-  // Validación en curso: orden con código real pero sin freeze.
+  // Validación en curso: conserva la orden para el copy de estado, pero el
+  // código no se muestra hasta que el pago quede aprobado.
   const orderWithCode = orders.find((order) => (
     ["PAGO_EN_REVISION", "PAGO_RECHAZADO"].includes(order.publicStatus)
   ));
@@ -141,10 +141,11 @@ export function updatePanel4(_context = {}) {
   const technicianText = technicianId
     || (state.activeTechnician?.swapInProgress ? "Cambio de tecnico en curso" : "Tecnico no disponible");
 
-  // Código del proceso: real en estados B/C y tambien en estado A post-clic
-  // cuando la orden sigue viva en seguimiento.
+  // Código del proceso: real solo en estado C. En revisión/rechazo se mantiene
+  // placeholder para no sugerir que el proceso técnico ya está listo.
   let orderCode = "";
-  if (visualState === "B" || visualState === "C" || order) {
+  const canShowProcessCode = visualState === "C";
+  if (canShowProcessCode) {
     orderCode = String(order?.shortCode || order?.code || "").trim();
     if (!orderCode && usingDebug) orderCode = DEBUG_ORDER_CODE;
   }

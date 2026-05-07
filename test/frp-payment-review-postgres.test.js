@@ -833,6 +833,7 @@ test("FRP serializer derives no-connection alert after approved payment window",
 
   assert.equal(state.operatorOrders[0].operatorStatus, "NO_CONNECTION");
   assert.equal(state.operatorOrders[0].primaryAction, "notify_customer");
+  assert.equal(state.operatorOrders[0].finalizeAllowed, true);
   assert.equal(state.operatorOrders[0].notifyCustomerAllowed, true);
   assert.equal(state.operatorOrders[0].noConnectionAlertAt, "2026-05-06T10:05:00.000Z");
 });

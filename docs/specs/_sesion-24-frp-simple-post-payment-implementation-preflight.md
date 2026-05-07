@@ -608,3 +608,74 @@ curl -fsS https://ariadgsm.com/api/health
 npm run postgres:read-check -- --report /tmp/postgres-live-after-frp-step4-instructions.json --strict
 cat /tmp/postgres-live-after-frp-step4-instructions.json
 ```
+
+## Corte 6 implementado
+
+Fecha: 2026-05-07
+
+Archivos tocados:
+
+- `public/app.js`
+- `public/portal-modules/panel-4-connection.js`
+- `docs/specs/cliente/panel-4-conexion.md`
+- `docs/specs/operador/operador-frp-express.md`
+- `test/phase3a.contract.test.js`
+- `test/frp-payment-review-postgres.test.js`
+
+Cambios aplicados:
+
+- Las ordenes amarillas `NO_CONNECTION` conservan accion `Finalizar` ademas de `Avisar cliente`.
+- La accion `Finalizar` sigue usando el endpoint seguro `PATCH /api/frp/jobs/:id/direct-finalize`.
+- No se reutiliza `PATCH /api/frp/jobs/:id/cancel` para amarillas sin conexion porque ese endpoint pertenece al contrato viejo de jobs ya tomados/en proceso.
+- El Panel 4 cliente deja de mostrar `Codigo del proceso` durante `PAGO_EN_REVISION` o `PAGO_RECHAZADO`.
+- El codigo del proceso se muestra solo cuando el estado visual del Panel 4 es `C`: pago aprobado o servicio vivo.
+- El placeholder pasa a `Aparecera cuando tu pago sea aprobado`.
+
+Razonamiento:
+
+- La web no puede confirmar conexion USB Redirector por si sola; esa lectura sigue siendo operativa/externa.
+- Si el operador completa el servicio desde una orden amarilla, no debe quedar bloqueado por un estado visual de aviso.
+- Mostrar codigo antes de aprobar pago puede hacer que el cliente confunda comprobante recibido con proceso tecnico listo.
+
+Cancelacion:
+
+- No se agrega cancelacion irreversible en este corte.
+- Cancelar una orden pagada toca politica de reembolso y seguimiento cliente; requiere endpoint/contrato propio para no usar un endpoint viejo con semantica distinta.
+
+Verificacion local:
+
+```powershell
+node --check public/app.js
+node --check public/portal-modules/panel-4-connection.js
+node --check test/phase3a.contract.test.js
+node --check test/frp-payment-review-postgres.test.js
+node --test test/phase3a.contract.test.js
+node --test test/frp-payment-review-postgres.test.js
+npm.cmd test
+```
+
+Resultado:
+
+- `node --check` enfocado: OK.
+- `node --test test/phase3a.contract.test.js`: 26/26 pasando.
+- `node --test test/frp-payment-review-postgres.test.js`: 22/22 pasando.
+- `git diff --check`: OK; solo avisos CRLF del checkout Windows.
+- `npm.cmd test`: 71/71 pasando.
+
+Verificacion navegador local aislada:
+
+- URL temporal: `http://127.0.0.1:4184`.
+- Datos usados: `ARIAD_DATA_DIR` temporal, sin tocar runtime real ni Postgres.
+- Cliente con pago en revision:
+  - `#panel4[data-state="B"]`.
+  - `#panel4OrderCodeValue`: `Aparecera cuando tu pago sea aprobado`.
+  - `#panel4OrderCodeCopy` oculto con `hidden`.
+- Cliente con pago aprobado:
+  - `#panel4[data-state="C"]`.
+  - `#panel4OrderCodeValue`: `ARD-0002`.
+  - `#panel4OrderCodeCopy` visible.
+- Operador FRP:
+  - Se confirmo 1 card `.frp-ops-v2-order-card.is-no-connection`.
+  - Se confirmo 1 boton visible `[data-frp-direct-finalize]`, habilitado.
+  - Se confirmo 1 boton visible `[data-frp-notify-customer]`, habilitado.
+  - Consola del navegador: sin errores JS (`tab.dev.logs({ levels: ["error"] })` vacio).

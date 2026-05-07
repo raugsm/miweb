@@ -1878,8 +1878,9 @@ function frpOpsV2RenderOperatorOrderCard(order, { isMeActive, hasActiveTechnicia
   const item = frpOpsV2ActionableOperatorItem(order);
   const quantity = Number(order.quantity || order.items?.length || 1);
   const isApprovedLike = ["PAYMENT_APPROVED", "IN_PROCESS"].includes(order.operatorStatus);
+  const isFinalizableLike = isApprovedLike || order.operatorStatus === "NO_CONNECTION";
   const isReviewLike = ["AI_REVIEWING", "PAYMENT_REJECTED", "NEEDS_ATTENTION"].includes(order.operatorStatus);
-  const canFinalize = Boolean(item?.id && order.finalizeAllowed && isApprovedLike && isMeActive && !swapInProgress);
+  const canFinalize = Boolean(item?.id && order.finalizeAllowed && isFinalizableLike && isMeActive && !swapInProgress);
   const canReview = Boolean(order.reviewAllowed && isReviewLike && canReviewFrpPayments() && !swapInProgress);
   const canNotify = Boolean(order.notifyCustomerAllowed && order.operatorStatus === "NO_CONNECTION" && !swapInProgress);
   const disabledTip = swapInProgress
@@ -1907,7 +1908,7 @@ function frpOpsV2RenderOperatorOrderCard(order, { isMeActive, hasActiveTechnicia
       </div>
       ${frpOpsV2RenderOperatorOrderItems(order)}
       <div class="frp-ops-v2-order-actions">
-        ${isApprovedLike ? `
+        ${isFinalizableLike ? `
           <button type="button" class="frp-ops-v2-btn-primary"
             data-frp-direct-finalize="${escapeHtml(item?.id || "")}"
             ${canFinalize ? "" : "disabled"}
