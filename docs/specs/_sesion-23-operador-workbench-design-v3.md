@@ -272,6 +272,23 @@ Costos
 
 En mobile no usar dos columnas. La prioridad es lectura y botones grandes, no densidad.
 
+## Mockup visual v3
+
+Archivo:
+
+```text
+docs/specs/operador/mockups/operador-frp-express-v3.html
+```
+
+Proposito:
+
+- revisar estructura visual desktop/mobile antes de tocar runtime;
+- validar jerarquia: estado superior, trabajo propio, observacion, cola, excepciones, finalizados y costos;
+- mantener el bug de comprobante reclasificado como estado de cuenta no confirmada, no como crash de Chrome;
+- conservar un artefacto estatico para discutir diseno sin mezclarlo con contratos backend.
+
+Este mockup no es implementacion y no reemplaza pruebas runtime. Solo permite aprobar o corregir la direccion visual antes de tocar `public/app.js` o CSS productivo.
+
 ## Reglas de componentes
 
 ### Botones
@@ -326,7 +343,7 @@ En mobile no usar dos columnas. La prioridad es lectura y botones grandes, no de
 
 ## Criterios de aprobacion antes de codificar
 
-No codificar hasta que este documento quede aceptado o corregido.
+No codificar runtime hasta que este documento y el mockup visual queden aceptados o corregidos.
 
 Para aprobar el diseno, debe quedar claro:
 
@@ -358,10 +375,10 @@ Fase 3:
 
 ## Siguiente paso unico
 
-Revisar este documento y decidir:
+Revisar el mockup visual y decidir:
 
 ```text
-Aprobado para wireframe visual
+Aprobado para implementacion fase 1
 o
-Corregir estructura antes de wireframe
+Corregir mockup antes de implementar
 ```

@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Panel trabajador FRP v3 - AriadGSM</title>
+  <style>
+    :root {
+      --page: #F7F8FA;
+      --surface: #FFFFFF;
+      --surface-soft: #F1F4F7;
+      --line: #DDE3EA;
+      --line-strong: #B8C4D1;
+      --text: #18202A;
+      --muted: #5D6B7A;
+      --soft: #8290A0;
+      --blue: #195D8F;
+      --blue-soft: #EAF4FB;
+      --teal: #0E766E;
+      --teal-soft: #E6F5F3;
+      --green: #237044;
+      --green-soft: #E8F5EE;
+      --amber: #8A5A00;
+      --amber-soft: #FFF4D8;
+      --red: #9A2727;
+      --red-soft: #FCE9E9;
+      --violet: #5E4A92;
+      --violet-soft: #F0ECFA;
+      --radius: 8px;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--page);
+      color: var(--text);
+      font-family: var(--font);
+    }
+
+    button {
+      font: inherit;
+      border: 0;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.62;
+    }
+
+    .shell {
+      width: min(1180px, calc(100vw - 32px));
+      margin: 24px auto;
+    }
+
+    .topbar {
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) auto;
+      gap: 16px;
+      align-items: center;
+      padding: 14px 0 18px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .eyebrow {
+      margin: 0 0 4px;
+      font-size: 11px;
+      letter-spacing: 0;
+      text-transform: uppercase;
+      color: var(--soft);
+      font-weight: 700;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 22px;
+      line-height: 1.18;
+      letter-spacing: 0;
+      font-weight: 700;
+    }
+
+    .status-strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .chip {
+      min-height: 30px;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 6px 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+
+    .chip strong { color: var(--text); }
+    .chip.green { background: var(--green-soft); color: var(--green); border-color: #B8DFC8; }
+    .chip.teal { background: var(--teal-soft); color: var(--teal); border-color: #B9E1DC; }
+    .chip.amber { background: var(--amber-soft); color: var(--amber); border-color: #F1D38A; }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(0, 1.45fr) minmax(330px, 0.8fr);
+      gap: 18px;
+      padding-top: 18px;
+    }
+
+    .main-stack,
+    .side-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      min-width: 0;
+    }
+
+    .section {
+      min-width: 0;
+    }
+
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+
+    .section-title {
+      margin: 0;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1;
+      letter-spacing: 0;
+      text-transform: uppercase;
+      font-weight: 800;
+    }
+
+    .section-note {
+      color: var(--soft);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .job-card,
+    .queue-card,
+    .notice-card,
+    .table-wrap,
+    .cost-bar {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+    }
+
+    .job-card {
+      padding: 16px;
+    }
+
+    .job-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(220px, 0.8fr);
+      gap: 14px;
+      align-items: start;
+    }
+
+    .job-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-bottom: 8px;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 750;
+      color: var(--muted);
+      background: var(--surface-soft);
+      border: 1px solid transparent;
+      white-space: nowrap;
+    }
+
+    .tag.blue { color: var(--blue); background: var(--blue-soft); border-color: #C7E0F1; }
+    .tag.amber { color: var(--amber); background: var(--amber-soft); border-color: #F0D28B; }
+    .tag.red { color: var(--red); background: var(--red-soft); border-color: #F0B9B9; }
+    .tag.teal { color: var(--teal); background: var(--teal-soft); border-color: #B9E1DC; }
+    .tag.violet { color: var(--violet); background: var(--violet-soft); border-color: #D4CAE9; }
+
+    .job-title {
+      margin: 0;
+      font-size: 19px;
+      line-height: 1.22;
+      font-weight: 750;
+    }
+
+    .job-subtitle {
+      margin: 5px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .data-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .data-cell {
+      min-width: 0;
+      padding: 10px;
+      border-radius: 7px;
+      background: var(--surface-soft);
+      border: 1px solid var(--line);
+    }
+
+    .data-label {
+      color: var(--soft);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+
+    .data-value {
+      margin-top: 3px;
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 750;
+      overflow-wrap: anywhere;
+    }
+
+    .action-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      align-items: stretch;
+    }
+
+    .primary-action,
+    .secondary-action,
+    .plain-action {
+      min-height: 40px;
+      border-radius: 7px;
+      padding: 9px 12px;
+      font-weight: 750;
+      font-size: 13px;
+      text-align: center;
+    }
+
+    .primary-action {
+      background: var(--blue);
+      color: #FFFFFF;
+    }
+
+    .secondary-action {
+      background: var(--surface);
+      color: var(--blue);
+      border: 1px solid #B8D3E8;
+    }
+
+    .plain-action {
+      background: var(--surface-soft);
+      color: var(--muted);
+      border: 1px solid var(--line);
+    }
+
+    .reason {
+      padding: 10px;
+      border-radius: 7px;
+      background: var(--amber-soft);
+      border: 1px solid #F0D28B;
+      color: var(--amber);
+      font-size: 12px;
+      line-height: 1.35;
+      font-weight: 650;
+    }
+
+    .other-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .readonly-card {
+      padding: 11px;
+      border: 1px dashed var(--line-strong);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+
+    .readonly-card h3,
+    .queue-card h3,
+    .notice-card h3 {
+      margin: 0;
+      font-size: 13px;
+      line-height: 1.25;
+      font-weight: 750;
+    }
+
+    .readonly-card p,
+    .queue-card p,
+    .notice-card p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .queue-toolbar {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .toggle {
+      min-height: 32px;
+      border-radius: 999px;
+      padding: 6px 11px;
+      border: 1px solid #E5C878;
+      background: var(--amber-soft);
+      color: var(--amber);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .queue-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .queue-card {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+      padding: 12px;
+    }
+
+    .queue-card.vip {
+      border-color: #E2C36C;
+      box-shadow: inset 4px 0 0 #C99018;
+    }
+
+    .take-action {
+      min-width: 86px;
+      min-height: 34px;
+      border-radius: 7px;
+      background: var(--surface);
+      border: 1px solid #B8D3E8;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .split-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .notice-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .notice-card {
+      padding: 12px;
+    }
+
+    .notice-card.pay {
+      border-color: #ECD28F;
+      background: #FFFCF4;
+    }
+
+    .notice-card.review {
+      border-color: #E6B2B2;
+      background: #FFF7F7;
+    }
+
+    .notice-card.blocked {
+      border-color: #D4CAE9;
+      background: var(--violet-soft);
+    }
+
+    .card-link {
+      display: inline-flex;
+      margin-top: 8px;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 800;
+      text-decoration: none;
+    }
+
+    .table-wrap {
+      overflow: hidden;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    th,
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: middle;
+    }
+
+    th {
+      color: var(--soft);
+      font-size: 10px;
+      letter-spacing: 0;
+      text-transform: uppercase;
+      background: var(--surface-soft);
+    }
+
+    tr:last-child td { border-bottom: 0; }
+
+    .tech-mark {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 28px;
+      height: 24px;
+      padding: 0 6px;
+      border-radius: 999px;
+      background: var(--teal-soft);
+      color: var(--teal);
+      font-size: 11px;
+      font-weight: 850;
+    }
+
+    .cost-bar {
+      min-height: 42px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 11px 12px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 750;
+    }
+
+    .mobile-preview {
+      display: none;
+    }
+
+    @media (max-width: 860px) {
+      .shell {
+        width: min(100vw - 16px, 640px);
+        margin: 12px auto;
+      }
+
+      .topbar,
+      .workspace,
+      .job-grid,
+      .split-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .status-strip {
+        justify-content: flex-start;
+      }
+
+      .other-grid,
+      .data-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .queue-card {
+        grid-template-columns: 1fr;
+      }
+
+      .take-action,
+      .primary-action,
+      .secondary-action,
+      .plain-action {
+        width: 100%;
+      }
+
+      .side-stack {
+        gap: 14px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell" aria-label="Wireframe panel trabajador FRP v3">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Panel trabajador</p>
+        <h1>FRP Express</h1>
+      </div>
+      <div class="status-strip" aria-label="Estado del panel">
+        <span class="chip green"><span class="dot"></span><strong>Jack activo</strong></span>
+        <span class="chip teal">Live conectado</span>
+        <span class="chip"><strong>Cola</strong> 4</span>
+        <span class="chip amber"><strong>Revision</strong> 1</span>
+      </div>
+    </header>
+
+    <section class="workspace">
+      <div class="main-stack">
+        <section class="section" aria-labelledby="current-title">
+          <div class="section-head">
+            <h2 id="current-title" class="section-title">Tu trabajo actual</h2>
+            <span class="section-note">Ownership congelado: Jack</span>
+          </div>
+          <article class="job-card">
+            <div class="job-grid">
+              <div>
+                <div class="job-meta">
+                  <span class="tag blue">ARD-20260507-034</span>
+                  <span class="tag">1 de 2 equipos</span>
+                  <span class="tag teal">tomado hace 3 min</span>
+                </div>
+                <h3 class="job-title">Maria Gonzalez</h3>
+                <p class="job-subtitle">Xiaomi Cuenta Google - Redmi Note 13 - Peru</p>
+                <div class="data-grid">
+                  <div class="data-cell">
+                    <div class="data-label">Technician ID</div>
+                    <div class="data-value">1000 9983 5478</div>
+                  </div>
+                  <div class="data-cell">
+                    <div class="data-label">Codigo proceso</div>
+                    <div class="data-value">CL-1082-2</div>
+                  </div>
+                </div>
+              </div>
+              <aside class="action-panel" aria-label="Acciones del job propio">
+                <button type="button" class="primary-action">Marcar finalizado</button>
+                <button type="button" class="secondary-action">Reportar problema</button>
+                <button type="button" class="plain-action">Copiar datos</button>
+                <div class="reason" role="status">Si el tecnico activo cambia, este job sigue siendo de Jack hasta finalizar, cancelar o enviar a revision.</div>
+              </aside>
+            </div>
+          </article>
+        </section>
+
+        <section class="section" aria-labelledby="other-title">
+          <div class="section-head">
+            <h2 id="other-title" class="section-title">Trabajos en curso por otros</h2>
+            <span class="section-note">Solo lectura</span>
+          </div>
+          <div class="other-grid">
+            <article class="readonly-card">
+              <span class="tag violet">Angelo</span>
+              <h3>ARD-20260507-033</h3>
+              <p>Cliente Ivan R. - tomado hace 8 min. Sin acciones para Jack.</p>
+            </article>
+            <article class="readonly-card">
+              <span class="tag amber">30+ min</span>
+              <h3>ARD-20260507-029</h3>
+              <p>Worker remoto - revisar si sigue trabajando. No heredar ownership.</p>
+            </article>
+          </div>
+        </section>
+
+        <section class="section" aria-labelledby="queue-title">
+          <div class="section-head">
+            <h2 id="queue-title" class="section-title">Cola lista para tecnico</h2>
+            <div class="queue-toolbar">
+              <button type="button" class="toggle" aria-pressed="true">Solo VIP - 2</button>
+              <button type="button" class="primary-action">Tomar siguiente visible</button>
+            </div>
+          </div>
+          <div class="queue-list">
+            <article class="queue-card vip">
+              <div>
+                <div class="job-meta">
+                  <span class="tag amber">VIP</span>
+                  <span class="tag blue">ARD-20260507-035</span>
+                  <span class="tag">conectado hace 1 min</span>
+                </div>
+                <h3>Carlos Mendoza - Xiaomi Cuenta Google</h3>
+                <p>Primer job visible. El CTA grande debe tomar este job especifico.</p>
+              </div>
+              <button type="button" class="take-action">Tomar</button>
+            </article>
+            <article class="queue-card vip">
+              <div>
+                <div class="job-meta">
+                  <span class="tag amber">VIP</span>
+                  <span class="tag blue">ARD-20260507-036</span>
+                  <span class="tag">conectado hace 4 min</span>
+                </div>
+                <h3>Lucia Vega - Xiaomi Cuenta Google</h3>
+                <p>Visible por filtro VIP. No ocultar trabajos normales sin aviso.</p>
+              </div>
+              <button type="button" class="take-action">Tomar</button>
+            </article>
+          </div>
+        </section>
+      </div>
+
+      <aside class="side-stack" aria-label="Excepciones e historial">
+        <section class="section" aria-labelledby="attention-title">
+          <div class="section-head">
+            <h2 id="attention-title" class="section-title">Excepciones</h2>
+            <span class="section-note">Resolver sin adivinar</span>
+          </div>
+          <div class="split-grid">
+            <div class="notice-list">
+              <article class="notice-card pay">
+                <span class="tag amber">Pago</span>
+                <h3>ARD-20260507-031</h3>
+                <p>Comprobante pendiente. Abrir modal con foco controlado.</p>
+                <a href="#" class="card-link">Ver comprobante</a>
+              </article>
+              <article class="notice-card pay">
+                <span class="tag amber">Pago</span>
+                <h3>ARD-20260507-032</h3>
+                <p>Monto coincide, falta aprobacion manual.</p>
+                <a href="#" class="card-link">Revisar</a>
+              </article>
+            </div>
+            <div class="notice-list">
+              <article class="notice-card review">
+                <span class="tag red">Revision</span>
+                <h3>ARD-20260507-030</h3>
+                <p>Solo quien reporto, coordinador o admin puede resolver.</p>
+                <a href="#" class="card-link">Resolver</a>
+              </article>
+              <article class="notice-card blocked">
+                <span class="tag violet">Cliente</span>
+                <h3>Cuenta no confirmada</h3>
+                <p>No es fallo de imagen. Falta confirmar cuenta antes de subir comprobante.</p>
+                <a href="#" class="card-link">Ver cliente</a>
+              </article>
+            </div>
+          </div>
+        </section>
+
+        <section class="section" aria-labelledby="done-title">
+          <div class="section-head">
+            <h2 id="done-title" class="section-title">Finalizados hoy</h2>
+            <span class="section-note">Tabla compacta</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Codigo</th>
+                  <th>Cliente</th>
+                  <th>Tec</th>
+                  <th>Hora</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>ARD-034</td>
+                  <td>Raul GSM</td>
+                  <td><span class="tech-mark" title="Jack">JA</span></td>
+                  <td>18:42</td>
+                </tr>
+                <tr>
+                  <td>ARD-033</td>
+                  <td>Mobile Center</td>
+                  <td><span class="tech-mark" title="Angelo">AN</span></td>
+                  <td>18:19</td>
+                </tr>
+                <tr>
+                  <td>ARD-032</td>
+                  <td>VIP Store</td>
+                  <td><span class="tech-mark" title="Bryam">BR</span></td>
+                  <td>17:58</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="section" aria-labelledby="cost-title">
+          <div class="section-head">
+            <h2 id="cost-title" class="section-title">Administrativo</h2>
+          </div>
+          <div class="cost-bar">
+            <span>Costos FRP</span>
+            <span>Colapsado por defecto</span>
+          </div>
+        </section>
+      </aside>
+    </section>
+  </main>
+</body>
+</html>
