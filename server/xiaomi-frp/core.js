@@ -234,7 +234,9 @@ export function publicXiaomiOrder(order, db) {
   const items = db.customerOrderItems.filter((item) => item.orderId === order.id);
   const jobs = frpOrder ? db.frpJobs.filter((job) => job.orderId === frpOrder.id) : [];
   const completed = jobs.filter((job) => job.status === "FINALIZADO").length;
+  const canceled = jobs.filter((job) => job.status === "CANCELADO").length;
   const status = expectedPublicStatus(order, frpOrder, jobs);
+  const totalProcesses = Number(order.quantity || items.length || jobs.length || 0);
   return {
     id: order.id,
     code: order.code,
@@ -242,7 +244,8 @@ export function publicXiaomiOrder(order, db) {
     status,
     quantity: order.quantity,
     completed,
-    remaining: Math.max(0, Number(order.quantity || items.length || jobs.length || 0) - completed),
+    canceled,
+    remaining: Math.max(0, totalProcesses - completed - canceled),
     countryIso: order.countryIso || countryIsoFromName(order.country),
     country: order.country || "",
     whatsapp: order.customerWhatsapp || order.whatsapp || "",

@@ -98,10 +98,21 @@ test("xiaomi frp backend supports public order flow and operator actions", { tim
     assert.equal(response.data.order.remaining, 1);
     assert.equal(response.data.order.status, "LISTO_PARA_CONEXION");
 
+    response = await http.request("POST", `/api/xiaomi-frp/operator/orders/${code}/refund`, {
+      mode: "partial",
+      count: 1,
+      reason: "customer requested one process refund",
+    });
+    assert.equal(response.status, 200);
+    assert.equal(response.data.order.status, "REEMBOLSO_SOLICITADO");
+    assert.equal(response.data.order.canceled, 1);
+    assert.equal(response.data.order.remaining, 0);
+
     response = await http.request("GET", "/api/xiaomi-frp/operator/audit");
     assert.equal(response.status, 200);
     assert.ok(response.data.audit.some((entry) => entry.action === "XIAOMI_FRP_ORDER_CREATED"));
     assert.ok(response.data.audit.some((entry) => entry.action === "XIAOMI_FRP_PROCESS_DONE"));
+    assert.ok(response.data.audit.some((entry) => entry.action === "XIAOMI_FRP_ORDER_REFUND"));
   } finally {
     await server.stop();
   }

@@ -567,6 +567,53 @@ export function createXiaomiFrpRoutes({
       return sendJson(res, 200, { order: publicXiaomiOrder(order, db) });
     }
 
+    const refundOrderMatch = pathname.match(/^\/api\/xiaomi-frp\/operator\/orders\/(AG-\d{4,5})\/refund$/);
+    if (req.method === "POST" && refundOrderMatch) {
+      const input = await parseJson(req);
+      const db = await readDb();
+      if (!(await requireFrpAccess(user, res, db, "XIAOMI_FRP_REFUND_DENIED", refundOrderMatch[1]))) return;
+      const order = findOrderByCode(db, refundOrderMatch[1]);
+      const frpOrder = order ? db.frpOrders.find((entry) => entry.id === order.frpOrderId) : null;
+      if (!order || !frpOrder) return sendJson(res, 404, { error: "Pedido no encontrado." });
+      const jobs = db.frpJobs.filter((job) => job.orderId === frpOrder.id);
+      const refundable = jobs.filter((job) => job.status !== "FINALIZADO" && job.status !== "CANCELADO");
+      const mode = String(input.mode || "partial").toLowerCase() === "total" ? "total" : "partial";
+      const requestedCount = mode === "total" ? refundable.length : Math.max(1, Number.parseInt(input.count || 1, 10) || 1);
+      const selected = refundable.slice(0, requestedCount);
+      if (!selected.length) return sendJson(res, 409, { error: "No hay procesos pendientes para reembolsar." });
+      const timestamp = nowIso();
+      for (const job of selected) {
+        job.status = "CANCELADO";
+        job.cancelReason = "refund";
+        job.canceledAt = timestamp;
+        job.canceledBy = user.id;
+        job.updatedAt = timestamp;
+        const item = db.customerOrderItems.find((entry) => entry.id === job.portalOrderItemId);
+        if (item) {
+          item.status = "CANCELADO";
+          item.cancelReason = "refund";
+          item.canceledAt = timestamp;
+          item.updatedAt = timestamp;
+        }
+      }
+      order.publicStatus = mode === "total" ? "CANCELADO" : "REEMBOLSO_SOLICITADO";
+      order.refundStatus = mode === "total" ? "TOTAL" : "PARTIAL";
+      order.refundReason = cleanText(input.reason || "", 200);
+      order.updatedAt = timestamp;
+      syncFrpOrderStatus(db, frpOrder);
+      addManualNotification(order, "REFUND", `Pedido ${order.code}: reembolso ${mode === "total" ? "total" : "parcial"} registrado.`);
+      audit(db, user.id, "XIAOMI_FRP_ORDER_REFUND", order.id, {
+        code: order.code,
+        mode,
+        count: selected.length,
+        reason: order.refundReason,
+      });
+      await writeDb(db);
+      publishOrder(db, order, "order_refund");
+      publishOperator(db, "order_refund");
+      return sendJson(res, 200, { order: publicXiaomiOrder(order, db) });
+    }
+
     const processActionMatch = pathname.match(/^\/api\/xiaomi-frp\/operator\/processes\/([^/]+)\/(connected|done|incompatible|refund)$/);
     if (req.method === "POST" && processActionMatch) {
       const input = await parseJson(req);
