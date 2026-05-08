@@ -112,6 +112,7 @@ import { createFrpSerializers } from "./server/frp/serializers.js";
 import { createFrpRoutes } from "./server/frp/frp-routes.js";
 import { createPortalSerializers } from "./server/portal/serializers.js";
 import { createPortalRoutes } from "./server/portal/portal-routes.js";
+import { createXiaomiFrpRoutes } from "./server/xiaomi-frp/routes.js";
 import { createStorage } from "./server/db/storage.js";
 import { confirmPortalCustomerPostgres } from "./server/db/postgres-customer-admin.js";
 import { insertAuditEvent } from "./server/db/postgres-audit.js";
@@ -637,6 +638,21 @@ function normalizePaymentMethodOverrides(rawOverrides = []) {
       code: String(entry.code),
       active: entry.active === false ? false : true,
       customMessage: typeof entry.customMessage === "string" ? entry.customMessage.slice(0, 240) : "",
+      displayName: typeof entry.displayName === "string" ? entry.displayName.slice(0, 80) : "",
+      fields: Array.isArray(entry.fields)
+        ? entry.fields.slice(0, 8).map((field) => ({
+            label: String(field?.label || "").slice(0, 40),
+            value: String(field?.value || "").slice(0, 160),
+            copyable: field?.copyable !== false,
+            monospace: Boolean(field?.monospace),
+          })).filter((field) => field.label && field.value)
+        : undefined,
+      qrImage: entry.qrImage && typeof entry.qrImage === "object" ? {
+        name: String(entry.qrImage.name || "").slice(0, 90),
+        type: String(entry.qrImage.type || "").slice(0, 30),
+        size: Number(entry.qrImage.size || 0),
+        dataUrl: String(entry.qrImage.dataUrl || ""),
+      } : null,
       updatedAt: String(entry.updatedAt || ""),
       updatedBy: String(entry.updatedBy || ""),
     }));
@@ -656,7 +672,8 @@ function normalizePricingConfig(config = {}) {
         updatedBy: String(existing?.updatedBy || ""),
       };
     }),
-    serviceRules: defaults.serviceRules.map((defaultRule) => {
+    serviceRules: [
+      ...defaults.serviceRules.map((defaultRule) => {
       const existing = existingRules.find((rule) => rule.serviceCode === defaultRule.serviceCode);
       const pricingMode = pricingModes.has(existing?.pricingMode) ? existing.pricingMode : defaultRule.pricingMode;
       return {
@@ -674,7 +691,24 @@ function normalizePricingConfig(config = {}) {
         updatedAt: String(existing?.updatedAt || ""),
         updatedBy: String(existing?.updatedBy || ""),
       };
-    }),
+      }),
+      ...existingRules
+        .filter((rule) => rule?.serviceCode && !defaults.serviceRules.some((defaultRule) => defaultRule.serviceCode === rule.serviceCode))
+        .map((rule) => ({
+          ...rule,
+          serviceCode: String(rule.serviceCode),
+          pricingMode: pricingModes.has(rule.pricingMode) ? rule.pricingMode : "MANUAL",
+          baseCostUsdt: moneyNumber(rule.baseCostUsdt),
+          marginUsdt: moneyNumber(rule.marginUsdt),
+          authCostUsdt: moneyNumber(rule.authCostUsdt),
+          criticalCostUsdt: moneyNumber(rule.criticalCostUsdt),
+          toolCostUsdt: moneyNumber(rule.toolCostUsdt),
+          serverCostUsdt: moneyNumber(rule.serverCostUsdt),
+          manualAdjustmentAllowed: typeof rule.manualAdjustmentAllowed === "boolean" ? rule.manualAdjustmentAllowed : true,
+          updatedAt: String(rule.updatedAt || ""),
+          updatedBy: String(rule.updatedBy || ""),
+        })),
+    ],
     frpPricing: normalizeFrpPricingConfig(config.frpPricing || defaults.frpPricing),
     paymentMethodOverrides: normalizePaymentMethodOverrides(config.paymentMethodOverrides),
   };
@@ -694,6 +728,10 @@ function paymentMethodsWithOverrides(db) {
       ...method,
       active: override?.active === false ? false : true,
       customMessage: typeof override?.customMessage === "string" ? override.customMessage : "",
+      displayName: override?.displayName || method.displayName,
+      fields: Array.isArray(override?.fields) && override.fields.length ? override.fields : method.fields,
+      qrImage: override?.qrImage || null,
+      qrImageUrl: override?.qrImageUrl || method.qrImageUrl || null,
     };
   });
 }
@@ -4073,6 +4111,31 @@ const handleFrpApi = createFrpRoutes({
   writeDb,
 });
 
+const handleXiaomiFrpApi = createXiaomiFrpRoutes({
+  audit,
+  cleanText,
+  crypto,
+  enforcePortalRateLimit,
+  frpServiceCode,
+  frpWorkChannel,
+  hashToken,
+  maxPortalOrderRequestsPerWindow,
+  maxPortalProofRequestsPerWindow,
+  nowIso,
+  parseJson,
+  paymentMethodsWithOverrides,
+  readDb,
+  requireFrpAccess,
+  requireFrpPaymentReviewer,
+  requireUser,
+  sanitizePaymentProofImages,
+  sendJson,
+  sendSseEvent,
+  services,
+  syncFrpOrderStatus,
+  writeDb,
+});
+
 async function handleApi(req, res, pathname) {
   if (pathname === "/api/operativa-v2/cloud/sync") {
     return handleCloudSyncApi(req, res);
@@ -4088,6 +4151,11 @@ async function handleApi(req, res, pathname) {
 
   if (req.method === "GET" && pathname === "/api/health") {
     return sendJson(res, 200, publicHealthPayload());
+  }
+
+  if (pathname.startsWith("/api/xiaomi-frp/")) {
+    await handleXiaomiFrpApi(req, res, pathname, user);
+    if (res.headersSent || res.writableEnded) return;
   }
 
   if (pathname.startsWith("/api/portal/")) {

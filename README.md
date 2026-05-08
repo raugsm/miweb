@@ -11,6 +11,33 @@ MVP interno para login, registro, roles, tickets y auditoria.
 - Finalizar un ticket exige guardar el log final.
 - Recuperacion de contrasena por enlace temporal enviado desde `soporte@ariadgsm.com`.
 
+## Xiaomi Reset + FRP SPA backend
+
+La API nueva vive bajo `/api/xiaomi-frp/*` y usa los modelos existentes:
+`customer_orders`, `customer_order_items`, `frp_orders`, `frp_jobs`,
+`payment_proofs`, `operator_users/sessions`, `audit_events` y
+`service_pricing_rules`.
+
+Los pedidos publicos usan codigo secuencial `AG-NNNN` y token privado de 10
+caracteres:
+
+```text
+https://ariadgsm.com/pedido/AG-0247?t=<token>
+```
+
+Sin token valido el backend responde `404`, no `401`, para no revelar si el
+pedido existe. El operador ve solo `AG-0247`.
+
+Rollover: `AG-0001` a `AG-9999` cubre aproximadamente 3 meses a 100 pedidos/dia.
+Cuando el contador pase de 9999 el backend emite `AG-10000` y conserva
+compatibilidad con 4-5 digitos. Antes de llegar a `AG-9000`, ampliar el formato
+visual del frontend y cualquier plantilla manual a 5 digitos.
+
+Precio inicial: `4.00 USDT` por proceso, configurable por operador desde
+`PATCH /api/xiaomi-frp/operator/price`. El fee fijo por compra es `0.30 USDT`.
+Las tasas locales se leen de la configuracion existente de exchange rates y se
+congelan en el pedido durante 10 minutos.
+
 ## Local
 
 ```bash

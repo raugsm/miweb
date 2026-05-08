@@ -197,6 +197,7 @@ const reportBlockPatterns = [
 const requiredMigrationVersions = [
   "001_initial_postgres.sql",
   "002_preserve_client_link_suggestion_actor.sql",
+  "003_xiaomi_frp_spa_backend.sql",
 ];
 
 function sha256(value) {
