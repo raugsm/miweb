@@ -26,6 +26,21 @@ function sign(body, token) {
   return `sha256=${digest}`;
 }
 
+function canonicalQuery(params) {
+  return [...params.entries()]
+    .sort(([leftKey, leftValue], [rightKey, rightValue]) => {
+      if (leftKey !== rightKey) return leftKey < rightKey ? -1 : 1;
+      if (leftValue === rightValue) return 0;
+      return leftValue < rightValue ? -1 : 1;
+    })
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+    .join("&");
+}
+
+function signAudit(pathname, params, timestamp, token) {
+  return sign(Buffer.from(["GET", pathname, canonicalQuery(params), timestamp].join("\n")), token);
+}
+
 async function waitForServer(baseUrl) {
   const deadline = Date.now() + 8_000;
   while (Date.now() < deadline) {
@@ -56,6 +71,20 @@ async function postBatch(baseUrl, token, payload, signature) {
   return { response, data };
 }
 
+async function getAudit(baseUrl, token, query = "", options = {}) {
+  const url = new URL(`${baseUrl}/api/operativa-v2/cloud/audit${query}`);
+  const timestamp = options.timestamp || new Date().toISOString();
+  const headers = {};
+  if (options.auth !== "missing") {
+    headers["X-AriadGSM-Timestamp"] = timestamp;
+    headers["X-AriadGSM-Signature"] =
+      options.signature || signAudit(url.pathname, url.searchParams, timestamp, token);
+  }
+  const response = await fetch(url, { headers });
+  const data = await response.json();
+  return { response, data };
+}
+
 test("cloud sync hardening enforces HMAC, rate limit, headers, and audit log", async () => {
   const token = "cloud-hardening-test-token";
   const port = await freePort();
@@ -69,6 +98,7 @@ test("cloud sync hardening enforces HMAC, rate limit, headers, and audit log", a
       ARIAD_DATA_DIR: dataDir,
       OPERATIVA_AGENT_KEY: token,
       ARIADGSM_CLOUD_SYNC_RATE_LIMIT_PER_MINUTE: "2",
+      ARIADGSM_CLOUD_AUDIT_RATE_LIMIT_PER_MINUTE: "3",
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -124,6 +154,38 @@ test("cloud sync hardening enforces HMAC, rate limit, headers, and audit log", a
     assert.ok(verdicts.includes("duplicate"));
     assert.ok(verdicts.includes("rejected"));
     assert.ok(audit.every((entry) => entry.timestamp && entry.hash && entry.lote_id && entry.agent_id));
+
+    const missingAuditAuth = await getAudit(baseUrl, token, "?limit=3", { auth: "missing" });
+    assert.equal(missingAuditAuth.response.status, 401);
+    assert.equal(missingAuditAuth.data.error, "timestamp_missing");
+
+    const invalidAuditAuth = await getAudit(baseUrl, token, "?limit=3", { signature: "sha256=bad" });
+    assert.equal(invalidAuditAuth.response.status, 401);
+    assert.equal(invalidAuditAuth.data.error, "signature_invalid");
+
+    const auditResponse = await getAudit(baseUrl, token, "?limit=10");
+    assert.equal(auditResponse.response.status, 200);
+    assert.ok(Array.isArray(auditResponse.data));
+    assert.ok(auditResponse.data.length >= 4);
+    assert.ok(auditResponse.data.every((entry) => {
+      return entry.lote_id && entry.agent_id && entry.timestamp && entry.hash_body && entry.verdict;
+    }));
+    assert.ok(auditResponse.data.every((entry) => !("body" in entry) && !("signature" in entry) && !("hash" in entry)));
+    assert.ok(auditResponse.data.some((entry) => entry.verdict === "new"));
+    assert.ok(auditResponse.data.some((entry) => entry.verdict === "duplicate"));
+    assert.ok(auditResponse.data.some((entry) => entry.verdict === "rejected" && entry.error_code));
+
+    const rejectedOnly = await getAudit(baseUrl, token, "?limit=10&verdict=rejected");
+    assert.equal(rejectedOnly.response.status, 200);
+    assert.ok(rejectedOnly.data.length >= 1);
+    assert.ok(rejectedOnly.data.every((entry) => entry.verdict === "rejected"));
+
+    const rateOne = await getAudit(baseUrl, token, "?limit=1&verdict=new");
+    assert.equal(rateOne.response.status, 200);
+    const rateTwo = await getAudit(baseUrl, token, "?limit=1&verdict=duplicate");
+    assert.equal(rateTwo.response.status, 429);
+    assert.equal(rateTwo.data.error, "rate_limited");
+    assert.ok(Number(rateTwo.response.headers.get("retry-after")) >= 1);
   } finally {
     if (!exited) {
       child.kill();

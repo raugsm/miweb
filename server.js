@@ -1,9 +1,11 @@
 import { createServer } from "node:http";
+import { createReadStream } from "node:fs";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { computeOrderHash, renderOrderComprobantePdf, renderOrderVerifyHtml } from "./server/comprobante/pdf.js";
 import { fileURLToPath } from "node:url";
 import crypto from "node:crypto";
+import readline from "node:readline";
 import nodemailer from "nodemailer";
 import { parsePhoneNumberFromString } from "libphonenumber-js/max";
 import {
@@ -159,12 +161,19 @@ const frpOpsStreams = new Map();
 // Spec: docs/specs/cliente/panel-1-metodo-de-pago.md §5 (cajones en vivo).
 const adminConfigStreams = new Set();
 const cloudSyncSignatureHeader = "x-ariadgsm-signature";
+const cloudSyncTimestampHeader = "x-ariadgsm-timestamp";
 const cloudSyncRateLimitWindowMs = 60_000;
 const cloudSyncRateLimitPerMinute = Math.max(
   1,
   Number(process.env.ARIADGSM_CLOUD_SYNC_RATE_LIMIT_PER_MINUTE || 60)
 );
 const cloudSyncRateBuckets = new Map();
+const cloudSyncAuditRateLimitPerMinute = Math.max(
+  1,
+  Number(process.env.ARIADGSM_CLOUD_AUDIT_RATE_LIMIT_PER_MINUTE || 10)
+);
+const cloudSyncAuditRateBuckets = new Map();
+const cloudSyncAuditTimestampSkewMs = 5 * 60 * 1000;
 
 const cloudflareTurnstileOrigin = "https://challenges.cloudflare.com";
 const turnstileEnabled = Boolean(turnstileSiteKey && turnstileSecret);
@@ -257,6 +266,159 @@ function consumeCloudSyncRate(agentToken) {
   }
   current.count += 1;
   return { allowed: true, remaining: cloudSyncRateLimitPerMinute - current.count, resetAt: current.resetAt };
+}
+
+function consumeCloudSyncAuditRate(agentToken) {
+  const now = Date.now();
+  const key = hashToken(`audit:${agentToken || "anonymous"}`);
+  const current = cloudSyncAuditRateBuckets.get(key);
+  if (!current || now >= current.resetAt) {
+    const resetAt = now + cloudSyncRateLimitWindowMs;
+    cloudSyncAuditRateBuckets.set(key, { count: 1, resetAt });
+    return { allowed: true, remaining: cloudSyncAuditRateLimitPerMinute - 1, resetAt };
+  }
+  if (current.count >= cloudSyncAuditRateLimitPerMinute) {
+    return { allowed: false, remaining: 0, resetAt: current.resetAt };
+  }
+  current.count += 1;
+  return { allowed: true, remaining: cloudSyncAuditRateLimitPerMinute - current.count, resetAt: current.resetAt };
+}
+
+function canonicalCloudAuditQuery(searchParams) {
+  const entries = [];
+  for (const [key, value] of searchParams.entries()) {
+    entries.push([key, value]);
+  }
+  entries.sort(([leftKey, leftValue], [rightKey, rightValue]) => {
+    if (leftKey !== rightKey) return leftKey < rightKey ? -1 : 1;
+    if (leftValue === rightValue) return 0;
+    return leftValue < rightValue ? -1 : 1;
+  });
+  return entries
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+    .join("&");
+}
+
+function cloudAuditSigningInput(method, pathname, canonicalQuery, timestamp) {
+  return [String(method || "GET").toUpperCase(), pathname, canonicalQuery, timestamp].join("\n");
+}
+
+function verifyCloudAuditSignature(req, requestUrl, secret) {
+  const timestamp = String(req.headers[cloudSyncTimestampHeader] || "").trim();
+  if (!timestamp) return { ok: false, error: "timestamp_missing" };
+  const timestampMs = Date.parse(timestamp);
+  if (!Number.isFinite(timestampMs) || Math.abs(Date.now() - timestampMs) > cloudSyncAuditTimestampSkewMs) {
+    return { ok: false, error: "timestamp_invalid" };
+  }
+  const signatureHeader = String(req.headers[cloudSyncSignatureHeader] || "").trim();
+  if (!signatureHeader) return { ok: false, error: "signature_missing" };
+  const canonicalQuery = canonicalCloudAuditQuery(requestUrl.searchParams);
+  const input = cloudAuditSigningInput(req.method, requestUrl.pathname, canonicalQuery, timestamp);
+  if (!verifyCloudSyncSignature(Buffer.from(input, "utf8"), signatureHeader, secret)) {
+    return { ok: false, error: "signature_invalid" };
+  }
+  return { ok: true };
+}
+
+function parseCloudAuditQuery(requestUrl) {
+  const rawLimit = Number(requestUrl.searchParams.get("limit") || 100);
+  const limit = Math.min(1000, Math.max(1, Number.isFinite(rawLimit) ? Math.trunc(rawLimit) : 100));
+  const verdict = String(requestUrl.searchParams.get("verdict") || "").trim().toLowerCase();
+  const since = String(requestUrl.searchParams.get("since") || "").trim();
+  if (verdict && !["new", "duplicate", "rejected"].includes(verdict)) {
+    const err = new Error("verdict invalido");
+    err.status = 400;
+    throw err;
+  }
+  let sinceMs = 0;
+  if (since) {
+    sinceMs = Date.parse(since);
+    if (!Number.isFinite(sinceMs)) {
+      const err = new Error("since invalido");
+      err.status = 400;
+      throw err;
+    }
+  }
+  return { limit, verdict, since, sinceMs };
+}
+
+function publicCloudAuditEntry(entry) {
+  const verdict = ["new", "duplicate", "rejected"].includes(entry?.verdict) ? entry.verdict : "rejected";
+  return {
+    lote_id: String(entry?.lote_id || ""),
+    agent_id: String(entry?.agent_id || ""),
+    timestamp: String(entry?.timestamp || ""),
+    hash_body: String(entry?.hash || entry?.bodyHash || ""),
+    verdict,
+    error_code: verdict === "rejected" ? String(entry?.reason || "") : "",
+  };
+}
+
+async function readCloudSyncAuditEntries({ limit, verdict, sinceMs }) {
+  const entries = [];
+  try {
+    await fs.access(cloudSyncAuditFile);
+  } catch (error) {
+    if (error?.code === "ENOENT") return entries;
+    throw error;
+  }
+
+  const stream = createReadStream(cloudSyncAuditFile, { encoding: "utf8" });
+  const lines = readline.createInterface({ input: stream, crlfDelay: Infinity });
+  for await (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    let parsed;
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch {
+      continue;
+    }
+    const publicEntry = publicCloudAuditEntry(parsed);
+    if (!publicEntry.lote_id || !publicEntry.timestamp || !publicEntry.hash_body) continue;
+    if (verdict && publicEntry.verdict !== verdict) continue;
+    if (sinceMs) {
+      const entryMs = Date.parse(publicEntry.timestamp);
+      if (!Number.isFinite(entryMs) || entryMs < sinceMs) continue;
+    }
+    entries.push(publicEntry);
+    if (entries.length > limit) entries.shift();
+  }
+  return entries;
+}
+
+async function handleCloudSyncAuditApi(req, res) {
+  if (req.method !== "GET") {
+    return sendJson(res, 405, { error: "Metodo no permitido." });
+  }
+
+  const requestUrl = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
+  let query;
+  try {
+    query = parseCloudAuditQuery(requestUrl);
+  } catch (error) {
+    return sendJson(res, error.status || 400, { error: error.message || "Consulta invalida." });
+  }
+
+  const expectedToken = getExpectedCloudAgentToken();
+  if (!expectedToken) {
+    return sendJson(res, 503, { error: "cloud_sync_not_configured" });
+  }
+  const auth = verifyCloudAuditSignature(req, requestUrl, expectedToken);
+  if (!auth.ok) {
+    return sendJson(res, 401, { error: auth.error });
+  }
+
+  const rate = consumeCloudSyncAuditRate(expectedToken);
+  res.setHeader("X-RateLimit-Limit", String(cloudSyncAuditRateLimitPerMinute));
+  res.setHeader("X-RateLimit-Remaining", String(rate.remaining));
+  if (!rate.allowed) {
+    res.setHeader("Retry-After", String(Math.max(1, Math.ceil((rate.resetAt - Date.now()) / 1000))));
+    return sendJson(res, 429, { error: "rate_limited" });
+  }
+
+  const entries = await readCloudSyncAuditEntries(query);
+  return sendJson(res, 200, entries);
 }
 
 async function readRawRequestBody(req, maxBytes = maxJsonBodyBytes) {
@@ -3914,6 +4076,9 @@ const handleFrpApi = createFrpRoutes({
 async function handleApi(req, res, pathname) {
   if (pathname === "/api/operativa-v2/cloud/sync") {
     return handleCloudSyncApi(req, res);
+  }
+  if (pathname === "/api/operativa-v2/cloud/audit") {
+    return handleCloudSyncAuditApi(req, res);
   }
 
   if (["POST", "PUT", "PATCH", "DELETE"].includes(req.method) && !isAllowedApiOrigin(req)) {

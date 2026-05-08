@@ -51,6 +51,68 @@ autenticar el body JSON exacto que controla el agente.
 - Audit log append-only en `cloud-sync-audit.jsonl` con `lote_id`, `agent_id`,
   `timestamp`, `hash` del body y `verdict`.
 - Esquema versionado: `server/contracts/audit-log-entry.schema.json`.
+- Endpoint read-only de observabilidad:
+  `GET /api/operativa-v2/cloud/audit`.
+
+## Endpoint read-only de auditoria Cloud Sync
+
+Decision cloud 0.1.1: se agrega un endpoint read-only para validar live el
+audit log append-only sin exponer cuerpos de lotes, firmas ni secretos.
+
+Autenticacion elegida: HMAC con la misma clave `OPERATIVA_AGENT_KEY`, no Bearer
+admin separado. Motivo: evita una segunda credencial en RC, mantiene la rotacion
+ligada al secreto ya consolidado en el agente, y usa `crypto.timingSafeEqual`
+como el contrato `/sync`.
+
+Request:
+
+```http
+GET /api/operativa-v2/cloud/audit?limit=100&verdict=rejected
+X-AriadGSM-Timestamp: <ISO-8601 UTC>
+X-AriadGSM-Signature: sha256=<hex>
+```
+
+Material firmado:
+
+```text
+GET
+/api/operativa-v2/cloud/audit
+<query canonicalizado>
+<timestamp ISO-8601>
+```
+
+Reglas:
+
+- `limit`: default 100, max 1000.
+- `since`: ISO-8601 opcional.
+- `verdict`: `new`, `duplicate` o `rejected`.
+- Ventana anti-replay: timestamp dentro de 5 minutos.
+- Rate limit: 10 req/min por clave, configurable con
+  `ARIADGSM_CLOUD_AUDIT_RATE_LIMIT_PER_MINUTE`.
+- Sin auth o auth invalida: `401`.
+- Exceso de rate: `429` con `Retry-After`.
+
+Respuesta:
+
+```json
+[
+  {
+    "lote_id": "cloudsync-...",
+    "agent_id": "desktop_agent",
+    "timestamp": "2026-05-08T04:45:39.352Z",
+    "hash_body": "<sha256-body>",
+    "verdict": "rejected",
+    "error_code": "invalid_json"
+  }
+]
+```
+
+Privacidad:
+
+- No devuelve body crudo de lotes.
+- No devuelve firmas crudas.
+- No devuelve `OPERATIVA_AGENT_KEY`.
+- No ofrece endpoint de borrado. La limpieza de audit log no se hace por HTTP.
 
 ## Single source of truth for agent secret
 
