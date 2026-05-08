@@ -41,6 +41,7 @@ import {
   turnstileSecret,
   turnstileSiteKey,
   customerModuleUrl,
+  maxJsonBodyBytes,
   technicianSwapMs,
 } from "./server/config/constants.js";
 import {
@@ -135,6 +136,8 @@ import {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(__dirname, "public");
 const dataDir = process.env.ARIAD_DATA_DIR || path.join(__dirname, "data");
+const cloudSyncAuditFile = path.join(dataDir, "cloud-sync-audit.jsonl");
+const cloudSyncLedgerFile = path.join(dataDir, "cloud-sync-batches.json");
 const port = Number(process.env.PORT || 4173);
 const setupToken = process.env.ARIAD_SETUP_TOKEN || "";
 const enableSetupPasswordReset = ["true", "1", "yes"].includes(String(process.env.ARIAD_ENABLE_SETUP_RESET || "").toLowerCase());
@@ -155,6 +158,13 @@ const frpOpsStreams = new Map();
 // son públicos por igual a todos los clientes online. Sin filtrado per-client.
 // Spec: docs/specs/cliente/panel-1-metodo-de-pago.md §5 (cajones en vivo).
 const adminConfigStreams = new Set();
+const cloudSyncSignatureHeader = "x-ariadgsm-signature";
+const cloudSyncRateLimitWindowMs = 60_000;
+const cloudSyncRateLimitPerMinute = Math.max(
+  1,
+  Number(process.env.ARIADGSM_CLOUD_SYNC_RATE_LIMIT_PER_MINUTE || 60)
+);
+const cloudSyncRateBuckets = new Map();
 
 const cloudflareTurnstileOrigin = "https://challenges.cloudflare.com";
 const turnstileEnabled = Boolean(turnstileSiteKey && turnstileSecret);
@@ -162,7 +172,7 @@ const isProduction = process.env.NODE_ENV === "production";
 const baseCsp = [
   "default-src 'self'",
   `script-src 'self'${turnstileEnabled ? ` ${cloudflareTurnstileOrigin}` : ""}`,
-  "style-src 'self' 'unsafe-inline'",
+  "style-src 'self'",
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
   "connect-src 'self'",
@@ -188,6 +198,231 @@ function isAllowedApiOrigin(req) {
   } catch {
     return false;
   }
+}
+
+function safeTokenEquals(left, right) {
+  const leftBuffer = Buffer.from(String(left || ""), "utf8");
+  const rightBuffer = Buffer.from(String(right || ""), "utf8");
+  if (leftBuffer.length !== rightBuffer.length) return false;
+  return crypto.timingSafeEqual(leftBuffer, rightBuffer);
+}
+
+function getExpectedCloudAgentToken() {
+  return String(
+    process.env.OPERATIVA_AGENT_KEY ||
+    process.env.OPERATIVA_AGENT_TOKEN ||
+    process.env.ARIADGSM_CLOUD_TOKEN ||
+    ""
+  ).trim();
+}
+
+function getPresentedCloudAgentToken(req) {
+  const authorization = String(req.headers.authorization || "").trim();
+  if (/^bearer\s+/i.test(authorization)) {
+    return authorization.replace(/^bearer\s+/i, "").trim();
+  }
+  return String(
+    req.headers["x-operativa-agent-token"] ||
+    req.headers["x-ariadgsm-agent-token"] ||
+    ""
+  ).trim();
+}
+
+function cloudSyncBodyHash(rawBody) {
+  return crypto.createHash("sha256").update(rawBody).digest("hex");
+}
+
+function cloudSyncSignatureForBody(rawBody, secret) {
+  const digest = crypto.createHmac("sha256", secret).update(rawBody).digest("hex");
+  return `sha256=${digest}`;
+}
+
+function verifyCloudSyncSignature(rawBody, signatureHeader, secret) {
+  const signature = String(signatureHeader || "").trim();
+  if (!secret || !/^sha256=[a-f0-9]{64}$/i.test(signature)) return false;
+  return safeTokenEquals(signature.toLowerCase(), cloudSyncSignatureForBody(rawBody, secret));
+}
+
+function consumeCloudSyncRate(agentToken) {
+  const now = Date.now();
+  const key = hashToken(agentToken || "anonymous");
+  const current = cloudSyncRateBuckets.get(key);
+  if (!current || now >= current.resetAt) {
+    const resetAt = now + cloudSyncRateLimitWindowMs;
+    cloudSyncRateBuckets.set(key, { count: 1, resetAt });
+    return { allowed: true, remaining: cloudSyncRateLimitPerMinute - 1, resetAt };
+  }
+  if (current.count >= cloudSyncRateLimitPerMinute) {
+    return { allowed: false, remaining: 0, resetAt: current.resetAt };
+  }
+  current.count += 1;
+  return { allowed: true, remaining: cloudSyncRateLimitPerMinute - current.count, resetAt: current.resetAt };
+}
+
+async function readRawRequestBody(req, maxBytes = maxJsonBodyBytes) {
+  const chunks = [];
+  let total = 0;
+  for await (const chunk of req) {
+    total += chunk.length;
+    if (total > maxBytes) {
+      const error = new Error("La solicitud es demasiado grande.");
+      error.status = 413;
+      throw error;
+    }
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
+}
+
+async function readCloudSyncLedger() {
+  try {
+    const raw = await fs.readFile(cloudSyncLedgerFile, "utf8");
+    const parsed = JSON.parse(raw);
+    return {
+      batches: Array.isArray(parsed.batches) ? parsed.batches : [],
+    };
+  } catch (error) {
+    if (error?.code === "ENOENT") return { batches: [] };
+    throw error;
+  }
+}
+
+async function writeCloudSyncLedger(ledger) {
+  await fs.mkdir(dataDir, { recursive: true });
+  const body = JSON.stringify({ batches: ledger.batches.slice(0, 500) }, null, 2);
+  await fs.writeFile(cloudSyncLedgerFile, `${body}\n`, "utf8");
+}
+
+async function appendCloudSyncAuditEntry(entry) {
+  await fs.mkdir(dataDir, { recursive: true });
+  const record = {
+    lote_id: String(entry.lote_id || entry.batchId || "").trim() || "unknown",
+    agent_id: String(entry.agent_id || entry.agentId || "").trim() || "unknown",
+    timestamp: entry.timestamp || new Date().toISOString(),
+    hash: String(entry.hash || entry.bodyHash || "").trim(),
+    verdict: ["new", "duplicate", "rejected"].includes(entry.verdict) ? entry.verdict : "rejected",
+    reason: String(entry.reason || ""),
+  };
+  await fs.appendFile(cloudSyncAuditFile, `${JSON.stringify(record)}\n`, "utf8");
+  return record;
+}
+
+function cloudSyncAuditIdentity(req, rawHash) {
+  const presentedToken = getPresentedCloudAgentToken(req);
+  return {
+    lote_id: String(req.headers["idempotency-key"] || "").trim() || rawHash.slice(0, 16),
+    agent_id: presentedToken ? `agent:${hashToken(presentedToken).slice(0, 12)}` : "unknown",
+    hash: rawHash,
+  };
+}
+
+async function rejectCloudSync(req, res, rawHash, status, errorCode, reason = errorCode) {
+  await appendCloudSyncAuditEntry({
+    ...cloudSyncAuditIdentity(req, rawHash),
+    verdict: "rejected",
+    reason,
+  });
+  return sendJson(res, status, { error: errorCode });
+}
+
+async function handleCloudSyncApi(req, res) {
+  if (req.method !== "POST") {
+    return sendJson(res, 405, { error: "Metodo no permitido." });
+  }
+
+  let rawBody;
+  try {
+    rawBody = await readRawRequestBody(req, 5 * 1024 * 1024);
+  } catch (error) {
+    return sendJson(res, error.status || 400, { error: error.message || "Payload invalido." });
+  }
+  const rawHash = cloudSyncBodyHash(rawBody);
+  const signatureHeader = String(req.headers[cloudSyncSignatureHeader] || "").trim();
+  if (!signatureHeader) {
+    return rejectCloudSync(req, res, rawHash, 401, "signature_missing");
+  }
+
+  const expectedToken = getExpectedCloudAgentToken();
+  if (!expectedToken) {
+    return rejectCloudSync(req, res, rawHash, 503, "cloud_sync_not_configured", "missing_OPERATIVA_AGENT_KEY");
+  }
+
+  if (!verifyCloudSyncSignature(rawBody, signatureHeader, expectedToken)) {
+    return rejectCloudSync(req, res, rawHash, 401, "signature_invalid");
+  }
+
+  const presentedToken = getPresentedCloudAgentToken(req);
+  if (!presentedToken || !safeTokenEquals(presentedToken, expectedToken)) {
+    return rejectCloudSync(req, res, rawHash, 401, "agent_token_invalid");
+  }
+
+  const rate = consumeCloudSyncRate(presentedToken);
+  res.setHeader("X-RateLimit-Limit", String(cloudSyncRateLimitPerMinute));
+  res.setHeader("X-RateLimit-Remaining", String(rate.remaining));
+  if (!rate.allowed) {
+    res.setHeader("Retry-After", String(Math.max(1, Math.ceil((rate.resetAt - Date.now()) / 1000))));
+    return rejectCloudSync(req, res, rawHash, 429, "rate_limited");
+  }
+
+  let payload;
+  try {
+    payload = rawBody.length ? JSON.parse(rawBody.toString("utf8")) : {};
+  } catch {
+    return rejectCloudSync(req, res, rawHash, 400, "invalid_json");
+  }
+
+  const idempotencyKey = String(
+    payload.idempotencyKey ||
+    req.headers["idempotency-key"] ||
+    payload.id ||
+    rawHash.slice(0, 16)
+  ).trim();
+  const agentId = String(
+    payload.actor ||
+    payload.agentId ||
+    payload.source ||
+    `agent:${hashToken(presentedToken).slice(0, 12)}`
+  ).trim();
+  const now = new Date().toISOString();
+  const ledger = await readCloudSyncLedger();
+  const existing = ledger.batches.find(
+    (item) => item.idempotencyKey === idempotencyKey || item.id === idempotencyKey
+  );
+  const verdict = existing ? "duplicate" : "new";
+  const batch = existing || {
+    id: String(payload.id || idempotencyKey),
+    idempotencyKey,
+    payloadHash: rawHash,
+    schemaVersion: payload.schemaVersion || "",
+    actor: agentId,
+    source: payload.source || "desktop_agent",
+    receivedAt: now,
+  };
+
+  if (!existing) {
+    ledger.batches.unshift(batch);
+    await writeCloudSyncLedger(ledger);
+  }
+
+  const auditEntry = await appendCloudSyncAuditEntry({
+    lote_id: batch.id || idempotencyKey,
+    agent_id: agentId,
+    hash: rawHash,
+    verdict,
+  });
+
+  return sendJson(res, 200, {
+    ok: true,
+    duplicate: verdict === "duplicate",
+    batch: {
+      id: batch.id,
+      idempotencyKey,
+      payloadHash: rawHash,
+      receivedAt: batch.receivedAt || now,
+      verdict,
+    },
+    audit: auditEntry,
+  });
 }
 
 function defaultServicePricingRule(service) {
@@ -3677,6 +3912,10 @@ const handleFrpApi = createFrpRoutes({
 });
 
 async function handleApi(req, res, pathname) {
+  if (pathname === "/api/operativa-v2/cloud/sync") {
+    return handleCloudSyncApi(req, res);
+  }
+
   if (["POST", "PUT", "PATCH", "DELETE"].includes(req.method) && !isAllowedApiOrigin(req)) {
     return sendJson(res, 403, { error: "Origen no autorizado." });
   }
@@ -5066,19 +5305,7 @@ function ownerRecoveryPage() {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex,nofollow" />
     <title>Recuperacion propietario - AriadGSM Ops</title>
-    <style>
-      body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #f5f7fb; color: #101827; font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-      main { width: min(480px, calc(100vw - 32px)); padding: 28px; border: 1px solid #d9e0ec; border-radius: 18px; background: #fff; box-shadow: 0 24px 70px rgba(16, 24, 39, 0.13); }
-      h1 { margin: 0 0 10px; font-size: 28px; }
-      p { color: #667085; line-height: 1.5; }
-      form { display: grid; gap: 14px; margin-top: 18px; }
-      label { display: grid; gap: 7px; color: #27364b; font-size: 13px; font-weight: 800; }
-      input { min-height: 46px; border: 1px solid #d9e0ec; border-radius: 8px; padding: 0 12px; font: inherit; }
-      button { min-height: 48px; border: 0; border-radius: 8px; background: #2177f2; color: #fff; font: inherit; font-weight: 900; cursor: pointer; }
-      .message[data-type="error"] { color: #dc3f49; }
-      .message[data-type="success"] { color: #0f9f6e; }
-      .note { font-size: 13px; }
-    </style>
+    <link rel="stylesheet" href="/owner-recovery.css" />
   </head>
   <body>
     <main>
@@ -5092,30 +5319,7 @@ function ownerRecoveryPage() {
         <p id="message" class="message note" aria-live="polite"></p>
       </form>
     </main>
-    <script>
-      const form = document.querySelector("#form");
-      const message = document.querySelector("#message");
-      form.addEventListener("submit", async (event) => {
-        event.preventDefault();
-        message.textContent = "";
-        const body = Object.fromEntries(new FormData(form));
-        try {
-          const response = await fetch("/api/password-reset", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body),
-          });
-          const payload = await response.json();
-          if (!response.ok) throw new Error(payload.error || "No se pudo restablecer.");
-          message.textContent = payload.message;
-          message.dataset.type = "success";
-          form.reset();
-        } catch (error) {
-          message.textContent = error.message;
-          message.dataset.type = "error";
-        }
-      });
-    </script>
+    <script src="/owner-recovery.js" type="module"></script>
   </body>
 </html>`;
 }
@@ -5243,7 +5447,7 @@ createServer(async (req, res) => {
     res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
     res.setHeader("Cross-Origin-Resource-Policy", "same-origin");
     if (isProduction) {
-      res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+      res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
     }
     const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
     if (url.pathname.startsWith("/api/")) {

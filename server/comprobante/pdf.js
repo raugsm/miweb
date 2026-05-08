@@ -127,7 +127,7 @@ export async function renderOrderComprobantePdf({ order, items, baseUrl }) {
 // navegador. SEC-002 cerro el token publico del PDF; /v/:code queda como SEC-003.
 export function renderOrderVerifyHtml({ order, items, hash }) {
   if (!order) {
-    return `<!doctype html><meta charset="utf-8"><title>Orden no encontrada</title><body style="font-family:system-ui;padding:40px;text-align:center"><h1>Orden no encontrada</h1><p>El código no corresponde a ninguna orden registrada.</p></body>`;
+    return `<!doctype html><html lang="es"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>Orden no encontrada</title><link rel="stylesheet" href="/verify.css" /></head><body class="verify-page verify-page-missing"><h1>Orden no encontrada</h1><p>El código no corresponde a ninguna orden registrada.</p></body></html>`;
   }
   const totalText = order.priceFormatted || `${fmtMoney(order.totalPrice)} USDT`;
   const fecha = new Date(order.createdAt).toLocaleString("es-AR", { dateStyle: "long", timeStyle: "short" });
@@ -138,34 +138,18 @@ export function renderOrderVerifyHtml({ order, items, hash }) {
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Verificación de comprobante AriadGSM ${escapeHtml(order.code)}</title>
-<style>
-  :root { color-scheme: light; }
-  body { font-family: system-ui, -apple-system, Segoe UI, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px; color: #0f1629; }
-  h1 { font-size: 20px; margin: 0 0 4px; }
-  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
-  .brand-logo { width: 32px; height: 32px; background: #1d4ed8; color: #fff; display: flex; align-items: center; justify-content: center; border-radius: 6px; font-weight: 800; font-size: 18px; }
-  .badge { display: inline-block; padding: 4px 10px; border-radius: 999px; background: #dcfce7; color: #166534; font-weight: 700; font-size: 12px; }
-  .total { font-size: 28px; font-weight: 800; text-align: center; margin: 16px 0 4px; }
-  .total small { display: block; font-size: 12px; font-weight: 400; color: #6b7280; margin-top: 4px; }
-  .card { background: #f8fafc; border-radius: 8px; padding: 12px 14px; margin: 16px 0; }
-  .row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 14px; }
-  .row em { font-style: normal; color: #475569; }
-  .row b { color: #0f1629; }
-  .hash { font-family: ui-monospace, Consolas, monospace; font-size: 11px; color: #94a3b8; word-break: break-all; text-align: center; margin-top: 12px; }
-  .footer { text-align: center; font-size: 12px; color: #6b7280; margin-top: 16px; }
-  .verified { text-align: center; padding: 8px; background: #ecfdf5; border-radius: 6px; color: #065f46; font-size: 12px; font-weight: 600; }
-</style>
+<link rel="stylesheet" href="/verify.css" />
 </head><body>
 <div class="brand">
   <div class="brand-logo">A</div>
   <div>
     <h1>AriadGSM</h1>
-    <small style="color:#6b7280">Verificación de comprobante</small>
+    <small class="brand-subtitle">Verificación de comprobante</small>
   </div>
 </div>
 <div class="verified">✓ Comprobante registrado en sistema</div>
 <div class="total">${escapeHtml(totalText)}<small>≈ ${fmtMoney(order.totalPrice)} USDT</small></div>
-<div style="text-align:center"><span class="badge">${escapeHtml(order.publicStatus || "")}</span></div>
+<div class="badge-row"><span class="badge">${escapeHtml(order.publicStatus || "")}</span></div>
 <div class="card">
   <div class="row"><em>Código</em><b>${escapeHtml(order.code)}</b></div>
   <div class="row"><em>Servicio</em><b>${equipos} × Xiaomi FRP Express</b></div>

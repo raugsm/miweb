@@ -280,9 +280,9 @@ function proofThumbSvg(proof, rejected = false) {
   const isPdf = String(proof?.type || "").toLowerCase() === "application/pdf";
   const opacity = rejected ? "0.5" : "1";
   if (isPdf) {
-    return `<svg viewBox="0 0 24 24" width="48" height="48" aria-hidden="true" style="opacity:${opacity}"><rect x="4" y="2" width="16" height="20" rx="2" fill="#A32D2D"/><text x="12" y="16" text-anchor="middle" font-size="7" font-weight="700" fill="#FFFFFF" font-family="Arial,sans-serif">PDF</text></svg>`;
+    return `<svg viewBox="0 0 24 24" width="48" height="48" aria-hidden="true" opacity="${opacity}"><rect x="4" y="2" width="16" height="20" rx="2" fill="#A32D2D"/><text x="12" y="16" text-anchor="middle" font-size="7" font-weight="700" fill="#FFFFFF" font-family="Arial,sans-serif">PDF</text></svg>`;
   }
-  return `<svg viewBox="0 0 24 24" width="48" height="48" aria-hidden="true" style="opacity:${opacity}"><rect x="3" y="4" width="18" height="16" rx="2" fill="#E8EDF5" stroke="#314660" stroke-width="0.5"/><circle cx="9" cy="10" r="1.5" fill="#314660"/><path d="M3 18l5-5 4 4 3-3 6 6H3z" fill="#314660"/></svg>`;
+  return `<svg viewBox="0 0 24 24" width="48" height="48" aria-hidden="true" opacity="${opacity}"><rect x="3" y="4" width="18" height="16" rx="2" fill="#E8EDF5" stroke="#314660" stroke-width="0.5"/><circle cx="9" cy="10" r="1.5" fill="#314660"/><path d="M3 18l5-5 4 4 3-3 6 6H3z" fill="#314660"/></svg>`;
 }
 
 // Setea el estado transitorio del bloque proof (uploading/dragover/etc.).
