@@ -5588,19 +5588,18 @@ function redirectToCustomerPortal(req, res) {
   res.end();
 }
 
-function requestUsesCustomerPortal(req, pathname) {
-  const host = requestHost(req);
-  return host === "ariadgsm.com"
-    || host === "www.ariadgsm.com"
-    || pathname === "/cliente"
+function requestUsesCustomerPortal(_req, pathname) {
+  return pathname === "/cliente"
     || pathname.startsWith("/cliente/")
     || pathname === "/portal";
 }
 
 function requestUsesXiaomiFrpSpa(req, pathname) {
-  const host = requestHost(req);
-  if (pathname === "/xiaomi-frp" || pathname.startsWith("/pedido/")) return true;
-  return (host === "ariadgsm.com" || host === "www.ariadgsm.com") && pathname === "/";
+  return pathname === "/" || pathname === "/xiaomi-frp" || pathname.startsWith("/pedido/");
+}
+
+function requestUsesAdminApp(pathname) {
+  return pathname === "/admin" || pathname.startsWith("/admin/");
 }
 
 async function serveStatic(req, res, pathname) {
@@ -5640,12 +5639,20 @@ async function serveStatic(req, res, pathname) {
     return redirectToCustomerPortal(req, res);
   }
 
+  if (pathname === "/operario" || pathname.startsWith("/operario/")) {
+    res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" });
+    return res.end("Not found");
+  }
+
   const xiaomiFrpSpaRequest = requestUsesXiaomiFrpSpa(req, pathname);
+  const adminRequest = !xiaomiFrpSpaRequest && requestUsesAdminApp(pathname);
   const portalRequest = !xiaomiFrpSpaRequest && requestUsesCustomerPortal(req, pathname);
   if (portalRequest) res.setHeader("Referrer-Policy", "no-referrer");
   let safePath = pathname;
   if (xiaomiFrpSpaRequest) {
     safePath = "/xiaomi-frp-spa/index.html";
+  } else if (adminRequest) {
+    safePath = "/index.html";
   } else if (portalRequest && (pathname === "/" || pathname === "/cliente" || pathname.startsWith("/cliente/") || pathname === "/portal")) {
     safePath = "/portal.html";
   } else if (pathname === "/") {

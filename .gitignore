@@ -2,3 +2,7 @@ data/
 *.log
 node_modules/
 .local-preview-data/
+.env
+.env.*
+!.env.example
+*.local

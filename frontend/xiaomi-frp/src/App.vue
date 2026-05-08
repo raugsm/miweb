@@ -1,7 +1,7 @@
 <template>
   <main class="app-shell">
     <header class="hero">
-      <img :src="logoUrl" alt="AriadGSM" />
+      <img class="brand-logo" :src="logoUrl" alt="ARIADGSM - Xiaomi Reset y FRP" />
       <div>
         <p class="eyebrow">Xiaomi Reset + FRP por sideload</p>
         <h1>Desbloqueo guiado en vivo</h1>
@@ -78,7 +78,7 @@ const token = ref("");
 const busy = ref(false);
 const error = ref("");
 const notice = ref("");
-const logoUrl = "/ariadgsm-logo-cropped.png";
+const logoUrl = `${import.meta.env.BASE_URL}logo-ariadgsm.png`;
 let events = null;
 let bootstrapTimer = null;
 
