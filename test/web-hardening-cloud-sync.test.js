@@ -98,7 +98,7 @@ test("cloud sync hardening enforces HMAC, rate limit, headers, and audit log", a
       ARIAD_DATA_DIR: dataDir,
       OPERATIVA_AGENT_KEY: token,
       ARIADGSM_CLOUD_SYNC_RATE_LIMIT_PER_MINUTE: "2",
-      ARIADGSM_CLOUD_AUDIT_RATE_LIMIT_PER_MINUTE: "3",
+      ARIADGSM_CLOUD_AUDIT_RATE_LIMIT_PER_MINUTE: "4",
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -179,6 +179,15 @@ test("cloud sync hardening enforces HMAC, rate limit, headers, and audit log", a
     assert.equal(rejectedOnly.response.status, 200);
     assert.ok(rejectedOnly.data.length >= 1);
     assert.ok(rejectedOnly.data.every((entry) => entry.verdict === "rejected"));
+
+    const since = encodeURIComponent(auditResponse.data[0].timestamp);
+    const sinceFiltered = await getAudit(baseUrl, token, `?limit=10&since=${since}`);
+    assert.equal(sinceFiltered.response.status, 200);
+    assert.ok(sinceFiltered.data.length >= 1);
+    assert.ok(sinceFiltered.data.every((entry) => Date.parse(entry.timestamp) >= Date.parse(auditResponse.data[0].timestamp)));
+
+    const deleteAudit = await fetch(`${baseUrl}/api/operativa-v2/cloud/audit`, { method: "DELETE" });
+    assert.equal(deleteAudit.status, 405);
 
     const rateOne = await getAudit(baseUrl, token, "?limit=1&verdict=new");
     assert.equal(rateOne.response.status, 200);
