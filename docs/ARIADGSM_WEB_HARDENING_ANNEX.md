@@ -135,3 +135,18 @@ en el agente y solo se habilita temporalmente con
 5. Enviar un lote firmado desde el agente local y validar respuesta `200`.
 6. Validar en audit log verdict `new` o `duplicate`, sin copiar la clave a `curl`.
 7. Retirar la clave anterior de variables de entorno y secretos locales.
+
+## Deuda 3: credenciales separadas para write y audit
+
+Hoy `/api/operativa-v2/cloud/sync` y
+`/api/operativa-v2/cloud/audit` operan con `OPERATIVA_AGENT_KEY` por
+simplicidad de RC. Migrar post-RC a credenciales separadas: una para escritura
+agente->cloud y otra para lectura admin de audit, idealmente gestionadas con
+vault/keyring.
+
+Riesgo: si `OPERATIVA_AGENT_KEY` se filtra, compromete tanto la inyeccion de
+lotes como la observabilidad de auditoria.
+
+Prioridad: media.
+
+Owner: Codex post-RC.
