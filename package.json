@@ -1,13 +1,16 @@
 {
   "name": "ariadgsm-ops-mvp",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "private": true,
   "description": "MVP interno para login, registro y roles de AriadGSM.",
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test test/phase3a.contract.test.js test/phase4.smoke.test.js test/phase5.technician-swap.test.js test/postgres-storage-guard.test.js test/audit-events-granular.test.js test/frp-payment-review-postgres.test.js test/portal-customer-confirm-postgres.test.js test/payment-verification-shadow.test.js test/web-hardening-cloud-sync.test.js test/xiaomi-frp-backend.test.js",
+    "test": "node scripts/check-vue-component-lines.mjs && node --test test/phase3a.contract.test.js test/phase4.smoke.test.js test/phase5.technician-swap.test.js test/postgres-storage-guard.test.js test/audit-events-granular.test.js test/frp-payment-review-postgres.test.js test/portal-customer-confirm-postgres.test.js test/payment-verification-shadow.test.js test/web-hardening-cloud-sync.test.js test/xiaomi-frp-backend.test.js",
     "test:smoke": "node --test test/phase4.smoke.test.js",
+    "frontend:build": "vite build --config frontend/xiaomi-frp/vite.config.js",
+    "frontend:check": "node scripts/check-vue-component-lines.mjs",
+    "frontend:dev": "vite --config frontend/xiaomi-frp/vite.config.js --host 127.0.0.1 --port 5173",
     "postgres:check": "node scripts/postgres/check-connection.mjs",
     "postgres:migrate": "node scripts/postgres/apply-migrations.mjs",
     "postgres:migrate:apply": "node scripts/postgres/apply-migrations.mjs --apply",
@@ -19,7 +22,7 @@
     "postgres:write-check": "node scripts/postgres/write-db-check.mjs"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=20.19.0"
   },
   "dependencies": {
     "libphonenumber-js": "^1.12.42",
@@ -28,5 +31,10 @@
     "pdfkit": "^0.18.0",
     "pg": "^8.20.0",
     "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.6",
+    "vite": "^7.3.3",
+    "vue": "^3.5.0"
   }
 }

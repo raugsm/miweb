@@ -22,6 +22,14 @@ test("xiaomi frp backend supports public order flow and operator actions", { tim
     const jar = new CookieJar();
     const http = createHttpClient(server.baseUrl, jar);
 
+    let page = await http.request("GET", "/xiaomi-frp");
+    assert.equal(page.status, 200);
+    assert.match(page.data, /Xiaomi Reset \+ FRP por sideload/);
+
+    page = await http.request("GET", "/robots.txt", undefined, { accept: "text/plain" });
+    assert.equal(page.status, 200);
+    assert.match(page.data, /Sitemap: https:\/\/ariadgsm\.com\/sitemap\.xml/);
+
     let response = await http.request("GET", "/api/xiaomi-frp/bootstrap", undefined, { "cf-ipcountry": "PE" });
     assert.equal(response.status, 200);
     assert.equal(response.data.countryIso, "PE");

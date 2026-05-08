@@ -5597,6 +5597,12 @@ function requestUsesCustomerPortal(req, pathname) {
     || pathname === "/portal";
 }
 
+function requestUsesXiaomiFrpSpa(req, pathname) {
+  const host = requestHost(req);
+  if (pathname === "/xiaomi-frp" || pathname.startsWith("/pedido/")) return true;
+  return (host === "ariadgsm.com" || host === "www.ariadgsm.com") && pathname === "/";
+}
+
 async function serveStatic(req, res, pathname) {
   if (pathname === "/owner-recovery") {
     if (!enableSetupPasswordReset) {
@@ -5634,10 +5640,13 @@ async function serveStatic(req, res, pathname) {
     return redirectToCustomerPortal(req, res);
   }
 
-  const portalRequest = requestUsesCustomerPortal(req, pathname);
+  const xiaomiFrpSpaRequest = requestUsesXiaomiFrpSpa(req, pathname);
+  const portalRequest = !xiaomiFrpSpaRequest && requestUsesCustomerPortal(req, pathname);
   if (portalRequest) res.setHeader("Referrer-Policy", "no-referrer");
   let safePath = pathname;
-  if (portalRequest && (pathname === "/" || pathname === "/cliente" || pathname.startsWith("/cliente/") || pathname === "/portal")) {
+  if (xiaomiFrpSpaRequest) {
+    safePath = "/xiaomi-frp-spa/index.html";
+  } else if (portalRequest && (pathname === "/" || pathname === "/cliente" || pathname.startsWith("/cliente/") || pathname === "/portal")) {
     safePath = "/portal.html";
   } else if (pathname === "/") {
     safePath = "/index.html";
@@ -5659,6 +5668,10 @@ async function serveStatic(req, res, pathname) {
       ".svg": "image/svg+xml",
       ".png": "image/png",
       ".jpg": "image/jpeg",
+      ".jpeg": "image/jpeg",
+      ".webp": "image/webp",
+      ".xml": "application/xml; charset=utf-8",
+      ".txt": "text/plain; charset=utf-8",
     }[ext] || "application/octet-stream";
     const cacheHeader = ext === ".html"
       ? "no-store"
@@ -5668,7 +5681,10 @@ async function serveStatic(req, res, pathname) {
     res.writeHead(200, { "Content-Type": type, "Cache-Control": cacheHeader });
     res.end(file);
   } catch {
-    const index = await fs.readFile(path.join(publicDir, portalRequest ? "portal.html" : "index.html"));
+    const fallbackFile = xiaomiFrpSpaRequest
+      ? "xiaomi-frp-spa/index.html"
+      : portalRequest ? "portal.html" : "index.html";
+    const index = await fs.readFile(path.join(publicDir, fallbackFile));
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
     res.end(index);
   }

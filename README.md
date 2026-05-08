@@ -38,6 +38,22 @@ Precio inicial: `4.00 USDT` por proceso, configurable por operador desde
 Las tasas locales se leen de la configuracion existente de exchange rates y se
 congelan en el pedido durante 10 minutos.
 
+## Xiaomi Reset + FRP SPA cliente
+
+El frontend publico vive en `frontend/xiaomi-frp` y se compila con Vue 3 + Vite:
+
+```bash
+npm run frontend:build
+```
+
+Render ejecuta ese build antes de `npm start` y deja los assets en
+`public/xiaomi-frp-spa`. El dominio publico `ariadgsm.com/` y las URLs
+`/pedido/AG-NNNN?t=<token>` sirven esta SPA sin recargar la pagina; las APIs
+siguen en `/api/xiaomi-frp/*`.
+
+Regla de mantenimiento: ningun componente `.vue` debe pasar de 300 lineas.
+`npm test` ejecuta `scripts/check-vue-component-lines.mjs` antes de la suite.
+
 ## Local
 
 ```bash

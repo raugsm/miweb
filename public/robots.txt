@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /owner-recovery
+Disallow: /pedido/
+
+Sitemap: https://ariadgsm.com/sitemap.xml
