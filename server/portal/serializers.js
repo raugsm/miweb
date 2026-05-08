@@ -187,26 +187,26 @@ export function createPortalSerializers({
     const items = db.customerOrderItems.filter((item) => item.orderId === order.id);
     const jobs = items.map((item) => db.frpJobs.find((job) => job.id === item.frpJobId)).filter(Boolean);
     const status = publicStatus || deriveCustomerOrderStatus(order, db);
-    if (status === "REVISION_COMPATIBILIDAD") return "AriadGSM revisara si el equipo aplica para FRP Express antes de pedir pago.";
-    if (status === "ESPERANDO_PAGO") return "Copia los datos de pago y sube el comprobante para iniciar la validacion.";
+    if (status === "REVISION_COMPATIBILIDAD") return "AriadGSM revisará si el equipo aplica para FRP Express antes de pedir pago.";
+    if (status === "ESPERANDO_PAGO") return "Copia los datos de pago y sube el comprobante para iniciar la validación.";
     if (status === "POSTPAGO_SOLICITADO") return "Postpago solicitado. AriadGSM debe aprobarlo antes de procesar.";
     if (status === "PAGO_EN_REVISION") {
       return order.customerConnectionReadyAt
-        ? "Comprobante recibido. Ya indicaste que la conexion esta lista; espera validacion."
+        ? "Comprobante recibido. Ya indicaste que la conexión está lista; espera validación."
         : "Comprobante recibido. Prepara USB Redirector mientras validamos el pago.";
     }
     if (status === "PAGO_RECHAZADO") {
       const reason = cleanText(frpOrder?.paymentRejectedReason || "", 160) || "Comprobante rechazado.";
       return `Pago rechazado: ${reason} Sube un nuevo comprobante.`;
     }
-    if (status === "EN_PREPARACION") return "Pago validado. Prepara USB Redirector y manten el equipo disponible para el servicio.";
-    if (status === "LISTO_PARA_CONEXION") return "Conexion lista. Mantente disponible para que el tecnico tome el equipo.";
-    if (status === "EN_PROCESO") return "Tecnico procesando. No desconectes el equipo hasta recibir el Done.";
+    if (status === "EN_PREPARACION") return "Pago validado. Prepara USB Redirector y mantén el equipo disponible para el servicio.";
+    if (status === "LISTO_PARA_CONEXION") return "Conexión lista. Mantente disponible para que el técnico tome el equipo.";
+    if (status === "EN_PROCESO") return "Técnico procesando. No desconectes el equipo hasta recibir el Done.";
     if (status === "REQUIERE_ATENCION") {
       const reason = jobs.find((job) => job.reviewReason)?.reviewReason || frpOrder?.reviewReason || "";
-      return reason ? `Requiere accion: ${reason}` : "Requiere accion del cliente o revision del equipo.";
+      return reason ? `Requiere acción: ${reason}` : "Requiere acción del cliente o revisión del equipo.";
     }
-    if (status === "FINALIZADO") return "Servicio finalizado. Revisa el Done y el log de salida.";
+    if (status === "FINALIZADO") return "Servicio finalizado. Descarga tu recibo abajo.";
     if (status === "CANCELADO") return "Solicitud cancelada.";
     return "Revisa el estado de tu solicitud.";
   }
@@ -363,7 +363,7 @@ export function createPortalSerializers({
         const job = db.frpJobs.find((candidate) => candidate.id === item.frpJobId);
         const eligibilityStatus = item.eligibilityStatus || job?.eligibilityStatus || "";
         const eligibilityMessage = item.eligibilityPublicMessage || job?.eligibilityPublicMessage || "";
-        const publicReviewMessage = eligibilityMessage || (job?.status === "REQUIERE_REVISION" ? "Requiere revision del equipo." : "");
+        const publicReviewMessage = eligibilityMessage || (job?.status === "REQUIERE_REVISION" ? "Requiere revisión del equipo." : "");
         return {
           id: item.id,
           sequence: item.sequence,

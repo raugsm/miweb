@@ -30,7 +30,7 @@ export function startFallbackPolling() {
       await refreshOrdersSilently();
     } catch {
       stopFallbackPolling();
-      setOrdersLiveStatus("Sin conexion", "error");
+      setOrdersLiveStatus("Sin conexión", "error");
       return;
     }
     state.pollTimer = setTimeout(tick, 20000);
@@ -66,7 +66,7 @@ export function startOrdersLive() {
       notifyCustomerUpdated();
       setOrdersLiveStatus("En vivo", "success");
     } catch {
-      setOrdersLiveStatus("Revisar conexion", "warn");
+      setOrdersLiveStatus("Revisar conexión", "warn");
     }
   });
   stream.onerror = () => {

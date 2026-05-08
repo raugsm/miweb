@@ -13,11 +13,11 @@ export function statusLabel(code) {
 
 export function itemStatusLabel(code) {
   const labels = {
-    ESPERANDO_PREPARACION: "Preparacion",
-    LISTO_PARA_TECNICO: "Listo para conexion",
+    ESPERANDO_PREPARACION: "Preparación",
+    LISTO_PARA_TECNICO: "Listo para conexión",
     EN_PROCESO: "En proceso",
     FINALIZADO: "Finalizado",
-    REQUIERE_REVISION: "Revision",
+    REQUIERE_REVISION: "Revisión",
     ESPERANDO_CLIENTE: "Esperando cliente",
     CANCELADO: "Cancelado",
   };
@@ -26,24 +26,24 @@ export function itemStatusLabel(code) {
 
 export function customerNextAction(order) {
   if (order?.nextAction) return order.nextAction;
-  if (order?.publicStatus === "REVISION_COMPATIBILIDAD") return "AriadGSM revisara compatibilidad antes de pedir pago.";
-  if (order?.publicStatus === "ESPERANDO_PAGO") return "Completa el paso 3 para iniciar validacion.";
-  if (order?.publicStatus === "PAGO_EN_REVISION") return "Validando comprobante. Te avisaremos en cuanto el tecnico apruebe el pago.";
+  if (order?.publicStatus === "REVISION_COMPATIBILIDAD") return "AriadGSM revisará compatibilidad antes de pedir pago.";
+  if (order?.publicStatus === "ESPERANDO_PAGO") return "Completa el paso 3 para iniciar validación.";
+  if (order?.publicStatus === "PAGO_EN_REVISION") return "Validando comprobante. Te avisaremos en cuanto el técnico apruebe el pago.";
   if (order?.publicStatus === "PAGO_RECHAZADO") {
     const reason = String(order.paymentRejectedReason || "").trim() || "Comprobante rechazado.";
     return `${reason} Sube un nuevo comprobante.`;
   }
-  if (order?.publicStatus === "EN_PREPARACION") return "Pago confirmado. Prepara USB Redirector y manten el equipo disponible.";
-  if (order?.publicStatus === "LISTO_PARA_CONEXION") return "Mantente disponible. El tecnico tomara el equipo.";
-  if (order?.publicStatus === "EN_PROCESO") return "No desconectes el equipo. Tecnico procesando.";
-  if (order?.publicStatus === "FINALIZADO") return "Servicio finalizado. Revisa el Done.";
+  if (order?.publicStatus === "EN_PREPARACION") return "Pago confirmado. Prepara USB Redirector y mantén el equipo disponible.";
+  if (order?.publicStatus === "LISTO_PARA_CONEXION") return "Mantente disponible. El técnico tomará el equipo.";
+  if (order?.publicStatus === "EN_PROCESO") return "No desconectes el equipo. Técnico procesando.";
+  if (order?.publicStatus === "FINALIZADO") return "Servicio finalizado. Descarga tu recibo abajo.";
   if (order?.publicStatus === "REQUIERE_ATENCION") return "Revisa el motivo y corrige lo solicitado.";
   return "Revisa el avance de tu pedido.";
 }
 
 export function orderBadges(order) {
   const badges = [];
-  if (order?.customerConnectionReadyAt) badges.push("Conexion lista");
+  if (order?.customerConnectionReadyAt) badges.push("Conexión lista");
   if (order?.urgentRequested) badges.push(order.urgentStatus === "APROBADO" ? "Urgente aprobado" : "Urgente solicitado");
   if (order?.postpayRequested) badges.push(order.postpayStatus === "APROBADO" ? "Postpago aprobado" : "Postpago solicitado");
   return badges;
@@ -128,9 +128,9 @@ export function compactOrderMeta(order) {
 }
 
 export function orderAlertText(order) {
-  if (order?.publicStatus === "REVISION_COMPATIBILIDAD") return "Modelo en revision: AriadGSM confirmara si aplica FRP Express antes de pedir pago.";
-  if (order?.publicStatus === "REQUIERE_ATENCION") return order.nextAction || "Se requiere atencion: revisa la indicacion de AriadGSM.";
-  if ((order?.items || []).some((item) => item.status === "REQUIERE_REVISION")) return "Hay un equipo en revision. Revisa el detalle antes de continuar.";
+  if (order?.publicStatus === "REVISION_COMPATIBILIDAD") return "Modelo en revisión: AriadGSM confirmará si aplica FRP Express antes de pedir pago.";
+  if (order?.publicStatus === "REQUIERE_ATENCION") return order.nextAction || "Se requiere atención: revisa la indicación de AriadGSM.";
+  if ((order?.items || []).some((item) => item.status === "REQUIERE_REVISION")) return "Hay un equipo en revisión. Revisa el detalle antes de continuar.";
   if (order?.publicStatus === "PAGO_RECHAZADO") {
     const reason = String(order.paymentRejectedReason || "").trim() || "Comprobante rechazado.";
     return `Tu pago fue rechazado. Motivo: ${reason} Sube un nuevo comprobante.`;

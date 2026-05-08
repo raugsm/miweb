@@ -8,6 +8,6 @@ export async function api(path, options = {}) {
     ...options,
   });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.error || "No se pudo completar la accion.");
+  if (!response.ok) throw new Error(payload.error || "No se pudo completar la acción.");
   return payload;
 }

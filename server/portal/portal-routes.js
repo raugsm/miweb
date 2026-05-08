@@ -434,7 +434,7 @@ export function createPortalRoutes({
       await writeDb(db);
     }
     res.setHeader("Set-Cookie", cookieHeader(customerSessionCookieName, "", 0));
-    return sendJson(res, 200, { message: "Sesion cliente cerrada." });
+    return sendJson(res, 200, { message: "Sesión cliente cerrada." });
   }
 
   if (req.method === "GET" && pathname === "/api/portal/orders") {

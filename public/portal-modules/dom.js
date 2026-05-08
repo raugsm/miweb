@@ -17,7 +17,7 @@ export function escapeHtml(value) {
 
 export function copyText(text, messageNode) {
   const done = () => setMessage(messageNode, "Copiado. Ya puedes pegarlo.", "success");
-  const fail = () => setMessage(messageNode, "No se pudo copiar automaticamente.", "error");
+  const fail = () => setMessage(messageNode, "No se pudo copiar automáticamente.", "error");
   if (navigator.clipboard?.writeText) {
     navigator.clipboard.writeText(text).then(done).catch(fail);
     return;

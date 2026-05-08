@@ -38,7 +38,7 @@ import { $ } from "./dom.js";
 import { state } from "./state.js";
 
 const DEBUG_ORDER_CODE = "CL-20260504-001-2";
-const PLACEHOLDER_CODE_TEXT = "Aparecera cuando tu pago sea aprobado";
+const PLACEHOLDER_CODE_TEXT = "Aparecerá cuando tu pago sea aprobado";
 
 const VALID_DEBUG_STATES = new Set(["A", "B", "C"]);
 const PREPARATION_STATES = new Set([
@@ -94,7 +94,7 @@ function orderForCards() {
 function panel4InstructionCopy(order, visualState) {
   if (order?.publicStatus === "PAGO_EN_REVISION") {
     return {
-      kicker: "Pago en revision",
+      kicker: "Pago en revisión",
       title: "Prepara Redirector",
       text: "Tu comprobante fue recibido. Puedes abrir Redirector y dejar el equipo listo mientras AriadGSM revisa el pago.",
     };
@@ -103,20 +103,20 @@ function panel4InstructionCopy(order, visualState) {
     return {
       kicker: "Pago rechazado",
       title: "Revisa el comprobante",
-      text: "Sube un nuevo comprobante desde el paso 3. El boton de conexion no desbloquea esta orden.",
+      text: "Sube un nuevo comprobante desde el paso 3. El botón de conexión no desbloquea esta orden.",
     };
   }
   if (visualState === "C") {
     return {
       kicker: "Pago aprobado",
-      title: "Manten el equipo conectado",
-      text: "Abre USB Redirector, conecta en modo sideload y no desconectes el equipo. AriadGSM puede procesar la orden sin otro boton.",
+      title: "Mantén el equipo conectado",
+      text: "Abre USB Redirector, conecta en modo sideload y no desconectes el equipo. AriadGSM puede procesar la orden sin otro botón.",
     };
   }
   return {
     kicker: "Paso 4",
     title: "Prepara el equipo",
-    text: "Descarga Redirector y ten el equipo listo. Cuando subas el comprobante, la orden quedara en seguimiento automaticamente.",
+    text: "Descarga Redirector y ten el equipo listo. Cuando subas el comprobante, la orden quedará en seguimiento automáticamente.",
   };
 }
 
@@ -139,7 +139,7 @@ export function updatePanel4(_context = {}) {
     technicianId = String(state.activeTechnician.redirectorId || "").trim();
   }
   const technicianText = technicianId
-    || (state.activeTechnician?.swapInProgress ? "Cambio de tecnico en curso" : "Tecnico no disponible");
+    || (state.activeTechnician?.swapInProgress ? "Cambio de técnico en curso" : "Técnico no disponible");
 
   // Código del proceso: real solo en estado C. En revisión/rechazo se mantiene
   // placeholder para no sugerir que el proceso técnico ya está listo.

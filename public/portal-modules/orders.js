@@ -30,21 +30,21 @@ const VISIBLE_IN_MY_ORDERS = new Set([
 const ITEM_STATUS = {
   ESPERANDO_PREPARACION: { label: "Pendiente", stage: "pending" },
   ESPERANDO_CLIENTE: { label: "Pendiente", stage: "pending" },
-  LISTO_PARA_TECNICO: { label: "Esperando tecnico", stage: "ready" },
+  LISTO_PARA_TECNICO: { label: "Esperando técnico", stage: "ready" },
   EN_PROCESO: { label: "En proceso", stage: "process" },
   FINALIZADO: { label: "Finalizado", stage: "done" },
-  REQUIERE_REVISION: { label: "Revision", stage: "warn" },
+  REQUIERE_REVISION: { label: "Revisión", stage: "warn" },
   CANCELADO: { label: "Cancelado", stage: "canceled" },
 };
 
 const ORDER_STATUS = {
-  PAGO_EN_REVISION: { label: "Pago en revision", stage: "review", detail: "Estamos revisando tu comprobante." },
+  PAGO_EN_REVISION: { label: "Pago en revisión", stage: "review", detail: "Estamos revisando tu comprobante." },
   PAGO_RECHAZADO: { label: "Pago rechazado", stage: "review", detail: "Revisa el motivo y sube un nuevo comprobante." },
   EN_PREPARACION: { label: "Pago aprobado", stage: "approved", detail: "Prepara el equipo para el servicio." },
   LISTO_PARA_CONEXION: { label: "Pago aprobado", stage: "approved", detail: "Mantente disponible para el servicio." },
   EN_PROCESO: { label: "En proceso", stage: "process", detail: "Servicio en proceso. No desconectes el equipo." },
-  REQUIERE_ATENCION: { label: "Requiere conexion", stage: "attention", detail: "Necesitamos que conectes el equipo o respondas el aviso." },
-  FINALIZADO: { label: "Finalizado", stage: "done", detail: "Servicio finalizado." },
+  REQUIERE_ATENCION: { label: "Requiere conexión", stage: "attention", detail: "Necesitamos que conectes el equipo o respondas el aviso." },
+  FINALIZADO: { label: "Finalizado", stage: "done", detail: "Servicio finalizado. Descarga tu recibo abajo." },
 };
 
 const ORDER_FLAG_SVGS = {
@@ -60,13 +60,13 @@ function orderStatusFor(order) {
 }
 
 function itemStatusFor(order, item) {
-  if (order?.publicStatus === "PAGO_EN_REVISION") return { label: "En revision", stage: "review" };
+  if (order?.publicStatus === "PAGO_EN_REVISION") return { label: "En revisión", stage: "review" };
   if (order?.publicStatus === "PAGO_RECHAZADO") return { label: "Revisar pago", stage: "warn" };
   if (["EN_PREPARACION", "LISTO_PARA_CONEXION"].includes(order?.publicStatus) && ["ESPERANDO_PREPARACION", "ESPERANDO_CLIENTE", "LISTO_PARA_TECNICO"].includes(item?.status)) {
     return { label: "Pago aprobado", stage: "approved" };
   }
   if (order?.publicStatus === "REQUIERE_ATENCION" && ["ESPERANDO_PREPARACION", "ESPERANDO_CLIENTE"].includes(item?.status)) {
-    return { label: "Requiere conexion", stage: "warn" };
+    return { label: "Requiere conexión", stage: "warn" };
   }
   return ITEM_STATUS[item?.status] || { label: item?.status || "Pendiente", stage: "pending" };
 }
@@ -154,7 +154,9 @@ function itemSideHtml(item, status) {
 }
 
 function itemRowsHtml(order) {
-  return itemsForOrder(order).map((item) => {
+  const items = itemsForOrder(order);
+  if (items.length <= 1) return "";
+  return items.map((item) => {
     const status = itemStatusFor(order, item);
     return `
       <li class="order-equipment-row is-${escapeHtml(status.stage)}">
@@ -203,7 +205,7 @@ function renderOrderCard(order) {
   const receiptEnabled = allProcessableItemsFinalized(order);
   const receiptHref = `/api/portal/orders/${encodeURIComponent(order.id)}/comprobante.pdf`;
   const shortCode = order.shortCode || order.code || order.id;
-  const realCode = order.code && order.code !== shortCode ? order.code : "";
+  const rowsHtml = itemRowsHtml(order);
   card.className = `order-card order-card-v1 is-${status.stage}`;
   card.dataset.orderId = order.id;
   card.dataset.publicStatus = order.publicStatus || "";
@@ -214,7 +216,6 @@ function renderOrderCard(order) {
         <span class="order-country-flag">${orderFlagHtml(order)}</span>
         <div class="order-card-titleblock">
           <strong class="order-code">${escapeHtml(shortCode)}</strong>
-          ${realCode ? `<span class="order-real-code">real: ${escapeHtml(realCode)}</span>` : ""}
         </div>
       </div>
       <div class="order-card-status">
@@ -225,9 +226,7 @@ function renderOrderCard(order) {
     <p class="order-meta">${escapeHtml(orderSummaryText(order))}</p>
     <p class="order-next-action">${escapeHtml(order.nextAction || status.detail)}</p>
     ${priceDecisionHtml(order)}
-    <ul class="order-equipment-list">
-      ${itemRowsHtml(order)}
-    </ul>
+    ${rowsHtml ? `<ul class="order-equipment-list">${rowsHtml}</ul>` : ""}
     <div class="order-card-actions order-card-actions-v1">
       <a
         class="order-receipt-button${receiptEnabled ? "" : " is-disabled"}"

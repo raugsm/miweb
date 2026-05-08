@@ -186,11 +186,12 @@ test("portal Mis Ordenes follows the post-payment tracking contract", async () =
   assert.match(ordersJs, /"EN_PREPARACION"/);
   assert.match(ordersJs, /const ORDER_STATUS = \{/);
   assert.match(ordersJs, /const shortCode = order\.shortCode \|\| order\.code \|\| order\.id;/);
-  assert.match(ordersJs, /class="order-real-code">real:/);
+  assert.doesNotMatch(ordersJs, /class="order-real-code">real:/);
+  assert.match(ordersJs, /if \(items\.length <= 1\) return "";/);
   assert.match(ordersJs, /card\.dataset\.operatorStatus = order\.operatorStatus \|\| "";/);
   assert.doesNotMatch(ordersJs, /data-order-item-ready=/);
   assert.doesNotMatch(ordersJs, /data-order-item-cancel=/);
-  assert.match(orderStateJs, /Pago confirmado\. Prepara USB Redirector y manten el equipo disponible\./);
+  assert.match(orderStateJs, /Pago confirmado\. Prepara USB Redirector y mantén el equipo disponible\./);
   assert.match(portalSerializerJs, /function portalOperatorOrderStatus\(order, db\)/);
   assert.match(portalSerializerJs, /operatorStatus,/);
   assert.match(portalSerializerJs, /paymentApprovedAt,/);
@@ -211,7 +212,7 @@ test("portal step 4 is an instruction/status panel, not a required connected but
   assert.match(portalHtml, /id="panel4Status" role="status" aria-live="polite"/);
   assert.match(portalHtml, /id="panel4EquipoConectado"[^>]+hidden[^>]+aria-hidden="true"[^>]+tabindex="-1"/);
   assert.match(panel4Js, /const PREPARATION_STATES = new Set\(\[/);
-  assert.match(panel4Js, /const PLACEHOLDER_CODE_TEXT = "Aparecera cuando tu pago sea aprobado";/);
+  assert.match(panel4Js, /const PLACEHOLDER_CODE_TEXT = "Aparecerá cuando tu pago sea aprobado";/);
   assert.match(panel4Js, /const canShowProcessCode = visualState === "C";/);
   assert.match(panel4Js, /order\?\.shortCode \|\| order\?\.code/);
   assert.match(panel4Js, /panel4InstructionCopy\(order, visualState\)/);

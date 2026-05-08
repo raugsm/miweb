@@ -18,6 +18,15 @@ import { state } from "./state.js";
 // HTML estático en portal.html y se rellena dinámicamente vía updatePanel4()
 // desde panel-4-connection.js.
 
+function formatClientDisplayName(value) {
+  return String(value || "Portal AriadGSM")
+    .trim()
+    .replace(/\s+/g, " ")
+    .split(" ")
+    .map((part) => part ? `${part.charAt(0).toLocaleUpperCase("es-PE")}${part.slice(1)}` : "")
+    .join(" ");
+}
+
 export function setTab(tab) {
   state.activeTab = tab;
   $$(".tab").forEach((button) => button.classList.toggle("active", button.dataset.tab === tab));
@@ -42,7 +51,7 @@ export function validateRegisterName(value) {
   if (!name) return { ok: false, error: "Escribe tu nombre y apellido." };
   if (name.length < 5 || name.length > 90) return { ok: false, error: "Nombre y apellido deben tener entre 5 y 90 caracteres." };
   if (/@|https?:\/\/|www\./i.test(name)) return { ok: false, error: "No escribas correo o enlaces en el nombre." };
-  if (/\d/.test(name) || /\+?\d[\d\s().-]{5,}\d/.test(name)) return { ok: false, error: "No escribas telefono ni numeros en el nombre." };
+  if (/\d/.test(name) || /\+?\d[\d\s().-]{5,}\d/.test(name)) return { ok: false, error: "No escribas teléfono ni números en el nombre." };
   if (!/^[\p{L}\p{M}][\p{L}\p{M}'’ -]*[\p{L}\p{M}]$/u.test(name)) {
     return { ok: false, error: "Usa solo letras, espacios, acentos, guiones o apostrofes en el nombre." };
   }
@@ -52,7 +61,7 @@ export function validateRegisterName(value) {
     .map((word) => normalizeForMatch(word.replace(/['’-]/g, "")))
     .filter((word) => word.length >= 2 && !connectorWords.has(word));
   if (significantWords.length < 2) return { ok: false, error: "Escribe al menos nombre y apellido." };
-  if (nameHasCountry(name)) return { ok: false, error: "No agregues el pais dentro del nombre." };
+  if (nameHasCountry(name)) return { ok: false, error: "No agregues el país dentro del nombre." };
   return { ok: true, name };
 }
 
@@ -65,8 +74,8 @@ export function phoneCountryEntries() {
 export function normalizeWhatsappInput(value) {
   const raw = String(value || "").trim();
   const normalized = raw.replace(/[^\d+]/g, "");
-  if (!normalized) return { ok: false, error: "Escribe tu WhatsApp con codigo internacional." };
-  if (!normalized.startsWith("+")) return { ok: false, error: "WhatsApp debe iniciar con + y codigo de pais." };
+  if (!normalized) return { ok: false, error: "Escribe tu WhatsApp con código internacional." };
+  if (!normalized.startsWith("+")) return { ok: false, error: "WhatsApp debe iniciar con + y código de país." };
   if (!/^\+[1-9]\d{6,14}$/.test(normalized)) return { ok: false, error: "WhatsApp debe tener formato internacional. Ejemplo: +573001234567." };
   return { ok: true, phone: normalized };
 }
@@ -86,11 +95,11 @@ export function updatePhoneCountryFromInput() {
   const detected = detectCountryFromWhatsapp(input.value);
   if (detected?.country && Array.from(countrySelect.options).some((option) => option.value === detected.country)) {
     countrySelect.value = detected.country;
-    hint.textContent = `Pais detectado por WhatsApp: ${detected.country}.`;
+    hint.textContent = `País detectado por WhatsApp: ${detected.country}.`;
     hint.dataset.type = "success";
     return;
   }
-  hint.textContent = "Escribe el numero con + y codigo internacional.";
+  hint.textContent = "Escribe el número con + y código internacional.";
   hint.dataset.type = input.value.trim() ? "warn" : "";
 }
 
@@ -104,7 +113,7 @@ export function ensureTurnstileScript() {
     script.async = true;
     script.defer = true;
     script.onload = () => resolve(true);
-    script.onerror = () => reject(new Error("No se pudo cargar la validacion anti-spam."));
+    script.onerror = () => reject(new Error("No se pudo cargar la validación anti-spam."));
     document.head.append(script);
   });
   return state.turnstileReady;
@@ -172,10 +181,9 @@ export function renderCustomer() {
     stopTechnicianPolling();
     return;
   }
-  $("#clientTitle").textContent = `${customer.client.name}`;
+  $("#clientTitle").textContent = formatClientDisplayName(customer.client.name);
   $("#clientStatus").textContent = customer.client.emailVerified ? "Correo verificado" : "Correo pendiente";
   $("#monthlyUsage").textContent = String(customer.monthlyUsage || 0);
-  $("#deviceStatus").textContent = customer.device?.authorizedForBenefits ? "Autorizado" : "Sin beneficios";
   $("#verificationCard").classList.toggle("hidden", customer.client.emailVerified);
   // PR-2a.4: banner deuda VIP pendiente del cierre anterior. Bloquea creacion
   // de nuevas ordenes desde el backend (POST /api/portal/orders/frp → 403).
