@@ -10,6 +10,7 @@ import {
   paymentMethodsForCountry,
   publicPaymentMethod,
   publicXiaomiOrder,
+  qrUrlForPaymentMethod,
   quoteXiaomiOrder,
   token10,
   validWhatsapp,
@@ -135,6 +136,48 @@ export function createXiaomiFrpRoutes({
       throw error;
     }
     return proofs;
+  }
+
+  function sanitizePaymentMethodQrImage(input, code) {
+    const dataUrl = String(input?.dataUrl || "");
+    const match = dataUrl.match(/^data:(image\/(?:png|jpe?g|webp));base64,([a-z0-9+/=]+)$/i);
+    const type = cleanText(input?.type || match?.[1] || "", 30);
+    const bytes = match ? Buffer.from(match[2], "base64") : Buffer.alloc(0);
+    const size = Number(input?.size || bytes.length || 0);
+    if (!match || !["image/png", "image/jpeg", "image/webp"].includes(type) || !size || size > 2 * 1024 * 1024) {
+      const error = new Error("QR invalido o demasiado pesado (max 2 MB, JPG/PNG/WEBP).");
+      error.status = 400;
+      throw error;
+    }
+    const sha256 = crypto.createHash("sha256").update(dataUrl).digest("hex");
+    const timestamp = nowIso();
+    return {
+      id: crypto.randomUUID(),
+      name: cleanText(input?.name || `${code}-qr.png`, 90),
+      type,
+      size,
+      dataUrl,
+      hash: sha256,
+      sha256,
+      url: qrUrlForPaymentMethod(code),
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+  }
+
+  function sendPaymentMethodQr(res, qrImage) {
+    const dataUrl = String(qrImage?.dataUrl || "");
+    const match = dataUrl.match(/^data:(image\/(?:png|jpe?g|webp));base64,([a-z0-9+/=]+)$/i);
+    if (!match) return false;
+    const body = Buffer.from(match[2], "base64");
+    res.writeHead(200, {
+      "Content-Type": match[1],
+      "Content-Length": body.length,
+      "Cache-Control": "public, max-age=300",
+      "X-Content-Type-Options": "nosniff",
+    });
+    res.end(body);
+    return true;
   }
 
   function createCustomer(db, { whatsapp, countryIso, code }) {
@@ -356,6 +399,18 @@ export function createXiaomiFrpRoutes({
         price: quote,
         paymentMethods: methods,
       });
+    }
+
+    const publicQrMatch = pathname.match(/^\/api\/xiaomi-frp\/payment-methods\/([^/]+)\/qr$/);
+    if (req.method === "GET" && publicQrMatch) {
+      const db = await readDb();
+      const code = decodeURIComponent(publicQrMatch[1]);
+      const method = paymentMethodsWithOverrides(db)
+        .find((entry) => entry.code === code && entry.code !== "PAYPAL" && entry.active !== false);
+      if (!method?.qrImage || !sendPaymentMethodQr(res, method.qrImage)) {
+        return sendJson(res, 404, { error: "QR no encontrado." });
+      }
+      return;
     }
 
     if (req.method === "POST" && pathname === "/api/xiaomi-frp/orders") {
@@ -700,17 +755,13 @@ export function createXiaomiFrpRoutes({
           })).filter((field) => field.label && field.value);
         }
         if (input.qrImage === null) entry.qrImage = null;
-        if (input.qrImage && /^data:image\/(png|jpe?g|webp);base64,/i.test(String(input.qrImage.dataUrl || ""))) {
-          entry.qrImage = {
-            name: cleanText(input.qrImage.name || `${code}-qr.png`, 90),
-            type: cleanText(input.qrImage.type || "image/png", 30),
-            size: Number(input.qrImage.size || 0),
-            dataUrl: String(input.qrImage.dataUrl),
-          };
-        }
+        if (input.qrImage) entry.qrImage = sanitizePaymentMethodQrImage(input.qrImage, code);
         entry.updatedAt = nowIso();
         entry.updatedBy = user.id;
-        audit(db, user.id, "XIAOMI_FRP_PAYMENT_METHOD_UPDATED", code, { active: entry.active });
+        audit(db, user.id, "XIAOMI_FRP_PAYMENT_METHOD_UPDATED", code, {
+          active: entry.active,
+          qrImage: input.qrImage === null ? "removed" : input.qrImage ? "stored_file" : "unchanged",
+        });
         await writeDb(db);
         publishOperator(db, "payment_method_updated");
         return sendJson(res, 200, { paymentMethods: paymentMethodsWithOverrides(db).filter((method) => method.code !== "PAYPAL").map(publicPaymentMethod) });

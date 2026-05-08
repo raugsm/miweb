@@ -397,8 +397,49 @@ function finalImageEntries(db) {
   return entries;
 }
 
+function paymentMethodQrOwnerId(code) {
+  return uuidFromSeed(`payment-method-qr:${String(code || "").trim()}`);
+}
+
+function paymentMethodQrUrl(code) {
+  return `/api/xiaomi-frp/payment-methods/${encodeURIComponent(String(code || ""))}/qr`;
+}
+
+function paymentMethodQrEntries(db) {
+  const overrides = Array.isArray(db?.pricingConfig?.paymentMethodOverrides)
+    ? db.pricingConfig.paymentMethodOverrides
+    : [];
+  return overrides
+    .filter((override) => override?.code && override?.qrImage && typeof override.qrImage === "object")
+    .map((override) => ({
+      code: String(override.code),
+      ownerId: paymentMethodQrOwnerId(override.code),
+      image: {
+        ...override.qrImage,
+        url: override.qrImage.url || paymentMethodQrUrl(override.code),
+      },
+    }));
+}
+
 function fileDigest(value) {
-  return stringValue(value?.hash || value?.sha256).trim();
+  const explicitDigest = stringValue(value?.hash || value?.sha256).trim();
+  if (explicitDigest) return explicitDigest;
+  const dataUrl = stringValue(value?.dataUrl);
+  return dataUrl ? sha256(dataUrl) : "";
+}
+
+function paymentMethodOverrideLegacyJson(override) {
+  const legacy = sanitizeLegacyJson(override || {});
+  if (legacy.qrImage && typeof legacy.qrImage === "object") {
+    const digest = fileDigest(override.qrImage);
+    legacy.qrImage = {
+      ...legacy.qrImage,
+      hash: legacy.qrImage.hash || digest,
+      sha256: legacy.qrImage.sha256 || digest,
+      url: legacy.qrImage.url || paymentMethodQrUrl(override.code),
+    };
+  }
+  return jsonb(legacy);
 }
 
 function proofRelationId(entry, digest) {
@@ -810,7 +851,7 @@ function buildImportPlan(db, sourceName, sourceSha256) {
       custom_message: stringValue(override.customMessage),
       updated_at: timestampOrNull(override.updatedAt),
       updated_by: actorUuid(override.updatedBy, userIds, warnings, { table: "payment_method_overrides", field: "updated_by", id: override.code, target: "operator_users" }),
-      legacy_json: legacyJson(override),
+      legacy_json: paymentMethodOverrideLegacyJson(override),
     });
   }
 
@@ -1015,8 +1056,26 @@ function buildImportPlan(db, sourceName, sourceSha256) {
     addStoredFile({ digest, ownerType: "FRP_JOB", ownerId: entry.jobId, purpose: "final_image", file: entry.image });
   }
 
+  const paymentMethodQrs = paymentMethodQrEntries(db);
+  let paymentMethodQrMissingHash = 0;
+  for (const entry of paymentMethodQrs) {
+    const digest = fileDigest(entry.image);
+    if (!digest) {
+      paymentMethodQrMissingHash += 1;
+      continue;
+    }
+    addStoredFile({
+      digest,
+      ownerType: "PAYMENT_METHOD_QR",
+      ownerId: entry.ownerId,
+      purpose: "payment_method_qr",
+      file: entry.image,
+    });
+  }
+
   if (proofMissingHash) warnings.push({ code: "paymentProofsMissingDigest", count: proofMissingHash });
   if (finalImageMissingHash) warnings.push({ code: "finalImagesMissingDigest", count: finalImageMissingHash });
+  if (paymentMethodQrMissingHash) warnings.push({ code: "paymentMethodQrsMissingDigest", count: paymentMethodQrMissingHash });
   rows.stored_files.push(...storedFiles.values());
 
   for (const entry of proofs) {

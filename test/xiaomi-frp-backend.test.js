@@ -7,6 +7,10 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import {
+  buildPostgresLegacyPlan,
+  POSTGRES_COLLECTION_NAMES,
+} from "../server/db/postgres-legacy-plan.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "..");
@@ -40,6 +44,30 @@ test("xiaomi frp backend supports public order flow and operator actions", { tim
       operatorPin: server.setupToken,
     });
     assert.equal(response.status, 200);
+
+    const qrDataUrl = `data:image/png;base64,${onePixelPng}`;
+    response = await http.request("PATCH", "/api/xiaomi-frp/operator/payment-methods/PE_YAPE_BRYAMS", {
+      qrImage: {
+        name: "yape-qr.png",
+        type: "image/png",
+        size: 68,
+        dataUrl: qrDataUrl,
+      },
+    });
+    assert.equal(response.status, 200);
+    const yapeMethod = response.data.paymentMethods.find((method) => method.code === "PE_YAPE_BRYAMS");
+    assert.ok(yapeMethod?.qrImage);
+    assert.equal(yapeMethod.qrImage.url, "/api/xiaomi-frp/payment-methods/PE_YAPE_BRYAMS/qr");
+    assert.equal(Object.hasOwn(yapeMethod.qrImage, "dataUrl"), false);
+    assert.equal(yapeMethod.qrImage.sha256.length, 64);
+
+    const qrResponse = await fetch(`${server.baseUrl}/api/xiaomi-frp/payment-methods/PE_YAPE_BRYAMS/qr`, {
+      signal: AbortSignal.timeout(10_000),
+    });
+    assert.equal(qrResponse.status, 200);
+    assert.equal(qrResponse.headers.get("content-type"), "image/png");
+    const qrBytes = Buffer.from(await qrResponse.arrayBuffer());
+    assert.ok(qrBytes.length > 0);
 
     response = await http.request("PATCH", "/api/pricing/exchange-rates/peru", { ratePerUsdt: 3.75 });
     assert.equal(response.status, 200);
@@ -116,6 +144,40 @@ test("xiaomi frp backend supports public order flow and operator actions", { tim
   } finally {
     await server.stop();
   }
+});
+
+test("xiaomi frp payment method QR writes to stored_files in postgres plan", () => {
+  const db = Object.fromEntries(POSTGRES_COLLECTION_NAMES.map((name) => [name, []]));
+  db.customerCounters = {};
+  db.ticketCounters = {};
+  db.frpCounters = {};
+  db.pricingConfig = {
+    exchangeRates: [],
+    serviceRules: [],
+    frpPricing: { policy: {}, providers: [] },
+    paymentMethodOverrides: [
+      {
+        code: "PE_YAPE_BRYAMS",
+        active: true,
+        customMessage: "",
+        qrImage: {
+          name: "yape-qr.png",
+          type: "image/png",
+          size: 68,
+          dataUrl: `data:image/png;base64,${onePixelPng}`,
+        },
+      },
+    ],
+  };
+  const plan = buildPostgresLegacyPlan(db, "test", "test-sha");
+  const qrFile = plan.rows.stored_files.find((row) => row.owner_type === "PAYMENT_METHOD_QR");
+  assert.ok(qrFile);
+  assert.equal(qrFile.purpose, "payment_method_qr");
+  assert.match(qrFile.legacy_data_url, /^data:image\/png;base64,/);
+  const override = plan.rows.payment_method_overrides.find((row) => row.code === "PE_YAPE_BRYAMS");
+  const overrideLegacy = JSON.parse(override.legacy_json);
+  assert.equal(overrideLegacy.qrImage.url, "/api/xiaomi-frp/payment-methods/PE_YAPE_BRYAMS/qr");
+  assert.equal(Object.hasOwn(overrideLegacy.qrImage, "dataUrl"), false);
 });
 
 async function startServer() {

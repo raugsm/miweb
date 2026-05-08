@@ -1,5 +1,7 @@
 begin;
 
+set local search_path = ariad, public;
+
 insert into service_pricing_rules
   (service_code, pricing_mode, base_cost_usdt, margin_usdt, auth_cost_usdt,
    critical_cost_usdt, tool_cost_usdt, server_cost_usdt,

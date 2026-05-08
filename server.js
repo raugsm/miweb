@@ -648,10 +648,16 @@ function normalizePaymentMethodOverrides(rawOverrides = []) {
           })).filter((field) => field.label && field.value)
         : undefined,
       qrImage: entry.qrImage && typeof entry.qrImage === "object" ? {
+        id: String(entry.qrImage.id || ""),
         name: String(entry.qrImage.name || "").slice(0, 90),
         type: String(entry.qrImage.type || "").slice(0, 30),
         size: Number(entry.qrImage.size || 0),
+        hash: String(entry.qrImage.hash || entry.qrImage.sha256 || ""),
+        sha256: String(entry.qrImage.sha256 || entry.qrImage.hash || ""),
+        url: String(entry.qrImage.url || ""),
         dataUrl: String(entry.qrImage.dataUrl || ""),
+        createdAt: String(entry.qrImage.createdAt || ""),
+        updatedAt: String(entry.qrImage.updatedAt || ""),
       } : null,
       updatedAt: String(entry.updatedAt || ""),
       updatedBy: String(entry.updatedBy || ""),

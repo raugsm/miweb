@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { withPostgresClient } from "./postgres.js";
 
 export const POSTGRES_TARGET_TABLES = [
@@ -89,6 +90,26 @@ function numberValue(value, fallback = 0) {
   return Number.isFinite(number) ? number : fallback;
 }
 
+function sha256(value) {
+  return crypto.createHash("sha256").update(value).digest("hex");
+}
+
+function uuidFromSeed(seed) {
+  const bytes = Buffer.from(sha256(seed).slice(0, 32), "hex");
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = bytes.toString("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+}
+
+function paymentMethodQrOwnerId(code) {
+  return uuidFromSeed(`payment-method-qr:${String(code || "").trim()}`);
+}
+
+function paymentMethodQrUrl(code) {
+  return `/api/xiaomi-frp/payment-methods/${encodeURIComponent(String(code || ""))}/qr`;
+}
+
 function setIfPresent(target, key, value) {
   if (value === undefined || value === null) return target;
   target[key] = value;
@@ -127,6 +148,62 @@ async function readLegacyCollection(client, table, orderBy = "id asc") {
   return (await readTable(client, table, orderBy)).map(legacyObject);
 }
 
+async function hydratePaymentMethodQrFiles(client, overrides) {
+  const entries = Array.isArray(overrides) ? overrides : [];
+  if (!entries.length) return entries;
+  const ownerIds = Array.from(new Set(entries.map((entry) => paymentMethodQrOwnerId(entry.code)).filter(Boolean)));
+  const hashes = Array.from(new Set(entries.map((entry) => String(entry.qrImage?.sha256 || entry.qrImage?.hash || "").trim()).filter(Boolean)));
+  if (!ownerIds.length && !hashes.length) return entries;
+  const result = await client.query(
+    `
+      select
+        owner_id,
+        name,
+        content_type,
+        size_bytes,
+        sha256,
+        legacy_data_url,
+        created_at,
+        legacy_json as file_legacy_json
+      from stored_files
+      where owner_type = 'PAYMENT_METHOD_QR'
+        and purpose = 'payment_method_qr'
+        and (owner_id = any($1::uuid[]) or sha256 = any($2::text[]))
+      order by created_at desc nulls last, id asc
+    `,
+    [ownerIds, hashes],
+  );
+  const byOwner = new Map();
+  const byHash = new Map();
+  for (const row of result.rows) {
+    const ownerId = String(row.owner_id || "");
+    const hash = String(row.sha256 || "");
+    if (ownerId && !byOwner.has(ownerId)) byOwner.set(ownerId, row);
+    if (hash && !byHash.has(hash)) byHash.set(hash, row);
+  }
+  for (const override of entries) {
+    const existing = isObject(override.qrImage) ? override.qrImage : {};
+    const hash = String(existing.sha256 || existing.hash || "").trim();
+    const row = byHash.get(hash) || byOwner.get(paymentMethodQrOwnerId(override.code));
+    if (!row) continue;
+    const fileLegacy = isObject(row.file_legacy_json) ? row.file_legacy_json : {};
+    const qrImage = {
+      ...existing,
+      name: existing.name || fileLegacy.name || row.name || "",
+      type: existing.type || fileLegacy.type || fileLegacy.contentType || row.content_type || "",
+      size: existing.size || fileLegacy.size || row.size_bytes || 0,
+      hash: hash || fileLegacy.hash || fileLegacy.sha256 || row.sha256 || "",
+      sha256: hash || fileLegacy.sha256 || fileLegacy.hash || row.sha256 || "",
+      url: existing.url || paymentMethodQrUrl(override.code),
+      createdAt: existing.createdAt || fileLegacy.createdAt || isoOrEmpty(row.created_at),
+      updatedAt: existing.updatedAt || fileLegacy.updatedAt || isoOrEmpty(row.created_at),
+    };
+    setIfPresent(qrImage, "dataUrl", row.legacy_data_url || fileLegacy.dataUrl || "");
+    override.qrImage = qrImage;
+  }
+  return entries;
+}
+
 async function readOperatorDevices(client) {
   const rows = await readTable(client, "operator_devices", "created_at asc, id asc");
   const adminRows = await readTable(client, "operator_device_admin_users", "created_at asc, user_id asc");
@@ -153,6 +230,7 @@ async function readPricingConfig(client) {
   const exchangeRates = await readLegacyCollection(client, "exchange_rates", "rate_key asc");
   const serviceRules = await readLegacyCollection(client, "service_pricing_rules", "service_code asc");
   const paymentMethodOverrides = await readLegacyCollection(client, "payment_method_overrides", "code asc");
+  await hydratePaymentMethodQrFiles(client, paymentMethodOverrides);
   const providerRows = await readTable(client, "frp_pricing_providers", "priority asc, id asc");
   const providers = providerRows.map((row) => ({
     ...legacyObject(row),

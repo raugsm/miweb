@@ -168,7 +168,27 @@ export function paymentMethodsForCountry(methods, countryIso) {
     .filter((method) => method.globalOption || (country && method.country === country));
 }
 
+export function qrUrlForPaymentMethod(code) {
+  return `/api/xiaomi-frp/payment-methods/${encodeURIComponent(String(code || ""))}/qr`;
+}
+
+function publicQrImage(qrImage, code) {
+  if (!qrImage || typeof qrImage !== "object") return null;
+  const sha256 = String(qrImage.sha256 || qrImage.hash || "").trim();
+  const url = String(qrImage.url || qrUrlForPaymentMethod(code || "")).trim();
+  if (!sha256) return null;
+  return {
+    name: String(qrImage.name || "").trim(),
+    type: String(qrImage.type || qrImage.contentType || "").trim(),
+    size: Number(qrImage.size || qrImage.sizeBytes || 0) || 0,
+    sha256,
+    url,
+    updatedAt: String(qrImage.updatedAt || qrImage.createdAt || "").trim(),
+  };
+}
+
 export function publicPaymentMethod(method) {
+  const qrImage = publicQrImage(method.qrImage, method.code);
   return {
     code: method.code,
     label: method.label,
@@ -178,8 +198,8 @@ export function publicPaymentMethod(method) {
     amountMode: method.amountMode || "decimal",
     fields: Array.isArray(method.fields) ? method.fields : [],
     details: Array.isArray(method.details) ? method.details : [],
-    qrImageUrl: method.qrImageUrl || "",
-    qrImage: method.qrImage || null,
+    qrImageUrl: qrImage?.url || method.qrImageUrl || "",
+    qrImage,
     customMessage: method.customMessage || "",
     globalOption: Boolean(method.globalOption),
   };
