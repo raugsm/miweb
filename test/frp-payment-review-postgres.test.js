@@ -818,6 +818,49 @@ test("FRP serializer exposes approved operatorOrders with stable short codes", (
   assert.equal(state.operatorOrders[0].customerId, "customer-7");
 });
 
+test("FRP serializer flags guest portal orders for operator badge", () => {
+  const now = new Date().toISOString();
+  const { publicFrpState } = createTestFrpSerializers();
+  const db = {
+    users: [],
+    frpOrders: [{
+      id: "guest-frp-order",
+      code: "ORD-20260506-008",
+      portalOrderId: "guest-portal-order",
+      clientId: "internal-guest",
+      clientName: "Cliente invitado",
+      country: "PE",
+      workChannel: "WHATSAPP_3",
+      quantity: 1,
+      paymentStatus: "COMPROBANTE_RECIBIDO",
+      orderStatus: "PAGO_VALIDADO",
+      checklist: { paymentValidated: true },
+      paymentReviewedAt: now,
+      createdAt: now,
+      updatedAt: now,
+    }],
+    frpJobs: [{
+      id: "guest-job-1",
+      code: "ORD-20260506-008-1",
+      orderId: "guest-frp-order",
+      sequence: 1,
+      totalJobs: 1,
+      status: "ESPERANDO_PREPARACION",
+      workChannel: "WHATSAPP_3",
+      createdAt: now,
+      updatedAt: now,
+    }],
+    customerOrders: [{ id: "guest-portal-order", code: "CL-20260506-008", clientId: "guest-customer", priceLockedAt: now }],
+    customerClients: [{ id: "guest-customer", accountType: "guest" }],
+  };
+
+  const state = publicFrpState(db, { id: "tech-1", role: "ATENCION_TECNICA" });
+
+  assert.equal(state.orders[0].isGuest, true);
+  assert.equal(state.jobs[0].order.isGuest, true);
+  assert.equal(state.operatorOrders[0].isGuest, true);
+});
+
 test("FRP serializer hides no-proof drafts from operatorOrders", () => {
   const now = new Date().toISOString();
   const { publicFrpState } = createTestFrpSerializers();

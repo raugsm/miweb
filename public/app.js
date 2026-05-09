@@ -1896,6 +1896,7 @@ function frpOpsV2RenderOperatorOrderCard(order, { swapInProgress }) {
           <div class="frp-ops-v2-order-card-detail">${escapeHtml(frpOpsV2OperatorOrderDetail(order, item))}</div>
         </div>
         <div class="frp-ops-v2-order-card-badges">
+          ${order.isGuest ? '<span class="frp-ops-v2-order-chip is-guest">Guest</span>' : ""}
           <span class="frp-ops-v2-order-chip">${escapeHtml(quantity)} equipo${quantity === 1 ? "" : "s"}</span>
           <span class="frp-ops-v2-order-status ${statusMeta.className}">${escapeHtml(statusMeta.label)}</span>
         </div>

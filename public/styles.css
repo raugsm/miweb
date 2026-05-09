@@ -2612,6 +2612,12 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; }
   border: 1px solid #BBD4FF;
 }
 
+.frp-ops-v2-order-chip.is-guest {
+  color: #374151;
+  background: #F3F4F6;
+  border-color: #D1D5DB;
+}
+
 .frp-ops-v2-order-status.is-approved {
   color: #047857;
   background: #DFF6EC;

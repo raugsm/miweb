@@ -114,6 +114,7 @@ export function createFrpSerializers({
     const customerClient = portalOrder?.clientId
       ? db.customerClients.find((candidate) => candidate.id === portalOrder.clientId)
       : null;
+    const isGuest = customerClient?.accountType === "guest";
     const status = operatorOrderStatus(order, jobs, portalOrder);
     const approvedAt = order.paymentReviewedAt || portalOrder?.paymentReviewedAt || order.priceLockedAt || portalOrder?.priceLockedAt || "";
     const noConnectionAlertAt = order.noConnectionAlertAt || portalOrder?.noConnectionAlertAt || isoAfter(approvedAt, noConnectionWindowMs);
@@ -127,6 +128,7 @@ export function createFrpSerializers({
       portalOrderCode: portalOrder?.code || "",
       customerId: portalOrder?.clientId || order.clientId || "",
       clientId: order.clientId || "",
+      isGuest,
       customerStatus: customerClient?.status || "",
       clientName: order.clientName,
       clientWhatsapp: order.clientWhatsapp || "",
@@ -168,9 +170,16 @@ export function createFrpSerializers({
   function publicFrpOrder(order, db) {
     const creator = db.users.find((user) => user.id === order.createdBy);
     const jobs = db.frpJobs.filter((job) => job.orderId === order.id);
+    const portalOrder = order.portalOrderId
+      ? db.customerOrders.find((candidate) => candidate.id === order.portalOrderId)
+      : null;
+    const customerClient = portalOrder?.clientId
+      ? db.customerClients.find((candidate) => candidate.id === portalOrder.clientId)
+      : null;
     return {
       ...order,
       shortCode: publicShortOrderCode(order),
+      isGuest: customerClient?.accountType === "guest",
       createdByName: creator?.name || "Sistema",
       jobs: jobs.map((job) => publicFrpJob(job, db, false, order)),
       jobCounts: frpJobStatuses.reduce((acc, status) => {
@@ -217,6 +226,7 @@ export function createFrpSerializers({
         quantity: Number(order.quantity || 1),
         technicianId: frozenRedirectorId,
         redirectorId: frozenRedirectorId,
+        isGuest: customerClient?.accountType === "guest",
         customerStatus: customerClient?.status || "",
         portalOrderCode: portalOrder?.code || "",
         processCode,

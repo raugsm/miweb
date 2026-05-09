@@ -191,6 +191,26 @@ test("portal proof upload picker keeps mobile-safe file input contract", async (
   assert.match(panel3Css, /\.panel-3-proof-input\s*{[\s\S]*clip-path:\s*inset\(50%\);/);
 });
 
+test("portal guest module is isolated, mobile-safe, and below component size cap", async () => {
+  const portalHtml = await readFile(new URL("../public/portal.html", import.meta.url), "utf8");
+  const portalJs = await readFile(new URL("../public/portal.js", import.meta.url), "utf8");
+  const stateJs = await readFile(new URL("../public/portal-modules/state.js", import.meta.url), "utf8");
+  const guestJs = await readFile(new URL("../public/portal-modules/guest.js", import.meta.url), "utf8");
+  const guestClaimJs = await readFile(new URL("../public/portal-modules/guest-claim.js", import.meta.url), "utf8");
+
+  assert.match(portalHtml, /id="guestPanel"/);
+  assert.match(portalJs, /wireGuestEvents/);
+  assert.match(portalJs, /wireGuestClaimEvents/);
+  assert.match(stateJs, /guest:\s*null/);
+  assert.match(guestJs, /state\.guest/);
+  assert.doesNotMatch(guestJs, /state\.customer\s*=/);
+  assert.match(guestJs, /capture="environment"/);
+  assert.match(guestJs, /history\.replaceState/);
+  assert.ok(guestJs.split(/\r?\n/).length <= 300);
+  assert.match(guestClaimJs, /guestClaimCandidates/);
+  assert.doesNotMatch(guestClaimJs, /candidate\.whatsapp|whatsapp:/i);
+});
+
 test("portal Mis Ordenes follows the post-payment tracking contract", async () => {
   const ordersJs = await readFile(new URL("../public/portal-modules/orders.js", import.meta.url), "utf8");
   const orderStateJs = await readFile(new URL("../public/portal-modules/order-state.js", import.meta.url), "utf8");
@@ -329,6 +349,7 @@ test("operator workbench v3 layout keeps post-payment action hooks", async () =>
   assert.match(appJs, /frp-ops-v2-main-stack/);
   assert.match(appJs, /frp-ops-v2-side-stack/);
   assert.match(appJs, /data-frp-direct-finalize="\$\{escapeHtml\(item\?\.id \|\| ""\)\}"/);
+  assert.match(appJs, /order\.isGuest \? '<span class="frp-ops-v2-order-chip is-guest">Guest<\/span>' : ""/);
   assert.match(appJs, /data-frp-show-proof="\$\{escapeHtml\(order\.id\)\}"/);
   assert.match(appJs, /data-frp-notify-customer="\$\{escapeHtml\(order\.id\)\}"/);
   assert.match(appJs, /async function directFinalizeFrpJob\(jobId\)/);
@@ -338,6 +359,7 @@ test("operator workbench v3 layout keeps post-payment action hooks", async () =>
   assert.match(stylesCss, /\.frp-ops-v2-header\s*{[\s\S]*display:\s*none;/);
   assert.match(stylesCss, /\.frp-ops-v2-workspace\s*{[\s\S]*grid-template-columns:\s*repeat\(auto-fit, minmax\(min\(100%, 620px\), 1fr\)\);/);
   assert.match(stylesCss, /\.frp-ops-v2-order-card\.is-approved\s*{/);
+  assert.match(stylesCss, /\.frp-ops-v2-order-chip\.is-guest\s*{/);
   assert.match(stylesCss, /\.frp-ops-v2-order-status\.is-no-connection\s*{/);
   assert.match(stylesCss, /\.technician-widget-actions \.mini-btn\s*{[\s\S]*white-space:\s*nowrap;/);
 });
