@@ -8,6 +8,7 @@
 //     cuyo caso `renderPaymentPills` cae al país del perfil.
 export const state = {
   customer: null,
+  guest: null,
   catalog: null,
   activeTab: "login",
   pollTimer: null,

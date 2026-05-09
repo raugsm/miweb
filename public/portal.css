@@ -13,6 +13,7 @@
 @import url("./portal-styles/12-responsive.css");
 @import url("./portal-styles/13-panel-3.css");
 @import url("./portal-styles/14-panel-4.css");
+@import url("./portal-styles/15-guest.css");
 
 .portal-shell:has(.app-panel:not(.hidden)) {
   grid-template-columns: 1fr;

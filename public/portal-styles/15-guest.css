@@ -1,0 +1,146 @@
+.guest-panel {
+  grid-column: 1 / -1;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  padding: 24px;
+}
+
+.guest-panel.hidden {
+  display: none;
+}
+
+.guest-card {
+  display: grid;
+  gap: 18px;
+}
+
+.guest-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.guest-card h2,
+.guest-card h3,
+.guest-card p {
+  margin: 0;
+}
+
+.guest-account-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #cfe0fb;
+  border-radius: 8px;
+  background: #f4f8ff;
+  color: #1d3766;
+  font-weight: 800;
+}
+
+.guest-form {
+  display: grid;
+  gap: 14px;
+}
+
+@media (min-width: 768px) {
+  .guest-form {
+    grid-template-columns: minmax(0, 1.4fr) 130px minmax(180px, 0.8fr);
+    align-items: end;
+  }
+}
+
+.guest-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.guest-form input,
+.guest-form select {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+}
+
+.guest-form input:focus,
+.guest-form select:focus {
+  outline: 2px solid rgba(36, 114, 247, 0.22);
+  border-color: var(--blue);
+}
+
+.guest-proof-row {
+  display: grid;
+  gap: 10px;
+}
+
+.guest-total-card,
+.guest-order-card {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.guest-total-card strong,
+.guest-code {
+  color: var(--ink);
+  font-size: clamp(1.7rem, 6vw, 2.6rem);
+  line-height: 1;
+}
+
+.guest-order-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.guest-order-actions a,
+.guest-order-actions button,
+.guest-account-banner button {
+  min-height: 44px;
+}
+
+.guest-message {
+  margin: 0;
+}
+
+.guest-claim-banner {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 14px;
+  border: 1px solid #cfe0fb;
+  border-radius: 8px;
+  background: #f4f8ff;
+}
+
+.guest-claim-banner strong,
+.guest-claim-banner span {
+  display: block;
+}
+
+.guest-claim-banner span {
+  margin-top: 4px;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.guest-claim-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}

@@ -13,6 +13,7 @@ import {
 import { $, $$, copyText, setMessage } from "./dom.js";
 import { activeOrderForFlow, notifyEquipoConectado } from "./flow-state.js";
 import { checkEligibilityHint, clampQuantityWithFlag, parseItems, setQuantity, syncDetectedItems } from "./frp.js";
+import { renderGuest } from "./guest.js";
 import { refreshOrdersSilently, setOrdersLiveStatus, stopOrdersLive } from "./live-orders.js";
 import { orderNeedsPaymentProof } from "./order-state.js";
 import {
@@ -102,6 +103,11 @@ function wirePasswordToggles() {
 export function wireEvents() {
   wirePasswordToggles();
   wireGlobalFileDropGuard();
+  document.addEventListener("ariad:customer-updated", () => {
+    renderCatalog();
+    renderCustomer();
+    renderGuest();
+  });
   $$(".tab").forEach((button) => button.addEventListener("click", () => setTab(button.dataset.tab)));
   $("#loginForm").addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -113,6 +119,7 @@ export function wireEvents() {
       state.catalog = payload.catalog;
       renderCatalog();
       renderCustomer();
+      renderGuest();
     } catch (error) {
       setMessage($("#authMessage"), error.message, "error");
     }
@@ -138,6 +145,7 @@ export function wireEvents() {
         state.catalog = payload.catalog;
         renderCatalog();
         renderCustomer();
+        renderGuest();
       }
       setMessage($("#authMessage"), payload.message || "Si los datos son validos, revisa tu correo para continuar.", "success");
       resetTurnstile("register");
@@ -465,6 +473,7 @@ export function wireEvents() {
     state.customer = null;
     stopOrdersLive();
     renderCustomer();
+    renderGuest();
     setTab("login");
   });
 }

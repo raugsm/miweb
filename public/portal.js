@@ -3,6 +3,8 @@ import { renderCustomer } from "./portal-modules/auth-forms.js?v=s16-fix007";
 import { applyEmailVerification } from "./portal-modules/deep-links.js?v=s19-verify001";
 import { setMessage, $ } from "./portal-modules/dom.js?v=s16-fix007";
 import { wireEvents } from "./portal-modules/events.js?v=s16-fix009";
+import { wireGuestClaimEvents } from "./portal-modules/guest-claim.js?v=paso2c7";
+import { wireGuestEvents } from "./portal-modules/guest.js?v=paso2c6";
 import { configureOrderRenderer } from "./portal-modules/orders.js?v=s16-fix007";
 import { loadSession } from "./portal-modules/session.js?v=s16-fix007";
 
@@ -21,6 +23,8 @@ try {
 
 configureOrderRenderer({ onCustomerUpdate: renderCustomer });
 wireEvents();
+wireGuestEvents();
+wireGuestClaimEvents();
 
 async function bootPortal() {
   const hasEmailVerificationToken = new URLSearchParams(location.search).has("verifyEmail");
