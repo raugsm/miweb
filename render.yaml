@@ -4,6 +4,7 @@ services:
     runtime: node
     plan: starter
     buildCommand: npm install
+    preDeployCommand: npm run postgres:migrate:apply
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:
