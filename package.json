@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test test/phase3a.contract.test.js test/phase4.smoke.test.js test/phase5.technician-swap.test.js test/postgres-storage-guard.test.js test/postgres-auth.test.js test/portal-granular-auth.test.js test/audit-events-granular.test.js test/frp-payment-review-postgres.test.js test/portal-customer-confirm-postgres.test.js test/payment-verification-shadow.test.js test/web-hardening-cloud-sync.test.js",
+    "test": "node --test test/phase3a.contract.test.js test/phase4.smoke.test.js test/phase5.technician-swap.test.js test/postgres-storage-guard.test.js test/postgres-auth.test.js test/portal-granular-auth.test.js test/operator-granular-auth.test.js test/audit-events-granular.test.js test/frp-payment-review-postgres.test.js test/portal-customer-confirm-postgres.test.js test/payment-verification-shadow.test.js test/web-hardening-cloud-sync.test.js",
     "test:smoke": "node --test test/phase4.smoke.test.js",
     "postgres:check": "node scripts/postgres/check-connection.mjs",
     "postgres:migrate": "node scripts/postgres/apply-migrations.mjs",

@@ -113,7 +113,12 @@ import { createFrpRoutes } from "./server/frp/frp-routes.js";
 import { createPortalSerializers } from "./server/portal/serializers.js";
 import { createPortalRoutes } from "./server/portal/portal-routes.js";
 import { createStorage } from "./server/db/storage.js";
-import { customerSessionLookup } from "./server/db/postgres-auth.js";
+import {
+  customerSessionLookup,
+  operatorLoginAttempt,
+  operatorSessionDelete,
+  operatorSessionLookup,
+} from "./server/db/postgres-auth.js";
 import { confirmPortalCustomerPostgres } from "./server/db/postgres-customer-admin.js";
 import { insertAuditEvent } from "./server/db/postgres-audit.js";
 import {
@@ -749,6 +754,10 @@ function envFlag(value) {
 
 function useGranularCustomerAuth() {
   return storage.driver === "postgres" && envFlag(process.env.POSTGRES_AUTH_GRANULAR_CUSTOMER);
+}
+
+function useGranularOperatorAuth() {
+  return storage.driver === "postgres" && envFlag(process.env.POSTGRES_AUTH_GRANULAR_OPERATOR);
 }
 
 function releaseCommitFromEnv(env = process.env) {
@@ -3197,6 +3206,14 @@ function renewExpiredFavorableLocks(db) {
 async function getCurrentUser(req) {
   const token = getCookie(req, "ariad_session");
   if (!token) return null;
+  if (useGranularOperatorAuth()) {
+    const deviceToken = getCookie(req, deviceCookieName);
+    return operatorSessionLookup(hashToken(token), deviceToken ? hashToken(deviceToken) : "", {
+      sessionVersion,
+      trustedDeviceVersion,
+      presenceWriteIntervalMs,
+    });
+  }
   const db = await readDb();
   const now = Date.now();
   const before = db.sessions.length;
@@ -4183,6 +4200,9 @@ async function handleApi(req, res, pathname) {
   }
 
   if (req.method === "GET" && pathname === "/api/session") {
+    // With POSTGRES_AUTH_GRANULAR_OPERATOR=1, getCurrentUser() above validates
+    // identity via SQL granular. The dashboard payload below intentionally stays
+    // legacy until Fase C migrates orders/pagos/FRP panel reads.
     const db = await readDb();
     const setupRequired = db.users.length === 0 && Boolean(setupToken);
     if (!user) return sendJson(res, 200, { user: null, setupRequired });
@@ -4416,6 +4436,57 @@ async function handleApi(req, res, pathname) {
     const input = await parseJson(req);
     const email = normalizeEmail(input.email);
     const password = String(input.password || "");
+    if (useGranularOperatorAuth()) {
+      let deviceToken = getCookie(req, deviceCookieName);
+      if (!deviceToken) deviceToken = crypto.randomBytes(32).toString("base64url");
+      const token = crypto.randomBytes(32).toString("base64url");
+      const deviceInfo = {
+        tokenHash: hashToken(deviceToken),
+        userAgent: cleanText(req.headers["user-agent"] || "unknown", 180),
+        ipHash: hashToken(clientIp(req)),
+        nowIso: nowIso(),
+        nowMs: Date.now(),
+      };
+      const result = await operatorLoginAttempt(email, password, deviceInfo, {
+        operatorPin: String(input.operatorPin || ""),
+        setupToken,
+        verifyPassword,
+        sessionTokenHash: hashToken(token),
+        sessionVersion,
+        trustedDeviceVersion,
+        sessionMaxAgeSeconds,
+        deviceApprovalExpiresMs,
+        rateLimitOptions: {
+          bucket: "operator_login",
+          maxAttempts: maxOperatorLoginFailuresPerWindow,
+        },
+      });
+      if (result.status === "rate_limited") return sendJson(res, 429, { error: "Demasiados intentos. Intenta mas tarde." });
+      if (result.status === "invalid_credentials") return sendJson(res, 401, { error: "Credenciales invalidas." });
+      if (result.status === "inactive") return sendJson(res, 403, { error: "Cuenta pendiente de activacion por administrador." });
+      if (result.status === "admin_setup_pin_required") {
+        res.setHeader("Set-Cookie", cookieHeader(deviceCookieName, deviceToken, deviceMaxAgeSeconds, { sameSite: "Strict" }));
+        return sendJson(res, 409, {
+          error: result.pinLabel === "PIN operativo"
+            ? "PIN operativo requerido para solicitar aprobacion de este dispositivo."
+            : "Codigo de instalacion requerido para autorizar el primer dispositivo admin.",
+          code: "ADMIN_DEVICE_PIN_REQUIRED",
+          pinLabel: result.pinLabel || "PIN operativo",
+        });
+      }
+      if (result.status === "admin_approval_required") {
+        res.setHeader("Set-Cookie", cookieHeader(deviceCookieName, deviceToken, deviceMaxAgeSeconds, { sameSite: "Strict" }));
+        return sendJson(res, 409, {
+          error: "Solicitud enviada. Aprueba este dispositivo desde una PC admin ya autorizada.",
+          code: "ADMIN_DEVICE_APPROVAL_REQUIRED",
+        });
+      }
+      res.setHeader("Set-Cookie", [
+        cookieHeader("ariad_session", token, sessionMaxAgeSeconds, { sameSite: "Strict" }),
+        cookieHeader(deviceCookieName, deviceToken, deviceMaxAgeSeconds, { sameSite: "Strict" }),
+      ]);
+      return sendJson(res, 200, { user: publicUser(result.user) });
+    }
     const db = await readDb();
     const loginRate = portalRateLimitState(db, req, "operator_login", email);
     const existing = db.users.find((candidate) => candidate.email === email);
@@ -4743,6 +4814,14 @@ async function handleApi(req, res, pathname) {
 
   if (req.method === "POST" && pathname === "/api/logout") {
     const token = getCookie(req, "ariad_session");
+    if (useGranularOperatorAuth()) {
+      if (token) {
+        await operatorSessionDelete(hashToken(token));
+        if (user?.id) closeFrpOpsStreamsForUser(user.id, null, "operator_logged_out", "Sesion cerrada.");
+      }
+      res.setHeader("Set-Cookie", `ariad_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${isProduction ? "; Secure" : ""}`);
+      return sendNoContent(res);
+    }
     if (token) {
       const db = await readDb();
       db.sessions = db.sessions.filter((session) => session.tokenHash !== hashToken(token));
