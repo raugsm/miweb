@@ -1,4 +1,10 @@
 import { assessPaymentProofsForAutomation } from "../payments/payment-verification.js";
+import {
+  customerLoginAttempt as defaultCustomerLoginAttempt,
+  customerSessionBootstrap as defaultCustomerSessionBootstrap,
+  customerSessionDelete as defaultCustomerSessionDelete,
+  customerSessionLookup as defaultCustomerSessionLookup,
+} from "../db/postgres-auth.js";
 
 export function createPortalRoutes({
   addAdminConfigStream,
@@ -22,6 +28,10 @@ export function createPortalRoutes({
   customerSessionCookieName,
   customerSessionMaxAgeSeconds,
   customerSessionVersion,
+  customerLoginAttempt = defaultCustomerLoginAttempt,
+  customerSessionBootstrap = defaultCustomerSessionBootstrap,
+  customerSessionDelete = defaultCustomerSessionDelete,
+  customerSessionLookup = defaultCustomerSessionLookup,
   defaultCustomerBenefit,
   enforcePortalRateLimit,
   ensureCustomerDevice,
@@ -74,6 +84,7 @@ export function createPortalRoutes({
   validateTurnstileIfConfigured,
   verifyPassword,
   writeDb,
+  useGranularCustomerAuth = () => false,
 }) {
   function markCustomerFrpJobReady(job, timestamp) {
     if (!job) return false;
@@ -182,6 +193,34 @@ export function createPortalRoutes({
   }
 
   if (req.method === "GET" && pathname === "/api/portal/session") {
+    if (useGranularCustomerAuth()) {
+      let deviceToken = getCookie(req, customerDeviceCookieName);
+      if (!deviceToken) deviceToken = crypto.randomBytes(32).toString("base64url");
+      const sessionToken = getCookie(req, customerSessionCookieName);
+      const deviceTokenHash = hashToken(deviceToken);
+      const context = sessionToken
+        ? await customerSessionLookup(hashToken(sessionToken), deviceTokenHash, {
+          sessionVersion: customerSessionVersion,
+          presenceWriteIntervalMs: 10 * 1000,
+          nowMs: Date.now(),
+          nowIso: nowIso(),
+        })
+        : { user: null, client: null, device: null };
+      const bootstrap = context?.user && context?.client
+        ? await customerSessionBootstrap(context.user, context.client, context.device, {
+          publicCustomerState,
+          publicPortalCatalog,
+        })
+        : await customerSessionBootstrap(null, null, null, {
+          publicCustomerState,
+          publicPortalCatalog,
+        });
+      res.setHeader("Set-Cookie", cookieHeader(customerDeviceCookieName, deviceToken, customerDeviceMaxAgeSeconds));
+      return sendJson(res, 200, {
+        customer: bootstrap.customer,
+        catalog: bootstrap.catalog,
+      });
+    }
     const context = await getCurrentCustomerContext(req);
     res.setHeader("Set-Cookie", cookieHeader(customerDeviceCookieName, context.deviceToken, customerDeviceMaxAgeSeconds));
     return sendJson(res, 200, {
@@ -374,6 +413,50 @@ export function createPortalRoutes({
     const input = await parseJson(req);
     const email = normalizeEmail(input.email);
     const password = String(input.password || "");
+    if (useGranularCustomerAuth()) {
+      let deviceToken = getCookie(req, customerDeviceCookieName);
+      if (!deviceToken) deviceToken = crypto.randomBytes(32).toString("base64url");
+      const token = crypto.randomBytes(32).toString("base64url");
+      const deviceInfo = {
+        tokenHash: hashToken(deviceToken),
+        userAgent: cleanText(req.headers["user-agent"] || "unknown", 180),
+        ipHash: hashToken(clientIp(req)),
+        nowIso: nowIso(),
+        nowMs: Date.now(),
+      };
+      const result = await customerLoginAttempt(email, password, deviceInfo, {
+        verifyPassword,
+        sessionTokenHash: hashToken(token),
+        sessionVersion: customerSessionVersion,
+        sessionMaxAgeSeconds: customerSessionMaxAgeSeconds,
+        rateLimitOptions: {
+          bucket: "portal_login",
+          maxAttempts: maxPortalRegisterRequestsPerWindow,
+        },
+      });
+      res.setHeader("Set-Cookie", cookieHeader(customerDeviceCookieName, deviceToken, customerDeviceMaxAgeSeconds));
+      if (result.status === "rate_limited") {
+        return sendJson(res, 429, { error: "Demasiados intentos. Intenta mas tarde." });
+      }
+      if (result.status === "invalid_credentials") {
+        return sendJson(res, 401, { error: "Credenciales de cliente invalidas." });
+      }
+      if (result.status === "blocked") {
+        return sendJson(res, 403, { error: "Cuenta cliente bloqueada o no disponible." });
+      }
+      const bootstrap = await customerSessionBootstrap(result.user, result.client, result.device, {
+        publicCustomerState,
+        publicPortalCatalog,
+      });
+      res.setHeader("Set-Cookie", [
+        cookieHeader(customerSessionCookieName, token, customerSessionMaxAgeSeconds),
+        cookieHeader(customerDeviceCookieName, deviceToken, customerDeviceMaxAgeSeconds),
+      ]);
+      return sendJson(res, 200, {
+        customer: bootstrap.customer,
+        catalog: bootstrap.catalog,
+      });
+    }
     const db = await readDb();
     const { token: deviceToken, device } = ensureCustomerDevice(db, req);
     const rateOk = enforcePortalRateLimit(db, req, "portal_login", email, maxPortalRegisterRequestsPerWindow);
@@ -428,6 +511,11 @@ export function createPortalRoutes({
 
   if (req.method === "POST" && pathname === "/api/portal/logout") {
     const token = getCookie(req, customerSessionCookieName);
+    if (useGranularCustomerAuth()) {
+      if (token) await customerSessionDelete(hashToken(token));
+      res.setHeader("Set-Cookie", cookieHeader(customerSessionCookieName, "", 0));
+      return sendJson(res, 200, { message: "SesiÃ³n cliente cerrada." });
+    }
     const db = await readDb();
     if (token) {
       db.customerSessions = db.customerSessions.filter((session) => session.tokenHash !== hashToken(token));

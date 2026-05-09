@@ -113,6 +113,7 @@ import { createFrpRoutes } from "./server/frp/frp-routes.js";
 import { createPortalSerializers } from "./server/portal/serializers.js";
 import { createPortalRoutes } from "./server/portal/portal-routes.js";
 import { createStorage } from "./server/db/storage.js";
+import { customerSessionLookup } from "./server/db/postgres-auth.js";
 import { confirmPortalCustomerPostgres } from "./server/db/postgres-customer-admin.js";
 import { insertAuditEvent } from "./server/db/postgres-audit.js";
 import {
@@ -741,6 +742,14 @@ function defaultDb() {
 const storage = createStorage({ dataDir, defaultDb });
 // PostgreSQL runtime must not persist incidental full-snapshot rewrites from read/session paths.
 const runtimeSnapshotWritesEnabled = storage.driver !== "postgres";
+
+function envFlag(value) {
+  return ["1", "true", "yes"].includes(String(value || "").trim().toLowerCase());
+}
+
+function useGranularCustomerAuth() {
+  return storage.driver === "postgres" && envFlag(process.env.POSTGRES_AUTH_GRANULAR_CUSTOMER);
+}
 
 function releaseCommitFromEnv(env = process.env) {
   const raw = String(env.RENDER_GIT_COMMIT || env.RENDER_COMMIT || env.GIT_COMMIT || env.SOURCE_VERSION || "").trim();
@@ -3228,6 +3237,28 @@ async function getCurrentUser(req) {
 
 async function getCurrentCustomerContext(req) {
   const token = getCookie(req, customerSessionCookieName);
+  if (useGranularCustomerAuth()) {
+    let deviceToken = getCookie(req, customerDeviceCookieName);
+    if (!deviceToken) deviceToken = crypto.randomBytes(32).toString("base64url");
+    const lookup = token
+      ? await customerSessionLookup(hashToken(token), hashToken(deviceToken), {
+        sessionVersion: customerSessionVersion,
+        presenceWriteIntervalMs,
+      })
+      : { user: null, client: null, session: null, device: null };
+    // Auth identity is granular, but legacy portal mutation routes still need a
+    // full snapshot until Fase C migrates orders/pagos/FRP. Do not use this path
+    // for GET /api/portal/session; that endpoint has a fully granular branch.
+    const db = await readDb();
+    const user = lookup?.user
+      ? db.customerUsers.find((candidate) => candidate.id === lookup.user.id) || lookup.user
+      : null;
+    const client = lookup?.client
+      ? db.customerClients.find((candidate) => candidate.id === lookup.client.id) || lookup.client
+      : null;
+    const device = lookup?.device || (deviceToken ? db.customerDevices.find((candidate) => candidate.tokenHash === hashToken(deviceToken)) : null);
+    return { db, user, client, device, session: lookup?.session || null, deviceToken };
+  }
   const db = await readDb();
   const { token: deviceToken, device } = ensureCustomerDevice(db, req);
   let shouldWrite = true;
@@ -4006,6 +4037,7 @@ const handlePortalApi = createPortalRoutes({
   validateTurnstileIfConfigured,
   verifyPassword,
   writeDb,
+  useGranularCustomerAuth,
 });
 
 const handleFrpApi = createFrpRoutes({

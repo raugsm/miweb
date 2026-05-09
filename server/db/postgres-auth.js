@@ -1168,6 +1168,42 @@ async function readPricingConfig(client) {
 async function readCustomerBootstrapDb(client, user, customerClient, device) {
   const clientId = customerClient?.id || "";
   const masterClientId = customerClient?.masterClientId || "";
+  if (!clientId) {
+    const pricingConfig = await readPricingConfig(client);
+    return {
+      users: [],
+      sessions: [],
+      devices: [],
+      deviceApprovals: [],
+      customerClients: [],
+      customerUsers: [],
+      customerSessions: [],
+      customerDevices: device ? [device] : [],
+      customerRequests: [],
+      customerOrders: [],
+      customerOrderItems: [],
+      customerBenefits: [],
+      customerEmailVerificationTokens: [],
+      masterClients: [],
+      clientLinks: [],
+      clientLinkSuggestions: [],
+      paymentLedgerEntries: [],
+      dailyCloses: [],
+      dailyCloseLines: [],
+      dailyAdjustments: [],
+      portalRateLimits: [],
+      clients: [],
+      tickets: [],
+      frpOrders: [],
+      frpJobs: [],
+      frpProviderCostHistory: [],
+      frpPendingCostChanges: [],
+      passwordResetTokens: [],
+      passwordResetRequests: [],
+      audit: [],
+      pricingConfig,
+    };
+  }
   const orderResult = await client.query(
     `
       select *
