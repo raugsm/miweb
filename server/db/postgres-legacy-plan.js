@@ -66,6 +66,7 @@ const targetTables = [
   "customer_requests",
   "customer_orders",
   "customer_order_items",
+  "guest_session_tokens",
   "service_tickets",
   "stored_files",
   "payment_proofs",
@@ -111,6 +112,7 @@ const insertOrder = [
   "customer_requests",
   "customer_orders",
   "customer_order_items",
+  "guest_session_tokens",
   "service_tickets",
   "stored_files",
   "payment_proofs",
@@ -137,7 +139,7 @@ const columnsByTable = {
   password_reset_tokens: ["id", "user_id", "token_hash", "created_at", "expires_at", "used_at", "legacy_json"],
   password_reset_requests: ["id", "email_hash", "ip_hash", "created_at", "legacy_json"],
   master_clients: ["id", "display_name", "primary_whatsapp", "country", "primary_email", "status", "source", "merged_into_master_client_id", "merged_at", "created_at", "updated_at", "legacy_json"],
-  customer_clients: ["id", "master_client_id", "name", "whatsapp", "country", "whatsapp_country_iso", "whatsapp_detected_country", "status", "primary_email", "email_verified_at", "created_at", "updated_at", "legacy_json"],
+  customer_clients: ["id", "master_client_id", "name", "whatsapp", "country", "whatsapp_country_iso", "whatsapp_detected_country", "status", "primary_email", "email_verified_at", "account_type", "created_at", "updated_at", "legacy_json"],
   customer_users: ["id", "client_id", "name", "email", "password_hash", "role", "active", "email_verified_at", "created_at", "updated_at", "legacy_json"],
   internal_clients: ["id", "master_client_id", "name", "whatsapp", "country", "work_channel", "created_by", "created_by_actor", "created_at", "updated_at", "legacy_json"],
   client_links: ["id", "master_client_id", "source_type", "source_id", "confidence", "signals", "active", "unlinked_at", "unlinked_by", "unlinked_by_actor", "created_by", "created_by_actor", "created_at", "updated_at", "legacy_json"],
@@ -157,6 +159,7 @@ const columnsByTable = {
   customer_requests: ["id", "client_id", "master_client_id", "user_id", "service_code", "service_name", "channel", "status", "created_at", "updated_at", "legacy_json"],
   customer_orders: ["id", "code", "request_id", "client_id", "master_client_id", "user_id", "service_code", "internal_service_code", "service_name", "work_channel", "quantity", "unit_price_usdt", "total_price_usdt", "price_formatted", "pricing_snapshot", "payment_method", "payment_label", "public_status", "compatibility_review_required", "frp_order_id", "internal_client_id", "customer_connection_ready_at", "debt_amount_usdt", "debt_cleared_at", "note", "created_at", "updated_at", "legacy_json"],
   customer_order_items: ["id", "request_id", "order_id", "client_id", "master_client_id", "sequence", "original_text", "model", "imei", "status", "eligibility_status", "eligibility_detected_match", "eligibility_matched_alias", "eligibility_internal_reason", "eligibility_public_message", "frp_order_id", "frp_job_id", "created_at", "updated_at", "legacy_json"],
+  guest_session_tokens: ["id", "order_id", "client_id", "token_hash", "token_hint", "scope", "expires_at", "revoked_at", "last_seen_at", "created_at", "legacy_json"],
   service_tickets: ["id", "code", "client_id", "master_client_id", "client_name", "country", "service_code", "service_name", "work_channel", "price_usdt", "payment_method", "payment_status", "operational_status", "created_by", "last_handled_by", "created_at", "updated_at", "legacy_json"],
   stored_files: ["id", "owner_type", "owner_id", "purpose", "name", "content_type", "size_bytes", "sha256", "storage_kind", "storage_key", "legacy_data_url", "created_at", "legacy_json"],
   payment_proofs: ["id", "source_type", "source_id", "stored_file_id", "review_status", "uploaded_by", "uploaded_at", "reviewed_by", "reviewed_at", "rejected_reason", "legacy_json"],
@@ -197,6 +200,7 @@ const reportBlockPatterns = [
 const requiredMigrationVersions = [
   "001_initial_postgres.sql",
   "002_preserve_client_link_suggestion_actor.sql",
+  "004_portal_guest_flow.sql",
 ];
 
 function sha256(value) {
@@ -451,6 +455,7 @@ function buildImportPlan(db, sourceName, sourceSha256) {
   const customerRequests = arrayOf(db, "customerRequests", warnings);
   const customerOrders = arrayOf(db, "customerOrders", warnings);
   const customerOrderItems = arrayOf(db, "customerOrderItems", warnings);
+  const guestSessionTokens = Array.isArray(db.guestSessionTokens) ? db.guestSessionTokens : [];
   const tickets = arrayOf(db, "tickets", warnings);
   const frpOrders = arrayOf(db, "frpOrders", warnings);
   const frpJobs = arrayOf(db, "frpJobs", warnings);
@@ -622,9 +627,26 @@ function buildImportPlan(db, sourceName, sourceSha256) {
       status: enumValue(client.status, ["REGISTRADO_NO_VERIFICADO", "EMAIL_VERIFICADO", "REGISTRADO", "VERIFICADO", "VIP", "EMPRESA", "BLOQUEADO"], "REGISTRADO_NO_VERIFICADO"),
       primary_email: normalizedEmail(client.primaryEmail || client.email),
       email_verified_at: timestampOrNull(client.emailVerifiedAt),
+      account_type: enumValue(client.accountType || "registered", ["registered", "guest"], "registered"),
       created_at: timestampValue(client.createdAt, nowIso),
       updated_at: timestampValue(client.updatedAt || client.createdAt, nowIso),
       legacy_json: legacyJson(client),
+    });
+  }
+
+  for (const token of guestSessionTokens) {
+    rows.guest_session_tokens.push({
+      id: requiredUuid(token.id, "guestSessionTokens.id"),
+      order_id: refUuid(token.orderId, customerOrderIds, warnings, { table: "guest_session_tokens", field: "order_id", id: token.id, target: "customer_orders" }),
+      client_id: refUuid(token.clientId, customerClientIds, warnings, { table: "guest_session_tokens", field: "client_id", id: token.id, target: "customer_clients" }),
+      token_hash: credentialDigest(token.tokenHash, "guest_session_tokens", token.id, warnings),
+      token_hint: stringValue(token.tokenHint),
+      scope: enumValue(token.scope || "order", ["order"], "order"),
+      expires_at: timestampValue(token.expiresAt, nowIso),
+      revoked_at: timestampOrNull(token.revokedAt),
+      last_seen_at: timestampOrNull(token.lastSeenAt),
+      created_at: timestampValue(token.createdAt, nowIso),
+      legacy_json: legacyJson(token),
     });
   }
 
@@ -1348,6 +1370,7 @@ function findDuplicatePlannedPrimaryKeys(rows) {
     customer_requests: ["id"],
     customer_orders: ["id"],
     customer_order_items: ["id"],
+    guest_session_tokens: ["id"],
     service_tickets: ["id"],
     stored_files: ["id"],
     payment_proofs: ["id"],

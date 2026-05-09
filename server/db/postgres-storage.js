@@ -17,6 +17,7 @@ const destructiveGuardTables = [
   "internal_clients",
   "customer_orders",
   "customer_order_items",
+  "guest_session_tokens",
   "stored_files",
   "payment_proofs",
   "frp_orders",

@@ -37,6 +37,7 @@ export const POSTGRES_TARGET_TABLES = [
   "frp_orders",
   "frp_jobs",
   "frp_job_files",
+  "guest_session_tokens",
   "active_technician_state",
   "payment_ledger_entries",
   "daily_closes",
@@ -48,7 +49,6 @@ export const POSTGRES_TARGET_TABLES = [
 
 const legacyCollectionMap = [
   ["masterClients", "master_clients", "created_at asc, id asc"],
-  ["customerClients", "customer_clients", "created_at asc, id asc"],
   ["clients", "internal_clients", "created_at asc, id asc"],
   ["clientLinks", "client_links", "created_at asc, id asc"],
   ["clientLinkSuggestions", "client_link_suggestions", "created_at asc, id asc"],
@@ -146,6 +146,31 @@ async function readCustomerDevices(client) {
     ...legacyObject(row),
     tokenHash: row.token_hash || "",
     authorizedClientIds: clientIdsByDevice.get(String(row.id)) || [],
+  }));
+}
+
+async function readCustomerClients(client) {
+  const rows = await readTable(client, "customer_clients", "created_at asc, id asc");
+  return rows.map((row) => ({
+    ...legacyObject(row),
+    accountType: row.account_type || legacyObject(row).accountType || "registered",
+  }));
+}
+
+async function readGuestSessionTokens(client) {
+  const rows = await readTable(client, "guest_session_tokens", "created_at asc, id asc");
+  return rows.map((row) => ({
+    ...legacyObject(row),
+    id: row.id || legacyObject(row).id || "",
+    orderId: row.order_id || legacyObject(row).orderId || "",
+    clientId: row.client_id || legacyObject(row).clientId || "",
+    tokenHash: row.token_hash || "",
+    tokenHint: row.token_hint || legacyObject(row).tokenHint || "",
+    scope: row.scope || legacyObject(row).scope || "order",
+    expiresAt: isoOrEmpty(row.expires_at),
+    revokedAt: isoOrEmpty(row.revoked_at),
+    lastSeenAt: isoOrEmpty(row.last_seen_at),
+    createdAt: isoOrEmpty(row.created_at),
   }));
 }
 
@@ -374,6 +399,8 @@ export async function readPostgresLegacyDb() {
       await client.query("set local search_path = ariad, public");
       const db = {
         ...(await readSensitiveCollections(client)),
+        customerClients: await readCustomerClients(client),
+        guestSessionTokens: await readGuestSessionTokens(client),
         devices: await readOperatorDevices(client),
         customerDevices: await readCustomerDevices(client),
         pricingConfig: await readPricingConfig(client),

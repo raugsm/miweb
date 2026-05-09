@@ -717,6 +717,7 @@ function defaultDb() {
     customerRequests: [],
     customerOrders: [],
     customerOrderItems: [],
+    guestSessionTokens: [],
     customerBenefits: [],
     customerEmailVerificationTokens: [],
     customerCounters: {},
@@ -797,6 +798,7 @@ async function readDb() {
   db.customerRequests ||= [];
   db.customerOrders ||= [];
   db.customerOrderItems ||= [];
+  db.guestSessionTokens ||= [];
   db.customerBenefits ||= [];
   db.customerEmailVerificationTokens ||= [];
   db.customerCounters ||= {};
