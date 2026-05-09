@@ -9,6 +9,7 @@ import {
   operatorLoginAttempt,
   operatorRateLimitCheck,
   operatorSessionLookup,
+  preserveCurrentAuthRowsBeforeLegacyReplace,
 } from "../server/db/postgres-auth.js";
 
 const nowMs = Date.parse("2026-05-08T15:00:00.000Z");
@@ -472,4 +473,90 @@ test("operatorSessionLookup rejects admin sessions when device trust does not ma
   assert.equal(result, null);
   assert.equal(client.calls.includes("delete operator session"), true);
   assert.equal(client.calls.at(-1), "insert audit");
+});
+
+test("preserveCurrentAuthRowsBeforeLegacyReplace keeps granular sessions missing from stale legacy snapshots", async () => {
+  const currentCustomerDevice = {
+    id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+    token_hash: "customer-device-token-hash",
+    user_agent: "node-test",
+    first_ip_hash: "ip-hash",
+    last_seen_at: nowIso,
+    created_at: nowIso,
+    legacy_json: { id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd", tokenHash: "customer-device-token-hash" },
+  };
+  const currentCustomerSession = {
+    id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+    user_id: "11111111-1111-4111-8111-111111111111",
+    client_id: "22222222-2222-4222-8222-222222222222",
+    token_hash: "fresh-customer-session-hash",
+    device_id: currentCustomerDevice.id,
+    version: 1,
+    last_seen_at: nowIso,
+    expires_at: new Date(nowMs + 3600_000).toISOString(),
+    created_at: nowIso,
+    legacy_json: { id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", tokenHash: "fresh-customer-session-hash" },
+  };
+  const currentOperatorDevice = {
+    id: "ffffffff-ffff-4fff-8fff-ffffffffffff",
+    token_hash: "operator-device-token-hash",
+    user_agent: "node-test",
+    first_ip_hash: "ip-hash",
+    trust_version: 3,
+    trusted_at: nowIso,
+    last_seen_at: nowIso,
+    created_at: nowIso,
+    legacy_json: { id: "ffffffff-ffff-4fff-8fff-ffffffffffff", tokenHash: "operator-device-token-hash" },
+  };
+  const currentOperatorSession = {
+    id: "99999999-9999-4999-8999-999999999999",
+    user_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    token_hash: "fresh-operator-session-hash",
+    device_id: currentOperatorDevice.id,
+    version: 7,
+    last_seen_at: nowIso,
+    expires_at: new Date(nowMs + 3600_000).toISOString(),
+    created_at: nowIso,
+    legacy_json: { id: "99999999-9999-4999-8999-999999999999", tokenHash: "fresh-operator-session-hash" },
+  };
+  const client = new MockClient({
+    "select * from operator_devices order by created_at asc, id asc": { rows: [currentOperatorDevice] },
+    "select * from operator_device_admin_users order by created_at asc, user_id asc": {
+      rows: [{ device_id: currentOperatorDevice.id, user_id: currentOperatorSession.user_id, created_at: nowIso }],
+    },
+    "select * from operator_sessions order by created_at asc, id asc": { rows: [currentOperatorSession] },
+    "select * from customer_devices order by created_at asc, id asc": { rows: [currentCustomerDevice] },
+    "select * from customer_device_authorizations order by authorized_at asc, client_id asc": {
+      rows: [{ device_id: currentCustomerDevice.id, client_id: currentCustomerSession.client_id, authorized_at: nowIso }],
+    },
+    "select * from customer_sessions order by created_at asc, id asc": { rows: [currentCustomerSession] },
+  });
+  client.query = async function query(sql, params = []) {
+    const normalized = String(sql || "").replace(/\s+/g, " ").trim().toLowerCase();
+    this.calls.push(normalized.startsWith("set local search_path") ? "set search_path" : normalized);
+    const handler = this.responses[normalized];
+    return handler || { rows: [], rowCount: 0 };
+  };
+  const plan = {
+    rows: {
+      operator_devices: [],
+      operator_device_admin_users: [],
+      operator_sessions: [],
+      customer_devices: [],
+      customer_device_authorizations: [],
+      customer_sessions: [],
+    },
+    tables: {},
+  };
+
+  await preserveCurrentAuthRowsBeforeLegacyReplace(client, plan);
+
+  assert.equal(plan.rows.customer_sessions[0].token_hash, "fresh-customer-session-hash");
+  assert.equal(plan.rows.operator_sessions[0].token_hash, "fresh-operator-session-hash");
+  assert.equal(plan.rows.customer_devices[0].id, currentCustomerDevice.id);
+  assert.equal(plan.rows.operator_devices[0].id, currentOperatorDevice.id);
+  assert.equal(plan.rows.customer_device_authorizations.length, 1);
+  assert.equal(plan.rows.operator_device_admin_users.length, 1);
+  assert.equal(plan.tables.customer_sessions, 1);
+  assert.equal(plan.tables.operator_sessions, 1);
 });

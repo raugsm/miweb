@@ -7,6 +7,7 @@ import {
   replacePostgresLegacyRuntime,
   sanitizePostgresErrorMessage,
 } from "./postgres-legacy-plan.js";
+import { preserveCurrentAuthRowsBeforeLegacyReplace } from "./postgres-auth.js";
 
 const destructiveGuardTables = [
   "operator_users",
@@ -87,9 +88,13 @@ export function createPostgresStorage({ env = process.env } = {}) {
 
   async function replaceRuntimeOnce(db) {
     const plan = buildPostgresLegacyPlan(db, "runtime-write", "runtime-write");
-    if (plan.warnings.length) throw integrityWarningsError(plan.warnings);
     return withTransaction(async (client) => {
       await assertPostgresRequiredMigrations(client);
+      // Auth granular writes session/device rows directly in Postgres. While
+      // legacy routes still replace runtime snapshots, merge the current auth
+      // rows just before truncate so a stale snapshot cannot drop live sessions.
+      await preserveCurrentAuthRowsBeforeLegacyReplace(client, plan);
+      if (plan.warnings.length) throw integrityWarningsError(plan.warnings);
       if (!envFlag(env.POSTGRES_RUNTIME_ALLOW_DESTRUCTIVE_REPLACE)) {
         await client.query("select pg_advisory_xact_lock(hashtext($1), hashtext($2))", ["ariadgsm", "legacy-runtime-write"]);
         const currentTables = await queryPostgresRuntimeCounts(client, { includeMigrationRuns: false });
