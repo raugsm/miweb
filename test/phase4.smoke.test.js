@@ -63,8 +63,8 @@ async function runSmoke({ baseUrl, dataDir, setupToken }) {
   assert.equal(response.status, 201);
   const portalOrder = response.data.order;
   assert.equal(Object.hasOwn(portalOrder, "accessCode"), false, "la API cliente no debe exponer accessCode");
-  assert.equal(portalOrder.totalPrice, 73.05);
-  assert.match(portalOrder.priceFormatted || "", /S\/\s*273\.90/);
+  assert.equal(portalOrder.totalPrice, 73.8);
+  assert.match(portalOrder.priceFormatted || "", /S\/\s*276\.80/);
   assert.equal(portalOrder.items.length, 3);
 
   response = await http.request("PATCH", `/api/portal/orders/${encodeURIComponent(portalOrder.id)}/payment-proof`, {

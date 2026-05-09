@@ -384,7 +384,14 @@ export function updateQuote() {
     if (effectiveUnit > 0 && quantity > 0) {
       const unitText = paymentAmountText(effectiveUnit, payment);
       const equiposLabel = quantity === 1 ? "equipo" : "equipos";
-      panel2Breakdown.textContent = `${quantity} ${equiposLabel} × ${unitText}`;
+      const lines = [`${quantity} ${equiposLabel} × ${unitText}`];
+      if (Number(estimate.operatorFeePerOrderUsdt || 0) > 0) {
+        lines.push(`fee operativo ${paymentAmountText(estimate.operatorFeePerOrderUsdt, payment)}`);
+      }
+      if (Number(estimate.guestSurchargeTotalUsdt || 0) > 0) {
+        lines.push(`guest ${paymentAmountText(estimate.guestSurchargeTotalUsdt, payment)}`);
+      }
+      panel2Breakdown.textContent = lines.join(" + ");
       panel2Breakdown.hidden = false;
     } else {
       panel2Breakdown.hidden = true;

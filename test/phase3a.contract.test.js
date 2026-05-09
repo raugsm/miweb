@@ -5,7 +5,7 @@ import test from "node:test";
 import { frpServiceCode, frpWorkChannel, portalPublicServices } from "../server/config/catalog.js";
 import { limaDateStamp, limaMonthStamp } from "../server/core/dates.js";
 import { sendSseEvent } from "../server/core/http.js";
-import { classifyCostChange, computeProviderBaseline, defaultFrpPricingConfig, frpCurrentPricing, frpDynamicQuantityTiers, frpDynamicTier } from "../server/frp/pricing.js";
+import { classifyCostChange, computeProviderBaseline, defaultFrpPricingConfig, frpCurrentPricing, frpDynamicQuantityTiers, frpDynamicTier, frpPriceBreakdown } from "../server/frp/pricing.js";
 import { frpEligibilityResult, summarizeFrpEligibility } from "../server/frp/eligibility.js";
 import { roundFinalPaymentAmount } from "../public/portal-modules/payments.js";
 import { filesToProofs } from "../public/portal-modules/proofs.js";
@@ -31,24 +31,15 @@ test("default FRP pricing resolves to internalCost + targetMargin (no static flo
   assert.equal(pricing.unitPrice, 24.5);
 });
 
-test("FRP volume tiers derive from dynamic normal price (qty 1 = pricing.unitPrice)", () => {
+test("FRP volume tiers are archived and no longer active for FRP Express", () => {
   const db = { pricingConfig: { frpPricing: defaultFrpPricingConfig() } };
   const pricing = frpCurrentPricing(db);
 
-  // 4 tiers (sub-commit 15a.5), ordenados de mayor minQty a menor.
-  // Descuentos sobre margen 40/25/15/0 desde costo 23.50 + margen 1.00.
-  assert.deepEqual(
-    frpDynamicQuantityTiers(pricing).map((tier) => tier.unitPrice),
-    [24.1, 24.25, 24.35, 24.5],
-  );
-  // discountPct queda como señal interna del beneficio; el portal no muestra "-X%".
-  assert.deepEqual(
-    frpDynamicQuantityTiers(pricing).map((tier) => tier.discountPct),
-    [40, 25, 15, 0],
-  );
+  // Los tiers permanecen archivados en catalog.js, pero no se publican ni aplican.
+  assert.deepEqual(frpDynamicQuantityTiers(pricing), []);
 });
 
-test("FRP volume discounts apply only over target margin and protect public floor", () => {
+test("FRP legacy dynamic tier helper remains bounded for archived data", () => {
   const pricing = { available: true, internalCostUsdt: 3.5, unitPrice: 4.5 };
   const normalTier = { minQty: 1, marginDiscountPct: 0, discountPct: 0, unitPrice: 25, label: "Precio normal" };
   const volumeTier = { minQty: 2, marginDiscountPct: 15, discountPct: 15, unitPrice: 24.85, label: "Beneficio por 2-3 equipos" };
@@ -58,10 +49,35 @@ test("FRP volume discounts apply only over target margin and protect public floo
 
   assert.equal(frpDynamicTier(normalTier, pricing).unitPrice, 4.5);
   assert.equal(frpDynamicTier(volumeTier, pricing).unitPrice, 4.35);
-  assert.equal(frpDynamicTier(tooDeepTier, pricing).unitPrice, 4.1);
-  assert.equal(frpDynamicTier(legacyUnitTier, pricing).unitPrice, 4.1);
-  assert.equal(frpDynamicTier(narrowMarginTier, { available: true, internalCostUsdt: 3.5, unitPrice: 4.0 }).unitPrice, 4.0);
-  assert.equal(frpDynamicTier(narrowMarginTier, { available: true, internalCostUsdt: 3.5, unitPrice: 4.0 }).discountPct, 0);
+  assert.equal(frpDynamicTier(tooDeepTier, pricing).unitPrice, 3.5);
+  assert.equal(frpDynamicTier(legacyUnitTier, pricing).unitPrice, 3.5);
+  assert.equal(frpDynamicTier(narrowMarginTier, { available: true, internalCostUsdt: 3.5, unitPrice: 4.0 }).unitPrice, 3.8);
+  assert.equal(frpDynamicTier(narrowMarginTier, { available: true, internalCostUsdt: 3.5, unitPrice: 4.0 }).discountPct, 40);
+});
+
+test("FRP pricing v2 matches canonical registered and guest totals", () => {
+  const config = defaultFrpPricingConfig();
+  config.providers = config.providers.map((provider) => (
+    provider.id === "krypto" ? { ...provider, fixedCostUsdt: 3.00 } : provider
+  ));
+  config.policy.targetMarginUsdt = 1.00;
+  const pricing = frpCurrentPricing({ pricingConfig: { frpPricing: config } });
+  const expected = [
+    [1, false, 4.30],
+    [2, false, 8.30],
+    [3, false, 12.30],
+    [5, false, 20.30],
+    [10, false, 40.30],
+    [1, true, 4.50],
+    [2, true, 8.70],
+    [3, true, 12.90],
+    [5, true, 21.30],
+    [10, true, 42.30],
+  ];
+
+  for (const [quantity, isGuest, total] of expected) {
+    assert.equal(frpPriceBreakdown(pricing, { quantity, isGuest }).totalUsdt, total);
+  }
 });
 
 test("portal final payment amounts round only at display/cobro boundary", () => {

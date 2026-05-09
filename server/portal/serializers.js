@@ -508,8 +508,14 @@ export function createPortalSerializers({
       paymentMethods: allowedPortalPaymentMethods(db),
       countries: countries.map(([, country]) => country),
       statuses: publicOrderStatuses,
-      quantityTiers: pricing?.available ? frpDynamicQuantityTiers(pricing) : frpQuantityTiers,
-      monthlyTiers: pricing?.available ? frpDynamicMonthlyTiers(pricing) : frpMonthlyTiers,
+      pricing: pricing?.available ? {
+        available: true,
+        baseUnitPriceUsdt: moneyNumber(pricing.baseUnitPriceUsdt || pricing.unitPrice || 0),
+        operatorFeePerOrderUsdt: moneyNumber(pricing.operatorFeePerOrderUsdt || 0),
+        guestSurchargePerEquipmentUsdt: moneyNumber(pricing.guestSurchargePerEquipmentUsdt || 0),
+      } : { available: false },
+      quantityTiers: [],
+      monthlyTiers: [],
       exchangeRates: pricingConfig.exchangeRates.map((rate) => ({
         country: rate.country,
         currency: rate.currency,

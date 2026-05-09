@@ -229,18 +229,23 @@ export const frpJobChecklistKeys = ["clientConnected", "requiredStateConfirmed",
 // muestra como "-X%" para evitar que el cliente piense que descuenta del total.
 // `unitPrice` = FALLBACK cuando no hay pricingConfig (publicPortalCatalog lo expone
 // tal cual). Refleja la curva historica con precio normal default 25 USDT.
-export const frpPublicVolumeFloorMarginUsdt = 0.60;
-export const frpQuantityTiers = [
+// Paso 2.C.3: tiers archivados. FRP Express ya no aplica beneficios por
+// volumen ni metas mensuales. VIP se conserva como excepcion manual por
+// vipUnitMargin; ver docs/ARIADGSM_PASO_2_RUNBOOK.md.
+export const frpPublicVolumeFloorMarginUsdt = 0;
+export const frpArchivedQuantityTiers = [
   { minQty: 7, marginDiscountPct: 40, unitPrice: 24.60, discountPct: 40, label: "Beneficio por 7-10 equipos" },
   { minQty: 4, marginDiscountPct: 25, unitPrice: 24.75, discountPct: 25, label: "Beneficio por 4-6 equipos" },
   { minQty: 2, marginDiscountPct: 15, unitPrice: 24.85, discountPct: 15, label: "Beneficio por 2-3 equipos" },
   { minQty: 1, marginDiscountPct: 0, unitPrice: 25.00, discountPct: 0, label: "Precio normal" },
 ];
-export const frpMonthlyTiers = [
+export const frpArchivedMonthlyTiers = [
   { minJobs: 100, unitPrice: 22, label: "Meta 100+" },
   { minJobs: 60, unitPrice: 23, label: "Meta 60+" },
   { minJobs: 30, unitPrice: 24, label: "Meta 30+" },
 ];
+export const frpQuantityTiers = [];
+export const frpMonthlyTiers = [];
 // PR-2a.7: ARCHIVED es estado terminal — no aparece en selector de provider
 // activo (activeFrpProvider filtra por ACTIVE) y la UI lo oculta del listado
 // principal. Queda persistido y en auditoria. NO se elimina definitivamente.

@@ -50,50 +50,34 @@ export function clampQuantityWithFlag(raw) {
   return { value: parsed, capped: false };
 }
 
-// QUE: estimacion del cliente. Devuelve `base` (precio nominal por unidad,
-// constante — panel 1 siempre lo muestra), `unit` (precio efectivo con tier
-// por volumen / monthly / VIP aplicado, usado en total), `total` (= unit * qty),
-// `discountPct` (señal interna del beneficio, 0 si normal) e `isVip` (flag para
-// que el panel 2 oculte el badge de volumen).
-// POR QUE: spec panel-2-solicitud.md v1.3 §8 — descuentos por volumen sobre la
-// ganancia objetivo. La UI evita mostrar "-X%" porque no descuenta sobre el total.
-export function estimatePortalPrice(quantity) {
+// Paso 2.C.4: precio local = (base * N) + fee fijo + surcharge guest.
+export function estimatePortalPrice(quantity, options = {}) {
   const qty = Math.max(1, Math.min(50, Number.parseInt(quantity, 10) || 1));
   const service = state.catalog?.services?.[0];
-  const base = Number(service?.baseUnitPrice || 25);
+  const pricing = state.catalog?.pricing || {};
   const benefit = state.customer?.benefit;
-  // Sub-commit 15a.5: VIP detectado por status="VIP" o vipEffectiveUnitPrice>0.
-  // Para VIP, panel 2 NO muestra badge/label/aviso de volumen (spec §8).
-  const isVip = String(state.customer?.client?.status || "").toUpperCase() === "VIP"
-    || Number(benefit?.vipEffectiveUnitPrice || 0) > 0;
-  if (!benefit?.usableNow) {
-    return { unit: base, base, total: base * qty, label: "Precio base. Beneficios bloqueados para este dispositivo.", discountPct: 0, isVip };
-  }
-  const tiers = state.catalog?.quantityTiers || [];
-  // Sub-commit 15a.5: VIP saltea volume tiers — sólo VIP price aplica.
-  const quantityTier = !isVip
-    ? tiers.filter((tier) => qty >= Number(tier.minQty || 0))
-        .sort((a, b) => Number(a.unitPrice) - Number(b.unitPrice))[0]
-    : null;
-  const monthlyUsage = Number(state.customer?.monthlyUsage || 0);
-  const monthlyTier = (state.catalog?.monthlyTiers || [])
-    .filter((tier) => monthlyUsage >= Number(tier.minJobs || 0))
-    .sort((a, b) => Number(a.unitPrice) - Number(b.unitPrice))[0];
-  // PR-2a.5-fix: precio VIP = costo proveedor + vipUnitMargin (calculado en backend
-  // y expuesto como vipEffectiveUnitPrice). Al cambiar el costo del proveedor, este
-  // valor cambia automaticamente — el margen del operador se preserva.
-  const vipEffective = Number(benefit.vipEffectiveUnitPrice || 0);
-  const vipTier = vipEffective > 0 ? { unitPrice: vipEffective, label: "VIP aprobado", discountPct: 0 } : null;
-  const selected = [quantityTier, monthlyTier, vipTier]
-    .filter(Boolean)
-    .sort((a, b) => Number(a.unitPrice) - Number(b.unitPrice))[0] || { unitPrice: base, label: "Precio normal", discountPct: 0 };
+  const isGuest = Boolean(options.isGuest || state.guest);
+  const vipEffective = !isGuest ? Number(benefit?.vipEffectiveUnitPrice || 0) : 0;
+  const base = vipEffective > 0
+    ? vipEffective
+    : Number(pricing.baseUnitPriceUsdt || service?.baseUnitPrice || 25);
+  const operatorFeePerOrderUsdt = Number(pricing.operatorFeePerOrderUsdt || 0);
+  const guestSurchargePerEquipmentUsdt = isGuest ? Number(pricing.guestSurchargePerEquipmentUsdt || 0) : 0;
+  const guestSurchargeTotalUsdt = guestSurchargePerEquipmentUsdt * qty;
+  const equipmentSubtotalUsdt = base * qty;
+  const total = equipmentSubtotalUsdt + operatorFeePerOrderUsdt + guestSurchargeTotalUsdt;
   return {
-    unit: Number(selected.unitPrice || base),
+    unit: base,
     base,
-    total: Number(selected.unitPrice || base) * qty,
-    label: selected.label || "Precio normal",
-    discountPct: Number(selected.discountPct || 0),
-    isVip,
+    total,
+    label: vipEffective > 0 ? "VIP aprobado" : "Precio fijo",
+    discountPct: 0,
+    isVip: vipEffective > 0,
+    operatorFeePerOrderUsdt,
+    guestSurchargePerEquipmentUsdt,
+    guestSurchargeTotalUsdt,
+    equipmentSubtotalUsdt,
+    isGuest,
   };
 }
 

@@ -3,6 +3,11 @@ import { nowIso } from "../core/dates.js";
 import { moneyNumber, percentNumber } from "../core/money.js";
 import { cleanText } from "../core/validation.js";
 
+function envMoney(name, fallback, env = process.env) {
+  const value = Number(env?.[name]);
+  return moneyNumber(Number.isFinite(value) ? value : fallback);
+}
+
 export function defaultFrpPricingConfig() {
   return {
     policy: {
@@ -129,6 +134,8 @@ export function activeFrpProvider(config) {
 export function frpCurrentPricing(db) {
   const config = normalizeFrpPricingConfig(db.pricingConfig?.frpPricing);
   const provider = activeFrpProvider(config);
+  const operatorFeePerOrderUsdt = envMoney("PORTAL_OPERATOR_FEE_USDT", 0.30);
+  const guestSurchargePerEquipmentUsdt = envMoney("PORTAL_GUEST_SURCHARGE_PER_EQUIPMENT_USDT", 0.20);
   if (!provider) {
     return {
       available: false,
@@ -137,6 +144,9 @@ export function frpCurrentPricing(db) {
       provider: null,
       internalCostUsdt: 0,
       minAllowedUnitPrice: 0,
+      baseUnitPriceUsdt: 0,
+      operatorFeePerOrderUsdt,
+      guestSurchargePerEquipmentUsdt,
       unitPrice: 0,
     };
   }
@@ -145,18 +155,45 @@ export function frpCurrentPricing(db) {
   // humano vive en la validacion del PATCH /pricing/providers (frp-routes.js).
   const internalCostUsdt = frpProviderCostUsdt(provider);
   const targetMargin = moneyNumber(config.policy.targetMarginUsdt);
-  const unitPrice = moneyNumber(internalCostUsdt + targetMargin);
+  const baseUnitPriceUsdt = moneyNumber(internalCostUsdt + targetMargin);
   // minAllowedUnitPrice se mantiene por compat con consumidores que lo leen,
   // pero ya no opera como clamp en frpDynamicTier. Vale exactamente unitPrice
   // (= cost + targetMargin) ya que es el "piso" semantico del precio normal.
   return {
-    available: unitPrice > 0,
-    reason: unitPrice > 0 ? "" : "Precio FRP no configurado",
+    available: baseUnitPriceUsdt > 0,
+    reason: baseUnitPriceUsdt > 0 ? "" : "Precio FRP no configurado",
     config,
     provider,
     internalCostUsdt,
-    minAllowedUnitPrice: unitPrice,
-    unitPrice,
+    minAllowedUnitPrice: baseUnitPriceUsdt,
+    baseUnitPriceUsdt,
+    operatorFeePerOrderUsdt,
+    guestSurchargePerEquipmentUsdt,
+    unitPrice: baseUnitPriceUsdt,
+  };
+}
+
+export function frpPriceBreakdown(pricing, { quantity = 1, isGuest = false } = {}) {
+  const safeQuantity = Math.max(1, Math.min(50, Number.parseInt(quantity, 10) || 1));
+  const baseUnitPriceUsdt = moneyNumber(pricing?.baseUnitPriceUsdt ?? pricing?.unitPrice ?? 0);
+  const operatorFeePerOrderUsdt = moneyNumber(pricing?.operatorFeePerOrderUsdt ?? 0.30);
+  const guestSurchargePerEquipmentUsdt = isGuest ? moneyNumber(pricing?.guestSurchargePerEquipmentUsdt ?? 0.20) : 0;
+  const equipmentSubtotalUsdt = moneyNumber(baseUnitPriceUsdt * safeQuantity);
+  const guestSurchargeTotalUsdt = moneyNumber(guestSurchargePerEquipmentUsdt * safeQuantity);
+  const totalUsdt = moneyNumber(equipmentSubtotalUsdt + operatorFeePerOrderUsdt + guestSurchargeTotalUsdt);
+  const effectiveMarginUsdt = moneyNumber(Math.max(0, baseUnitPriceUsdt - moneyNumber(pricing?.internalCostUsdt || 0)));
+  return {
+    quantity: safeQuantity,
+    isGuest: Boolean(isGuest),
+    internalCostUsdt: moneyNumber(pricing?.internalCostUsdt || 0),
+    targetMarginUsdt: moneyNumber(pricing?.config?.policy?.targetMarginUsdt || 0),
+    effectiveMarginUsdt,
+    baseUnitPriceUsdt,
+    operatorFeePerOrderUsdt,
+    guestSurchargePerEquipmentUsdt,
+    guestSurchargeTotalUsdt,
+    equipmentSubtotalUsdt,
+    totalUsdt,
   };
 }
 
@@ -292,8 +329,12 @@ export function frpDynamicMonthlyTiers(pricing) {
 
 export function frpPricingSnapshot(pricing, suggestion = {}) {
   const provider = pricing.provider;
+  const breakdown = suggestion.breakdown || frpPriceBreakdown(pricing, {
+    quantity: suggestion.quantity || 1,
+    isGuest: suggestion.isGuest,
+  });
   return {
-    version: "frp-dynamic-v1",
+    version: "frp-pricing-v2",
     providerId: provider?.id || "",
     providerName: provider?.name || "",
     providerStatus: provider?.status || "",
@@ -304,12 +345,21 @@ export function frpPricingSnapshot(pricing, suggestion = {}) {
     internalCostUsdt: moneyNumber(pricing.internalCostUsdt || 0),
     minMarginUsdt: moneyNumber(pricing.config?.policy?.minMarginUsdt || 0),
     targetMarginUsdt: moneyNumber(pricing.config?.policy?.targetMarginUsdt || 0),
+    effectiveMarginUsdt: moneyNumber(suggestion.effectiveMarginUsdt ?? breakdown.effectiveMarginUsdt),
+    vipUnitMarginUsdt: moneyNumber(suggestion.vipUnitMarginUsdt || 0),
     minSellPriceUsdt: moneyNumber(pricing.config?.policy?.minSellPriceUsdt || 0),
     minAllowedUnitPrice: moneyNumber(pricing.minAllowedUnitPrice || 0),
-    baseUnitPrice: moneyNumber(pricing.unitPrice || 0),
-    unitPrice: moneyNumber(suggestion.unitPrice ?? pricing.unitPrice),
-    quantity: Number(suggestion.quantity || 1),
-    total: moneyNumber(suggestion.total || 0),
+    baseUnitPrice: moneyNumber(breakdown.baseUnitPriceUsdt),
+    baseUnitPriceUsdt: moneyNumber(breakdown.baseUnitPriceUsdt),
+    operatorFeePerOrderUsdt: moneyNumber(breakdown.operatorFeePerOrderUsdt),
+    guestSurchargePerEquipmentUsdt: moneyNumber(breakdown.guestSurchargePerEquipmentUsdt),
+    guestSurchargeTotalUsdt: moneyNumber(breakdown.guestSurchargeTotalUsdt),
+    equipmentSubtotalUsdt: moneyNumber(breakdown.equipmentSubtotalUsdt),
+    isGuest: Boolean(breakdown.isGuest),
+    unitPrice: moneyNumber(suggestion.unitPrice ?? breakdown.baseUnitPriceUsdt),
+    quantity: Number(breakdown.quantity || 1),
+    total: moneyNumber(suggestion.total ?? breakdown.totalUsdt),
+    totalUsdt: moneyNumber(suggestion.total ?? breakdown.totalUsdt),
     discountLabel: cleanText(suggestion.label || "", 80),
     calculatedAt: nowIso(),
   };

@@ -1138,16 +1138,11 @@ function frpOperatorOrders() {
 }
 
 function frpQuantityTier(quantity) {
-  const qty = Number(quantity || 1);
-  const tiers = session.frp?.pricing?.quantityTiers?.length
-    ? session.frp.pricing.quantityTiers
-    : [
-      { minQty: 10, label: "Volumen 10+", unitPrice: 22 },
-      { minQty: 5, label: "Volumen 5-9", unitPrice: 23 },
-      { minQty: 2, label: "Volumen 2-4", unitPrice: 24 },
-      { minQty: 1, label: "Normal", unitPrice: 25 },
-    ];
-  return tiers.find((tier) => qty >= Number(tier.minQty || 1)) || tiers.at(-1);
+  return {
+    minQty: 1,
+    label: "Precio fijo",
+    unitPrice: Number(session.frp?.pricing?.summary?.unitPrice || 0),
+  };
 }
 
 function frpPaymentByCode(code) {

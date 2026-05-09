@@ -101,6 +101,7 @@ import {
   computeProviderBaseline,
   defaultFrpPricingConfig,
   frpCurrentPricing,
+  frpPriceBreakdown,
   frpDynamicMonthlyTiers,
   frpDynamicQuantityTiers,
   frpPricingSnapshot,
@@ -1083,9 +1084,10 @@ function customerPendingDebt(db, clientId) {
     .reduce((sum, order) => sum + Number(order.debtAmount || 0), 0);
 }
 
-function portalFrpPriceSuggestion(db, clientId, quantity, canUseBenefits, benefit, masterClientId = "") {
+function portalFrpPriceSuggestion(db, clientId, quantity, canUseBenefits, benefit, masterClientId = "", options = {}) {
   const safeQuantity = Math.max(1, Math.min(50, Number.parseInt(quantity, 10) || 1));
   const pricing = frpCurrentPricing(db);
+  const monthlyUsage = customerMonthlyUsage(db, clientId, new Date(), masterClientId || benefit?.masterClientId || "");
   if (!pricing.available) {
     return {
       available: false,
@@ -1094,63 +1096,39 @@ function portalFrpPriceSuggestion(db, clientId, quantity, canUseBenefits, benefi
       unitPrice: 0,
       label: "No disponible",
       total: 0,
-      monthlyUsage: customerMonthlyUsage(db, clientId, new Date(), masterClientId || benefit?.masterClientId || ""),
+      monthlyUsage,
       discountLocked: true,
       nextMonthlyTier: null,
       pricingSnapshot: frpPricingSnapshot(pricing, { quantity: safeQuantity, unitPrice: 0, total: 0, label: "No disponible" }),
     };
   }
-  const baseUnitPrice = pricing.unitPrice;
-  if (!canUseBenefits) {
-    const suggestion = {
-      available: true,
-      quantity: safeQuantity,
-      unitPrice: baseUnitPrice,
-      label: "Precio base",
-      total: moneyNumber(baseUnitPrice * safeQuantity),
-      monthlyUsage: customerMonthlyUsage(db, clientId, new Date(), masterClientId || benefit?.masterClientId || ""),
-      discountLocked: true,
-      nextMonthlyTier: nextFrpMonthlyTier(0, pricing),
-    };
-    suggestion.pricingSnapshot = frpPricingSnapshot(pricing, suggestion);
-    return suggestion;
-  }
-  const monthlyUsage = customerMonthlyUsage(db, clientId, new Date(), masterClientId || benefit?.masterClientId || "");
-  // Sub-commit 15a.5 (spec panel-2 §8): clientes VIP no reciben volume tier — solo
-  // su precio VIP particular. Detectamos VIP por status="VIP" o por vipUnitMargin>0
-  // (cualquier signal positivo activa el modelo VIP).
-  const clientRecord = clientId ? db.customerClients.find((c) => c.id === clientId) : null;
-  const isVipClient = clientId && (
-    String(clientRecord?.status || "").toUpperCase() === "VIP" ||
-    Number(benefit.vipUnitMargin || 0) > 0
-  );
-  const quantityTier = !isVipClient && benefit.quantityDiscountEnabled
-    ? frpTierForQuantity(safeQuantity, pricing)
-    : { unitPrice: baseUnitPrice, label: "Precio base", minQty: 1 };
-  const monthlyTier = benefit.monthlyDiscountEnabled ? frpTierForMonthlyUsage(monthlyUsage, pricing) : null;
-  const goalTier = benefit.goalDiscountEnabled && benefit.monthlyGoal > 0 && monthlyUsage >= benefit.monthlyGoal
-    ? { unitPrice: Math.max(pricing.minAllowedUnitPrice, baseUnitPrice - 1), label: `Meta ${benefit.monthlyGoal}+` }
-    : null;
-  // PR-2a.5-fix: precio VIP = costo proveedor + margen VIP. Sin clamp al piso
-  // volumen — VIP esta DEBAJO del piso volumen por diseño (spec panel-2 §8: VIP
-  // tiene su propio modelo, fuera del scope de protection floor de volumen).
-  const vipTier = clientId && Number(benefit.vipUnitMargin || 0) > 0
-    ? { unitPrice: moneyNumber(pricing.internalCostUsdt + Number(benefit.vipUnitMargin)), label: "VIP aprobado" }
-    : null;
-  const selected = [quantityTier, monthlyTier, goalTier, vipTier]
-    .filter(Boolean)
-    .sort((a, b) => a.unitPrice - b.unitPrice)[0] || { unitPrice: baseUnitPrice, label: "Precio base" };
-  const nextMonthlyTier = nextFrpMonthlyTier(monthlyUsage, pricing);
+  const isGuest = Boolean(options.isGuest);
+  const vipUnitMargin = !isGuest && Number(benefit?.vipUnitMargin || 0) > 0
+    ? moneyNumber(benefit.vipUnitMargin)
+    : 0;
+  const effectivePricing = vipUnitMargin > 0
+    ? {
+        ...pricing,
+        baseUnitPriceUsdt: moneyNumber(pricing.internalCostUsdt + vipUnitMargin),
+        unitPrice: moneyNumber(pricing.internalCostUsdt + vipUnitMargin),
+      }
+    : pricing;
+  const breakdown = frpPriceBreakdown(effectivePricing, { quantity: safeQuantity, isGuest });
+  // Paso 2.C.4: FRP Express usa formula fija por orden; tiers archivados.
   const suggestion = {
     available: true,
     quantity: safeQuantity,
-    unitPrice: selected.unitPrice,
-    label: selected.label,
-    total: moneyNumber(selected.unitPrice * safeQuantity),
+    isGuest,
+    unitPrice: breakdown.baseUnitPriceUsdt,
+    label: vipUnitMargin > 0 ? "VIP aprobado" : "Precio fijo",
+    total: breakdown.totalUsdt,
+    breakdown,
+    vipUnitMarginUsdt: vipUnitMargin,
+    effectiveMarginUsdt: breakdown.effectiveMarginUsdt,
     monthlyUsage,
-    quantityTier: { minQty: quantityTier.minQty || 1, unitPrice: quantityTier.unitPrice, label: quantityTier.label },
-    monthlyTier: monthlyTier ? { minJobs: monthlyTier.minJobs, unitPrice: monthlyTier.unitPrice, label: monthlyTier.label } : null,
-    nextMonthlyTier: nextMonthlyTier ? { minJobs: nextMonthlyTier.minJobs, unitPrice: nextMonthlyTier.unitPrice, label: nextMonthlyTier.label, remaining: nextMonthlyTier.minJobs - monthlyUsage } : null,
+    quantityTier: null,
+    monthlyTier: null,
+    nextMonthlyTier: null,
     discountLocked: false,
   };
   suggestion.pricingSnapshot = frpPricingSnapshot(pricing, suggestion);
@@ -1404,18 +1382,16 @@ function frpMonthlyUsage(db, clientId, value = new Date()) {
 }
 
 function frpTierForQuantity(quantity, pricing = null) {
-  const tiers = pricing?.available ? frpDynamicQuantityTiers(pricing) : frpQuantityTiers;
-  return tiers.find((tier) => quantity >= tier.minQty) || tiers.at(-1);
+  const unitPrice = moneyNumber(pricing?.unitPrice || 0);
+  return { minQty: 1, unitPrice, label: "Precio fijo" };
 }
 
 function frpTierForMonthlyUsage(usage, pricing = null) {
-  const tiers = pricing?.available ? frpDynamicMonthlyTiers(pricing) : frpMonthlyTiers;
-  return tiers.find((tier) => usage >= tier.minJobs) || null;
+  return null;
 }
 
 function nextFrpMonthlyTier(usage, pricing = null) {
-  const tiers = pricing?.available ? frpDynamicMonthlyTiers(pricing) : frpMonthlyTiers;
-  return [...tiers].reverse().find((tier) => usage < tier.minJobs) || null;
+  return null;
 }
 
 function frpPriceSuggestion(db, clientId, quantity) {
@@ -1434,22 +1410,19 @@ function frpPriceSuggestion(db, clientId, quantity) {
     };
   }
   const monthlyUsage = frpMonthlyUsage(db, clientId);
-  const quantityTier = frpTierForQuantity(safeQuantity, pricing);
-  const monthlyTier = frpTierForMonthlyUsage(monthlyUsage, pricing);
-  const candidates = [quantityTier, monthlyTier].filter(Boolean);
-  const selected = candidates.reduce((best, tier) => (tier.unitPrice < best.unitPrice ? tier : best), quantityTier);
-  const nextTier = nextFrpMonthlyTier(monthlyUsage, pricing);
-  const total = moneyNumber(selected.unitPrice * safeQuantity);
+  const breakdown = frpPriceBreakdown(pricing, { quantity: safeQuantity, isGuest: false });
   const suggestion = {
     available: true,
     quantity: safeQuantity,
     monthlyUsage,
-    nextMonthlyTier: nextTier ? { minJobs: nextTier.minJobs, unitPrice: nextTier.unitPrice, label: nextTier.label, remaining: nextTier.minJobs - monthlyUsage } : null,
-    quantityTier: { minQty: quantityTier.minQty, unitPrice: quantityTier.unitPrice, label: quantityTier.label },
-    monthlyTier: monthlyTier ? { minJobs: monthlyTier.minJobs, unitPrice: monthlyTier.unitPrice, label: monthlyTier.label } : null,
-    unitPrice: selected.unitPrice,
-    label: selected.label,
-    total,
+    nextMonthlyTier: null,
+    quantityTier: null,
+    monthlyTier: null,
+    isGuest: false,
+    unitPrice: breakdown.baseUnitPriceUsdt,
+    label: "Precio fijo",
+    total: breakdown.totalUsdt,
+    breakdown,
   };
   suggestion.pricingSnapshot = frpPricingSnapshot(pricing, suggestion);
   return suggestion;
