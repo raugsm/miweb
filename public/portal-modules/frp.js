@@ -56,7 +56,7 @@ export function estimatePortalPrice(quantity, options = {}) {
   const service = state.catalog?.services?.[0];
   const pricing = state.catalog?.pricing || {};
   const benefit = state.customer?.benefit;
-  const isGuest = Boolean(options.isGuest || state.guest);
+  const isGuest = options.isGuest === true;
   const vipEffective = !isGuest ? Number(benefit?.vipEffectiveUnitPrice || 0) : 0;
   const base = vipEffective > 0
     ? vipEffective
