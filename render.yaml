@@ -2,7 +2,7 @@ services:
   - type: web
     name: ariadgsm-ops
     runtime: node
-    plan: starter
+    plan: standard
     buildCommand: npm install
     preDeployCommand: npm run postgres:migrate:apply
     startCommand: npm start
