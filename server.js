@@ -4030,6 +4030,8 @@ const handlePortalApi = createPortalRoutes({
   verifyPassword,
   writeDb,
   useGranularCustomerAuth,
+  usePortalGuestEnabled: () => envFlag(process.env.PORTAL_GUEST_ENABLED),
+  usePortalGuestClaimEnabled: () => process.env.PORTAL_GUEST_CLAIM_ENABLED === undefined || envFlag(process.env.PORTAL_GUEST_CLAIM_ENABLED),
 });
 
 const handleFrpApi = createFrpRoutes({
@@ -5606,6 +5608,7 @@ function requestUsesCustomerPortal(req, pathname) {
     || host === "www.ariadgsm.com"
     || pathname === "/cliente"
     || pathname.startsWith("/cliente/")
+    || pathname.startsWith("/pedido/")
     || pathname === "/portal";
 }
 
@@ -5649,7 +5652,7 @@ async function serveStatic(req, res, pathname) {
   const portalRequest = requestUsesCustomerPortal(req, pathname);
   if (portalRequest) res.setHeader("Referrer-Policy", "no-referrer");
   let safePath = pathname;
-  if (portalRequest && (pathname === "/" || pathname === "/cliente" || pathname.startsWith("/cliente/") || pathname === "/portal")) {
+  if (portalRequest && (pathname === "/" || pathname === "/cliente" || pathname.startsWith("/cliente/") || pathname.startsWith("/pedido/") || pathname === "/portal")) {
     safePath = "/portal.html";
   } else if (pathname === "/") {
     safePath = "/index.html";

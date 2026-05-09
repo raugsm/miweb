@@ -5,6 +5,14 @@ import {
   customerSessionDelete as defaultCustomerSessionDelete,
   customerSessionLookup as defaultCustomerSessionLookup,
 } from "../db/postgres-auth.js";
+import {
+  createGuestSessionToken,
+  findGuestOrdersForClaimByWhatsapp,
+  findOrCreateGuestClient,
+  generateGuestRecoveryLink,
+  validateGuestSessionToken,
+  claimGuestOrders,
+} from "./guest.js";
 
 export function createPortalRoutes({
   addAdminConfigStream,
@@ -85,6 +93,8 @@ export function createPortalRoutes({
   verifyPassword,
   writeDb,
   useGranularCustomerAuth = () => false,
+  usePortalGuestEnabled = () => false,
+  usePortalGuestClaimEnabled = () => true,
 }) {
   function markCustomerFrpJobReady(job, timestamp) {
     if (!job) return false;
@@ -181,6 +191,101 @@ export function createPortalRoutes({
     return retired.length;
   }
 
+  const guestSessionCookieName = "ariad_guest_order";
+  const guestSessionMaxAgeSeconds = 90 * 24 * 60 * 60;
+
+  function guestDisabled(res) {
+    return sendJson(res, 404, { error: "not_found" });
+  }
+
+  function setGuestSessionCookie(res, token) {
+    if (!token) return;
+    res.setHeader("Set-Cookie", cookieHeader(guestSessionCookieName, token, guestSessionMaxAgeSeconds, { sameSite: "Strict" }));
+  }
+
+  function guestClaimEnabled() {
+    return Boolean(usePortalGuestEnabled() && usePortalGuestClaimEnabled());
+  }
+
+  function guestTokenFrom(req, input = {}) {
+    const url = new URL(req.url || "/", "http://localhost");
+    return cleanText(
+      input.guestToken
+        || input.token
+        || req.headers?.["x-ariadgsm-guest-token"]
+        || url.searchParams.get("t")
+        || getCookie(req, guestSessionCookieName)
+        || "",
+      220,
+    );
+  }
+
+  function guestLookupByCodeOrId(db, codeOrId) {
+    const value = cleanText(codeOrId, 100);
+    return db.customerOrders.find((candidate) => (
+      candidate.id === value
+      || candidate.code === value
+      || candidate.shortCode === value
+      || candidate.publicCode === value
+    ));
+  }
+
+  function guestDeps() {
+    return {
+      cleanText,
+      crypto,
+      hashToken,
+      normalizePortalWhatsapp,
+      nowIso,
+      phoneKey,
+    };
+  }
+
+  async function loadGuestOrderContext(req, orderRef, input = {}) {
+    const db = await readDb();
+    const order = guestLookupByCodeOrId(db, decodeURIComponent(orderRef || ""));
+    if (!order) return { db, order: null, client: null, tokenRecord: null };
+    const token = guestTokenFrom(req, input);
+    if (!token) return { db, order: null, client: null, tokenRecord: null };
+    const lookup = validateGuestSessionToken(db, token, {
+      ...guestDeps(),
+      orderId: order.id,
+      onCleanupError: (error) => console.error("guest token cleanup failed", error?.message || error),
+    });
+    if (!lookup?.order || lookup.order.id !== order.id) {
+      return { db, order: null, client: null, tokenRecord: null };
+    }
+    return { db, order: lookup.order, client: lookup.client, tokenRecord: lookup.tokenRecord, token };
+  }
+
+  function publicGuestOrderResponse(db, order, token = "") {
+    const recoveryLink = token
+      ? generateGuestRecoveryLink(order.id, {
+          db,
+          token,
+          publicBaseUrl: "",
+        })
+      : "";
+    return {
+      order: publicCustomerOrder(order, db),
+      recoveryLink,
+    };
+  }
+
+  function publicGuestClaimCandidates(db, client) {
+    if (!guestClaimEnabled() || !client?.whatsapp) return [];
+    return findGuestOrdersForClaimByWhatsapp(db, client.whatsapp, { phoneKey })
+      .filter((order) => order.clientId !== client.id)
+      .map((order) => ({ code: order.code, status: order.status, createdAt: order.createdAt }));
+  }
+
+  function customerStateWithGuestClaims(db, context) {
+    const customer = publicCustomerState(db, context);
+    const candidates = publicGuestClaimCandidates(db, context?.client);
+    if (candidates.length) customer.guestClaimCandidates = candidates;
+    return customer;
+  }
+
   return async function handlePortalApi(req, res, pathname) {
   if (req.method === "GET" && pathname === "/api/portal/catalog") {
     const db = await readDb();
@@ -216,15 +321,21 @@ export function createPortalRoutes({
           publicPortalCatalog,
         });
       res.setHeader("Set-Cookie", cookieHeader(customerDeviceCookieName, deviceToken, customerDeviceMaxAgeSeconds));
+      const customer = bootstrap.customer;
+      if (guestClaimEnabled() && context?.client?.whatsapp) {
+        const claimDb = await readDb();
+        const candidates = publicGuestClaimCandidates(claimDb, context.client);
+        if (candidates.length) customer.guestClaimCandidates = candidates;
+      }
       return sendJson(res, 200, {
-        customer: bootstrap.customer,
+        customer,
         catalog: bootstrap.catalog,
       });
     }
     const context = await getCurrentCustomerContext(req);
     res.setHeader("Set-Cookie", cookieHeader(customerDeviceCookieName, context.deviceToken, customerDeviceMaxAgeSeconds));
     return sendJson(res, 200, {
-      customer: publicCustomerState(context.db, context),
+      customer: customerStateWithGuestClaims(context.db, context),
       catalog: publicPortalCatalog(context.db),
     });
   }
@@ -371,7 +482,7 @@ export function createPortalRoutes({
       cookieHeader(customerDeviceCookieName, deviceToken, customerDeviceMaxAgeSeconds),
     ]);
     return sendJson(res, 201, {
-      customer: publicCustomerState(db, { user: customerUser, client, device }),
+      customer: customerStateWithGuestClaims(db, { user: customerUser, client, device }),
       catalog: publicPortalCatalog(db),
       message: verificationSent ? "Cuenta creada. Revisa tu correo para verificarla." : "Cuenta creada. No pudimos enviar el correo de verificacion; intenta reenviarlo.",
       emailVerification: { required: true, sent: verificationSent },
@@ -629,6 +740,359 @@ export function createPortalRoutes({
     req.on("close", cleanup);
     res.on("error", cleanup);
     return;
+  }
+
+  if (pathname.startsWith("/api/portal/guest/") && !usePortalGuestEnabled()) {
+    return guestDisabled(res);
+  }
+
+  if (req.method === "GET" && pathname === "/api/portal/guest/state") {
+    const db = await readDb();
+    return sendJson(res, 200, {
+      guest: { enabled: true },
+      catalog: publicPortalCatalog(db),
+    });
+  }
+
+  if (req.method === "POST" && pathname === "/api/portal/guest/orders") {
+    const input = await parseJson(req);
+    const db = await readDb();
+    const { client: guestClient, created: guestClientCreated } = findOrCreateGuestClient(db, input.whatsapp, input.country, guestDeps());
+    const quantity = Math.max(1, Math.min(10, Number.parseInt(input.quantity, 10) || 1));
+    const service = portalPublicServices.find((candidate) => candidate.code === "PORTAL-XIAOMI-FRP" && candidate.enabled);
+    const requestedPaymentCode = cleanText(input.paymentMethod, 60);
+    const payment = resolvePortalPaymentForClient(requestedPaymentCode, guestClient, db);
+    if (!service) return sendJson(res, 503, { error: "Xiaomi FRP no esta disponible en el portal." });
+    if (!payment) return sendJson(res, 400, { error: "Metodo de pago invalido para tu pais." });
+    const rateOk = enforcePortalRateLimit(db, req, "portal_guest_order_frp", hashToken(guestClient.whatsapp), maxPortalOrderRequestsPerWindow);
+    if (!rateOk) {
+      audit(db, null, "PORTAL_GUEST_ORDER_RATE_LIMITED", guestClient.id, { phoneHash: hashToken(guestClient.whatsapp), ipHash: hashToken(clientIp(req)) });
+      await writeDb(db);
+      return sendJson(res, 429, { error: "Demasiadas solicitudes. Intenta mas tarde." });
+    }
+    const suggestion = portalFrpPriceSuggestion(db, guestClient.id, quantity, false, {}, "", { isGuest: true });
+    if (!suggestion.available) {
+      audit(db, null, "PORTAL_GUEST_ORDER_BLOCKED_PRICING_UNAVAILABLE", guestClient.id, {
+        quantity,
+        reason: suggestion.error || "pricing_unavailable",
+        phoneHash: hashToken(guestClient.whatsapp),
+      });
+      await writeDb(db);
+      return sendJson(res, 503, { error: suggestion.error || "Xiaomi FRP no tiene precio activo en este momento." });
+    }
+    const requestId = crypto.randomUUID();
+    const orderId = crypto.randomUUID();
+    const inputItems = Array.isArray(input.items) ? input.items : [];
+    const items = Array.from({ length: quantity }, (_, index) => {
+      const itemInput = inputItems[index] || {};
+      const originalText = cleanText(itemInput.raw || itemInput.model || input.model || "", 180);
+      const eligibility = frpEligibilityResult(originalText);
+      return {
+        id: crypto.randomUUID(),
+        requestId,
+        orderId,
+        clientId: guestClient.id,
+        masterClientId: guestClient.masterClientId || "",
+        sequence: index + 1,
+        originalText,
+        model: cleanText(itemInput.model || originalText || "", 120),
+        imei: cleanText(itemInput.imei || "", 40),
+        status: eligibility.status === "REQUIERE_REVISION" ? "REQUIERE_REVISION" : "ESPERANDO_PREPARACION",
+        eligibilityStatus: eligibility.status,
+        eligibilityDetectedMatch: eligibility.detectedMatch,
+        eligibilityMatchedAlias: eligibility.matchedAlias,
+        eligibilityInternalReason: eligibility.internalReason,
+        eligibilityPublicMessage: eligibility.publicMessage,
+        frpOrderId: "",
+        frpJobId: "",
+        createdAt: nowIso(),
+        updatedAt: nowIso(),
+      };
+    });
+    const eligibilitySummary = summarizeFrpEligibility(items);
+    if (eligibilitySummary.blocked.length) {
+      audit(db, null, "PORTAL_GUEST_FRP_ELIGIBILITY_BLOCKED", guestClient.id, {
+        quantity,
+        phoneHash: hashToken(guestClient.whatsapp),
+        blocked: eligibilitySummary.blocked.map((result) => ({
+          status: result.status,
+          detectedMatch: result.detectedMatch,
+          internalReason: result.internalReason,
+        })),
+      });
+      await writeDb(db);
+      return sendJson(res, 409, {
+        error: eligibilitySummary.blocked[0]?.publicMessage || "Uno de los equipos no aplica para FRP Express.",
+      });
+    }
+    const compatibilityReviewRequired = eligibilitySummary.review.length > 0;
+    const inputProofs = sanitizePaymentProofImages(input.paymentProofs || []);
+    if (inputProofs.length && compatibilityReviewRequired) {
+      audit(db, null, "PORTAL_GUEST_ORDER_PROOF_BLOCKED_COMPATIBILITY_REVIEW", guestClient.id, {
+        quantity,
+        proofCount: inputProofs.length,
+        phoneHash: hashToken(guestClient.whatsapp),
+      });
+      await writeDb(db);
+      return sendJson(res, 409, { error: "AriadGSM debe confirmar compatibilidad antes de recibir pago. Vuelve a enviar la solicitud sin comprobante." });
+    }
+    const duplicateHash = new Set();
+    for (const candidateOrder of db.customerOrders) for (const proof of candidateOrder.paymentProofs || []) duplicateHash.add(proof.hash);
+    for (const otherFrpOrder of db.frpOrders) for (const proof of otherFrpOrder.paymentProofs || []) duplicateHash.add(proof.hash);
+    for (const ticket of db.tickets) for (const proof of ticket.paymentProofs || []) duplicateHash.add(proof.hash);
+    if (inputProofs.some((proof) => duplicateHash.has(proof.hash))) {
+      audit(db, null, "PORTAL_GUEST_PAYMENT_PROOF_DUPLICATE_BLOCKED", guestClient.id, { quantity, phoneHash: hashToken(guestClient.whatsapp) });
+      await writeDb(db);
+      return sendJson(res, 409, { error: "Ese comprobante ya fue cargado antes." });
+    }
+    const initialPublicStatus = compatibilityReviewRequired
+      ? "REVISION_COMPATIBILIDAD"
+      : (inputProofs.length ? "PAGO_EN_REVISION" : "ESPERANDO_PAGO");
+    const request = {
+      id: requestId,
+      clientId: guestClient.id,
+      masterClientId: guestClient.masterClientId || "",
+      userId: "",
+      serviceCode: service.code,
+      serviceName: service.name,
+      channel: frpWorkChannel,
+      status: initialPublicStatus,
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+    };
+    const order = {
+      id: orderId,
+      code: nextCustomerOrderCode(db),
+      requestId,
+      clientId: guestClient.id,
+      masterClientId: guestClient.masterClientId || "",
+      userId: "",
+      serviceCode: service.code,
+      internalServiceCode: service.internalServiceCode,
+      serviceName: service.name,
+      workChannel: frpWorkChannel,
+      quantity,
+      baseUnitPrice: suggestion.pricingSnapshot?.baseUnitPrice || suggestion.unitPrice,
+      suggestedUnitPrice: suggestion.unitPrice,
+      unitPrice: suggestion.unitPrice,
+      totalPrice: suggestion.total,
+      pricingSnapshot: suggestion.pricingSnapshot,
+      priceFormatted: formatPortalPaymentAmountFromUsdt(db, suggestion.total, payment),
+      discountLabel: suggestion.label,
+      discountLocked: suggestion.discountLocked,
+      monthlyUsageAtCreation: suggestion.monthlyUsage,
+      nextMonthlyTier: null,
+      paymentMethod: payment.code,
+      paymentLabel: payment.label,
+      paymentDetails: payment.details,
+      paymentProofs: inputProofs.slice(),
+      priceLocked: 0,
+      priceLockedAt: "",
+      priceLockExpiresAt: "",
+      priceDecisionAction: "",
+      priceDecisionAt: "",
+      priceDecisionWaitUntil: "",
+      customerConnectionReadyAt: "",
+      urgentRequested: false,
+      urgentStatus: "",
+      postpayRequested: false,
+      postpayStatus: "",
+      publicStatus: initialPublicStatus,
+      compatibilityReviewRequired,
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+      note: cleanText(input.note, 500),
+    };
+    createFrpOrderFromPortal(db, guestClient, order, items);
+    order.publicCode = publicCustomerOrder(order, db).shortCode || order.code;
+    if (inputProofs.length) {
+      const paymentVerification = assessPaymentProofsForAutomation({
+        order,
+        proofs: inputProofs,
+        source: "portal_guest_create",
+        now: nowIso(),
+      });
+      order.paymentVerification = paymentVerification;
+      const linkedFrpOrder = db.frpOrders.find((candidate) => candidate.id === order.frpOrderId);
+      if (linkedFrpOrder) {
+        linkedFrpOrder.paymentProofs = inputProofs.slice();
+        linkedFrpOrder.paymentStatus = "PAGO_EN_VALIDACION";
+        linkedFrpOrder.paymentVerification = paymentVerification;
+        linkedFrpOrder.updatedAt = nowIso();
+        syncFrpOrderStatus(db, linkedFrpOrder);
+      }
+    }
+    db.customerRequests.unshift(request);
+    db.customerOrders.unshift(order);
+    db.customerOrderItems.unshift(...items);
+    const { token } = createGuestSessionToken(db, order.id, guestDeps());
+    audit(db, null, "PORTAL_GUEST_ORDER_CREATED", order.id, {
+      code: order.publicCode || order.code,
+      clientId: guestClient.id,
+      guestClientCreated,
+      quantity,
+      totalPrice: order.totalPrice,
+      phoneHash: hashToken(guestClient.whatsapp),
+      proofCount: inputProofs.length,
+    });
+    await writeDb(db);
+    publishPortalOrders(db, guestClient.id, inputProofs.length ? "guest_order_created_with_proof" : "guest_order_created");
+    publishFrpOps(db, inputProofs.length ? "payment_review_needed" : "guest_frp_order_created");
+    setGuestSessionCookie(res, token);
+    return sendJson(res, 201, publicGuestOrderResponse(db, order, token));
+  }
+
+  const guestOrderMatch = pathname.match(/^\/api\/portal\/guest\/orders\/([^/]+)$/);
+  if (req.method === "GET" && guestOrderMatch) {
+    const context = await loadGuestOrderContext(req, guestOrderMatch[1]);
+    if (!context.order) return sendJson(res, 404, { error: "Orden no encontrada." });
+    setGuestSessionCookie(res, context.token);
+    return sendJson(res, 200, publicGuestOrderResponse(context.db, context.order));
+  }
+
+  const guestProofMatch = pathname.match(/^\/api\/portal\/guest\/orders\/([^/]+)\/payment-proof$/);
+  if (req.method === "PATCH" && guestProofMatch) {
+    const input = await parseJson(req);
+    const context = await loadGuestOrderContext(req, guestProofMatch[1], input);
+    if (!context.order) return sendJson(res, 404, { error: "Orden no encontrada." });
+    const db = context.db;
+    const rateOk = enforcePortalRateLimit(db, req, "portal_guest_payment_proof", context.order.id, maxPortalProofRequestsPerWindow);
+    if (!rateOk) {
+      audit(db, null, "PORTAL_GUEST_PAYMENT_PROOF_RATE_LIMITED", context.order.id, { ipHash: hashToken(clientIp(req)) });
+      await writeDb(db);
+      return sendJson(res, 429, { error: "Demasiados comprobantes enviados. Intenta mas tarde." });
+    }
+    const proofs = sanitizePaymentProofImages(input.paymentProofs || []);
+    if (!proofs.length) return sendJson(res, 400, { error: "Sube al menos un comprobante." });
+    context.order.paymentProofs = proofs;
+    context.order.publicStatus = "PAGO_EN_REVISION";
+    context.order.updatedAt = nowIso();
+    const verification = assessPaymentProofsForAutomation({
+      order: context.order,
+      proofs,
+      source: "portal_guest_reupload",
+      now: nowIso(),
+    });
+    context.order.paymentVerification = verification;
+    const linkedFrpOrder = db.frpOrders.find((candidate) => candidate.id === context.order.frpOrderId);
+    if (linkedFrpOrder) {
+      linkedFrpOrder.paymentProofs = proofs.slice();
+      linkedFrpOrder.paymentStatus = "PAGO_EN_VALIDACION";
+      linkedFrpOrder.paymentVerification = verification;
+      linkedFrpOrder.updatedAt = nowIso();
+      syncFrpOrderStatus(db, linkedFrpOrder);
+    }
+    audit(db, null, "PORTAL_GUEST_PAYMENT_PROOF_UPLOADED", context.order.id, {
+      proofCount: proofs.length,
+      phoneHash: hashToken(context.client?.whatsapp || ""),
+    });
+    await writeDb(db);
+    publishPortalOrders(db, context.order.clientId, "guest_payment_proof_uploaded");
+    publishFrpOps(db, "payment_review_needed");
+    return sendJson(res, 200, publicGuestOrderResponse(db, context.order));
+  }
+
+  const guestEventsMatch = pathname.match(/^\/api\/portal\/guest\/orders\/([^/]+)\/events$/);
+  if (req.method === "GET" && guestEventsMatch) {
+    const context = await loadGuestOrderContext(req, guestEventsMatch[1]);
+    if (!context.order) return sendJson(res, 404, { error: "Orden no encontrada." });
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-store, no-transform",
+      "Connection": "keep-alive",
+      "X-Accel-Buffering": "no",
+    });
+    res.write("retry: 5000\n\n");
+    const stream = { id: crypto.randomUUID(), clientId: context.order.clientId, userId: "", res, startedAtMs: Date.now(), closed: false };
+    addPortalOrderStream(context.order.clientId, stream);
+    sendSseEvent(res, "orders", {
+      reason: "connected",
+      updatedAt: nowIso(),
+      order: publicCustomerOrder(context.order, context.db),
+    }, `${Date.now()}`);
+    const heartbeat = setInterval(() => {
+      if (stream.closed || res.destroyed || res.writableEnded) return;
+      res.write(`: heartbeat ${Date.now()}\n\n`);
+    }, portalOrdersSseHeartbeatMs);
+    const cleanup = () => {
+      if (stream.closed) return;
+      stream.closed = true;
+      clearInterval(heartbeat);
+      removePortalOrderStream(context.order.clientId, stream);
+    };
+    req.on("close", cleanup);
+    res.on("error", cleanup);
+    return;
+  }
+
+  if (req.method === "POST" && pathname === "/api/portal/guest/claim-preview") {
+    if (!guestClaimEnabled()) return guestDisabled(res);
+    const context = await getCurrentCustomerContext(req);
+    if (!requireCustomer(context, res)) return;
+    const candidates = publicGuestClaimCandidates(context.db, context.client);
+    return sendJson(res, 200, { candidates });
+  }
+
+  if (req.method === "POST" && pathname === "/api/portal/guest/claim") {
+    if (!guestClaimEnabled()) return guestDisabled(res);
+    const context = await getCurrentCustomerContext(req);
+    if (!requireCustomer(context, res)) return;
+    const input = await parseJson(req);
+    if (input.confirm !== true) return sendJson(res, 400, { error: "Confirma la asociacion antes de continuar." });
+    const db = context.db;
+    const candidates = findGuestOrdersForClaimByWhatsapp(db, context.client.whatsapp, { phoneKey })
+      .filter((order) => order.clientId !== context.client.id);
+    const requestedCodes = new Set((Array.isArray(input.codes) ? input.codes : []).map((code) => cleanText(code, 80)).filter(Boolean));
+    const selected = requestedCodes.size
+      ? candidates.filter((order) => requestedCodes.has(order.code))
+      : candidates;
+    if (!selected.length) return sendJson(res, 404, { error: "No hay ordenes invitadas para asociar." });
+    const sourceGuestClientIds = [...new Set(selected.map((order) => order.clientId).filter(Boolean))];
+    const result = claimGuestOrders(db, context.client.id, sourceGuestClientIds, { nowIso });
+    audit(db, context.user.id, "PORTAL_GUEST_CLAIM", context.client.id, {
+      phoneHash: hashToken(context.client.whatsapp || ""),
+      ordersClaimed: result.ordersClaimed,
+      sourceGuestClientCount: sourceGuestClientIds.length,
+      codes: selected.map((order) => order.code).slice(0, 20),
+    });
+    await writeDb(db);
+    publishPortalOrders(db, context.client.id, "guest_claim");
+    return sendJson(res, 200, {
+      ok: true,
+      claimed: result.ordersClaimed,
+      customer: customerStateWithGuestClaims(db, context),
+    });
+  }
+
+  const guestComprobanteMatch = pathname.match(/^\/api\/portal\/guest\/orders\/([^/]+)\/comprobante\.pdf$/);
+  if (req.method === "GET" && guestComprobanteMatch) {
+    const context = await loadGuestOrderContext(req, guestComprobanteMatch[1]);
+    if (!context.order) return sendJson(res, 404, { error: "Orden no encontrada." });
+    const publicOrder = publicCustomerOrder(context.order, context.db);
+    if (publicOrder.publicStatus !== "FINALIZADO") {
+      return sendJson(res, 409, { error: "El comprobante PDF se habilita cuando la orden este finalizada." });
+    }
+    const items = context.db.customerOrderItems.filter((item) => item.orderId === context.order.id).map((item) => {
+      const job = context.db.frpJobs.find((candidate) => candidate.id === item.frpJobId);
+      return {
+        sequence: item.sequence,
+        model: item.model,
+        ardCode: job?.ardCode || item.ardCode || "",
+        doneAt: job?.doneAt || "",
+      };
+    });
+    const { buffer } = await renderOrderComprobantePdf({
+      order: { ...publicOrder, clientName: context.client?.name || "" },
+      items,
+      baseUrl: `http://${req.headers.host || "localhost"}`,
+    });
+    res.writeHead(200, {
+      "Content-Type": "application/pdf",
+      "Content-Length": String(buffer.length),
+      "Content-Disposition": `inline; filename="AriadGSM-${context.order.publicCode || context.order.code}.pdf"`,
+      "Cache-Control": "no-store",
+    });
+    return res.end(buffer);
   }
 
   if (req.method === "POST" && pathname === "/api/portal/orders/frp") {
