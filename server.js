@@ -5613,8 +5613,10 @@ function requestUsesCustomerPortal(req, pathname) {
     || pathname === "/portal";
 }
 
+const defaultWhatsappSupportNumber = "51961751354";
+
 function whatsappSupportNumber() {
-  return String(process.env.WHATSAPP_SUPPORT_NUMBER || "").replace(/\D/g, "");
+  return String(process.env.WHATSAPP_SUPPORT_NUMBER || defaultWhatsappSupportNumber).replace(/\D/g, "");
 }
 
 function whatsappSupportUrl() {
