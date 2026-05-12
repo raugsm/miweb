@@ -155,6 +155,10 @@ const publicBaseUrl = String(process.env.ARIAD_PUBLIC_URL || process.env.RENDER_
 const mailFrom = process.env.ARIAD_MAIL_FROM || '"AriadGSM Soporte" <soporte@ariadgsm.com>';
 const customerPortalBaseUrl = resolveCustomerPortalBaseUrl();
 const releaseCommit = releaseCommitFromEnv(process.env);
+const latestClientVersionRpcUrl = "https://duvpkpfivcnftxelgqtt.supabase.co/rest/v1/rpc/get_latest_client_version";
+const latestClientVersionCacheTtlMs = 5 * 60 * 1000;
+let latestClientDownloadCache = { downloadUrl: "", expiresAt: 0 };
+let warnedMissingSupabaseAnonKey = false;
 const portalOrderStreams = new Map();
 // QUE: streams SSE del panel operador FRP. Map<userId, Set<stream>>.
 // Multiples streams por user son validos (laptop + movil del mismo operador).
@@ -5603,13 +5607,93 @@ function redirectToCustomerPortal(req, res) {
 }
 
 function requestUsesCustomerPortal(req, pathname) {
-  const host = requestHost(req);
-  return host === "ariadgsm.com"
-    || host === "www.ariadgsm.com"
-    || pathname === "/cliente"
+  return pathname === "/cliente"
     || pathname.startsWith("/cliente/")
     || pathname.startsWith("/pedido/")
     || pathname === "/portal";
+}
+
+function whatsappSupportNumber() {
+  return String(process.env.WHATSAPP_SUPPORT_NUMBER || "").replace(/\D/g, "");
+}
+
+function whatsappSupportUrl() {
+  const number = whatsappSupportNumber();
+  return number ? `https://wa.me/${number}` : "/manual#contacto";
+}
+
+function renderPublicHtmlTemplate(html) {
+  const number = whatsappSupportNumber() || "Configurar WhatsApp soporte";
+  return html
+    .replaceAll("__WHATSAPP_SUPPORT_URL__", whatsappSupportUrl())
+    .replaceAll("__WHATSAPP_SUPPORT_NUMBER__", number);
+}
+
+function requestUsesAdminShell(pathname) {
+  return pathname === "/admin" || pathname.startsWith("/admin/");
+}
+
+async function latestClientDownloadUrl() {
+  const now = Date.now();
+  if (latestClientDownloadCache.downloadUrl && latestClientDownloadCache.expiresAt > now) {
+    return latestClientDownloadCache.downloadUrl;
+  }
+  const supabaseAnonKey = String(process.env.SUPABASE_ANON_KEY || "").trim();
+  if (!supabaseAnonKey) {
+    if (!warnedMissingSupabaseAnonKey) {
+      console.warn("SUPABASE_ANON_KEY no esta configurada; /descargar no puede resolver la ultima version.");
+      warnedMissingSupabaseAnonKey = true;
+    }
+    return "";
+  }
+  const response = await fetch(latestClientVersionRpcUrl, {
+    method: "POST",
+    headers: {
+      apikey: supabaseAnonKey,
+      Authorization: `Bearer ${supabaseAnonKey}`,
+      "Content-Type": "application/json",
+    },
+    body: "{}",
+  });
+  if (!response.ok) {
+    throw new Error(`Supabase latest client version RPC failed with ${response.status}`);
+  }
+  const payload = await response.json();
+  const record = Array.isArray(payload) ? payload[0] : payload;
+  const downloadUrl = String(record?.download_url || "").trim();
+  if (!/^https?:\/\//i.test(downloadUrl)) {
+    throw new Error("Supabase latest client version RPC did not return a valid download_url");
+  }
+  latestClientDownloadCache = {
+    downloadUrl,
+    expiresAt: now + latestClientVersionCacheTtlMs,
+  };
+  return downloadUrl;
+}
+
+async function redirectToLatestClientInstaller(res) {
+  try {
+    const downloadUrl = await latestClientDownloadUrl();
+    if (!downloadUrl) {
+      res.writeHead(503, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" });
+      return res.end("El servicio de descarga está temporalmente no disponible.\nPor favor intentá de nuevo en unos minutos.");
+    }
+    res.writeHead(302, {
+      Location: downloadUrl,
+      "Cache-Control": "no-store",
+      "Referrer-Policy": "no-referrer",
+    });
+    return res.end();
+  } catch (error) {
+    console.warn("No se pudo resolver la descarga de AriadGSM Cliente.", error?.message || error);
+    res.writeHead(503, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" });
+    return res.end("El servicio de descarga está temporalmente no disponible.\nPor favor intentá de nuevo en unos minutos.");
+  }
+}
+
+async function sendPublicHtmlFile(res, fileName) {
+  const html = await fs.readFile(path.join(publicDir, fileName), "utf8");
+  return sendHtml(res, 200, renderPublicHtmlTemplate(html));
 }
 
 async function serveStatic(req, res, pathname) {
@@ -5649,11 +5733,31 @@ async function serveStatic(req, res, pathname) {
     return redirectToCustomerPortal(req, res);
   }
 
+  if (pathname === "/descargar") {
+    return redirectToLatestClientInstaller(res);
+  }
+  if (pathname === "/instrucciones") {
+    res.writeHead(301, {
+      Location: "/manual",
+      "Cache-Control": "no-store",
+    });
+    return res.end();
+  }
+  if (pathname === "/") {
+    return sendPublicHtmlFile(res, "landing.html");
+  }
+  if (pathname === "/manual") {
+    return sendPublicHtmlFile(res, "manual.html");
+  }
+
   const portalRequest = requestUsesCustomerPortal(req, pathname);
+  const adminRequest = requestUsesAdminShell(pathname);
   if (portalRequest) res.setHeader("Referrer-Policy", "no-referrer");
   let safePath = pathname;
   if (portalRequest && (pathname === "/" || pathname === "/cliente" || pathname.startsWith("/cliente/") || pathname.startsWith("/pedido/") || pathname === "/portal")) {
     safePath = "/portal.html";
+  } else if (adminRequest) {
+    safePath = "/index.html";
   } else if (pathname === "/") {
     safePath = "/index.html";
   }
@@ -5683,7 +5787,8 @@ async function serveStatic(req, res, pathname) {
     res.writeHead(200, { "Content-Type": type, "Cache-Control": cacheHeader });
     res.end(file);
   } catch {
-    const index = await fs.readFile(path.join(publicDir, portalRequest ? "portal.html" : "index.html"));
+    const fallbackFile = portalRequest ? "portal.html" : "index.html";
+    const index = await fs.readFile(path.join(publicDir, fallbackFile));
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
     res.end(index);
   }

@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AriadGSM Cliente — Manual de uso</title>
+    <meta name="description" content="Manual completo para instalar y usar AriadGSM Cliente en servicios Xiaomi FRP remotos." />
+    <meta property="og:title" content="AriadGSM Cliente — Manual de uso" />
+    <meta property="og:description" content="Guía paso a paso para técnicos que usan AriadGSM Cliente." />
+    <meta property="og:type" content="article" />
+    <meta property="og:image" content="/ariadgsm-logo-cropped.png" />
+    <link rel="stylesheet" href="/landing.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container header-inner">
+        <a class="brand" href="/" aria-label="AriadGSM inicio">
+          <img src="/ariadgsm-logo-cropped.png" alt="AriadGSM" />
+        </a>
+        <nav class="nav-links" aria-label="Navegación principal">
+          <a href="/">Inicio</a>
+          <a href="/descargar">Descargar</a>
+          <a href="__WHATSAPP_SUPPORT_URL__">WhatsApp</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="manual-page">
+      <article class="container manual">
+        <header class="manual-hero">
+          <p class="eyebrow">Manual oficial</p>
+          <h1>AriadGSM Cliente — Guía de uso</h1>
+          <p class="subtitle">Servicio remoto para desbloquear FRP y resetear cuentas Xiaomi en minutos.</p>
+          <a href="/descargar" class="btn btn-primary">Descargar AriadGSM Cliente</a>
+        </header>
+
+        <section>
+          <h2>1. Instalación</h2>
+          <ol>
+            <li>Descargá AriadGSM Cliente desde el botón de descarga oficial.</li>
+            <li>Ejecutá el instalador con doble click en <strong>AriadGSM-Cliente-Setup.exe</strong>.</li>
+            <li>Aceptá los permisos si Windows los pide.</li>
+            <li>Cuando termine, la app va a abrir automáticamente.</li>
+          </ol>
+          <div class="notice warning">
+            <strong>No ejecutes la app como administrador.</strong>
+            <p>Solo doble click normal. Si la ejecutás como admin, no vas a poder arrastrar imágenes desde Chrome ni conectar el módulo remoto.</p>
+          </div>
+          <h3>Requisitos del sistema</h3>
+          <ul>
+            <li>Windows 10 o superior</li>
+            <li>Conexión a internet estable</li>
+            <li>Cable USB para conectar tu Xiaomi</li>
+          </ul>
+        </section>
+
+        <section>
+          <h2>2. Primer uso</h2>
+          <p>Al abrir la app por primera vez ves:</p>
+          <ul>
+            <li>Header con tu versión actual y un botón para cambiar entre tema claro u oscuro.</li>
+            <li>Card principal con el servicio disponible: Xiaomi Reset + FRP.</li>
+            <li>Precio mostrado según tu país y moneda.</li>
+          </ul>
+          <p>No necesitás crear cuenta ni hacer login. Es directo.</p>
+        </section>
+
+        <section>
+          <h2>3. Armar tu pedido</h2>
+          <h3>3.1. Seleccionar país y moneda</h3>
+          <p>Hacé click en el dropdown de país y elegí el tuyo. El precio se ajusta automáticamente a tu moneda.</p>
+
+          <h3>3.2. Cantidad de equipos</h3>
+          <p>Si vas a procesar más de un equipo, ajustá la cantidad. El total se recalcula.</p>
+
+          <h3>3.3. Elegir método de pago</h3>
+          <p>Vas a ver los métodos disponibles para tu país: Yape, Bancolombia, STP, Mercado Pago o Binance Pay. Hacé click en el método que vas a usar.</p>
+
+          <h3>3.4. Realizar el pago</h3>
+          <p>Hacé la transferencia desde tu app de banco o cripto al destinatario mostrado. Transferí el monto exacto.</p>
+
+          <h3>3.5. Subir comprobante de pago</h3>
+          <p>Tres formas:</p>
+          <ul>
+            <li>Arrastrar desde Chrome, WhatsApp Web o la app del banco a la zona de carga.</li>
+            <li>Pegar captura con <kbd>Ctrl</kbd> + <kbd>V</kbd>.</li>
+            <li>Usar el botón "Examinar archivo".</li>
+          </ul>
+          <p>Formatos: PNG, JPG, JPEG, WEBP, GIF. Máximo 10 MB.</p>
+        </section>
+
+        <section>
+          <h2>4. Confirmar el pedido</h2>
+          <p>Click en <strong>Confirmar pedido y conectar</strong>. La app va a:</p>
+          <ol>
+            <li>Subir tu comprobante.</li>
+            <li>Crear el pedido en el sistema.</li>
+            <li>Asignarte un código único, por ejemplo <code>AG-260512-001</code>.</li>
+            <li>Lanzar automáticamente el módulo de conexión remota.</li>
+          </ol>
+        </section>
+
+        <section>
+          <h2>5. Conectar tu equipo</h2>
+          <h3>5.1. Poner tu Xiaomi en modo sideload</h3>
+          <ol>
+            <li>Apagá tu Xiaomi completamente.</li>
+            <li>Mantené Volumen - + Botón de Encendido al mismo tiempo.</li>
+            <li>Cuando aparezca el logo de recovery, soltá los botones.</li>
+            <li>En el menú de recovery elegí <strong>Apply update from ADB</strong>.</li>
+            <li>Conectá el cable USB.</li>
+          </ol>
+
+          <h3>5.2. Esperá que el módulo detecte tu equipo</h3>
+          <p>El Customer Module va a pasar del Paso 1 al Paso 2 automáticamente. Ahí el técnico de AriadGSM toma control.</p>
+        </section>
+
+        <section>
+          <h2>6. Esperá el servicio</h2>
+          <p>Vas a ver el estado en tiempo real:</p>
+          <ul>
+            <li><strong>Esperando conexión</strong>: el técnico todavía no tomó el caso.</li>
+            <li><strong>Procesando ahora</strong>: el técnico está trabajando en tu equipo.</li>
+            <li><strong>Listo</strong>: el servicio terminó.</li>
+          </ul>
+          <p>Tiempo promedio: 5-30 segundos.</p>
+        </section>
+
+        <section>
+          <h2>7. Servicio completado</h2>
+          <p>Tu Xiaomi reinicia automáticamente. La app muestra:</p>
+          <blockquote>
+            <p>✓ Servicio completado<br />Tu equipo fue procesado exitosamente.</p>
+          </blockquote>
+          <p>Botones disponibles:</p>
+          <ul>
+            <li><strong>Nuevo pedido</strong>: procesar otro equipo.</li>
+            <li><strong>WhatsApp soporte</strong>: contactar al equipo.</li>
+          </ul>
+        </section>
+
+        <section>
+          <h2>8. Actualizaciones automáticas</h2>
+          <p>AriadGSM Cliente se actualiza solo. Si hay nueva versión al abrir la app, se actualiza automáticamente. Si llega una actualización mientras usás la app, espera a que termines tu pedido actual.</p>
+        </section>
+
+        <section>
+          <h2>9. Solución de problemas</h2>
+          <h3>"No se pudo conectar automáticamente"</h3>
+          <p>Usá <strong>Reintentar</strong> o <strong>WhatsApp soporte</strong>.</p>
+
+          <h3>"Estás ejecutando la aplicación como administrador"</h3>
+          <ol>
+            <li>Cerrá la app.</li>
+            <li>Click derecho en el ícono → Propiedades → Compatibilidad.</li>
+            <li>Desmarcá "Ejecutar este programa como administrador".</li>
+            <li>Abrí con doble click normal.</li>
+          </ol>
+
+          <h3>Mi Xiaomi no entra en sideload</h3>
+          <ul>
+            <li>Asegurate de apagarlo completamente.</li>
+            <li>Combinación principal: Volumen - + Power.</li>
+            <li>Si no funciona, probá Volumen + + Power.</li>
+          </ul>
+
+          <h3>El comprobante no se sube</h3>
+          <ul>
+            <li>Usá un archivo válido: PNG, JPG, WEBP o GIF menor a 10 MB.</li>
+            <li>Si copiás desde Chrome, copiá la imagen, no el enlace.</li>
+            <li>Probá con "Examinar archivo".</li>
+          </ul>
+        </section>
+
+        <section id="contacto">
+          <h2>Contacto</h2>
+          <p>WhatsApp: <a href="__WHATSAPP_SUPPORT_URL__">__WHATSAPP_SUPPORT_NUMBER__</a></p>
+          <p>Sitio web: <a href="/">ariadgsm.com</a></p>
+        </section>
+      </article>
+    </main>
+  </body>
+</html>
