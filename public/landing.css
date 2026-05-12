@@ -175,6 +175,20 @@ h3 {
   font-size: 14px;
 }
 
+.version-pill {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  padding: 3px 9px;
+  border: 1px solid rgba(45, 127, 255, 0.22);
+  border-radius: 999px;
+  color: var(--brand);
+  background: rgba(45, 127, 255, 0.08);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
 .hero-card {
   align-self: center;
   padding: 26px;

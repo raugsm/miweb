@@ -161,7 +161,7 @@ const supabaseRestUrl = `${supabaseProjectUrl}/rest/v1`;
 const latestClientVersionRpcUrl = `${supabaseRestUrl}/rpc/get_latest_client_version`;
 const latestClientVersionCacheTtlMs = 5 * 60 * 1000;
 const clientAppPriceCacheTtlMs = 5 * 1000;
-let latestClientDownloadCache = { downloadUrl: "", expiresAt: 0 };
+let latestClientVersionCache = { info: null, expiresAt: 0 };
 let clientAppPriceReportCache = { report: null, expiresAt: 0 };
 let warnedMissingSupabaseAnonKey = false;
 let warnedMissingSupabaseAnonKeyForPrices = false;
@@ -4192,6 +4192,20 @@ async function handleApi(req, res, pathname) {
     }
   }
 
+  if (req.method === "GET" && pathname === "/api/public/latest-client-version") {
+    try {
+      const info = await latestClientVersionInfo();
+      return sendJson(res, 200, {
+        available: Boolean(info.version),
+        version: info.version || "",
+        publishedAt: info.publishedAt || "",
+      });
+    } catch (error) {
+      console.warn("No se pudo cargar la version publica de AriadGSM Cliente.", error?.message || error);
+      return sendJson(res, 503, { error: "Version temporalmente no disponible." });
+    }
+  }
+
   const user = await getCurrentUser(req);
 
   if (req.method === "GET" && pathname === "/api/health") {
@@ -5713,24 +5727,32 @@ function requestUsesAdminShell(pathname) {
   return pathname === "/admin" || pathname.startsWith("/admin/");
 }
 
-async function latestClientDownloadUrl() {
+function normalizeLatestClientVersionInfo(record) {
+  return {
+    version: String(record?.version || "").trim(),
+    downloadUrl: String(record?.download_url || record?.installer_url || record?.file_url || "").trim(),
+    publishedAt: String(record?.published_at || record?.created_at || record?.updated_at || "").trim(),
+  };
+}
+
+async function latestClientVersionInfo() {
   const now = Date.now();
-  if (latestClientDownloadCache.downloadUrl && latestClientDownloadCache.expiresAt > now) {
-    return latestClientDownloadCache.downloadUrl;
+  if (latestClientVersionCache.info && latestClientVersionCache.expiresAt > now) {
+    return latestClientVersionCache.info;
   }
-  const supabaseAnonKey = String(process.env.SUPABASE_ANON_KEY || "").trim();
-  if (!supabaseAnonKey) {
+  const anonKey = supabaseAnonKey();
+  if (!anonKey) {
     if (!warnedMissingSupabaseAnonKey) {
       console.warn("SUPABASE_ANON_KEY no esta configurada; /descargar no puede resolver la ultima version.");
       warnedMissingSupabaseAnonKey = true;
     }
-    return "";
+    return { version: "", downloadUrl: "", publishedAt: "" };
   }
   const response = await fetch(latestClientVersionRpcUrl, {
     method: "POST",
     headers: {
-      apikey: supabaseAnonKey,
-      Authorization: `Bearer ${supabaseAnonKey}`,
+      apikey: anonKey,
+      Authorization: `Bearer ${anonKey}`,
       "Content-Type": "application/json",
     },
     body: "{}",
@@ -5740,15 +5762,20 @@ async function latestClientDownloadUrl() {
   }
   const payload = await response.json();
   const record = Array.isArray(payload) ? payload[0] : payload;
-  const downloadUrl = String(record?.download_url || "").trim();
-  if (!/^https?:\/\//i.test(downloadUrl)) {
+  const info = normalizeLatestClientVersionInfo(record);
+  if (!/^https?:\/\//i.test(info.downloadUrl)) {
     throw new Error("Supabase latest client version RPC did not return a valid download_url");
   }
-  latestClientDownloadCache = {
-    downloadUrl,
+  latestClientVersionCache = {
+    info,
     expiresAt: now + latestClientVersionCacheTtlMs,
   };
-  return downloadUrl;
+  return info;
+}
+
+async function latestClientDownloadUrl() {
+  const info = await latestClientVersionInfo();
+  return info.downloadUrl;
 }
 
 async function redirectToLatestClientInstaller(res) {

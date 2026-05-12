@@ -44,7 +44,7 @@ WHATSAPP_SUPPORT_NUMBER=<numero internacional para soporte sin + ni espacios; de
 
 `ARIAD_CUSTOMER_MODULE_URL` alimenta el boton "Descargar Customer Module" del paso 4 del portal cliente. Si la variable esta vacia, el portal muestra "Pidelo por WhatsApp 3" en lugar del boton. El binario no se versiona en este repo: subelo como adjunto a un GitHub Release y pega esa URL en Render.
 
-`SUPABASE_ANON_KEY` permite que `GET /descargar` consulte la RPC `get_latest_client_version` y redirija al instalador mas reciente de AriadGSM Cliente. Tambien permite que `GET /api/public/frp-prices` lea los precios publicos desde las tablas del dashboard de la aplicacion. Si falta, `/descargar` y `/api/public/frp-prices` responden 503.
+`SUPABASE_ANON_KEY` permite que `GET /descargar` consulte la RPC `get_latest_client_version` y redirija al instalador mas reciente de AriadGSM Cliente. Tambien permite que `GET /api/public/latest-client-version` muestre la version actual en la landing y que `GET /api/public/frp-prices` lea los precios publicos desde las tablas del dashboard de la aplicacion. Si falta, `/descargar` y `/api/public/frp-prices` responden 503; la landing simplemente oculta la etiqueta de version.
 
 `WHATSAPP_SUPPORT_NUMBER` alimenta los enlaces publicos de WhatsApp en la landing y el manual. Usar formato internacional solo con digitos. Si no se configura, la web usa `51961751354`.
 

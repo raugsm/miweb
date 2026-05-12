@@ -50,3 +50,13 @@ test("public landing prices refresh near-live from app dashboard endpoint", () =
   assert.match(source, /window\.setInterval\(schedulePriceRefresh, livePriceRefreshMs\)/);
   assert.doesNotMatch(source, /\/api\/portal\/admin-config\/events/);
 });
+
+test("public landing shows latest AriadGSM Cliente version from download RPC endpoint", () => {
+  const html = readFileSync(new URL("../public/landing.html", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../public/landing-version.js", import.meta.url), "utf8");
+
+  assert.match(html, /data-client-version/);
+  assert.match(html, /\/landing-version\.js/);
+  assert.match(source, /\/api\/public\/latest-client-version/);
+  assert.match(source, /Versi\\u00f3n v/);
+});
