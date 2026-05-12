@@ -47,6 +47,8 @@ WHATSAPP_SUPPORT_NUMBER=<numero internacional para soporte sin + ni espacios; de
 
 `WHATSAPP_SUPPORT_NUMBER` alimenta los enlaces publicos de WhatsApp en la landing y el manual. Usar formato internacional solo con digitos. Si no se configura, la web usa `51961751354`.
 
+`GET /api/public/frp-prices` expone un reporte publico de precios FRP por pais. La landing lo consume desde `/landing-prices.js`; los montos se calculan con el pricing y tasas vigentes del panel interno, no desde HTML hardcodeado.
+
 `ARIAD_TECHNICIAN_SWAP_MS` (opcional, default 10000) controla la duracion en milisegundos de la ventana de bloqueo cuando se cambia de tecnico activo. Solo bajalo a valores menores (>= 100) en entornos de test.
 
 En Render, adjuntar un disco persistente en `/opt/render/project/src/storage`.

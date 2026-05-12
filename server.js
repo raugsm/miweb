@@ -113,6 +113,7 @@ import { createFrpSerializers } from "./server/frp/serializers.js";
 import { createFrpRoutes } from "./server/frp/frp-routes.js";
 import { createPortalSerializers } from "./server/portal/serializers.js";
 import { createPortalRoutes } from "./server/portal/portal-routes.js";
+import { buildPublicFrpPriceReport } from "./server/public/frp-prices.js";
 import { createStorage } from "./server/db/storage.js";
 import {
   customerSessionLookup,
@@ -1137,6 +1138,28 @@ function portalFrpPriceSuggestion(db, clientId, quantity, canUseBenefits, benefi
   };
   suggestion.pricingSnapshot = frpPricingSnapshot(pricing, suggestion);
   return suggestion;
+}
+
+function publicFrpPriceReport(db) {
+  const pricing = frpCurrentPricing(db);
+  const pricingConfig = normalizePricingConfig(db?.pricingConfig || defaultPricingConfig());
+  const breakdown = pricing.available
+    ? frpPriceBreakdown(pricing, { quantity: 1, isGuest: false })
+    : null;
+  const updatedAt = [
+    pricing.config?.policy?.updatedAt,
+    pricing.provider?.updatedAt,
+    ...(pricingConfig.exchangeRates || []).map((rate) => rate.updatedAt),
+  ].filter(Boolean).sort().at(-1) || "";
+
+  return buildPublicFrpPriceReport({
+    available: pricing.available,
+    quantity: 1,
+    totalUsdt: breakdown?.totalUsdt || 0,
+    exchangeRates: pricingConfig.exchangeRates,
+    paymentMethods: paymentMethodsWithOverrides(db),
+    updatedAt,
+  });
 }
 
 const {
@@ -4114,6 +4137,12 @@ async function handleApi(req, res, pathname) {
   if (["POST", "PUT", "PATCH", "DELETE"].includes(req.method) && !isAllowedApiOrigin(req)) {
     return sendJson(res, 403, { error: "Origen no autorizado." });
   }
+
+  if (req.method === "GET" && pathname === "/api/public/frp-prices") {
+    const db = await readDb();
+    return sendJson(res, 200, { report: publicFrpPriceReport(db) });
+  }
+
   const user = await getCurrentUser(req);
 
   if (req.method === "GET" && pathname === "/api/health") {
