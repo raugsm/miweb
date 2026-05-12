@@ -1,4 +1,5 @@
 const priceList = document.querySelector("#public-price-list");
+let priceRefresh = null;
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -9,19 +10,32 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+function flagClass(price) {
+  const allowed = new Set(["cl", "co", "mx", "pe", "binance"]);
+  const code = String(price.flagCode || "").toLowerCase();
+  return allowed.has(code) ? ` price-flag-${code}` : " price-flag-binance";
+}
+
 function renderPriceCard(price) {
   const methods = Array.isArray(price.methods) && price.methods.length
     ? price.methods.join(" · ")
     : "Método disponible en la app";
   const unavailableClass = price.available ? "" : " price-card-muted";
+  const amount = price.available ? price.amountFormatted : "Consultar";
+  const helper = price.available ? `${price.currency} · 1 equipo` : "Por WhatsApp";
   return `
     <article class="price-card${unavailableClass}">
-      <div>
-        <span class="price-country">${escapeHtml(price.country)}</span>
-        <strong>${escapeHtml(price.amountFormatted)}</strong>
+      <div class="price-card-head">
+        <span class="price-country-wrap">
+          <span class="price-flag${flagClass(price)}" aria-hidden="true"></span>
+          <span>
+            <span class="price-country">${escapeHtml(price.country)}</span>
+            <small class="price-method">${escapeHtml(methods)}</small>
+          </span>
+        </span>
       </div>
-      <p>${escapeHtml(methods)}</p>
-      <small>${escapeHtml(price.currency)} · ${escapeHtml(price.priceUsdt?.toFixed ? price.priceUsdt.toFixed(2) : price.priceUsdt)} USDT base</small>
+      <strong>${escapeHtml(amount)}</strong>
+      <small class="price-helper">${escapeHtml(helper)}</small>
     </article>
   `;
 }
@@ -46,4 +60,33 @@ async function loadPublicPrices() {
   }
 }
 
+function schedulePriceRefresh() {
+  if (priceRefresh) return;
+  priceRefresh = window.setTimeout(() => {
+    priceRefresh = null;
+    loadPublicPrices();
+  }, 250);
+}
+
+function startLivePrices() {
+  if (!priceList) return;
+  if (!window.EventSource) {
+    window.setInterval(loadPublicPrices, 60_000);
+    return;
+  }
+  const stream = new EventSource("/api/portal/admin-config/events");
+  stream.addEventListener("exchange_rate_changed", schedulePriceRefresh);
+  stream.addEventListener("payment_method_toggled", schedulePriceRefresh);
+  stream.addEventListener("portal_catalog_changed", (event) => {
+    try {
+      const payload = JSON.parse(event.data || "{}");
+      if (payload.scope && payload.scope !== "frp_pricing") return;
+    } catch {
+      // If the event payload is malformed, a refresh is safer than stale public pricing.
+    }
+    schedulePriceRefresh();
+  });
+}
+
 loadPublicPrices();
+startLivePrices();

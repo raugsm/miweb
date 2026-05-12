@@ -15,6 +15,28 @@ function publicCountryName(country) {
   return country === "Global" ? "Internacional" : country;
 }
 
+function flagForCountry(country) {
+  const flags = {
+    Chile: "🇨🇱",
+    Colombia: "🇨🇴",
+    Mexico: "🇲🇽",
+    Peru: "🇵🇪",
+    Global: "🌐",
+  };
+  return flags[country] || "🌐";
+}
+
+function flagCodeForCountry(country) {
+  const codes = {
+    Chile: "cl",
+    Colombia: "co",
+    Mexico: "mx",
+    Peru: "pe",
+    Global: "binance",
+  };
+  return codes[country] || "binance";
+}
+
 function rateForCountryOrCurrency(exchangeRates, country, currency) {
   if (currency === "USDT") return { ratePerUsdt: 1, updatedAt: "" };
   return (exchangeRates || []).find((rate) => rate.country === country || rate.currency === currency) || null;
@@ -50,6 +72,8 @@ export function buildPublicFrpPriceReport({
     const amount = available && ratePerUsdt > 0 ? moneyNumber(totalUsdt * ratePerUsdt) : 0;
     return {
       country: publicCountryName(group.country),
+      flag: flagForCountry(group.country),
+      flagCode: flagCodeForCountry(group.country),
       currency: group.currency,
       available: Boolean(available && ratePerUsdt > 0),
       quantity: safeQuantity,
