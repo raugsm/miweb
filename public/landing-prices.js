@@ -1,4 +1,5 @@
 const priceList = document.querySelector("#public-price-list");
+const livePriceRefreshMs = 5_000;
 let priceRefresh = null;
 
 function escapeHtml(value) {
@@ -70,21 +71,9 @@ function schedulePriceRefresh() {
 
 function startLivePrices() {
   if (!priceList) return;
-  if (!window.EventSource) {
-    window.setInterval(loadPublicPrices, 60_000);
-    return;
-  }
-  const stream = new EventSource("/api/portal/admin-config/events");
-  stream.addEventListener("exchange_rate_changed", schedulePriceRefresh);
-  stream.addEventListener("payment_method_toggled", schedulePriceRefresh);
-  stream.addEventListener("portal_catalog_changed", (event) => {
-    try {
-      const payload = JSON.parse(event.data || "{}");
-      if (payload.scope && payload.scope !== "frp_pricing") return;
-    } catch {
-      // If the event payload is malformed, a refresh is safer than stale public pricing.
-    }
-    schedulePriceRefresh();
+  window.setInterval(schedulePriceRefresh, livePriceRefreshMs);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") schedulePriceRefresh();
   });
 }
 

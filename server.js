@@ -113,7 +113,7 @@ import { createFrpSerializers } from "./server/frp/serializers.js";
 import { createFrpRoutes } from "./server/frp/frp-routes.js";
 import { createPortalSerializers } from "./server/portal/serializers.js";
 import { createPortalRoutes } from "./server/portal/portal-routes.js";
-import { buildPublicFrpPriceReport } from "./server/public/frp-prices.js";
+import { buildClientAppFrpPriceReport } from "./server/public/frp-prices.js";
 import { createStorage } from "./server/db/storage.js";
 import {
   customerSessionLookup,
@@ -156,10 +156,15 @@ const publicBaseUrl = String(process.env.ARIAD_PUBLIC_URL || process.env.RENDER_
 const mailFrom = process.env.ARIAD_MAIL_FROM || '"AriadGSM Soporte" <soporte@ariadgsm.com>';
 const customerPortalBaseUrl = resolveCustomerPortalBaseUrl();
 const releaseCommit = releaseCommitFromEnv(process.env);
-const latestClientVersionRpcUrl = "https://duvpkpfivcnftxelgqtt.supabase.co/rest/v1/rpc/get_latest_client_version";
+const supabaseProjectUrl = String(process.env.SUPABASE_URL || "https://duvpkpfivcnftxelgqtt.supabase.co").replace(/\/+$/, "");
+const supabaseRestUrl = `${supabaseProjectUrl}/rest/v1`;
+const latestClientVersionRpcUrl = `${supabaseRestUrl}/rpc/get_latest_client_version`;
 const latestClientVersionCacheTtlMs = 5 * 60 * 1000;
+const clientAppPriceCacheTtlMs = 5 * 1000;
 let latestClientDownloadCache = { downloadUrl: "", expiresAt: 0 };
+let clientAppPriceReportCache = { report: null, expiresAt: 0 };
 let warnedMissingSupabaseAnonKey = false;
+let warnedMissingSupabaseAnonKeyForPrices = false;
 const portalOrderStreams = new Map();
 // QUE: streams SSE del panel operador FRP. Map<userId, Set<stream>>.
 // Multiples streams por user son validos (laptop + movil del mismo operador).
@@ -1140,26 +1145,66 @@ function portalFrpPriceSuggestion(db, clientId, quantity, canUseBenefits, benefi
   return suggestion;
 }
 
-function publicFrpPriceReport(db) {
-  const pricing = frpCurrentPricing(db);
-  const pricingConfig = normalizePricingConfig(db?.pricingConfig || defaultPricingConfig());
-  const breakdown = pricing.available
-    ? frpPriceBreakdown(pricing, { quantity: 1, isGuest: false })
-    : null;
-  const updatedAt = [
-    pricing.config?.policy?.updatedAt,
-    pricing.provider?.updatedAt,
-    ...(pricingConfig.exchangeRates || []).map((rate) => rate.updatedAt),
-  ].filter(Boolean).sort().at(-1) || "";
+function supabaseAnonKey() {
+  return String(process.env.SUPABASE_ANON_KEY || "").trim();
+}
 
-  return buildPublicFrpPriceReport({
-    available: pricing.available,
-    quantity: 1,
-    totalUsdt: breakdown?.totalUsdt || 0,
-    exchangeRates: pricingConfig.exchangeRates,
-    paymentMethods: paymentMethodsWithOverrides(db),
-    updatedAt,
+async function fetchSupabasePublicRows(tableName, select, order = "") {
+  const key = supabaseAnonKey();
+  if (!key) {
+    throw new Error("SUPABASE_ANON_KEY no esta configurada.");
+  }
+  const url = new URL(`${supabaseRestUrl}/${tableName}`);
+  url.searchParams.set("select", select);
+  if (order) url.searchParams.set("order", order);
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${key}`,
+      Accept: "application/json",
+    },
   });
+  if (!response.ok) {
+    throw new Error(`Supabase ${tableName} failed with ${response.status}`);
+  }
+  const payload = await response.json();
+  return Array.isArray(payload) ? payload : [];
+}
+
+async function publicClientAppFrpPriceReport() {
+  const now = Date.now();
+  if (clientAppPriceReportCache.report && clientAppPriceReportCache.expiresAt > now) {
+    return clientAppPriceReportCache.report;
+  }
+  const key = supabaseAnonKey();
+  if (!key) {
+    if (!warnedMissingSupabaseAnonKeyForPrices) {
+      console.warn("SUPABASE_ANON_KEY no esta configurada; /api/public/frp-prices no puede leer precios de AriadGSM Cliente.");
+      warnedMissingSupabaseAnonKeyForPrices = true;
+    }
+    throw new Error("SUPABASE_ANON_KEY no esta configurada.");
+  }
+  const [settingsRows, exchangeRateRows, paymentMethodRows] = await Promise.all([
+    fetchSupabasePublicRows("public_client_settings", "key,value"),
+    fetchSupabasePublicRows("public_country_exchange_rates", "country_code,currency,rate"),
+    fetchSupabasePublicRows(
+      "public_payment_methods",
+      "id,country_code,method_name,display_order,fields,qr_storage_path",
+      "country_code.asc,display_order.asc,method_name.asc"
+    ),
+  ]);
+  const report = buildClientAppFrpPriceReport({
+    settingsRows,
+    exchangeRateRows,
+    paymentMethodRows,
+    updatedAt: nowIso(),
+  });
+  clientAppPriceReportCache = {
+    report,
+    expiresAt: now + clientAppPriceCacheTtlMs,
+  };
+  return report;
 }
 
 const {
@@ -4139,8 +4184,12 @@ async function handleApi(req, res, pathname) {
   }
 
   if (req.method === "GET" && pathname === "/api/public/frp-prices") {
-    const db = await readDb();
-    return sendJson(res, 200, { report: publicFrpPriceReport(db) });
+    try {
+      return sendJson(res, 200, { report: await publicClientAppFrpPriceReport() });
+    } catch (error) {
+      console.warn("No se pudieron cargar precios publicos desde AriadGSM Cliente.", error?.message || error);
+      return sendJson(res, 503, { error: "Precios temporalmente no disponibles." });
+    }
   }
 
   const user = await getCurrentUser(req);

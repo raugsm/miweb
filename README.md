@@ -37,17 +37,18 @@ ARIAD_SMTP_SECURE=false
 ARIAD_SMTP_USER=<usuario smtp>
 ARIAD_SMTP_PASS=<password o api key smtp>
 ARIAD_CUSTOMER_MODULE_URL=<URL publica del Customer Module .exe; ej. una GitHub Release>
-SUPABASE_ANON_KEY=<anon key publica usada para resolver la ultima version de AriadGSM Cliente>
+SUPABASE_ANON_KEY=<anon key publica usada para resolver la ultima version y precios de AriadGSM Cliente>
+SUPABASE_URL=https://duvpkpfivcnftxelgqtt.supabase.co
 WHATSAPP_SUPPORT_NUMBER=<numero internacional para soporte sin + ni espacios; default 51961751354>
 ```
 
 `ARIAD_CUSTOMER_MODULE_URL` alimenta el boton "Descargar Customer Module" del paso 4 del portal cliente. Si la variable esta vacia, el portal muestra "Pidelo por WhatsApp 3" en lugar del boton. El binario no se versiona en este repo: subelo como adjunto a un GitHub Release y pega esa URL en Render.
 
-`SUPABASE_ANON_KEY` permite que `GET /descargar` consulte la RPC `get_latest_client_version` y redirija al instalador mas reciente de AriadGSM Cliente. Si falta, `/descargar` responde 503.
+`SUPABASE_ANON_KEY` permite que `GET /descargar` consulte la RPC `get_latest_client_version` y redirija al instalador mas reciente de AriadGSM Cliente. Tambien permite que `GET /api/public/frp-prices` lea los precios publicos desde las tablas del dashboard de la aplicacion. Si falta, `/descargar` y `/api/public/frp-prices` responden 503.
 
 `WHATSAPP_SUPPORT_NUMBER` alimenta los enlaces publicos de WhatsApp en la landing y el manual. Usar formato internacional solo con digitos. Si no se configura, la web usa `51961751354`.
 
-`GET /api/public/frp-prices` expone un reporte publico de precios FRP por pais. La landing lo consume desde `/landing-prices.js`; los montos se calculan con el pricing y tasas vigentes del panel interno, no desde HTML hardcodeado.
+`GET /api/public/frp-prices` expone un reporte publico de precios FRP por pais. La landing lo consume desde `/landing-prices.js`; los montos se calculan con `public_client_settings`, `public_country_exchange_rates` y `public_payment_methods` de AriadGSM Cliente en Supabase, no desde HTML hardcodeado ni desde el panel web.
 
 `ARIAD_TECHNICIAN_SWAP_MS` (opcional, default 10000) controla la duracion en milisegundos de la ventana de bloqueo cuando se cambia de tecnico activo. Solo bajalo a valores menores (>= 100) en entornos de test.
 

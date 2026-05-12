@@ -1,5 +1,13 @@
 import { moneyNumber } from "../core/money.js";
 
+const clientAppCountries = [
+  { code: "CL", country: "Chile", currency: "CLP", flag: "\u{1F1E8}\u{1F1F1}", flagCode: "cl" },
+  { code: "CO", country: "Colombia", currency: "COP", flag: "\u{1F1E8}\u{1F1F4}", flagCode: "co" },
+  { code: "MX", country: "M\u00e9xico", currency: "MXN", flag: "\u{1F1F2}\u{1F1FD}", flagCode: "mx" },
+  { code: "PE", country: "Peru", currency: "PEN", flag: "\u{1F1F5}\u{1F1EA}", flagCode: "pe" },
+  { code: "USDT", country: "Internacional", currency: "USDT", flag: "\u{1F310}", flagCode: "binance" },
+];
+
 function formatCurrency(amount, currency) {
   const value = moneyNumber(amount);
   if (currency === "PEN") return `S/ ${value.toFixed(2)}`;
@@ -11,92 +19,72 @@ function formatCurrency(amount, currency) {
   return `${value.toFixed(2)} ${currency || ""}`.trim();
 }
 
-function publicCountryName(country) {
-  return country === "Global" ? "Internacional" : country;
+function numericSetting(settingsRows, key) {
+  const row = (settingsRows || []).find((item) => item?.key === key);
+  const rawValue = typeof row?.value === "object" && row?.value !== null
+    ? row.value.value
+    : row?.value;
+  return moneyNumber(rawValue);
 }
 
-function flagForCountry(country) {
-  const flags = {
-    Chile: "🇨🇱",
-    Colombia: "🇨🇴",
-    Mexico: "🇲🇽",
-    Peru: "🇵🇪",
-    Global: "🌐",
+function rateForCountryCode(exchangeRateRows, countryCode) {
+  if (countryCode === "USDT") return { rate: 1, updatedAt: "" };
+  const row = (exchangeRateRows || []).find((item) => item?.country_code === countryCode);
+  return {
+    rate: moneyNumber(row?.rate || 0),
+    updatedAt: row?.updated_at || "",
   };
-  return flags[country] || "🌐";
 }
 
-function flagCodeForCountry(country) {
-  const codes = {
-    Chile: "cl",
-    Colombia: "co",
-    Mexico: "mx",
-    Peru: "pe",
-    Global: "binance",
-  };
-  return codes[country] || "binance";
+function methodsForCountry(paymentMethodRows, countryCode) {
+  return [...(paymentMethodRows || [])]
+    .filter((method) => method?.country_code === countryCode && method?.method_name)
+    .sort((a, b) => {
+      const orderA = Number.isFinite(Number(a.display_order)) ? Number(a.display_order) : 999;
+      const orderB = Number.isFinite(Number(b.display_order)) ? Number(b.display_order) : 999;
+      return orderA - orderB || String(a.method_name).localeCompare(String(b.method_name), "es");
+    })
+    .map((method) => String(method.method_name).trim())
+    .filter(Boolean);
 }
 
-function rateForCountryOrCurrency(exchangeRates, country, currency) {
-  if (currency === "USDT") return { ratePerUsdt: 1, updatedAt: "" };
-  return (exchangeRates || []).find((rate) => rate.country === country || rate.currency === currency) || null;
-}
-
-export function buildPublicFrpPriceReport({
-  available = false,
-  quantity = 1,
-  totalUsdt = 0,
-  exchangeRates = [],
-  paymentMethods = [],
+export function buildClientAppFrpPriceReport({
+  settingsRows = [],
+  exchangeRateRows = [],
+  paymentMethodRows = [],
   updatedAt = "",
 } = {}) {
-  const safeQuantity = Math.max(1, Math.min(10, Number.parseInt(quantity, 10) || 1));
-  const groups = new Map();
+  const costUsdt = numericSetting(settingsRows, "frp_cost_usdt");
+  const profitUsdt = numericSetting(settingsRows, "frp_profit_usdt");
+  const unitPriceUsdt = moneyNumber(costUsdt + profitUsdt);
+  const available = unitPriceUsdt > 0;
 
-  for (const method of paymentMethods || []) {
-    if (!method?.ticketOption || method.active === false || !method.currency) continue;
-    const key = `${method.country || "Global"}:${method.currency}`;
-    if (!groups.has(key)) {
-      groups.set(key, {
-        country: method.country || "Global",
-        currency: method.currency,
-        methods: [],
-      });
-    }
-    groups.get(key).methods.push(method.displayName || method.label || method.code);
-  }
-
-  const prices = [...groups.values()].map((group) => {
-    const rate = rateForCountryOrCurrency(exchangeRates, group.country, group.currency);
-    const ratePerUsdt = moneyNumber(rate?.ratePerUsdt || 0);
-    const amount = available && ratePerUsdt > 0 ? moneyNumber(totalUsdt * ratePerUsdt) : 0;
+  const prices = clientAppCountries.map((country) => {
+    const rate = rateForCountryCode(exchangeRateRows, country.code);
+    const ratePerUsdt = moneyNumber(rate.rate || 0);
+    const amount = available && ratePerUsdt > 0 ? moneyNumber(unitPriceUsdt * ratePerUsdt) : 0;
     return {
-      country: publicCountryName(group.country),
-      flag: flagForCountry(group.country),
-      flagCode: flagCodeForCountry(group.country),
-      currency: group.currency,
+      country: country.country,
+      countryCode: country.code,
+      flag: country.flag,
+      flagCode: country.flagCode,
+      currency: country.currency,
       available: Boolean(available && ratePerUsdt > 0),
-      quantity: safeQuantity,
-      priceUsdt: moneyNumber(totalUsdt),
+      quantity: 1,
+      priceUsdt: unitPriceUsdt,
       amount,
-      amountFormatted: amount > 0 ? formatCurrency(amount, group.currency) : "Consultar por WhatsApp",
-      methods: [...new Set(group.methods)].slice(0, 3),
+      amountFormatted: amount > 0 ? formatCurrency(amount, country.currency) : "Consultar por WhatsApp",
+      methods: methodsForCountry(paymentMethodRows, country.code).slice(0, 3),
       ratePerUsdt,
-      updatedAt: rate?.updatedAt || updatedAt || "",
+      updatedAt: rate.updatedAt || updatedAt || "",
     };
   });
 
-  prices.sort((a, b) => {
-    if (a.currency === "USDT") return 1;
-    if (b.currency === "USDT") return -1;
-    return a.country.localeCompare(b.country, "es");
-  });
-
   return {
-    available: Boolean(available),
-    quantity: safeQuantity,
-    source: "panel_operario",
-    sourceLabel: "Panel de trabajadores AriadGSM",
+    available,
+    quantity: 1,
+    source: "ariadgsm_cliente_app",
+    sourceLabel: "Dashboard AriadGSM Cliente",
     updatedAt: updatedAt || "",
     prices,
   };
