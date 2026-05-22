@@ -1,0 +1,22 @@
+:root {
+  --ariad-blue: #2070fc;
+  --ariad-blue-light: #6ea8ff;
+  --ariad-navy: #07152f;
+  --ariad-navy-2: #0b1c42;
+  --ariad-text: #101820;
+  --ariad-muted: #52657f;
+  --ariad-surface: #eef4ff;
+  --ariad-white: #ffffff;
+  --ariad-radius-sm: 8px;
+  --ariad-radius-md: 14px;
+  --ariad-shadow: 0 18px 36px rgba(10, 24, 56, 0.16);
+}
+
+.ariad-dark-bg {
+  background:
+    linear-gradient(90deg, rgba(32, 112, 252, 0.06) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(32, 112, 252, 0.05) 1px, transparent 1px),
+    linear-gradient(135deg, rgba(32, 112, 252, 0.22), transparent 34%),
+    linear-gradient(135deg, #183a7a, var(--ariad-navy) 64%);
+  background-size: 34px 34px, 34px 34px, auto, auto;
+}
