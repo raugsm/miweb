@@ -26,10 +26,10 @@
           <img src="/brand/logo-header.svg" alt="AriadGSM" />
         </a>
         <nav class="nav-links" aria-label="Navegación principal">
-          <a href="/descargar">Descargar</a>
+          <a href="/descargar" data-track-event="download_click" data-track-component="nav_download">Descargar</a>
           <a href="/manual">Cómo usar</a>
           <a href="#precios">Precios</a>
-          <a href="__WHATSAPP_SUPPORT_URL__">WhatsApp</a>
+          <a href="__WHATSAPP_SUPPORT_URL__" data-whatsapp-link data-track-event="whatsapp_click" data-track-component="nav_whatsapp">WhatsApp</a>
         </nav>
       </div>
     </header>
@@ -48,9 +48,9 @@
               para procesar equipos Xiaomi desde Windows.
             </p>
             <div class="hero-actions">
-              <a href="/descargar" class="btn btn-primary">Descargar AriadGSM Cliente</a>
+              <a href="/descargar" class="btn btn-primary" data-track-event="download_click" data-track-component="hero_download">Descargar AriadGSM Cliente</a>
               <a href="/manual" class="btn btn-secondary">Cómo usar</a>
-              <a href="__WHATSAPP_SUPPORT_URL__" class="btn btn-secondary">Soporte WhatsApp</a>
+              <a href="__WHATSAPP_SUPPORT_URL__" class="btn btn-secondary" data-whatsapp-link data-track-event="whatsapp_click" data-track-component="hero_whatsapp">Soporte WhatsApp</a>
             </div>
             <p class="hint">
               Windows 10 o superior · Gratis
@@ -203,7 +203,7 @@
             <p>AriadGSM Cliente consulta la versión más reciente y guía el pedido completo desde Windows.</p>
           </div>
           <div class="cta-actions">
-            <a href="/descargar" class="btn btn-primary">Descargar AriadGSM Cliente</a>
+            <a href="/descargar" class="btn btn-primary" data-track-event="download_click" data-track-component="strip_download">Descargar AriadGSM Cliente</a>
             <a href="/manual" class="btn btn-secondary">Leer manual completo</a>
           </div>
         </div>
@@ -216,10 +216,11 @@
         <p>
           <a href="/manual">Manual</a>
           <span>·</span>
-          <a href="__WHATSAPP_SUPPORT_URL__">Soporte WhatsApp</a>
+          <a href="__WHATSAPP_SUPPORT_URL__" data-whatsapp-link data-track-event="whatsapp_click" data-track-component="footer_whatsapp">Soporte WhatsApp</a>
         </p>
       </div>
     </footer>
+    <script type="module" src="/campaign-tracking.js"></script>
     <script type="module" src="/landing-version.js"></script>
     <script type="module" src="/landing-prices.js"></script>
   </body>

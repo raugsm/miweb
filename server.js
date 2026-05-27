@@ -191,6 +191,28 @@ const cloudSyncAuditRateLimitPerMinute = Math.max(
 );
 const cloudSyncAuditRateBuckets = new Map();
 const cloudSyncAuditTimestampSkewMs = 5 * 60 * 1000;
+const localClientInstallerPath = "/downloads/AriadGSM-Cliente-Setup-PerUser-v0.5.1.exe";
+const publicCampaignEventRateLimitPerMinute = Math.max(
+  3,
+  Number(process.env.ARIADGSM_PUBLIC_CAMPAIGN_RATE_LIMIT_PER_MINUTE || 30)
+);
+const publicCampaignEventRateWindowMs = 60_000;
+const publicCampaignEventRateBuckets = new Map();
+const publicCampaignParamKeys = [
+  "src",
+  "utm_source",
+  "utm_medium",
+  "utm_campaign",
+  "utm_content",
+  "utm_term",
+  "fbclid",
+];
+const publicCampaignEventTypes = new Set([
+  "landing_view",
+  "download_click",
+  "whatsapp_click",
+  "manual_click",
+]);
 
 const cloudflareTurnstileOrigin = "https://challenges.cloudflare.com";
 const turnstileEnabled = Boolean(turnstileSiteKey && turnstileSecret);
@@ -299,6 +321,70 @@ function consumeCloudSyncAuditRate(agentToken) {
   }
   current.count += 1;
   return { allowed: true, remaining: cloudSyncAuditRateLimitPerMinute - current.count, resetAt: current.resetAt };
+}
+
+function consumePublicCampaignEventRate(req) {
+  const now = Date.now();
+  const key = hashToken(clientIp(req));
+  const current = publicCampaignEventRateBuckets.get(key);
+  if (!current || now >= current.resetAt) {
+    const resetAt = now + publicCampaignEventRateWindowMs;
+    publicCampaignEventRateBuckets.set(key, { count: 1, resetAt });
+    return { allowed: true, remaining: publicCampaignEventRateLimitPerMinute - 1, resetAt };
+  }
+  if (current.count >= publicCampaignEventRateLimitPerMinute) {
+    return { allowed: false, remaining: 0, resetAt: current.resetAt };
+  }
+  current.count += 1;
+  return { allowed: true, remaining: publicCampaignEventRateLimitPerMinute - current.count, resetAt: current.resetAt };
+}
+
+function publicCampaignParams(source = {}) {
+  const params = {};
+  for (const key of publicCampaignParamKeys) {
+    const raw = source?.[key];
+    const value = cleanText(typeof raw === "string" ? raw : "", 180);
+    if (value) params[key] = value;
+  }
+  return params;
+}
+
+function normalizePublicCampaignEvent(input, req) {
+  const eventType = cleanText(input?.eventType, 40).toLowerCase();
+  const normalizedType = publicCampaignEventTypes.has(eventType) ? eventType : "";
+  return {
+    eventType: normalizedType,
+    sessionId: cleanText(input?.sessionId, 80),
+    component: cleanText(input?.component, 80),
+    destination: cleanText(input?.destination, 300),
+    url: cleanText(input?.url, 300),
+    referrer: cleanText(input?.referrer, 300),
+    campaign: publicCampaignParams(input?.campaign),
+    ipHash: hashToken(clientIp(req)),
+    userAgent: cleanText(req.headers["user-agent"] || "unknown", 180),
+    createdAt: nowIso(),
+  };
+}
+
+async function handlePublicCampaignEvent(req, res) {
+  if (req.method !== "POST") {
+    return sendJson(res, 405, { error: "Metodo no permitido." });
+  }
+  const rate = consumePublicCampaignEventRate(req);
+  if (!rate.allowed) {
+    res.setHeader("Retry-After", String(Math.ceil((rate.resetAt - Date.now()) / 1000)));
+    return sendJson(res, 429, { error: "rate_limited" });
+  }
+  const input = await parseJson(req);
+  const detail = normalizePublicCampaignEvent(input, req);
+  if (!detail.eventType) {
+    return sendJson(res, 400, { error: "Evento de campana invalido." });
+  }
+  await persistAuditEventOnly(
+    createAuditEvent(null, "PUBLIC_CAMPAIGN_EVENT", detail.sessionId || detail.eventType, detail),
+    { label: "public_campaign_event" }
+  );
+  return sendJson(res, 202, { ok: true });
 }
 
 function canonicalCloudAuditQuery(searchParams) {
@@ -4183,6 +4269,10 @@ async function handleApi(req, res, pathname) {
     return sendJson(res, 403, { error: "Origen no autorizado." });
   }
 
+  if (pathname === "/api/public/campaign-event") {
+    return handlePublicCampaignEvent(req, res);
+  }
+
   if (req.method === "GET" && pathname === "/api/public/frp-prices") {
     try {
       return sendJson(res, 200, { report: await publicClientAppFrpPriceReport() });
@@ -5778,12 +5868,20 @@ async function latestClientDownloadUrl() {
   return info.downloadUrl;
 }
 
+function redirectToLocalClientInstaller(res) {
+  res.writeHead(302, {
+    Location: localClientInstallerPath,
+    "Cache-Control": "no-store",
+    "Referrer-Policy": "no-referrer",
+  });
+  return res.end();
+}
+
 async function redirectToLatestClientInstaller(res) {
   try {
     const downloadUrl = await latestClientDownloadUrl();
     if (!downloadUrl) {
-      res.writeHead(503, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" });
-      return res.end("El servicio de descarga está temporalmente no disponible.\nPor favor intentá de nuevo en unos minutos.");
+      return redirectToLocalClientInstaller(res);
     }
     res.writeHead(302, {
       Location: downloadUrl,
@@ -5793,8 +5891,7 @@ async function redirectToLatestClientInstaller(res) {
     return res.end();
   } catch (error) {
     console.warn("No se pudo resolver la descarga de AriadGSM Cliente.", error?.message || error);
-    res.writeHead(503, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" });
-    return res.end("El servicio de descarga está temporalmente no disponible.\nPor favor intentá de nuevo en unos minutos.");
+    return redirectToLocalClientInstaller(res);
   }
 }
 
