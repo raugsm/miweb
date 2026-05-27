@@ -191,6 +191,7 @@ const cloudSyncAuditRateLimitPerMinute = Math.max(
 );
 const cloudSyncAuditRateBuckets = new Map();
 const cloudSyncAuditTimestampSkewMs = 5 * 60 * 1000;
+const localClientInstallerVersion = "0.5.1";
 const localClientInstallerPath = "/downloads/AriadGSM-Cliente-Setup-PerUser-v0.5.1.exe";
 const publicCampaignEventRateLimitPerMinute = Math.max(
   3,
@@ -5825,6 +5826,38 @@ function normalizeLatestClientVersionInfo(record) {
   };
 }
 
+function localClientVersionInfo() {
+  return {
+    version: localClientInstallerVersion,
+    downloadUrl: localClientInstallerPath,
+    publishedAt: "",
+  };
+}
+
+function semverParts(version) {
+  const match = String(version || "").trim().match(/^v?(\d+)(?:\.(\d+))?(?:\.(\d+))?/i);
+  if (!match) return null;
+  return [Number(match[1] || 0), Number(match[2] || 0), Number(match[3] || 0)];
+}
+
+function compareSemver(left, right) {
+  const leftParts = semverParts(left);
+  const rightParts = semverParts(right);
+  if (!leftParts || !rightParts) return 0;
+  for (let index = 0; index < 3; index += 1) {
+    if (leftParts[index] > rightParts[index]) return 1;
+    if (leftParts[index] < rightParts[index]) return -1;
+  }
+  return 0;
+}
+
+function effectiveClientVersionInfo(info) {
+  const local = localClientVersionInfo();
+  if (!info?.downloadUrl) return local;
+  if (compareSemver(info.version, local.version) < 0) return local;
+  return info;
+}
+
 async function latestClientVersionInfo() {
   const now = Date.now();
   if (latestClientVersionCache.info && latestClientVersionCache.expiresAt > now) {
@@ -5836,7 +5869,7 @@ async function latestClientVersionInfo() {
       console.warn("SUPABASE_ANON_KEY no esta configurada; /descargar no puede resolver la ultima version.");
       warnedMissingSupabaseAnonKey = true;
     }
-    return { version: "", downloadUrl: "", publishedAt: "" };
+    return localClientVersionInfo();
   }
   const response = await fetch(latestClientVersionRpcUrl, {
     method: "POST",
@@ -5856,11 +5889,12 @@ async function latestClientVersionInfo() {
   if (!/^https?:\/\//i.test(info.downloadUrl)) {
     throw new Error("Supabase latest client version RPC did not return a valid download_url");
   }
+  const effectiveInfo = effectiveClientVersionInfo(info);
   latestClientVersionCache = {
-    info,
+    info: effectiveInfo,
     expiresAt: now + latestClientVersionCacheTtlMs,
   };
-  return info;
+  return effectiveInfo;
 }
 
 async function latestClientDownloadUrl() {

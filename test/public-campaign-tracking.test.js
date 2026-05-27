@@ -68,6 +68,10 @@ test("public landing exposes campaign tracking and records ad events", async () 
     assert.equal(script.status, 200);
     assert.match(await script.text(), /PUBLIC|campaign-event|landing_view/i);
 
+    const version = await fetch(`${baseUrl}/api/public/latest-client-version`);
+    assert.equal(version.status, 200);
+    assert.equal((await version.json()).version, "0.5.1");
+
     const download = await fetch(`${baseUrl}/descargar`, { redirect: "manual" });
     assert.equal(download.status, 302);
     assert.equal(download.headers.get("location"), "/downloads/AriadGSM-Cliente-Setup-PerUser-v0.5.1.exe");
