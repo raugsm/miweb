@@ -381,6 +381,9 @@ async function handlePublicCampaignEvent(req, res) {
   if (!detail.eventType) {
     return sendJson(res, 400, { error: "Evento de campana invalido." });
   }
+  if (!Object.keys(detail.campaign).length) {
+    return sendJson(res, 202, { ok: true, ignored: true });
+  }
   await persistAuditEventOnly(
     createAuditEvent(null, "PUBLIC_CAMPAIGN_EVENT", detail.sessionId || detail.eventType, detail),
     { label: "public_campaign_event" }

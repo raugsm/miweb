@@ -2,7 +2,9 @@ const campaignParamKeys = ["src", "utm_source", "utm_medium", "utm_campaign", "u
 const campaignStorageKey = "ariadgsm_campaign_context";
 const campaignSessionKey = "ariadgsm_campaign_session";
 const campaignTtlMs = 30 * 24 * 60 * 60 * 1000;
-const whatsappText = "Hola, vengo del anuncio de Facebook y quiero descargar la app AriadGSM";
+const whatsappText = "Hola, quiero descargar la app AriadGSM";
+const campaignWhatsappText = "Hola, vengo del anuncio de Facebook y quiero descargar la app AriadGSM";
+const publicCampaignPaths = new Set(["/", "/descargar", "/manual"]);
 
 function campaignParamsFrom(searchParams) {
   const params = {};
@@ -34,15 +36,26 @@ function writeStoredContext(context) {
 function campaignContext() {
   const urlParams = campaignParamsFrom(new URLSearchParams(window.location.search));
   const stored = readStoredContext();
-  const params = Object.keys(urlParams).length ? urlParams : (stored.params || {});
+  const hasUrlParams = Object.keys(urlParams).length > 0;
+  const params = hasUrlParams ? urlParams : (stored.params || {});
+  const currentUrl = `${window.location.pathname}${window.location.search}`;
   const context = {
     params,
-    firstUrl: stored.firstUrl || `${window.location.pathname}${window.location.search}`,
-    lastUrl: `${window.location.pathname}${window.location.search}`,
+    firstUrl: hasUrlParams ? currentUrl : (stored.firstUrl || currentUrl),
+    lastUrl: currentUrl,
     savedAt: Date.now(),
   };
-  if (Object.keys(urlParams).length) writeStoredContext(context);
+  if (hasUrlParams) writeStoredContext(context);
   return context;
+}
+
+function hasCampaignContext(context) {
+  return Object.keys(context?.params || {}).length > 0;
+}
+
+function campaignPageComponent() {
+  if (window.location.pathname === "/manual") return "manual_page";
+  return "public_landing";
 }
 
 function sessionId() {
@@ -69,13 +82,46 @@ function alreadySent(key) {
   }
 }
 
-function sendCampaignEvent(eventType, extra = {}) {
+function campaignQueryString(context) {
+  const params = new URLSearchParams();
+  for (const key of campaignParamKeys) {
+    const value = context?.params?.[key];
+    if (value) params.set(key, value);
+  }
+  return params.toString();
+}
+
+function decorateCampaignLink(link, context) {
+  if (!hasCampaignContext(context)) return;
+  const href = link.getAttribute("href") || "";
+  if (!href || href.startsWith("#") || href.startsWith("mailto:") || href.startsWith("tel:")) return;
+  try {
+    const url = new URL(link.href);
+    if (url.origin !== window.location.origin || !publicCampaignPaths.has(url.pathname)) return;
+    for (const key of campaignParamKeys) {
+      const value = context.params?.[key];
+      if (value && !url.searchParams.has(key)) url.searchParams.set(key, value);
+    }
+    link.href = `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    // Keep the original link if URL parsing fails.
+  }
+}
+
+function decorateCampaignLinks(context) {
+  for (const link of document.querySelectorAll("a[href]")) {
+    decorateCampaignLink(link, context);
+  }
+}
+
+function sendCampaignEvent(eventType, extra = {}, context = activeCampaignContext) {
+  if (!hasCampaignContext(context)) return;
   const payload = {
     eventType,
     sessionId: sessionId(),
     url: `${window.location.pathname}${window.location.search}`,
     referrer: document.referrer || "",
-    campaign: campaignContext().params || {},
+    campaign: context.params || {},
     ...extra,
   };
   const body = JSON.stringify(payload);
@@ -92,10 +138,14 @@ function sendCampaignEvent(eventType, extra = {}) {
   }).catch(() => {});
 }
 
-function applyWhatsappText(link) {
+function applyWhatsappText(link, context) {
   try {
     const url = new URL(link.href);
-    url.searchParams.set("text", whatsappText);
+    const query = campaignQueryString(context);
+    const text = hasCampaignContext(context)
+      ? `${campaignWhatsappText}${query ? `\n\nOrigen: ${query}` : ""}`
+      : whatsappText;
+    url.searchParams.set("text", text);
     link.href = url.toString();
   } catch {
     // Keep the original link if URL parsing fails.
@@ -103,8 +153,9 @@ function applyWhatsappText(link) {
 }
 
 function bindTrackedLinks() {
+  decorateCampaignLinks(activeCampaignContext);
   for (const link of document.querySelectorAll("[data-whatsapp-link]")) {
-    applyWhatsappText(link);
+    applyWhatsappText(link, activeCampaignContext);
   }
   document.addEventListener("click", (event) => {
     const target = event.target.closest("[data-track-event]");
@@ -113,13 +164,13 @@ function bindTrackedLinks() {
     sendCampaignEvent(eventType, {
       component: target.dataset.trackComponent || target.textContent.trim().slice(0, 80),
       destination: target.href || target.dataset.trackDestination || "",
-    });
+    }, activeCampaignContext);
   }, { capture: true });
 }
 
-campaignContext();
-if (!alreadySent("landing_view")) {
-  sendCampaignEvent("landing_view", { component: "tecnicos_landing" });
+const activeCampaignContext = campaignContext();
+if (hasCampaignContext(activeCampaignContext) && !alreadySent("landing_view")) {
+  sendCampaignEvent("landing_view", { component: campaignPageComponent() }, activeCampaignContext);
 }
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", bindTrackedLinks, { once: true });

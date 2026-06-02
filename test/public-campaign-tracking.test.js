@@ -62,11 +62,22 @@ test("public landing exposes campaign tracking and records ad events", async () 
     assert.match(html, /AriadGSM Cliente para Windows/);
     assert.match(html, /campaign-tracking\.js/);
     assert.match(html, /data-track-event="download_click"/);
+    assert.match(html, /data-track-event="manual_click"/);
     assert.match(html, /data-whatsapp-link/);
 
     const script = await fetch(`${baseUrl}/campaign-tracking.js`);
     assert.equal(script.status, 200);
-    assert.match(await script.text(), /PUBLIC|campaign-event|landing_view/i);
+    const scriptBody = await script.text();
+    assert.match(scriptBody, /campaign-event|landing_view/i);
+    assert.match(scriptBody, /hasCampaignContext/);
+    assert.match(scriptBody, /decorateCampaignLinks/);
+
+    const manual = await fetch(`${baseUrl}/manual?utm_campaign=meta_xiaomi_app`);
+    assert.equal(manual.status, 200);
+    const manualHtml = await manual.text();
+    assert.match(manualHtml, /campaign-tracking\.js/);
+    assert.match(manualHtml, /data-track-event="download_click"/);
+    assert.match(manualHtml, /data-whatsapp-link/);
 
     const version = await fetch(`${baseUrl}/api/public/latest-client-version`);
     assert.equal(version.status, 200);
@@ -75,6 +86,23 @@ test("public landing exposes campaign tracking and records ad events", async () 
     const download = await fetch(`${baseUrl}/descargar`, { redirect: "manual" });
     assert.equal(download.status, 302);
     assert.equal(download.headers.get("location"), "/downloads/AriadGSM-Cliente-Setup-PerUser-v0.5.1.exe");
+
+    const ignoredEvent = await fetch(`${baseUrl}/api/public/campaign-event`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Origin": baseUrl,
+      },
+      body: JSON.stringify({
+        eventType: "landing_view",
+        sessionId: "organic-test-session",
+        component: "public_landing",
+        url: "/",
+        campaign: {},
+      }),
+    });
+    assert.equal(ignoredEvent.status, 202);
+    assert.deepEqual(await ignoredEvent.json(), { ok: true, ignored: true });
 
     const event = await fetch(`${baseUrl}/api/public/campaign-event`, {
       method: "POST",
@@ -101,7 +129,9 @@ test("public landing exposes campaign tracking and records ad events", async () 
 
     const rawDb = await readFile(path.join(dataDir, "users.json"), "utf8");
     const db = JSON.parse(rawDb);
-    const audit = db.audit.find((entry) => entry.action === "PUBLIC_CAMPAIGN_EVENT");
+    const audits = db.audit.filter((entry) => entry.action === "PUBLIC_CAMPAIGN_EVENT");
+    assert.equal(audits.length, 1, "only attributed public campaign events should be persisted");
+    const audit = audits[0];
     assert.ok(audit, "public campaign event should be persisted to audit");
     assert.equal(audit.detail.eventType, "download_click");
     assert.equal(audit.detail.campaign.utm_campaign, "meta_xiaomi_app");
