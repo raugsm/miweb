@@ -26,8 +26,8 @@
         </a>
         <nav class="nav-links" aria-label="Navegación principal">
           <a href="/">Inicio</a>
-          <a href="/descargar">Descargar</a>
-          <a href="__WHATSAPP_SUPPORT_URL__">WhatsApp</a>
+          <a href="/descargar" data-track-event="download_click" data-track-component="manual_nav_download">Descargar</a>
+          <a href="__WHATSAPP_SUPPORT_URL__" data-whatsapp-link data-track-event="whatsapp_click" data-track-component="manual_nav_whatsapp">WhatsApp</a>
         </nav>
       </div>
     </header>
@@ -38,7 +38,7 @@
           <p class="eyebrow">Manual oficial</p>
           <h1>AriadGSM Cliente — Guía de uso</h1>
           <p class="subtitle">Servicio remoto para desbloquear FRP y resetear cuentas Xiaomi en minutos.</p>
-          <a href="/descargar" class="btn btn-primary">Descargar AriadGSM Cliente</a>
+          <a href="/descargar" class="btn btn-primary" data-track-event="download_click" data-track-component="manual_hero_download">Descargar AriadGSM Cliente</a>
         </header>
 
         <section class="manual-visual">
@@ -203,10 +203,11 @@
 
         <section id="contacto">
           <h2>Contacto</h2>
-          <p>WhatsApp: <a href="__WHATSAPP_SUPPORT_URL__">__WHATSAPP_SUPPORT_NUMBER__</a></p>
+          <p>WhatsApp: <a href="__WHATSAPP_SUPPORT_URL__" data-whatsapp-link data-track-event="whatsapp_click" data-track-component="manual_contact_whatsapp">__WHATSAPP_SUPPORT_NUMBER__</a></p>
           <p>Sitio web: <a href="/">ariadgsm.com</a></p>
         </section>
       </article>
     </main>
+    <script type="module" src="/campaign-tracking.js"></script>
   </body>
 </html>
