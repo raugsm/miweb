@@ -191,8 +191,8 @@ const cloudSyncAuditRateLimitPerMinute = Math.max(
 );
 const cloudSyncAuditRateBuckets = new Map();
 const cloudSyncAuditTimestampSkewMs = 5 * 60 * 1000;
-const localClientInstallerVersion = "0.5.1";
-const localClientInstallerPath = "/downloads/AriadGSM-Cliente-Setup-PerUser-v0.5.1.exe";
+const localClientInstallerVersion = "0.5.0";
+const localClientInstallerPath = "/downloads/AriadGSM-Cliente-Setup-PerUser-v0.5.0.exe";
 const publicCampaignEventRateLimitPerMinute = Math.max(
   3,
   Number(process.env.ARIADGSM_PUBLIC_CAMPAIGN_RATE_LIMIT_PER_MINUTE || 30)
@@ -5856,6 +5856,7 @@ function compareSemver(left, right) {
 
 function effectiveClientVersionInfo(info) {
   const local = localClientVersionInfo();
+  if (local.downloadUrl) return local;
   if (!info?.downloadUrl) return local;
   if (compareSemver(info.version, local.version) < 0) return local;
   return info;
