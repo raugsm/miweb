@@ -141,9 +141,8 @@ function sendCampaignEvent(eventType, extra = {}, context = activeCampaignContex
 function applyWhatsappText(link, context) {
   try {
     const url = new URL(link.href);
-    const query = campaignQueryString(context);
     const text = hasCampaignContext(context)
-      ? `${campaignWhatsappText}${query ? `\n\nOrigen: ${query}` : ""}`
+      ? campaignWhatsappText
       : whatsappText;
     url.searchParams.set("text", text);
     link.href = url.toString();
