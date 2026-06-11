@@ -5856,6 +5856,7 @@ function compareSemver(left, right) {
 
 function effectiveClientVersionInfo(info) {
   const local = localClientVersionInfo();
+  if (local.downloadUrl) return local;
   if (!info?.downloadUrl) return local;
   if (compareSemver(info.version, local.version) < 0) return local;
   return info;
