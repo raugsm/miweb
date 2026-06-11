@@ -227,6 +227,15 @@ h3 {
   background: transparent;
 }
 
+.btn-whatsapp {
+  background: #0f9f56;
+  color: #fff;
+}
+
+.btn-whatsapp:hover {
+  background: #0d864a;
+}
+
 .hero .btn-secondary {
   border-color: var(--brand-light);
   color: #fff;
@@ -318,6 +327,9 @@ h3 {
 .visual-demo,
 .price-report,
 .download-strip,
+.whatsapp-services,
+.service-detail,
+.service-flow,
 .manual section {
   border-top: 1px solid var(--line);
 }
@@ -325,7 +337,10 @@ h3 {
 .features,
 .visual-demo,
 .price-report,
-.download-strip {
+.download-strip,
+.whatsapp-services,
+.service-detail,
+.service-flow {
   padding: 64px 0;
 }
 
@@ -738,6 +753,226 @@ h3 {
   font-size: 12px;
 }
 
+.whatsapp-services {
+  background:
+    linear-gradient(180deg, #fff 0%, #f6f9ff 100%);
+  scroll-margin-top: 96px;
+}
+
+.service-card {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+  border: 1px solid rgba(32, 112, 252, 0.16);
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 22px 70px rgba(15, 20, 25, .08);
+  overflow: hidden;
+}
+
+.service-copy {
+  min-width: 0;
+  padding: 28px;
+}
+
+.service-kicker {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  margin-bottom: 14px;
+  padding: 0 11px;
+  border: 1px solid rgba(32, 112, 252, .18);
+  border-radius: 999px;
+  background: rgba(32, 112, 252, .08);
+  color: var(--brand);
+  font-size: 12px;
+  font-weight: 950;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.service-copy h3 {
+  max-width: 620px;
+  font-size: clamp(28px, 5vw, 42px);
+  line-height: 1.04;
+}
+
+.service-copy p,
+.service-detail p,
+.service-flow p {
+  color: var(--muted);
+}
+
+.model-tags,
+.service-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.model-tags {
+  margin: 22px 0 24px;
+}
+
+.model-tags span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.service-visual {
+  display: grid;
+  place-items: center;
+  min-height: 300px;
+  padding: 26px;
+  background:
+    linear-gradient(145deg, rgba(7, 21, 47, .08), rgba(32, 112, 252, .16)),
+    #eef4ff;
+}
+
+.service-visual img {
+  width: min(78%, 320px);
+  max-height: 340px;
+  object-fit: contain;
+  filter: drop-shadow(0 24px 36px rgba(7, 21, 47, .24));
+}
+
+.motorola-hero {
+  position: relative;
+  overflow: hidden;
+  padding: 88px 0;
+  background:
+    linear-gradient(135deg, rgba(7, 21, 47, .98) 0%, rgba(12, 45, 98, .98) 58%, rgba(32, 112, 252, .94) 100%);
+  color: #fff;
+}
+
+.motorola-hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 36px;
+  align-items: center;
+}
+
+.motorola-hero .eyebrow {
+  color: #9dc2ff;
+}
+
+.motorola-hero .subtitle,
+.motorola-hero .hint {
+  color: #dce8ff;
+}
+
+.motorola-hero .btn-secondary {
+  border-color: rgba(255, 255, 255, .5);
+  color: #fff;
+  background: rgba(255, 255, 255, .08);
+}
+
+.phone-stage {
+  display: grid;
+  place-items: center;
+  min-height: 360px;
+  border: 1px solid rgba(255, 255, 255, .18);
+  border-radius: 28px;
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, .14), rgba(255, 255, 255, .04));
+  box-shadow: 0 26px 74px rgba(0, 8, 20, .24);
+}
+
+.phone-stage img {
+  width: min(78%, 310px);
+  max-height: 430px;
+  object-fit: contain;
+  filter: drop-shadow(0 30px 44px rgba(0, 8, 20, .42));
+}
+
+.service-detail {
+  background: var(--surface);
+}
+
+.model-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+.model-panel,
+.step-card {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #fff;
+}
+
+.model-panel {
+  min-width: 0;
+  padding: 24px;
+}
+
+.model-panel h3 {
+  font-size: 25px;
+}
+
+.model-list {
+  display: grid;
+  gap: 10px;
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.model-list li {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 850;
+  overflow-wrap: anywhere;
+}
+
+.model-list.compact li {
+  background: #fff;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.remote-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.remote-list span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 72px;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 12px;
+  background: var(--brand);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 950;
+}
+
+.service-flow {
+  background: #fff;
+}
+
+.step-card {
+  min-height: 220px;
+  padding: 22px;
+}
+
 .cta-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -858,6 +1093,18 @@ blockquote p {
   .cta-grid {
     grid-template-columns: minmax(0, 1fr) auto;
   }
+
+  .service-card {
+    grid-template-columns: minmax(0, 1.05fr) minmax(260px, .95fr);
+  }
+
+  .model-grid {
+    grid-template-columns: minmax(0, 1.2fr) minmax(240px, .8fr);
+  }
+
+  .model-panel-main {
+    grid-row: span 2;
+  }
 }
 
 @media (min-width: 1024px) {
@@ -883,6 +1130,10 @@ blockquote p {
 
   .price-report-grid {
     grid-template-columns: 1fr;
+  }
+
+  .motorola-hero-grid {
+    grid-template-columns: minmax(0, 1fr) 390px;
   }
 }
 
@@ -949,5 +1200,33 @@ blockquote p {
   .price-card strong {
     text-align: left;
     white-space: normal;
+  }
+
+  .service-copy,
+  .model-panel,
+  .step-card {
+    padding: 20px;
+  }
+
+  .service-actions {
+    width: 100%;
+  }
+
+  .service-visual {
+    min-height: 260px;
+  }
+
+  .service-visual img,
+  .phone-stage img {
+    width: min(86%, 260px);
+  }
+
+  .motorola-hero {
+    padding: 70px 0;
+  }
+
+  .phone-stage {
+    min-height: 300px;
+    border-radius: 22px;
   }
 }

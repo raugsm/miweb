@@ -191,8 +191,8 @@ const cloudSyncAuditRateLimitPerMinute = Math.max(
 );
 const cloudSyncAuditRateBuckets = new Map();
 const cloudSyncAuditTimestampSkewMs = 5 * 60 * 1000;
-const localClientInstallerVersion = "0.5.1";
-const localClientInstallerPath = "/downloads/AriadGSM-Cliente-Setup-PerUser-v0.5.1.exe";
+const localClientInstallerVersion = "0.5.0";
+const localClientInstallerPath = "/downloads/AriadGSM-Cliente-Setup-PerUser-v0.5.0.exe";
 const publicCampaignEventRateLimitPerMinute = Math.max(
   3,
   Number(process.env.ARIADGSM_PUBLIC_CAMPAIGN_RATE_LIMIT_PER_MINUTE || 30)
@@ -5977,6 +5977,9 @@ async function serveStatic(req, res, pathname) {
   if (pathname === "/descargar") {
     return redirectToLatestClientInstaller(res);
   }
+  if (pathname === "/downloads/AriadGSM-Cliente-Setup-PerUser-v0.5.1.exe") {
+    return redirectToLocalClientInstaller(res);
+  }
   if (pathname === "/instrucciones") {
     res.writeHead(301, {
       Location: "/manual",
@@ -5989,6 +5992,9 @@ async function serveStatic(req, res, pathname) {
   }
   if (pathname === "/manual") {
     return sendPublicHtmlFile(res, "manual.html");
+  }
+  if (pathname === "/servicios/motorola-f4" || pathname === "/servicios/motorola-f4/") {
+    return sendPublicHtmlFile(res, "motorola-f4.html");
   }
 
   const portalRequest = requestUsesCustomerPortal(req, pathname);

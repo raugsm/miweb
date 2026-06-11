@@ -71,6 +71,7 @@ test("public landing exposes campaign tracking and records ad events", async () 
     assert.match(scriptBody, /campaign-event|landing_view/i);
     assert.match(scriptBody, /hasCampaignContext/);
     assert.match(scriptBody, /decorateCampaignLinks/);
+    assert.match(scriptBody, /motorola_f4_page/);
 
     const manual = await fetch(`${baseUrl}/manual?utm_campaign=meta_xiaomi_app`);
     assert.equal(manual.status, 200);
@@ -79,13 +80,26 @@ test("public landing exposes campaign tracking and records ad events", async () 
     assert.match(manualHtml, /data-track-event="download_click"/);
     assert.match(manualHtml, /data-whatsapp-link/);
 
+    const motorola = await fetch(`${baseUrl}/servicios/motorola-f4?utm_campaign=meta_motorola_f4`);
+    assert.equal(motorola.status, 200);
+    const motorolaHtml = await motorola.text();
+    assert.match(motorolaHtml, /Motorola F4 modelos soportados/);
+    assert.match(motorolaHtml, /campaign-tracking\.js/);
+    assert.match(motorolaHtml, /data-track-event="whatsapp_click"/);
+    assert.match(motorolaHtml, /51970748831/);
+    assert.doesNotMatch(motorolaHtml, /data-whatsapp-link/);
+
     const version = await fetch(`${baseUrl}/api/public/latest-client-version`);
     assert.equal(version.status, 200);
-    assert.equal((await version.json()).version, "0.5.1");
+    assert.equal((await version.json()).version, "0.5.0");
 
     const download = await fetch(`${baseUrl}/descargar`, { redirect: "manual" });
     assert.equal(download.status, 302);
-    assert.equal(download.headers.get("location"), "/downloads/AriadGSM-Cliente-Setup-PerUser-v0.5.1.exe");
+    assert.equal(download.headers.get("location"), "/downloads/AriadGSM-Cliente-Setup-PerUser-v0.5.0.exe");
+
+    const legacyDownload = await fetch(`${baseUrl}/downloads/AriadGSM-Cliente-Setup-PerUser-v0.5.1.exe`, { redirect: "manual" });
+    assert.equal(legacyDownload.status, 302);
+    assert.equal(legacyDownload.headers.get("location"), "/downloads/AriadGSM-Cliente-Setup-PerUser-v0.5.0.exe");
 
     const ignoredEvent = await fetch(`${baseUrl}/api/public/campaign-event`, {
       method: "POST",

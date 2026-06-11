@@ -4,7 +4,7 @@ const campaignSessionKey = "ariadgsm_campaign_session";
 const campaignTtlMs = 30 * 24 * 60 * 60 * 1000;
 const whatsappText = "Hola, quiero descargar la app AriadGSM";
 const campaignWhatsappText = "Hola, vengo del anuncio de Facebook y quiero descargar la app AriadGSM";
-const publicCampaignPaths = new Set(["/", "/descargar", "/manual"]);
+const publicCampaignPaths = new Set(["/", "/descargar", "/manual", "/servicios/motorola-f4", "/servicios/motorola-f4/"]);
 
 function campaignParamsFrom(searchParams) {
   const params = {};
@@ -55,6 +55,7 @@ function hasCampaignContext(context) {
 
 function campaignPageComponent() {
   if (window.location.pathname === "/manual") return "manual_page";
+  if (window.location.pathname === "/servicios/motorola-f4" || window.location.pathname === "/servicios/motorola-f4/") return "motorola_f4_page";
   return "public_landing";
 }
 
