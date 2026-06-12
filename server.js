@@ -191,8 +191,6 @@ const cloudSyncAuditRateLimitPerMinute = Math.max(
 );
 const cloudSyncAuditRateBuckets = new Map();
 const cloudSyncAuditTimestampSkewMs = 5 * 60 * 1000;
-const localClientInstallerVersion = "0.5.0";
-const localClientInstallerPath = "/downloads/AriadGSM-Cliente-Setup-PerUser-v0.5.0.exe";
 const publicCampaignEventRateLimitPerMinute = Math.max(
   3,
   Number(process.env.ARIADGSM_PUBLIC_CAMPAIGN_RATE_LIMIT_PER_MINUTE || 30)
@@ -5829,39 +5827,6 @@ function normalizeLatestClientVersionInfo(record) {
   };
 }
 
-function localClientVersionInfo() {
-  return {
-    version: localClientInstallerVersion,
-    downloadUrl: localClientInstallerPath,
-    publishedAt: "",
-  };
-}
-
-function semverParts(version) {
-  const match = String(version || "").trim().match(/^v?(\d+)(?:\.(\d+))?(?:\.(\d+))?/i);
-  if (!match) return null;
-  return [Number(match[1] || 0), Number(match[2] || 0), Number(match[3] || 0)];
-}
-
-function compareSemver(left, right) {
-  const leftParts = semverParts(left);
-  const rightParts = semverParts(right);
-  if (!leftParts || !rightParts) return 0;
-  for (let index = 0; index < 3; index += 1) {
-    if (leftParts[index] > rightParts[index]) return 1;
-    if (leftParts[index] < rightParts[index]) return -1;
-  }
-  return 0;
-}
-
-function effectiveClientVersionInfo(info) {
-  const local = localClientVersionInfo();
-  if (local.downloadUrl) return local;
-  if (!info?.downloadUrl) return local;
-  if (compareSemver(info.version, local.version) < 0) return local;
-  return info;
-}
-
 async function latestClientVersionInfo() {
   const now = Date.now();
   if (latestClientVersionCache.info && latestClientVersionCache.expiresAt > now) {
@@ -5873,7 +5838,7 @@ async function latestClientVersionInfo() {
       console.warn("SUPABASE_ANON_KEY no esta configurada; /descargar no puede resolver la ultima version.");
       warnedMissingSupabaseAnonKey = true;
     }
-    return localClientVersionInfo();
+    return { version: "", downloadUrl: "", publishedAt: "" };
   }
   const response = await fetch(latestClientVersionRpcUrl, {
     method: "POST",
@@ -5893,12 +5858,11 @@ async function latestClientVersionInfo() {
   if (!/^https?:\/\//i.test(info.downloadUrl)) {
     throw new Error("Supabase latest client version RPC did not return a valid download_url");
   }
-  const effectiveInfo = effectiveClientVersionInfo(info);
   latestClientVersionCache = {
-    info: effectiveInfo,
+    info,
     expiresAt: now + latestClientVersionCacheTtlMs,
   };
-  return effectiveInfo;
+  return info;
 }
 
 async function latestClientDownloadUrl() {
@@ -5906,20 +5870,12 @@ async function latestClientDownloadUrl() {
   return info.downloadUrl;
 }
 
-function redirectToLocalClientInstaller(res) {
-  res.writeHead(302, {
-    Location: localClientInstallerPath,
-    "Cache-Control": "no-store",
-    "Referrer-Policy": "no-referrer",
-  });
-  return res.end();
-}
-
 async function redirectToLatestClientInstaller(res) {
   try {
     const downloadUrl = await latestClientDownloadUrl();
     if (!downloadUrl) {
-      return redirectToLocalClientInstaller(res);
+      res.writeHead(503, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" });
+      return res.end("El servicio de descarga estÃ¡ temporalmente no disponible.\nPor favor intentÃ¡ de nuevo en unos minutos.");
     }
     res.writeHead(302, {
       Location: downloadUrl,
@@ -5929,7 +5885,8 @@ async function redirectToLatestClientInstaller(res) {
     return res.end();
   } catch (error) {
     console.warn("No se pudo resolver la descarga de AriadGSM Cliente.", error?.message || error);
-    return redirectToLocalClientInstaller(res);
+    res.writeHead(503, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" });
+    return res.end("El servicio de descarga estÃ¡ temporalmente no disponible.\nPor favor intentÃ¡ de nuevo en unos minutos.");
   }
 }
 
@@ -5977,9 +5934,6 @@ async function serveStatic(req, res, pathname) {
 
   if (pathname === "/descargar") {
     return redirectToLatestClientInstaller(res);
-  }
-  if (pathname === "/downloads/AriadGSM-Cliente-Setup-PerUser-v0.5.1.exe") {
-    return redirectToLocalClientInstaller(res);
   }
   if (pathname === "/instrucciones") {
     res.writeHead(301, {

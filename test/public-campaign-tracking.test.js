@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { createServer as createHttpServer } from "node:http";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -91,15 +92,14 @@ test("public landing exposes campaign tracking and records ad events", async () 
 
     const version = await fetch(`${baseUrl}/api/public/latest-client-version`);
     assert.equal(version.status, 200);
-    assert.equal((await version.json()).version, "0.5.0");
+    assert.deepEqual(await version.json(), {
+      available: false,
+      version: "",
+      publishedAt: "",
+    });
 
     const download = await fetch(`${baseUrl}/descargar`, { redirect: "manual" });
-    assert.equal(download.status, 302);
-    assert.equal(download.headers.get("location"), "/downloads/AriadGSM-Cliente-Setup-PerUser-v0.5.0.exe");
-
-    const legacyDownload = await fetch(`${baseUrl}/downloads/AriadGSM-Cliente-Setup-PerUser-v0.5.1.exe`, { redirect: "manual" });
-    assert.equal(legacyDownload.status, 302);
-    assert.equal(legacyDownload.headers.get("location"), "/downloads/AriadGSM-Cliente-Setup-PerUser-v0.5.0.exe");
+    assert.equal(download.status, 503);
 
     const ignoredEvent = await fetch(`${baseUrl}/api/public/campaign-event`, {
       method: "POST",
@@ -157,5 +157,83 @@ test("public landing exposes campaign tracking and records ad events", async () 
       await new Promise((resolve) => child.once("exit", resolve));
     }
     await rm(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("public client download resolves the latest installer from Supabase", async () => {
+  const remoteDownloadUrl = "https://duvpkpfivcnftxelgqtt.supabase.co/storage/v1/object/public/app-resources/installers/v0.5.2/AriadGSM-Cliente-Setup-PerUser-v0.5.2.exe";
+  const supabaseRequests = [];
+  const supabasePort = await freePort();
+  const supabaseServer = createHttpServer((req, res) => {
+    if (req.method === "POST" && req.url === "/rest/v1/rpc/get_latest_client_version") {
+      let body = "";
+      req.setEncoding("utf8");
+      req.on("data", (chunk) => {
+        body += chunk;
+      });
+      req.on("end", () => {
+        supabaseRequests.push({ headers: req.headers, body });
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+        res.end(JSON.stringify([{
+          version: "0.5.2",
+          download_url: remoteDownloadUrl,
+          published_at: "2026-06-12T22:00:00Z",
+        }]));
+      });
+      return;
+    }
+    res.writeHead(404, { "Content-Type": "application/json; charset=utf-8" });
+    res.end(JSON.stringify({ error: "not found" }));
+  });
+  await new Promise((resolve) => supabaseServer.listen(supabasePort, "127.0.0.1", resolve));
+
+  const port = await freePort();
+  const dataDir = await mkdtemp(path.join(os.tmpdir(), "ariadgsm-public-supabase-download-"));
+  const child = spawn(process.execPath, ["server.js"], {
+    cwd: root,
+    env: {
+      ...process.env,
+      PORT: String(port),
+      ARIAD_DATA_DIR: dataDir,
+      ARIAD_STORAGE_DRIVER: "json",
+      SUPABASE_URL: `http://127.0.0.1:${supabasePort}`,
+      SUPABASE_ANON_KEY: "test-anon-key",
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let exited = false;
+  child.once("exit", () => {
+    exited = true;
+  });
+
+  try {
+    const baseUrl = `http://127.0.0.1:${port}`;
+    await waitForServer(baseUrl);
+
+    const version = await fetch(`${baseUrl}/api/public/latest-client-version`);
+    assert.equal(version.status, 200);
+    assert.deepEqual(await version.json(), {
+      available: true,
+      version: "0.5.2",
+      publishedAt: "2026-06-12T22:00:00Z",
+    });
+
+    const download = await fetch(`${baseUrl}/descargar`, { redirect: "manual" });
+    assert.equal(download.status, 302);
+    assert.equal(download.headers.get("location"), remoteDownloadUrl);
+
+    assert.equal(supabaseRequests.length, 1, "latest version should be cached between public version and download requests");
+    assert.equal(supabaseRequests[0].headers.apikey, "test-anon-key");
+    assert.equal(supabaseRequests[0].headers.authorization, "Bearer test-anon-key");
+    assert.equal(supabaseRequests[0].body, "{}");
+  } finally {
+    if (!exited) {
+      child.kill();
+      await new Promise((resolve) => child.once("exit", resolve));
+    }
+    await rm(dataDir, { recursive: true, force: true });
+    await new Promise((resolve, reject) => {
+      supabaseServer.close((error) => (error ? reject(error) : resolve()));
+    });
   }
 });
