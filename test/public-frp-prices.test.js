@@ -87,8 +87,8 @@ test("public landing renders separate FRP and Cuentas MI price groups", () => {
 
   assert.match(html, /id="public-price-list"/);
   assert.match(html, /id="public-mi-price-list"/);
-  assert.match(html, /class="price-group-title">FRP</);
-  assert.match(html, /class="price-group-title">Cuentas MI</);
+  assert.match(html, /class="price-group-title">Xiaomi Reset \+ FRP</);
+  assert.match(html, /class="price-group-title">Xiaomi Cuentas MI</);
   assert.match(source, /report\?\.miPrices/);
 });
 
