@@ -62,7 +62,10 @@ test("public MI account prices use per-country keys with global fallback", () =>
   });
 
   assert.equal(report.miAvailable, true);
-  assert.equal(report.miPrices.length, 5);
+  // Cuentas MI no incluye la tarjeta USDT; FRP si la conserva.
+  assert.equal(report.miPrices.length, 4);
+  assert.equal(report.miPrices.some((price) => price.countryCode === "USDT"), false);
+  assert.equal(report.prices.some((price) => price.countryCode === "USDT"), true);
 
   const peru = report.miPrices.find((price) => price.countryCode === "PE");
   assert.equal(peru.priceUsdt, 4.5);
@@ -73,9 +76,6 @@ test("public MI account prices use per-country keys with global fallback", () =>
   const mexico = report.miPrices.find((price) => price.countryCode === "MX");
   assert.equal(mexico.priceUsdt, 8.5);
   assert.equal(mexico.amountFormatted, "$161.50 MXN");
-
-  const global = report.miPrices.find((price) => price.countryCode === "USDT");
-  assert.equal(global.amountFormatted, "8.50 USDT");
 
   // El bloque FRP no cambia.
   assert.equal(report.prices.find((price) => price.countryCode === "PE").priceUsdt, 4);

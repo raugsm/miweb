@@ -103,10 +103,14 @@ export function buildClientAppFrpPriceReport({
 
   const prices = clientAppCountries.map((country) => buildCountryPrice(country, unitPriceUsdt, available));
 
-  const miPrices = clientAppCountries.map((country) => {
-    const priceUsdt = miUnitPriceUsdt(settingsRows, country.code);
-    return buildCountryPrice(country, priceUsdt, priceUsdt > 0);
-  });
+  // Cuentas MI no se cobra en USDT: el bloque publico solo lista los paises
+  // con moneda local.
+  const miPrices = clientAppCountries
+    .filter((country) => country.code !== "USDT")
+    .map((country) => {
+      const priceUsdt = miUnitPriceUsdt(settingsRows, country.code);
+      return buildCountryPrice(country, priceUsdt, priceUsdt > 0);
+    });
   const miAvailable = miPrices.some((price) => price.available);
 
   return {
