@@ -69,10 +69,21 @@ function methodsForCountry(paymentMethodRows, countryCode) {
     .filter(Boolean);
 }
 
+function rentalDurationLabel(hours) {
+  const value = Number(hours);
+  if (!Number.isFinite(value) || value <= 0) return "alquiler";
+  if (value % 24 === 0) {
+    const days = value / 24;
+    return days === 1 ? "1 dia" : `${days} dias`;
+  }
+  return value === 1 ? "1 hora" : `${value} horas`;
+}
+
 export function buildClientAppFrpPriceReport({
   settingsRows = [],
   exchangeRateRows = [],
   paymentMethodRows = [],
+  toolRows = [],
   updatedAt = "",
 } = {}) {
   const costUsdt = numericSetting(settingsRows, "frp_cost_usdt");
@@ -80,7 +91,7 @@ export function buildClientAppFrpPriceReport({
   const unitPriceUsdt = moneyNumber(costUsdt + profitUsdt);
   const available = unitPriceUsdt > 0;
 
-  const buildCountryPrice = (country, priceUsdt, serviceAvailable) => {
+  const buildCountryPrice = (country, priceUsdt, serviceAvailable, unitLabel = "1 equipo") => {
     const rate = rateForCountryCode(exchangeRateRows, country.code);
     const ratePerUsdt = moneyNumber(rate.rate || 0);
     const amount = serviceAvailable && ratePerUsdt > 0 ? moneyNumber(priceUsdt * ratePerUsdt) : 0;
@@ -92,6 +103,7 @@ export function buildClientAppFrpPriceReport({
       currency: country.currency,
       available: Boolean(serviceAvailable && ratePerUsdt > 0),
       quantity: 1,
+      unitLabel,
       priceUsdt,
       amount,
       amountFormatted: amount > 0 ? formatCurrency(amount, country.currency) : "Consultar por WhatsApp",
@@ -113,14 +125,44 @@ export function buildClientAppFrpPriceReport({
     });
   const miAvailable = miPrices.some((price) => price.available);
 
+  // Alquiler de herramientas: una tarjeta por pais para cada herramienta activa.
+  // El precio ya viene en USDT desde tools_available, sin costo/ganancia aparte.
+  const rentals = [...(toolRows || [])]
+    .filter((tool) => tool && tool.name)
+    .sort((a, b) => {
+      const orderA = Number.isFinite(Number(a.sort_order)) ? Number(a.sort_order) : 999;
+      const orderB = Number.isFinite(Number(b.sort_order)) ? Number(b.sort_order) : 999;
+      return orderA - orderB || String(a.name).localeCompare(String(b.name), "es");
+    })
+    .map((tool) => {
+      const priceUsdt = moneyNumber(tool.price_usdt);
+      const durationHours = Number(tool.duration_hours) || 0;
+      const unitLabel = rentalDurationLabel(durationHours);
+      return {
+        id: String(tool.id || ""),
+        name: String(tool.name).trim(),
+        brand: String(tool.brand || "").trim(),
+        durationHours,
+        durationLabel: unitLabel,
+        priceUsdt,
+        // El alquiler si acepta Binance Pay, asi que conserva la tarjeta USDT.
+        prices: clientAppCountries.map((country) =>
+          buildCountryPrice(country, priceUsdt, priceUsdt > 0, unitLabel)
+        ),
+      };
+    })
+    .filter((rental) => rental.prices.some((price) => price.available));
+
   return {
     available,
     miAvailable,
+    rentalsAvailable: rentals.length > 0,
     quantity: 1,
     source: "ariadgsm_cliente_app",
     sourceLabel: "Dashboard AriadGSM Cliente",
     updatedAt: updatedAt || "",
     prices,
     miPrices,
+    rentals,
   };
 }

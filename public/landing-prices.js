@@ -1,6 +1,7 @@
 const priceList = document.querySelector("#public-price-list");
 const miPriceList = document.querySelector("#public-mi-price-list");
 const miPriceGroup = document.querySelector("#public-mi-price-group");
+const rentalPriceGroups = document.querySelector("#public-rental-price-groups");
 const livePriceRefreshMs = 5_000;
 let priceRefresh = null;
 
@@ -25,7 +26,8 @@ function renderPriceCard(price) {
     : "Método disponible en la app";
   const unavailableClass = price.available ? "" : " price-card-muted";
   const amount = price.available ? price.amountFormatted : "Consultar";
-  const helper = price.available ? `${price.currency} · 1 equipo` : "Por WhatsApp";
+  const unit = price.unitLabel || "1 equipo";
+  const helper = price.available ? `${price.currency} · ${unit}` : "Por WhatsApp";
   return `
     <article class="price-card${unavailableClass}">
       <div class="price-card-head">
@@ -52,6 +54,24 @@ function renderPriceGroup(target, prices) {
   target.innerHTML = prices.map(renderPriceCard).join("");
 }
 
+// Un bloque por herramienta activa, con el mismo diseno de tarjetas.
+function renderRentalGroups(rentals) {
+  if (!rentalPriceGroups) return;
+  const usable = rentals.filter((rental) => rental?.name && Array.isArray(rental.prices) && rental.prices.length);
+  if (!usable.length) {
+    rentalPriceGroups.innerHTML = "";
+    return;
+  }
+  rentalPriceGroups.innerHTML = usable
+    .map((rental) => `
+      <div class="price-group">
+        <h3 class="price-group-title">Alquiler de herramientas - ${escapeHtml(rental.name)}</h3>
+        <div class="price-list">${rental.prices.map(renderPriceCard).join("")}</div>
+      </div>
+    `)
+    .join("");
+}
+
 async function loadPublicPrices() {
   if (!priceList && !miPriceList) return;
   try {
@@ -66,11 +86,13 @@ async function loadPublicPrices() {
     renderPriceGroup(miPriceList, miPrices);
     // Cuentas MI solo aparece si el dashboard tiene sus precios cargados.
     if (miPriceGroup) miPriceGroup.hidden = !miPrices.some((price) => price.available);
+    renderRentalGroups(payload?.report?.rentals || []);
   } catch {
     if (priceList) {
       priceList.innerHTML = `<div class="price-loading">No se pudieron cargar los precios. Consulta por WhatsApp.</div>`;
     }
     if (miPriceGroup) miPriceGroup.hidden = true;
+    if (rentalPriceGroups) rentalPriceGroups.innerHTML = "";
   }
 }
 

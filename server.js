@@ -1273,7 +1273,7 @@ async function publicClientAppFrpPriceReport() {
     }
     throw new Error("SUPABASE_ANON_KEY no esta configurada.");
   }
-  const [settingsRows, exchangeRateRows, paymentMethodRows] = await Promise.all([
+  const [settingsRows, exchangeRateRows, paymentMethodRows, toolRows] = await Promise.all([
     fetchSupabasePublicRows("public_client_settings", "key,value"),
     fetchSupabasePublicRows("public_country_exchange_rates", "country_code,currency,rate"),
     fetchSupabasePublicRows(
@@ -1281,11 +1281,22 @@ async function publicClientAppFrpPriceReport() {
       "id,country_code,method_name,display_order,fields,qr_storage_path",
       "country_code.asc,display_order.asc,method_name.asc"
     ),
+    // El alquiler de herramientas es opcional: si la vista no existe o falla,
+    // la landing sigue mostrando FRP y Cuentas MI.
+    fetchSupabasePublicRows(
+      "public_tools_available",
+      "id,name,brand,duration_hours,price_usdt,sort_order",
+      "sort_order.asc,name.asc"
+    ).catch((error) => {
+      console.warn("No se pudo cargar el alquiler de herramientas publico.", error?.message || error);
+      return [];
+    }),
   ]);
   const report = buildClientAppFrpPriceReport({
     settingsRows,
     exchangeRateRows,
     paymentMethodRows,
+    toolRows,
     updatedAt: nowIso(),
   });
   clientAppPriceReportCache = {

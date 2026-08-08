@@ -81,6 +81,60 @@ test("public MI account prices use per-country keys with global fallback", () =>
   assert.equal(report.prices.find((price) => price.countryCode === "PE").priceUsdt, 4);
 });
 
+test("tool rental prices convert the tool price per country without USDT", () => {
+  const report = buildClientAppFrpPriceReport({
+    settingsRows: [
+      { key: "frp_cost_usdt", value: "3.00" },
+      { key: "frp_profit_usdt", value: "1.00" },
+    ],
+    exchangeRateRows: [
+      { country_code: "CL", currency: "CLP", rate: "975" },
+      { country_code: "CO", currency: "COP", rate: "3250" },
+      { country_code: "MX", currency: "MXN", rate: "18" },
+      { country_code: "PE", currency: "PEN", rate: "3.50" },
+    ],
+    paymentMethodRows: [{ country_code: "PE", method_name: "Yape Peregrina", display_order: 1 }],
+    toolRows: [
+      { id: "tool-1", name: "DFT Pro", brand: "", duration_hours: 48, price_usdt: "1.5", sort_order: 0 },
+      { id: "tool-2", name: "Sin precio", duration_hours: 24, price_usdt: "0", sort_order: 1 },
+    ],
+  });
+
+  assert.equal(report.rentalsAvailable, true);
+  // La herramienta sin precio cargado no se publica.
+  assert.equal(report.rentals.length, 1);
+
+  const dft = report.rentals[0];
+  assert.equal(dft.name, "DFT Pro");
+  assert.equal(dft.priceUsdt, 1.5);
+  assert.equal(dft.durationLabel, "2 dias");
+  // El alquiler conserva la tarjeta USDT porque acepta Binance Pay.
+  assert.equal(dft.prices.length, 5);
+  assert.equal(dft.prices.find((price) => price.countryCode === "USDT").amountFormatted, "1.50 USDT");
+
+  const colombia = dft.prices.find((price) => price.countryCode === "CO");
+  assert.equal(colombia.amountFormatted, "4.875 COP");
+  assert.equal(colombia.unitLabel, "2 dias");
+
+  const mexico = dft.prices.find((price) => price.countryCode === "MX");
+  assert.equal(mexico.amountFormatted, "$27.00 MXN");
+});
+
+test("tool rentals are omitted when the dashboard exposes no tools", () => {
+  const report = buildClientAppFrpPriceReport({
+    settingsRows: [
+      { key: "frp_cost_usdt", value: "3.00" },
+      { key: "frp_profit_usdt", value: "1.00" },
+    ],
+    exchangeRateRows: [{ country_code: "PE", currency: "PEN", rate: "3.50" }],
+  });
+
+  assert.deepEqual(report.rentals, []);
+  assert.equal(report.rentalsAvailable, false);
+  // El resto del reporte sigue funcionando.
+  assert.equal(report.prices.length, 5);
+});
+
 test("public landing renders separate FRP and Cuentas MI price groups", () => {
   const html = readFileSync(new URL("../public/landing.html", import.meta.url), "utf8");
   const source = readFileSync(new URL("../public/landing-prices.js", import.meta.url), "utf8");
@@ -89,7 +143,9 @@ test("public landing renders separate FRP and Cuentas MI price groups", () => {
   assert.match(html, /id="public-mi-price-list"/);
   assert.match(html, /class="price-group-title">Xiaomi Reset \+ FRP</);
   assert.match(html, /class="price-group-title">Xiaomi Cuentas MI</);
+  assert.match(html, /id="public-rental-price-groups"/);
   assert.match(source, /report\?\.miPrices/);
+  assert.match(source, /Alquiler de herramientas - \$\{escapeHtml\(rental\.name\)\}/);
 });
 
 test("public landing prices refresh near-live from app dashboard endpoint", () => {
