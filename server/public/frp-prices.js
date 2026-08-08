@@ -27,6 +27,27 @@ function numericSetting(settingsRows, key) {
   return moneyNumber(rawValue);
 }
 
+function hasSetting(settingsRows, key) {
+  return (settingsRows || []).some((item) => item?.key === key);
+}
+
+// Espeja _reseller_compute_unit_pricing: cuentas MI usan llaves por pais con
+// fallback a las llaves globales cuando el pais no esta cargado.
+function miUnitPriceUsdt(settingsRows, countryCode) {
+  if (countryCode && countryCode !== "USDT") {
+    const suffix = String(countryCode).toLowerCase();
+    const costKey = `cuenta_mi_cost_usdt_${suffix}`;
+    if (hasSetting(settingsRows, costKey)) {
+      return moneyNumber(
+        numericSetting(settingsRows, costKey) + numericSetting(settingsRows, `cuenta_mi_profit_usdt_${suffix}`)
+      );
+    }
+  }
+  return moneyNumber(
+    numericSetting(settingsRows, "cuenta_mi_cost_usdt") + numericSetting(settingsRows, "cuenta_mi_profit_usdt")
+  );
+}
+
 function rateForCountryCode(exchangeRateRows, countryCode) {
   if (countryCode === "USDT") return { rate: 1, updatedAt: "" };
   const row = (exchangeRateRows || []).find((item) => item?.country_code === countryCode);
@@ -59,33 +80,43 @@ export function buildClientAppFrpPriceReport({
   const unitPriceUsdt = moneyNumber(costUsdt + profitUsdt);
   const available = unitPriceUsdt > 0;
 
-  const prices = clientAppCountries.map((country) => {
+  const buildCountryPrice = (country, priceUsdt, serviceAvailable) => {
     const rate = rateForCountryCode(exchangeRateRows, country.code);
     const ratePerUsdt = moneyNumber(rate.rate || 0);
-    const amount = available && ratePerUsdt > 0 ? moneyNumber(unitPriceUsdt * ratePerUsdt) : 0;
+    const amount = serviceAvailable && ratePerUsdt > 0 ? moneyNumber(priceUsdt * ratePerUsdt) : 0;
     return {
       country: country.country,
       countryCode: country.code,
       flag: country.flag,
       flagCode: country.flagCode,
       currency: country.currency,
-      available: Boolean(available && ratePerUsdt > 0),
+      available: Boolean(serviceAvailable && ratePerUsdt > 0),
       quantity: 1,
-      priceUsdt: unitPriceUsdt,
+      priceUsdt,
       amount,
       amountFormatted: amount > 0 ? formatCurrency(amount, country.currency) : "Consultar por WhatsApp",
       methods: methodsForCountry(paymentMethodRows, country.code).slice(0, 3),
       ratePerUsdt,
       updatedAt: rate.updatedAt || updatedAt || "",
     };
+  };
+
+  const prices = clientAppCountries.map((country) => buildCountryPrice(country, unitPriceUsdt, available));
+
+  const miPrices = clientAppCountries.map((country) => {
+    const priceUsdt = miUnitPriceUsdt(settingsRows, country.code);
+    return buildCountryPrice(country, priceUsdt, priceUsdt > 0);
   });
+  const miAvailable = miPrices.some((price) => price.available);
 
   return {
     available,
+    miAvailable,
     quantity: 1,
     source: "ariadgsm_cliente_app",
     sourceLabel: "Dashboard AriadGSM Cliente",
     updatedAt: updatedAt || "",
     prices,
+    miPrices,
   };
 }

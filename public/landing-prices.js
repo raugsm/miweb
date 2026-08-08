@@ -1,4 +1,6 @@
 const priceList = document.querySelector("#public-price-list");
+const miPriceList = document.querySelector("#public-mi-price-list");
+const miPriceGroup = document.querySelector("#public-mi-price-group");
 const livePriceRefreshMs = 5_000;
 let priceRefresh = null;
 
@@ -41,8 +43,17 @@ function renderPriceCard(price) {
   `;
 }
 
+function renderPriceGroup(target, prices) {
+  if (!target) return;
+  if (!prices.length) {
+    target.innerHTML = `<div class="price-loading">Precios no disponibles. Consulta por WhatsApp.</div>`;
+    return;
+  }
+  target.innerHTML = prices.map(renderPriceCard).join("");
+}
+
 async function loadPublicPrices() {
-  if (!priceList) return;
+  if (!priceList && !miPriceList) return;
   try {
     const response = await fetch("/api/public/frp-prices", {
       headers: { Accept: "application/json" },
@@ -50,14 +61,16 @@ async function loadPublicPrices() {
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const payload = await response.json();
-    const prices = payload?.report?.prices || [];
-    if (!prices.length) {
-      priceList.innerHTML = `<div class="price-loading">Precios no disponibles. Consulta por WhatsApp.</div>`;
-      return;
-    }
-    priceList.innerHTML = prices.map(renderPriceCard).join("");
+    const miPrices = payload?.report?.miPrices || [];
+    renderPriceGroup(priceList, payload?.report?.prices || []);
+    renderPriceGroup(miPriceList, miPrices);
+    // Cuentas MI solo aparece si el dashboard tiene sus precios cargados.
+    if (miPriceGroup) miPriceGroup.hidden = !miPrices.some((price) => price.available);
   } catch {
-    priceList.innerHTML = `<div class="price-loading">No se pudieron cargar los precios. Consulta por WhatsApp.</div>`;
+    if (priceList) {
+      priceList.innerHTML = `<div class="price-loading">No se pudieron cargar los precios. Consulta por WhatsApp.</div>`;
+    }
+    if (miPriceGroup) miPriceGroup.hidden = true;
   }
 }
 
@@ -70,7 +83,7 @@ function schedulePriceRefresh() {
 }
 
 function startLivePrices() {
-  if (!priceList) return;
+  if (!priceList && !miPriceList) return;
   window.setInterval(schedulePriceRefresh, livePriceRefreshMs);
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") schedulePriceRefresh();

@@ -608,6 +608,19 @@ h3 {
   gap: 10px;
 }
 
+.price-group + .price-group {
+  margin-top: 18px;
+}
+
+.price-group-title {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
 .price-card,
 .price-loading {
   border: 1px solid var(--line);

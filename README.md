@@ -48,7 +48,7 @@ WHATSAPP_SUPPORT_NUMBER=<numero internacional para soporte sin + ni espacios; de
 
 `WHATSAPP_SUPPORT_NUMBER` alimenta los enlaces publicos de WhatsApp en la landing y el manual. Usar formato internacional solo con digitos. Si no se configura, la web usa `51961751354`.
 
-`GET /api/public/frp-prices` expone un reporte publico de precios FRP por pais. La landing lo consume desde `/landing-prices.js`; los montos se calculan con `public_client_settings`, `public_country_exchange_rates` y `public_payment_methods` de AriadGSM Cliente en Supabase, no desde HTML hardcodeado ni desde el panel web.
+`GET /api/public/frp-prices` expone un reporte publico de precios por pais con dos bloques: `prices` (FRP) y `miPrices` (Cuentas MI). La landing los consume desde `/landing-prices.js` y los pinta en dos grupos titulados "FRP" y "Cuentas MI"; los montos se calculan con `public_client_settings`, `public_country_exchange_rates` y `public_payment_methods` de AriadGSM Cliente en Supabase, no desde HTML hardcodeado ni desde el panel web. Cuentas MI usa las llaves `cuenta_mi_cost_usdt_<pais>` / `cuenta_mi_profit_usdt_<pais>` con fallback a las globales `cuenta_mi_cost_usdt` / `cuenta_mi_profit_usdt`, replicando lo que hace el RPC `_reseller_compute_unit_pricing` de la app.
 
 `ARIAD_TECHNICIAN_SWAP_MS` (opcional, default 10000) controla la duracion en milisegundos de la ventana de bloqueo cuando se cambia de tecnico activo. Solo bajalo a valores menores (>= 100) en entornos de test.
 

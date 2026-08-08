@@ -44,6 +44,54 @@ test("public FRP price report uses AriadGSM Cliente app dashboard rows", () => {
   assert.deepEqual(global.methods, ["Binance Pay"]);
 });
 
+test("public MI account prices use per-country keys with global fallback", () => {
+  const report = buildClientAppFrpPriceReport({
+    settingsRows: [
+      { key: "frp_cost_usdt", value: "3.00" },
+      { key: "frp_profit_usdt", value: "1.00" },
+      { key: "cuenta_mi_cost_usdt", value: "6.00" },
+      { key: "cuenta_mi_profit_usdt", value: "2.50" },
+      { key: "cuenta_mi_cost_usdt_pe", value: "3.00" },
+      { key: "cuenta_mi_profit_usdt_pe", value: "1.50" },
+    ],
+    exchangeRateRows: [
+      { country_code: "PE", currency: "PEN", rate: "3.55" },
+      { country_code: "MX", currency: "MXN", rate: "19" },
+    ],
+    paymentMethodRows: [{ country_code: "PE", method_name: "Yape Peregrina", display_order: 1 }],
+  });
+
+  assert.equal(report.miAvailable, true);
+  assert.equal(report.miPrices.length, 5);
+
+  const peru = report.miPrices.find((price) => price.countryCode === "PE");
+  assert.equal(peru.priceUsdt, 4.5);
+  assert.equal(peru.amount, 15.975);
+  assert.deepEqual(peru.methods, ["Yape Peregrina"]);
+
+  // Sin llaves por pais cae al global 6.00 + 2.50.
+  const mexico = report.miPrices.find((price) => price.countryCode === "MX");
+  assert.equal(mexico.priceUsdt, 8.5);
+  assert.equal(mexico.amountFormatted, "$161.50 MXN");
+
+  const global = report.miPrices.find((price) => price.countryCode === "USDT");
+  assert.equal(global.amountFormatted, "8.50 USDT");
+
+  // El bloque FRP no cambia.
+  assert.equal(report.prices.find((price) => price.countryCode === "PE").priceUsdt, 4);
+});
+
+test("public landing renders separate FRP and Cuentas MI price groups", () => {
+  const html = readFileSync(new URL("../public/landing.html", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../public/landing-prices.js", import.meta.url), "utf8");
+
+  assert.match(html, /id="public-price-list"/);
+  assert.match(html, /id="public-mi-price-list"/);
+  assert.match(html, /class="price-group-title">FRP</);
+  assert.match(html, /class="price-group-title">Cuentas MI</);
+  assert.match(source, /report\?\.miPrices/);
+});
+
 test("public landing prices refresh near-live from app dashboard endpoint", () => {
   const source = readFileSync(new URL("../public/landing-prices.js", import.meta.url), "utf8");
   assert.match(source, /const livePriceRefreshMs = 5_000/);
