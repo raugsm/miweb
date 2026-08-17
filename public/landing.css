@@ -668,6 +668,12 @@ h3 {
   overflow: hidden;
 }
 
+.price-flag-ar {
+  background:
+    radial-gradient(circle at 50% 50%, #f6b40e 0 3px, transparent 3.5px),
+    linear-gradient(#74acdf 0 33%, #fff 33% 66%, #74acdf 66% 100%);
+}
+
 .price-flag-cl {
   background:
     radial-gradient(circle at 18% 25%, #fff 0 2px, transparent 2.5px),
@@ -679,6 +685,10 @@ h3 {
   background: linear-gradient(#fcd116 0 50%, #003893 50% 75%, #ce1126 75% 100%);
 }
 
+.price-flag-ec {
+  background: linear-gradient(#ffdd00 0 50%, #0072ce 50% 75%, #ef3340 75% 100%);
+}
+
 .price-flag-mx {
   background:
     radial-gradient(circle at 50% 50%, #8c6b2f 0 2px, transparent 2.5px),
@@ -687,6 +697,31 @@ h3 {
 
 .price-flag-pe {
   background: linear-gradient(90deg, #d91023 0 33%, #fff 33% 66%, #d91023 66% 100%);
+}
+
+/* Worldwide no tiene bandera: un globo simple lo separa de la tarjeta Binance. */
+.price-flag-ww {
+  background: linear-gradient(160deg, #1f6feb 0%, #16a3c8 100%);
+}
+
+.price-flag-ww::before,
+.price-flag-ww::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  height: 16px;
+  border: 1px solid rgba(255, 255, 255, .85);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.price-flag-ww::before {
+  width: 16px;
+}
+
+.price-flag-ww::after {
+  width: 7px;
 }
 
 .price-flag-binance {

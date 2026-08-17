@@ -15,7 +15,7 @@ function escapeHtml(value) {
 }
 
 function flagClass(price) {
-  const allowed = new Set(["cl", "co", "mx", "pe", "binance"]);
+  const allowed = new Set(["ar", "cl", "co", "ec", "mx", "pe", "ww", "binance"]);
   const code = String(price.flagCode || "").toLowerCase();
   return allowed.has(code) ? ` price-flag-${code}` : " price-flag-binance";
 }

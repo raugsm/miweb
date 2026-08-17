@@ -8,6 +8,20 @@ const clientAppCountries = [
   { code: "USDT", country: "Internacional", currency: "USDT", flag: "\u{1F310}", flagCode: "binance" },
 ];
 
+// Cuentas MI se vende en mas plazas que FRP: el dashboard ya cobra estas en
+// USDT (tipo de cambio 1) con Binance Pay como metodo.
+const miExtraCountries = [
+  { code: "AR", country: "Argentina", currency: "USDT", flag: "\u{1F1E6}\u{1F1F7}", flagCode: "ar" },
+  { code: "EC", country: "Ecuador", currency: "USDT", flag: "\u{1F1EA}\u{1F1E8}", flagCode: "ec" },
+  { code: "WW", country: "Worldwide", currency: "USDT", flag: "\u{1F30E}", flagCode: "ww" },
+];
+
+// La tarjeta generica "Internacional" queda fuera: Worldwide cumple ese rol y
+// el dashboard le da su propio precio.
+const miCountries = [...clientAppCountries, ...miExtraCountries]
+  .filter((country) => country.code !== "USDT")
+  .sort((a, b) => a.country.localeCompare(b.country, "es"));
+
 function formatCurrency(amount, currency) {
   const value = moneyNumber(amount);
   if (currency === "PEN") return `S/ ${value.toFixed(2)}`;
@@ -115,14 +129,12 @@ export function buildClientAppFrpPriceReport({
 
   const prices = clientAppCountries.map((country) => buildCountryPrice(country, unitPriceUsdt, available));
 
-  // Cuentas MI no se cobra en USDT: el bloque publico solo lista los paises
-  // con moneda local.
-  const miPrices = clientAppCountries
-    .filter((country) => country.code !== "USDT")
-    .map((country) => {
-      const priceUsdt = miUnitPriceUsdt(settingsRows, country.code);
-      return buildCountryPrice(country, priceUsdt, priceUsdt > 0);
-    });
+  // Cada plaza usa su llave por pais y cae a la global cuando el dashboard
+  // todavia no la tiene cargada.
+  const miPrices = miCountries.map((country) => {
+    const priceUsdt = miUnitPriceUsdt(settingsRows, country.code);
+    return buildCountryPrice(country, priceUsdt, priceUsdt > 0);
+  });
   const miAvailable = miPrices.some((price) => price.available);
 
   // Alquiler de herramientas: una tarjeta por pais para cada herramienta activa.

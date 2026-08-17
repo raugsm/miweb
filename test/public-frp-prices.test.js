@@ -57,13 +57,22 @@ test("public MI account prices use per-country keys with global fallback", () =>
     exchangeRateRows: [
       { country_code: "PE", currency: "PEN", rate: "3.55" },
       { country_code: "MX", currency: "MXN", rate: "19" },
+      { country_code: "AR", currency: "USDT", rate: "1" },
+      { country_code: "EC", currency: "USDT", rate: "1" },
+      { country_code: "WW", currency: "USDT", rate: "1" },
     ],
-    paymentMethodRows: [{ country_code: "PE", method_name: "Yape Peregrina", display_order: 1 }],
+    paymentMethodRows: [
+      { country_code: "PE", method_name: "Yape Peregrina", display_order: 1 },
+      { country_code: "WW", method_name: "Binance Pay", display_order: 0 },
+    ],
   });
 
   assert.equal(report.miAvailable, true);
-  // Cuentas MI no incluye la tarjeta USDT; FRP si la conserva.
-  assert.equal(report.miPrices.length, 4);
+  // Cuentas MI no incluye la tarjeta generica USDT; FRP si la conserva.
+  assert.deepEqual(
+    report.miPrices.map((price) => price.countryCode),
+    ["AR", "CL", "CO", "EC", "MX", "PE", "WW"]
+  );
   assert.equal(report.miPrices.some((price) => price.countryCode === "USDT"), false);
   assert.equal(report.prices.some((price) => price.countryCode === "USDT"), true);
 
@@ -77,8 +86,42 @@ test("public MI account prices use per-country keys with global fallback", () =>
   assert.equal(mexico.priceUsdt, 8.5);
   assert.equal(mexico.amountFormatted, "$161.50 MXN");
 
+  // Argentina, Ecuador y Worldwide se cobran en USDT con tipo de cambio 1.
+  const worldwide = report.miPrices.find((price) => price.countryCode === "WW");
+  assert.equal(worldwide.country, "Worldwide");
+  assert.equal(worldwide.flagCode, "ww");
+  assert.equal(worldwide.amountFormatted, "8.50 USDT");
+  assert.deepEqual(worldwide.methods, ["Binance Pay"]);
+
+  const argentina = report.miPrices.find((price) => price.countryCode === "AR");
+  assert.equal(argentina.available, true);
+  assert.equal(argentina.amountFormatted, "8.50 USDT");
+  assert.equal(report.miPrices.find((price) => price.countryCode === "EC").amountFormatted, "8.50 USDT");
+
   // El bloque FRP no cambia.
+  assert.equal(report.prices.map((price) => price.countryCode).join(","), "CL,CO,MX,PE,USDT");
   assert.equal(report.prices.find((price) => price.countryCode === "PE").priceUsdt, 4);
+});
+
+test("new MI plazas honour their own dashboard keys when loaded", () => {
+  const report = buildClientAppFrpPriceReport({
+    settingsRows: [
+      { key: "cuenta_mi_cost_usdt", value: "6.00" },
+      { key: "cuenta_mi_profit_usdt", value: "2.50" },
+      { key: "cuenta_mi_cost_usdt_ar", value: "4.00" },
+      { key: "cuenta_mi_profit_usdt_ar", value: "1.25" },
+    ],
+    exchangeRateRows: [
+      { country_code: "AR", currency: "USDT", rate: "1" },
+      { country_code: "EC", currency: "USDT", rate: "1" },
+    ],
+  });
+
+  assert.equal(report.miPrices.find((price) => price.countryCode === "AR").priceUsdt, 5.25);
+  // Ecuador sigue en la global mientras no tenga sus llaves.
+  assert.equal(report.miPrices.find((price) => price.countryCode === "EC").priceUsdt, 8.5);
+  // Sin tipo de cambio cargado la tarjeta queda en "Consultar".
+  assert.equal(report.miPrices.find((price) => price.countryCode === "WW").available, false);
 });
 
 test("tool rental prices convert the tool price per country without USDT", () => {
