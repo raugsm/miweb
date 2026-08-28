@@ -63,12 +63,22 @@ function renderRentalGroups(rentals) {
     return;
   }
   rentalPriceGroups.innerHTML = usable
-    .map((rental) => `
+    .map((rental) => {
+      // Sin cuentas libres la app cobra el piso base + recargo, ya incluido
+      // en estos montos. Solo se avisa cuando el dashboard lo confirma.
+      const aviso = rental.agotada
+        ? `<p class="price-group-note">Sin stock ahora: se consigue afuera, +${escapeHtml(
+            Number(rental.recargoUsdt || 0).toFixed(2)
+          )} USDT ya incluido en el precio.</p>`
+        : "";
+      return `
       <div class="price-group">
         <h3 class="price-group-title">Alquiler de herramientas - ${escapeHtml(rental.name)}</h3>
+        ${aviso}
         <div class="price-list">${rental.prices.map(renderPriceCard).join("")}</div>
       </div>
-    `)
+    `;
+    })
     .join("");
 }
 

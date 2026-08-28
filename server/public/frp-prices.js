@@ -83,6 +83,19 @@ function methodsForCountry(paymentMethodRows, countryCode) {
     .filter(Boolean);
 }
 
+// Cuando el pool no tiene cuentas libres el alquiler se sirve comprando la
+// cuenta afuera y create_tool_rental_v2 aplica este piso sobre el precio base.
+const rentalExternalSurchargeUsdt = 1;
+
+// Devuelve el numero de cuentas libres, o null cuando el dato no vino. Un dato
+// ausente (null/undefined/"") NO es cero: sin saberlo no se cobra recargo.
+// Number(null) y Number("") valen 0, por eso no alcanza con Number.isFinite.
+function freeAccountsOrNull(rawValue) {
+  if (rawValue === null || rawValue === undefined || rawValue === "") return null;
+  const parsed = Number(rawValue);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function rentalDurationLabel(hours) {
   const value = Number(hours);
   if (!Number.isFinite(value) || value <= 0) return "alquiler";
@@ -147,7 +160,12 @@ export function buildClientAppFrpPriceReport({
       return orderA - orderB || String(a.name).localeCompare(String(b.name), "es");
     })
     .map((tool) => {
-      const priceUsdt = moneyNumber(tool.price_usdt);
+      const precioBaseUsdt = moneyNumber(tool.price_usdt);
+      const cuentasLibres = freeAccountsOrNull(tool.cuentas_libres);
+      const agotada = cuentasLibres !== null && cuentasLibres <= 0;
+      const recargoUsdt = agotada ? rentalExternalSurchargeUsdt : 0;
+      // Publicamos lo que el cliente va a pagar de verdad, no el precio base.
+      const priceUsdt = moneyNumber(precioBaseUsdt + recargoUsdt);
       const durationHours = Number(tool.duration_hours) || 0;
       const unitLabel = rentalDurationLabel(durationHours);
       return {
@@ -156,10 +174,16 @@ export function buildClientAppFrpPriceReport({
         brand: String(tool.brand || "").trim(),
         durationHours,
         durationLabel: unitLabel,
+        agotada,
+        cuentasLibres,
+        precioBaseUsdt,
+        recargoUsdt,
         priceUsdt,
         // El alquiler si acepta Binance Pay, asi que conserva la tarjeta USDT.
+        // La disponibilidad mira el precio BASE: una herramienta sin precio
+        // cargado no debe publicarse solo porque el recargo la deja en 1 USDT.
         prices: clientAppCountries.map((country) =>
-          buildCountryPrice(country, priceUsdt, priceUsdt > 0, unitLabel)
+          buildCountryPrice(country, priceUsdt, precioBaseUsdt > 0, unitLabel)
         ),
       };
     })

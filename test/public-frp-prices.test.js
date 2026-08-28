@@ -163,6 +163,100 @@ test("tool rental prices convert the tool price per country without USDT", () =>
   assert.equal(mexico.amountFormatted, "$27.00 MXN");
 });
 
+function rentalReport(toolRows) {
+  return buildClientAppFrpPriceReport({
+    settingsRows: [
+      { key: "frp_cost_usdt", value: "3.00" },
+      { key: "frp_profit_usdt", value: "1.00" },
+    ],
+    exchangeRateRows: [{ country_code: "PE", currency: "PEN", rate: "3.50" }],
+    toolRows,
+  });
+}
+
+test("an exhausted tool pool publishes the price with the external surcharge", () => {
+  const report = rentalReport([
+    { id: "t1", name: "DFT Pro", duration_hours: 48, price_usdt: "2.10", sort_order: 0, cuentas_libres: 0 },
+  ]);
+
+  const dft = report.rentals[0];
+  assert.equal(dft.agotada, true);
+  assert.equal(dft.precioBaseUsdt, 2.1);
+  assert.equal(dft.recargoUsdt, 1);
+  assert.equal(dft.priceUsdt, 3.1);
+});
+
+test("a tool with free accounts publishes its base price untouched", () => {
+  const report = rentalReport([
+    { id: "t2", name: "Unlock Tool", duration_hours: 6, price_usdt: "0.70", sort_order: 1, cuentas_libres: 2 },
+  ]);
+
+  const tool = report.rentals[0];
+  assert.equal(tool.agotada, false);
+  assert.equal(tool.recargoUsdt, 0);
+  assert.equal(tool.priceUsdt, 0.7);
+  assert.equal(tool.precioBaseUsdt, 0.7);
+});
+
+test("a missing cuentas_libres never invents a surcharge", () => {
+  // undefined, null y "" son \"no se\", no \"cero libres\". Number(null) es 0,
+  // asi que este caso es el que rompe si se confia en Number.isFinite a secas.
+  for (const rawValue of [undefined, null, ""]) {
+    const tool = {
+      id: "t3", name: "Vista vieja", duration_hours: 24, price_usdt: "1.00", sort_order: 0,
+    };
+    if (rawValue !== undefined) tool.cuentas_libres = rawValue;
+    const rental = rentalReport([tool]).rentals[0];
+    assert.equal(rental.agotada, false, `cuentas_libres=${String(rawValue)} no debe marcar agotada`);
+    assert.equal(rental.recargoUsdt, 0);
+    assert.equal(rental.priceUsdt, 1);
+    assert.equal(rental.cuentasLibres, null);
+  }
+});
+
+test("the local currency conversion uses the surcharged price", () => {
+  const report = rentalReport([
+    { id: "t4", name: "DFT Pro", duration_hours: 48, price_usdt: "2.10", sort_order: 0, cuentas_libres: 0 },
+  ]);
+
+  const peru = report.rentals[0].prices.find((price) => price.countryCode === "PE");
+  // 3.10 x 3.50 = 10.85, no 2.10 x 3.50 = 7.35.
+  assert.equal(peru.amount, 10.85);
+  assert.equal(peru.amountFormatted, "S/ 10.85");
+
+  const usdt = report.rentals[0].prices.find((price) => price.countryCode === "USDT");
+  assert.equal(usdt.amountFormatted, "3.10 USDT");
+});
+
+test("an exhausted tool without a base price stays unpublished", () => {
+  // El recargo no debe convertir una herramienta sin precio cargado en una de 1 USDT.
+  const report = rentalReport([
+    { id: "t5", name: "Sin precio", duration_hours: 24, price_usdt: "0", sort_order: 0, cuentas_libres: 0 },
+  ]);
+
+  assert.deepEqual(report.rentals, []);
+  assert.equal(report.rentalsAvailable, false);
+});
+
+test("the rental surcharge leaves FRP and Cuentas MI untouched", () => {
+  const settingsRows = [
+    { key: "frp_cost_usdt", value: "3.00" },
+    { key: "frp_profit_usdt", value: "1.00" },
+    { key: "cuenta_mi_cost_usdt", value: "6.00" },
+    { key: "cuenta_mi_profit_usdt", value: "2.50" },
+  ];
+  const exchangeRateRows = [{ country_code: "PE", currency: "PEN", rate: "3.50" }];
+  const toolRows = [
+    { id: "t6", name: "DFT Pro", duration_hours: 48, price_usdt: "2.10", sort_order: 0, cuentas_libres: 0 },
+  ];
+
+  const without = buildClientAppFrpPriceReport({ settingsRows, exchangeRateRows });
+  const with_ = buildClientAppFrpPriceReport({ settingsRows, exchangeRateRows, toolRows });
+
+  assert.deepEqual(with_.prices, without.prices);
+  assert.deepEqual(with_.miPrices, without.miPrices);
+});
+
 test("tool rentals are omitted when the dashboard exposes no tools", () => {
   const report = buildClientAppFrpPriceReport({
     settingsRows: [
@@ -189,6 +283,10 @@ test("public landing renders separate FRP and Cuentas MI price groups", () => {
   assert.match(html, /id="public-rental-price-groups"/);
   assert.match(source, /report\?\.miPrices/);
   assert.match(source, /Alquiler de herramientas - \$\{escapeHtml\(rental\.name\)\}/);
+  // El aviso de stock agotado solo se pinta cuando el reporte lo confirma.
+  assert.match(source, /rental\.agotada/);
+  assert.match(source, /Sin stock ahora/);
+  assert.match(source, /price-group-note/);
 });
 
 test("public landing prices refresh near-live from app dashboard endpoint", () => {

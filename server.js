@@ -1285,7 +1285,7 @@ async function publicClientAppFrpPriceReport() {
     // la landing sigue mostrando FRP y Cuentas MI.
     fetchSupabasePublicRows(
       "public_tools_available",
-      "id,name,brand,duration_hours,price_usdt,sort_order",
+      "id,name,brand,duration_hours,price_usdt,sort_order,cuentas_libres",
       "sort_order.asc,name.asc"
     ).catch((error) => {
       console.warn("No se pudo cargar el alquiler de herramientas publico.", error?.message || error);
