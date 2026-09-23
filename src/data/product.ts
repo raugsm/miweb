@@ -34,7 +34,9 @@ export const footerLinks: NavItem[] = [
   { label: "AriadGSM", href: "/gsm" },
 ]
 
-export const headerCta: NavItem = { label: "Descargar", href: "/" }
+// Sin boton de descarga en la barra: confundia, porque aparecia en todas las
+// paginas sin decir que descargaba. Cada producto tiene el suyo donde
+// corresponde: Ari-Tool en la portada y AriadGSM Cliente en /gsm.
 
 /** Acceso de clientes: reemplaza al item "Mi cuenta" que antes vivia en el menu. */
 export const sessionCta: NavItem = { label: "Iniciar sesión", href: "/cuenta" }
