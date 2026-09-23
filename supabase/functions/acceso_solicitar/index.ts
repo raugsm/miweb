@@ -105,8 +105,20 @@ serve(async (req) => {
       return resp(429, { error: "demasiados_intentos" });
     }
 
-    // Anti-robot: antes de crear nada y antes de averiguar si el correo existe.
-    if (!await captchaValido(captcha, ip)) {
+    // Anti-robot: SOLO a quien viene de un navegador.
+    //
+    // Esta funcion tambien la usa la app de escritorio, que no tiene navegador
+    // y no puede resolver un recuadro de Cloudflare. Exigirselo la dejaba sin
+    // poder crear cuentas.
+    //
+    // Un navegador manda siempre la cabecera Origin en un POST a otro dominio;
+    // un cliente nativo no la manda. Esa es la diferencia que se usa aca.
+    //
+    // Si, un robot puede omitir Origin para saltarse el recuadro. Por eso el
+    // freno por ritmo de mas arriba se aplica a TODOS por igual y no depende
+    // de esto: es el que de verdad corta los registros en cadena.
+    const desdeNavegador = Boolean(req.headers.get("origin"));
+    if (desdeNavegador && !await captchaValido(captcha, ip)) {
       await anotar(db, correo, ip, false, "acceso_fallo");
       return resp(400, { error: "captcha" });
     }
