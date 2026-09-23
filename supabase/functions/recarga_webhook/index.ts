@@ -1,93 +1,99 @@
-// recarga_webhook (pública, verify_jwt=false): CoinGate avisa acá el estado del
-// pago. Cuando el estado es "paid", se acreditan los créditos UNA sola vez.
+// recarga_webhook (pública, verify_jwt=false): MixPay avisa acá cuando hay un
+// pago. El aviso NO viene firmado y, a propósito, NO trae el resultado del
+// pago. Por eso NUNCA se confía en el body: se re-consulta a MixPay
+// (payments_result) del lado del servidor y solo si dice "success" —y coinciden
+// el destinatario, la moneda y el monto— se acreditan los créditos UNA vez.
 //
-// Seguridad y anti-doble:
-//   - Se valida el `token` que CoinGate devuelve contra el guardado en la fila.
-//   - Se re-consulta la orden a CoinGate (defensa en profundidad) antes de sumar.
-//   - Se "reclama" la fila con un UPDATE condicional (pendiente → pagado): solo
-//     el primer webhook que la reclama acredita; los repetidos no hacen nada.
+// MixPay POST { orderId, traceId, payeeId }  →  responder 200 { code: "SUCCESS" }
+// Cualquier respuesta distinta de SUCCESS hace que MixPay reintente (hasta 10).
+//
+// Config (secrets):
+//   MIXPAY_PAYEE_ID        payeeId propio (tiene que coincidir con el del pago)
+//   MIXPAY_QUOTE_ASSET_ID  moneda de cotización esperada (por defecto "usd")
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { admin, CORS, resp } from "../_shared/seguridad.ts";
 
-function baseCoinGate(): string {
-  return Deno.env.get("COINGATE_ENV") === "production"
-    ? "https://api.coingate.com/api/v2"
-    : "https://api-sandbox.coingate.com/api/v2";
-}
+const MIXPAY_RESULT = "https://api.mixpay.me/v1/payments_result";
+
+// Respuestas que entiende MixPay: SUCCESS = no reintentar; cualquier otra = reintenta.
+const OK = { code: "SUCCESS" };
+const REINTENTAR = { code: "FAIL" };
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   try {
-    // CoinGate manda los datos como formulario (x-www-form-urlencoded).
-    const form = await req.formData().catch(() => null);
-    if (!form) return resp(400, { error: "sin_datos" });
-    const orderId = String(form.get("order_id") ?? ""); // = recarga.codigo
-    const token = String(form.get("token") ?? "");
-    const status = String(form.get("status") ?? "");
+    const body = await req.json().catch(() => null);
+    const orderId = String((body as { orderId?: string } | null)?.orderId ?? "");
     if (!orderId) return resp(400, { error: "sin_orden" });
 
     const db = admin();
     const { data: rec } = await db.schema("negocio").from("recarga")
-      .select("codigo,usuario_ref,creditos,token,estado,coingate_order_id")
+      .select("codigo,usuario_ref,creditos,monto_usd,estado")
       .eq("codigo", orderId).maybeSingle();
-    if (!rec) return resp(404, { error: "recarga_no_encontrada" });
+    // Si no existe o ya está pagada: SUCCESS para que MixPay no reintente.
+    if (!rec) return resp(200, OK);
     const r = rec as {
       codigo: string; usuario_ref: string; creditos: number;
-      token: string; estado: string; coingate_order_id: string | null;
+      monto_usd: number; estado: string;
     };
+    if (r.estado === "pagado") return resp(200, OK);
 
-    // El token del callback tiene que coincidir con el de la orden.
-    if (!token || token !== r.token) return resp(403, { error: "token_invalido" });
+    const payee = Deno.env.get("MIXPAY_PAYEE_ID");
+    if (!payee) { console.error("mixpay_no_configurado"); return resp(200, REINTENTAR); }
+    const quote = Deno.env.get("MIXPAY_QUOTE_ASSET_ID") ?? "usd";
 
-    // Ya acreditada: idempotente, nada que hacer.
-    if (r.estado === "pagado") return resp(200, { ok: true, ya: true });
+    // Fuente de verdad: preguntarle a MixPay el estado real del pago.
+    const q = new URLSearchParams({ orderId, payeeId: payee });
+    const cg = await fetch(`${MIXPAY_RESULT}?${q}`, { headers: { Accept: "application/json" } });
+    if (!cg.ok) { console.error("mixpay_result", cg.status); return resp(200, REINTENTAR); }
+    const j = await cg.json() as {
+      success?: boolean;
+      data?: { status?: string; payeeId?: string; quoteAmount?: string; quoteAssetId?: string };
+    };
+    const d = j?.data;
+    if (!j?.success || !d) return resp(200, REINTENTAR);
 
-    if (status === "paid") {
-      // Defensa en profundidad: preguntarle a CoinGate el estado real.
-      const clave = Deno.env.get("COINGATE_TOKEN");
-      if (clave && r.coingate_order_id) {
-        try {
-          const cg = await fetch(`${baseCoinGate()}/orders/${r.coingate_order_id}`, {
-            headers: { Authorization: `Token ${clave}`, Accept: "application/json" },
-          });
-          if (cg.ok) {
-            const o = await cg.json() as { status?: string };
-            if (o.status !== "paid") return resp(409, { error: "estado_no_confirmado" });
-          }
-        } catch (_e) { /* si la reconsulta falla, se confía en token + status */ }
-      }
-
-      // Reclamar la fila: solo pasa de pendiente → pagado una vez.
-      const { data: marca } = await db.schema("negocio").from("recarga")
-        .update({ estado: "pagado", pagado_en: new Date().toISOString() })
-        .eq("codigo", r.codigo).eq("estado", "pendiente").select("codigo");
-      if (!marca || (marca as unknown[]).length === 0) {
-        return resp(200, { ok: true, ya: true }); // otro webhook la tomó antes
-      }
-
-      // Sumar los créditos. Si falla, se devuelve la fila a pendiente para reintentar.
-      const { error: eCred } = await db.schema("negocio").rpc("credito_mover", {
-        p_usuario: r.usuario_ref, p_delta: r.creditos, p_tipo: "recarga",
-        p_motivo: "Recarga CoinGate", p_referencia: r.codigo, p_actor: null,
-      });
-      if (eCred) {
-        console.error("credito_mover_fallo", JSON.stringify(eCred));
+    // Solo estados terminales acreditan.
+    if (d.status !== "success") {
+      if (d.status === "failed") {
         await db.schema("negocio").from("recarga")
-          .update({ estado: "pendiente", pagado_en: null }).eq("codigo", r.codigo);
-        return resp(500, { error: "acreditacion_fallida" });
+          .update({ estado: "fallido" }).eq("codigo", r.codigo).eq("estado", "pendiente");
+        return resp(200, OK); // un pago fallido no se reintenta
       }
-      return resp(200, { ok: true });
+      return resp(200, REINTENTAR); // estado intermedio: que MixPay reintente
     }
 
-    if (["invalid", "expired", "canceled"].includes(status)) {
-      await db.schema("negocio").from("recarga")
-        .update({ estado: status === "canceled" ? "cancelado" : status })
-        .eq("codigo", r.codigo).eq("estado", "pendiente");
+    // Chequeos de seguridad: destinatario, moneda y monto correctos.
+    if (d.payeeId !== payee) { console.error("payee_no_coincide"); return resp(200, REINTENTAR); }
+    if (d.quoteAssetId && d.quoteAssetId !== quote) { console.error("quote_no_coincide"); return resp(200, REINTENTAR); }
+    const esperado = Number(r.monto_usd);
+    const pagado = Number(d.quoteAmount ?? "0");
+    if (!(Math.abs(pagado - esperado) < 0.001)) {
+      console.error("monto_no_coincide", pagado, esperado);
+      return resp(200, REINTENTAR);
     }
-    return resp(200, { ok: true });
+
+    // Reclamar la fila: solo pasa de pendiente → pagado una vez.
+    const { data: marca } = await db.schema("negocio").from("recarga")
+      .update({ estado: "pagado", pagado_en: new Date().toISOString() })
+      .eq("codigo", r.codigo).eq("estado", "pendiente").select("codigo");
+    if (!marca || (marca as unknown[]).length === 0) return resp(200, OK); // otro webhook la tomó
+
+    // Sumar los créditos. Si falla, se devuelve la fila a pendiente para reintentar.
+    const { error: eCred } = await db.schema("negocio").rpc("credito_mover", {
+      p_usuario: r.usuario_ref, p_delta: r.creditos, p_tipo: "recarga",
+      p_motivo: "Recarga MixPay", p_referencia: r.codigo, p_actor: null,
+    });
+    if (eCred) {
+      console.error("credito_mover_fallo", JSON.stringify(eCred));
+      await db.schema("negocio").from("recarga")
+        .update({ estado: "pendiente", pagado_en: null }).eq("codigo", r.codigo);
+      return resp(200, REINTENTAR); // que MixPay reintente
+    }
+    return resp(200, OK);
   } catch (e) {
     console.error("recarga_webhook", (e as Error).message);
-    return resp(500, { error: "fallo_interno" });
+    return resp(200, REINTENTAR); // error transitorio: que MixPay reintente
   }
 });

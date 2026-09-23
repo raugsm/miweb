@@ -1,13 +1,18 @@
-// recarga_crear (autenticada): el técnico pide recargar créditos. Crea una
-// orden de pago en CoinGate y devuelve el enlace del checkout (donde puede
-// pagar con Binance Pay o cripto). El crédito NO se suma acá: se suma cuando
-// CoinGate confirma el pago, en recarga_webhook.
+// recarga_crear (autenticada): el técnico pide recargar créditos. Crea un
+// cobro en MixPay y devuelve la página de pago (QR + código para pagar con
+// Binance Pay o USDT). El crédito NO se suma acá: se suma cuando MixPay
+// confirma el pago, en recarga_webhook.
 //
-// POST { creditos } + JWT del técnico  →  200 { url }
+// POST { creditos } + JWT del técnico  →  200 { url, code }
+//   url  = https://mixpay.me/code/<code>  (la página con el QR y Binance Pay)
+//   code = código del cobro de MixPay
 //
-// Secretos que usa:
-//   COINGATE_TOKEN  token de API de CoinGate (sandbox o producción)
-//   COINGATE_ENV    "production" para el entorno real; cualquier otra cosa = sandbox
+// MixPay no usa clave secreta para cobrar: el destino del dinero es el payeeId.
+// Config (secrets, nunca en código):
+//   MIXPAY_PAYEE_ID             payeeId de la cuenta MixPay (dónde llega el dinero)
+//   MIXPAY_SETTLEMENT_ASSET_ID  en qué recibe Ariad (por defecto USDT TRC-20)
+//   MIXPAY_QUOTE_ASSET_ID       en qué se cotiza el precio (por defecto "usd")
+//   ARIAD_URL                   base del proyecto (para la URL del webhook)
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { admin, CORS, llamante, resp } from "../_shared/seguridad.ts";
@@ -15,20 +20,10 @@ import { admin, CORS, llamante, resp } from "../_shared/seguridad.ts";
 // Paquetes permitidos. Modelo: 1 crédito = 1 USD (5 créditos = 5 USD = 1 proceso).
 const PAQUETES = [5, 10, 20, 50, 100];
 
-const SITIO = "https://ariadgsm.com";
-
-function baseCoinGate(): string {
-  return Deno.env.get("COINGATE_ENV") === "production"
-    ? "https://api.coingate.com/api/v2"
-    : "https://api-sandbox.coingate.com/api/v2";
-}
-
-/** Token aleatorio por orden: CoinGate lo devuelve en el webhook y así se valida. */
-function tokenAleatorio(): string {
-  const b = new Uint8Array(24);
-  crypto.getRandomValues(b);
-  return [...b].map((x) => x.toString(16).padStart(2, "0")).join("");
-}
+const MIXPAY_CREAR = "https://api.mixpay.me/v1/one_time_payment";
+// USDT en TRON (TRC-20): red barata, ideal para pagos chicos. Se puede
+// sobreescribir con MIXPAY_SETTLEMENT_ASSET_ID (ej. USDT BEP-20).
+const USDT_TRC20 = "b91e18ff-a9ae-3dc7-8679-e935d9a4b34b";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
@@ -51,16 +46,16 @@ serve(async (req) => {
     if (!PAQUETES.includes(creditos)) return resp(400, { error: "paquete_invalido" });
     const montoUsd = creditos; // 1 crédito = 1 USD
 
-    const clave = Deno.env.get("COINGATE_TOKEN");
-    if (!clave) return resp(500, { error: "coingate_no_configurado" });
+    const payee = Deno.env.get("MIXPAY_PAYEE_ID");
+    if (!payee) return resp(500, { error: "mixpay_no_configurado" });
+    const settlement = Deno.env.get("MIXPAY_SETTLEMENT_ASSET_ID") ?? USDT_TRC20;
+    const quote = Deno.env.get("MIXPAY_QUOTE_ASSET_ID") ?? "usd";
 
-    const token = tokenAleatorio();
-
-    // Fila de recarga pendiente. `codigo` viaja como order_id a CoinGate y
+    // Fila de recarga pendiente. `codigo` (uuid) viaja como orderId a MixPay y
     // vuelve en el webhook: así se sabe a quién acreditar, y sirve de anti-doble.
     const { data: rec, error: eRec } = await db.schema("negocio")
       .from("recarga").insert({
-        usuario_ref: usuario, creditos, monto_usd: montoUsd, token, estado: "pendiente",
+        usuario_ref: usuario, creditos, monto_usd: montoUsd, estado: "pendiente",
       }).select("codigo").single();
     if (eRec || !rec) {
       console.error("recarga_insert", JSON.stringify(eRec));
@@ -68,37 +63,38 @@ serve(async (req) => {
     }
     const codigo = (rec as { codigo: string }).codigo;
 
-    const cuerpo = new URLSearchParams({
-      price_amount: montoUsd.toFixed(2),
-      price_currency: "USD",
-      receive_currency: "USDC", // liquidación estable en USD (CoinGate no da USDT)
-      title: `Recarga ${creditos} creditos - Ari-Tool`,
-      description: `Recarga de ${creditos} creditos para ${correo}`,
-      order_id: codigo,
-      token,
-      callback_url: `${Deno.env.get("ARIAD_URL") ?? ""}/functions/v1/recarga_webhook`,
-      success_url: `${SITIO}/panel?recarga=ok`,
-      cancel_url: `${SITIO}/panel?recarga=cancel`,
-    });
-
-    const r = await fetch(`${baseCoinGate()}/orders`, {
+    const r = await fetch(MIXPAY_CREAR, {
       method: "POST",
-      headers: {
-        Authorization: `Token ${clave}`,
-        "Content-Type": "application/x-www-form-urlencoded",
-        Accept: "application/json",
-      },
-      body: cuerpo,
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({
+        payeeId: payee,
+        quoteAssetId: quote,
+        quoteAmount: montoUsd.toFixed(2),
+        settlementAssetId: settlement,
+        orderId: codigo, // uuid: 36 chars, válido como orderId de MixPay
+        callbackUrl: `${Deno.env.get("ARIAD_URL") ?? ""}/functions/v1/recarga_webhook`,
+        returnTo: "https://ariadgsm.com/cuenta?recarga=ok",
+      }),
     });
     if (!r.ok) {
-      console.error("coingate_crear", r.status, await r.text());
-      return resp(502, { error: "coingate_error" });
+      console.error("mixpay_crear", r.status, await r.text());
+      return resp(502, { error: "mixpay_error" });
     }
-    const orden = await r.json() as { id: number; payment_url: string };
+    const j = await r.json() as {
+      success?: boolean; code?: unknown; data?: { code?: string; traceId?: string };
+    };
+    // El código del cobro viene en data.code; el `code` de nivel superior suele
+    // ser un estado numérico, así que solo se acepta si es texto.
+    const code = j?.data?.code ?? (typeof j?.code === "string" ? j.code : undefined);
+    if (!j?.success || !code) {
+      console.error("mixpay_crear_respuesta", JSON.stringify(j));
+      return resp(502, { error: "mixpay_error" });
+    }
     await db.schema("negocio").from("recarga")
-      .update({ coingate_order_id: String(orden.id) }).eq("codigo", codigo);
+      .update({ mixpay_code: code, mixpay_trace_id: j.data?.traceId ?? null })
+      .eq("codigo", codigo);
 
-    return resp(200, { url: orden.payment_url });
+    return resp(200, { url: `https://mixpay.me/code/${code}`, code });
   } catch (e) {
     const m = (e as Error).message;
     if (m === "sin_sesion" || m === "sesion_invalida") return resp(401, { error: m });
