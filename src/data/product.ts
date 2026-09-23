@@ -23,6 +23,27 @@ export const headerLinks: NavItem[] = [
   { label: "AriadGSM", href: "/gsm" },
 ]
 
+/**
+ * Navegación principal del encabezado. `section` es el id de la sección en la
+ * portada, para resaltar en el menú dónde está parado el visitante (scrollspy).
+ * `hint` es la ayuda que se muestra debajo del nombre en el menú móvil.
+ */
+export type MainNavItem = { label: string; href: string; section: string; hint: string }
+
+export const mainNav: MainNavItem[] = [
+  { label: "Producto", href: "/#producto", section: "producto", hint: "Qué hace Ari-Tool" },
+  { label: "Guía", href: "/#guia", section: "guia", hint: "Cómo usarlo, paso a paso" },
+  { label: "Soporte", href: "/#soporte", section: "soporte", hint: "WhatsApp y ayuda" },
+]
+
+/** AriadGSM es otra sección/producto: va aparte, no como una sección de la portada. */
+export const crossNav: MainNavItem = {
+  label: "AriadGSM",
+  href: "/gsm",
+  section: "gsm",
+  hint: "Desbloqueo FRP de Xiaomi y más",
+}
+
 export const pageLinks: NavItem[] = [
   { label: "Guía", href: "/#guia" },
   { label: "Soporte", href: "/#soporte" },

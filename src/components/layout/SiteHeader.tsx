@@ -1,11 +1,13 @@
 ﻿import { lazy, Suspense, useState } from "react"
-import { Link } from "react-router-dom"
+import { Link, useLocation } from "react-router-dom"
 import { Menu, Moon, Sun } from "lucide-react"
 
 import { Container } from "@/components/Container"
 import { Button } from "@/components/ui/button"
-import { headerLinks, product, sessionCta } from "@/data/product"
+import { crossNav, mainNav, product, sessionCta } from "@/data/product"
+import { useScrollSpy } from "@/hooks/use-scroll-spy"
 import { useTheme } from "@/lib/theme"
+import { cn } from "@/lib/utils"
 
 const MobileMenu = lazy(() =>
   import("@/components/layout/MobileMenu").then((m) => ({
@@ -18,6 +20,16 @@ export function SiteHeader() {
   // El menú móvil solo se monta (y descarga su código) tras el primer clic.
   const [menuRequested, setMenuRequested] = useState(false)
   const { theme, toggleTheme } = useTheme()
+
+  // "Dónde estoy": en la portada lo dice el scroll (scrollspy); en /gsm, la ruta.
+  const { pathname, hash } = useLocation()
+  const onHome = pathname === "/"
+  const spy = useScrollSpy(["producto", "guia", "soporte"], onHome)
+  const activeSection = onHome
+    ? spy ?? (hash ? hash.slice(1) : null)
+    : pathname.startsWith("/gsm")
+      ? "gsm"
+      : null
 
   function openMenu() {
     setMenuRequested(true)
@@ -47,17 +59,47 @@ export function SiteHeader() {
 
         <nav
           aria-label="Navegación principal"
-          className="hidden items-center gap-6 lg:flex"
+          className="hidden items-center gap-1 lg:flex"
         >
-          {headerLinks.map((link) => (
-            <Link
-              key={link.href}
-              to={link.href}
-              className="rounded-md text-sm text-foreground/65 transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
-            >
-              {link.label}
-            </Link>
-          ))}
+          {mainNav.map((item) => {
+            const active = activeSection === item.section
+            return (
+              <Link
+                key={item.href}
+                to={item.href}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "group relative rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
+                  active ? "text-foreground" : "text-foreground/65 hover:text-foreground"
+                )}
+              >
+                {item.label}
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "pointer-events-none absolute inset-x-3 -bottom-px h-0.5 origin-left rounded-full bg-gradient-to-r from-cobalt to-cyan transition-transform duration-300",
+                    active ? "scale-x-100" : "scale-x-0 group-hover:scale-x-100"
+                  )}
+                />
+              </Link>
+            )
+          })}
+
+          <span aria-hidden="true" className="mx-2 h-4 w-px bg-line" />
+
+          <Link
+            to={crossNav.href}
+            aria-current={activeSection === "gsm" ? "page" : undefined}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
+              activeSection === "gsm"
+                ? "border-cobalt/50 bg-cobalt/10 text-foreground"
+                : "border-line text-foreground/65 hover:border-cobalt/40 hover:text-foreground"
+            )}
+          >
+            <span aria-hidden="true" className="size-1.5 rounded-full bg-cyan" />
+            {crossNav.label}
+          </Link>
         </nav>
 
         <div className="flex items-center gap-2">
@@ -95,7 +137,11 @@ export function SiteHeader() {
 
           {menuRequested ? (
             <Suspense fallback={null}>
-              <MobileMenu open={menuOpen} onOpenChange={setMenuOpen} />
+              <MobileMenu
+                open={menuOpen}
+                onOpenChange={setMenuOpen}
+                activeSection={activeSection}
+              />
             </Suspense>
           ) : null}
         </div>
