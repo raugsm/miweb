@@ -5869,6 +5869,14 @@ function requestUsesAdminShell(pathname) {
   return pathname === "/admin" || pathname.startsWith("/admin/");
 }
 
+/**
+ * ops.ariadgsm.com es el panel de operadores completo, no solo /admin.
+ * Ese subdominio nunca sirve la web publica de Ari-Tool.
+ */
+function requestUsesOpsHost(req) {
+  return requestHost(req) === "ops.ariadgsm.com";
+}
+
 function normalizeLatestClientVersionInfo(record) {
   return {
     version: String(record?.version || "").trim(),
@@ -5992,9 +6000,10 @@ async function serveStatic(req, res, pathname) {
     });
     return res.end();
   }
-  if (pathname === "/") {
-    // SPA unificada: la portada es la de AriadDesbloqueador cuando el build
-    // existe; sin build se mantiene la landing legacy de AriadGSM.
+  if (pathname === "/" && !requestUsesOpsHost(req)) {
+    // SPA unificada: la portada es Ari-Tool cuando el build existe; sin build
+    // se mantiene la landing legacy de AriadGSM. En ops.ariadgsm.com no entra
+    // nunca: ahi manda el panel de operadores.
     if (webDistAvailable) {
       return sendWebIndex(res, "/");
     }
@@ -6031,7 +6040,8 @@ async function serveStatic(req, res, pathname) {
   // Las rutas legacy (portal/cliente, admin) siguen leyendo public/ hasta su
   // migracion a React. El resto prefiere el build del SPA (assets hasheados,
   // fonts, imagenes copiadas de public/ por Vite).
-  const useWebDist = webDistAvailable && !portalRequest && !adminRequest;
+  const useWebDist = webDistAvailable && !portalRequest && !adminRequest
+    && !requestUsesOpsHost(req);
   const distResolved = useWebDist ? path.normalize(path.join(webDistDir, safePath)) : null;
 
   try {
