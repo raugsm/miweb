@@ -1,7 +1,7 @@
 {
-  "name": "ARIAD GSM",
-  "short_name": "ARIAD GSM",
-  "description": "Soluciones GSM online para técnicos y revendedores.",
+  "name": "Ari-Tool · AriadGSM",
+  "short_name": "Ari-Tool",
+  "description": "Ari-Tool de AriadGSM: quita el Security Plugin de equipos Tecno, Infinix e itel con MediaTek.",
   "icons": [
     {
       "src": "android-chrome-192x192.png",
@@ -15,6 +15,8 @@
     }
   ],
   "theme_color": "#2070FC",
-  "background_color": "#2070FC",
-  "display": "standalone"
+  "background_color": "#0B0B0C",
+  "display": "standalone",
+  "start_url": "/",
+  "lang": "es"
 }
