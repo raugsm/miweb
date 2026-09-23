@@ -8,15 +8,27 @@ import { admin, CORS, esCorreo, resp } from "../_shared/seguridad.ts";
 
 // --- Freno por ritmo -------------------------------------------------------
 //
-// Esta funcion crea cuentas y es publica: sin freno, un robot puede levantar
-// miles en un rato y dejar la base y el correo inservibles. Se cuenta cuantas
-// veces se intento desde la misma IP y con el mismo correo en la ultima hora.
+// Objetivo: frenar la CREACION MASIVA de cuentas (un bot levantando miles),
+// SIN bloquear a tecnicos reales.
 //
-// Los numeros son altos para una persona (nadie abre 6 cuentas por hora desde
-// la misma conexion) y bajos para un robot.
+// Por que el diseño anterior fallaba: contaba TODOS los intentos (incluidos
+// fallidos y reintentos) por IP y por correo, con topes bajos (6 y 3). Pero
+// los tecnicos comparten IP (CGNAT, la red del local, el mismo operador
+// movil): una IP con 5 tecnicos reventaba el cupo y a todos les salia 429.
+// Y el limite por correo solo castigaba a quien reintentaba su propio alta.
+//
+// Diseño correcto:
+//   - Se cuentan SOLO las altas creadas con exito (no los intentos). El abuso
+//     es crear cuentas, no intentar; un fallo o un reintento no bloquea a nadie.
+//   - Sin limite por correo: un correo se crea una sola vez (el filtro
+//     "ya_existe" lo cubre); contarlo solo penalizaba reintentos.
+//   - Tope por IP alto: una red compartida no se bloquea; un bot que crea
+//     decenas por hora desde una IP, si.
+//
+// La defensa fuerte contra bots (captcha) se retomara aparte; este freno es
+// solo una red de seguridad que nunca debe golpear a una persona.
 const VENTANA_MIN = 60;
-const TOPE_POR_IP = 6;
-const TOPE_POR_CORREO = 3;
+const TOPE_POR_IP = 30; // altas CREADAS con exito por IP en la ventana
 
 
 /** La IP real del visitante: Supabase la deja en x-forwarded-for. */
@@ -40,23 +52,23 @@ async function anotar(db: any, correo: string, ip: string | null, exito: boolean
   } catch (_e) { /* el registro no puede tumbar el alta */ }
 }
 
-/** true = pasa; false = ya se paso del tope y hay que frenarlo. */
+/**
+ * true = pasa; false = esta IP ya creo demasiadas cuentas en la ventana.
+ *
+ * Cuenta SOLO altas exitosas (acceso_ok), no intentos. Sin IP no se puede
+ * limitar de forma justa, asi que no se bloquea a nadie.
+ */
 // deno-lint-ignore no-explicit-any
-async function hayCupo(db: any, correo: string, ip: string | null): Promise<boolean> {
+async function hayCupo(db: any, ip: string | null): Promise<boolean> {
+  if (!ip) return true;
   const desde = new Date(Date.now() - VENTANA_MIN * 60_000).toISOString();
-
-  const { count: porCorreo } = await db.schema("seguridad")
+  const { count } = await db.schema("seguridad")
     .from("intento_acceso").select("codigo", { count: "exact", head: true })
-    .eq("correo", correo).gte("fecha_registro", desde);
-  if ((porCorreo ?? 0) >= TOPE_POR_CORREO) return false;
-
-  if (ip) {
-    const { count: porIp } = await db.schema("seguridad")
-      .from("intento_acceso").select("codigo", { count: "exact", head: true })
-      .eq("ip_origen", ip).gte("fecha_registro", desde);
-    if ((porIp ?? 0) >= TOPE_POR_IP) return false;
-  }
-  return true;
+    .eq("ip_origen", ip)
+    .eq("exito", true)
+    .eq("tipo_evento", "acceso_ok")
+    .gte("fecha_registro", desde);
+  return (count ?? 0) < TOPE_POR_IP;
 }
 
 serve(async (req) => {
@@ -77,9 +89,8 @@ serve(async (req) => {
     const db = admin();
     const ip = ipDe(req);
 
-    // Freno por ritmo ANTES de cualquier consulta: un robot no llega ni a
-    // averiguar si el correo existe.
-    if (!await hayCupo(db, correo, ip)) {
+    // Freno por ritmo: solo si esta IP ya creo demasiadas cuentas de verdad.
+    if (!await hayCupo(db, ip)) {
       await anotar(db, correo, ip, false, "bloqueo_ritmo");
       return resp(429, { error: "demasiados_intentos" });
     }
