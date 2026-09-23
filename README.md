@@ -1,61 +1,66 @@
-# AriadGSM Ops MVP
+# Ariad Web
 
-MVP interno para login, registro, roles, tickets y auditoria.
+Web unica de **Ariad**: AriadDesbloqueador (landing + area de cliente) y AriadGSM
+(portal FRP + panel operador) en una sola SPA **React 19 + TypeScript + Vite + Tailwind v4 + shadcn**,
+servida por la API Node de AriadGSM (sin cambios en sus endpoints).
 
-## Flujo actual
-
-- Registro/login con roles y canal asignado.
-- Creacion rapida de clientes desde texto libre, por ejemplo `Amilkar Arrieta Colombia`.
-- Tickets con codigo `V-YYYYMMDD-001`.
-- Tablero de seguimiento por arrastre: Nuevo, En cola, En proceso y Finalizado.
-- Finalizar un ticket exige guardar el log final.
-- Recuperacion de contrasena por enlace temporal enviado desde `soporte@ariadgsm.com`.
-
-## Local
+## Comandos
 
 ```bash
-npm start
+pnpm install     # instala dependencias (web + api)
+pnpm dev         # Vite (5173, proxy /api -> 4173) + API Node (4173) juntos
+pnpm dev:web     # solo el frontend
+pnpm dev:api     # solo la API
+pnpm build       # tsc + vite build -> dist/
+pnpm start       # node server.js sirviendo dist/ (produccion)
+pnpm test        # 126 tests de contrato/smoke de la API (intactos de miweb)
 ```
 
-La app usa `PORT` si existe. En local abre `http://127.0.0.1:4173`.
+## Estructura
+
+| Carpeta | Contenido |
+|---|---|
+| `src/` | SPA React-TS (paginas, componentes, stores, lib, data) |
+| `public/` | Assets (fonts, logos, imagenes) + HTML legacy de AriadGSM |
+| `server.js` + `server/` | API Node AriadGSM intacta (auth, tickets, FRP, portal, pricing, daily close, SSE) |
+| `test/` | 19 archivos de test de contrato/smoke |
+| `migrations/` | SQL Postgres |
+| `scripts/` | Utilidades postgres/migracion |
+| `docs/` | Especificaciones y decisiones de ambos proyectos |
+| `dist/` | Build de produccion (no versionar) |
+
+## Routing (servido por server.js)
+
+| Ruta | Sirve | Estado |
+|---|---|---|
+| `/`, `/guia`, `/soporte`, `/cuenta`, `/panel`, `/gsm` | SPA React (dist/) | migrado |
+| `/gsm-legacy` | landing.html historica de AriadGSM (campaign tracking) | compat/tests |
+| `/cliente`, `/pedido/:code`, `/portal` | portal.html legacy | legacy (migrar Fase 2) |
+| `/admin` | index.html legacy (operador) | legacy (migrar Fase 3) |
+| `/v/:orderCode`, `/manual`, `/servicios/*`, `/owner-recovery`, `/descargar` | paginas legacy | legacy |
+| `/api/*` | API Node | sin cambios |
+
+## Datos
+
+- **Supabase AriadDesbloqueador** (`sdarsjdwnuimjruthjwz`): consumido directo desde React (`src/lib/supabase/`).
+- **API AriadGSM** (`/api/*`): cookies de sesion propias; JSON (`data/`) o Postgres segun `ARIAD_STORAGE_DRIVER`.
+- **Supabase AriadGSM Cliente** (`duvpkpfivcnftxelgqtt`): version del instalador y precios publicos (solo backend).
+
+### .env local (Supabase)
+
+`server.js` carga `.env` si existe y sus valores ganan sobre las variables globales
+de la maquina (clave publica anon, no es secreta). Si no hay `.env`, usa
+`SUPABASE_URL` / `SUPABASE_ANON_KEY` del entorno (Render).
+
+```
+SUPABASE_URL=https://duvpkpfivcnftxelgqtt.supabase.co
+SUPABASE_ANON_KEY=<clave anon del proyecto duvpkpfivcnftxelgqtt>
+```
+
+Los tests ignoran el `.env` (preloader `scripts/disable-env-file.mjs`) para
+mantener sus mocks aislados.
 
 ## Produccion
 
-Variables recomendadas:
-
-```bash
-NODE_ENV=production
-ARIAD_DATA_DIR=/opt/render/project/src/storage
-ARIAD_SETUP_TOKEN=<codigo privado para crear el primer admin>
-ARIAD_ENABLE_SETUP_RESET=false
-ARIAD_OWNER_RECOVERY_EMAIL=<correo del propietario, solo durante recuperacion>
-ARIAD_PUBLIC_URL=https://ops.ariadgsm.com
-ARIAD_MAIL_FROM="AriadGSM Soporte" <soporte@ariadgsm.com>
-ARIAD_SMTP_HOST=<servidor smtp>
-ARIAD_SMTP_PORT=587
-ARIAD_SMTP_SECURE=false
-ARIAD_SMTP_USER=<usuario smtp>
-ARIAD_SMTP_PASS=<password o api key smtp>
-ARIAD_CUSTOMER_MODULE_URL=<URL publica del Customer Module .exe; ej. una GitHub Release>
-SUPABASE_ANON_KEY=<anon key publica usada para resolver la ultima version y precios de AriadGSM Cliente>
-SUPABASE_URL=https://duvpkpfivcnftxelgqtt.supabase.co
-WHATSAPP_SUPPORT_NUMBER=<numero internacional para soporte sin + ni espacios; default 51961751354>
-```
-
-`ARIAD_CUSTOMER_MODULE_URL` alimenta el boton "Descargar Customer Module" del paso 4 del portal cliente. Si la variable esta vacia, el portal muestra "Pidelo por WhatsApp 3" en lugar del boton. El binario no se versiona en este repo: subelo como adjunto a un GitHub Release y pega esa URL en Render.
-
-`SUPABASE_ANON_KEY` permite que `GET /descargar` consulte la RPC `get_latest_client_version` y redirija al instalador mas reciente de AriadGSM Cliente. Tambien permite que `GET /api/public/latest-client-version` muestre la version actual en la landing y que `GET /api/public/frp-prices` lea los precios publicos desde las tablas del dashboard de la aplicacion. Si falta, `/descargar` y `/api/public/frp-prices` responden 503; la landing simplemente oculta la etiqueta de version.
-
-`WHATSAPP_SUPPORT_NUMBER` alimenta los enlaces publicos de WhatsApp en la landing y el manual. Usar formato internacional solo con digitos. Si no se configura, la web usa `51961751354`.
-
-`GET /api/public/frp-prices` expone un reporte publico de precios por pais con dos bloques: `prices` (FRP) y `miPrices` (Cuentas MI). La landing los consume desde `/landing-prices.js` y los pinta en dos grupos titulados "FRP" y "Cuentas MI"; los montos se calculan con `public_client_settings`, `public_country_exchange_rates` y `public_payment_methods` de AriadGSM Cliente en Supabase, no desde HTML hardcodeado ni desde el panel web. Cuentas MI usa las llaves `cuenta_mi_cost_usdt_<pais>` / `cuenta_mi_profit_usdt_<pais>` con fallback a las globales `cuenta_mi_cost_usdt` / `cuenta_mi_profit_usdt`, replicando lo que hace el RPC `_reseller_compute_unit_pricing` de la app. FRP se publica en `CL`, `CO`, `MX`, `PE` y la tarjeta `USDT` (Internacional); Cuentas MI cubre ademas `AR`, `EC` y `WW` (Worldwide), que el dashboard cobra en USDT con tipo de cambio 1, y por eso omite la tarjeta generica `USDT`. Una plaza sin tipo de cambio en `public_country_exchange_rates` igual se lista, pero atenuada como "Consultar por WhatsApp".
-
-`ARIAD_TECHNICIAN_SWAP_MS` (opcional, default 10000) controla la duracion en milisegundos de la ventana de bloqueo cuando se cambia de tecnico activo. Solo bajalo a valores menores (>= 100) en entornos de test.
-
-En Render, adjuntar un disco persistente en `/opt/render/project/src/storage`.
-
-El reset por correo no funciona hasta configurar las variables `ARIAD_SMTP_*`.
-
-El reset por codigo de instalacion queda deshabilitado por defecto. Solo debe activarse temporalmente con `ARIAD_ENABLE_SETUP_RESET=true` para una recuperacion extrema de administrador. Si el correo propietario no figura como administrador activo, configura temporalmente `ARIAD_OWNER_RECOVERY_EMAIL`.
-
-No subir `data/users.json` a nube. Ese archivo contiene la base local de trabajo.
+`render.yaml` es la fuente de verdad: `pnpm install && pnpm build` + `pnpm start`.
+CSP en `server.js` ya permite `connect-src` a los dos proyectos Supabase.

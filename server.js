@@ -1,6 +1,7 @@
 import { createServer } from "node:http";
 import { createReadStream } from "node:fs";
 import { promises as fs } from "node:fs";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { computeOrderHash, renderOrderComprobantePdf, renderOrderVerifyHtml } from "./server/comprobante/pdf.js";
 import { fileURLToPath } from "node:url";
@@ -144,7 +145,40 @@ import {
 } from "./server/operator/technician.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Carga .env local (no versionado, solo desarrollo). Si el archivo existe,
+// SUS valores ganan sobre el entorno de la maquina (p. ej. variables globales
+// de Windows que apunten a otro proyecto). En produccion (Render) el .env no
+// se despliega y mandan las envVars del servicio.
+// Los tests inyectan ARIAD_SKIP_ENV_FILE=1 (via scripts/disable-env-file.mjs)
+// para mantener su aislamiento con mocks y llaves explicitas.
+// Nota: server/config/constants.js ya leyo process.env en el import de arriba;
+// este loader cubre las variables leidas de aqui en adelante.
+try {
+  const envFile = path.join(__dirname, ".env");
+  if (process.env.ARIAD_SKIP_ENV_FILE !== "1") {
+    const envRaw = await fs.readFile(envFile, "utf8");
+    for (const line of envRaw.split(/\r?\n/)) {
+      const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
+      if (!match) continue;
+      const [, name, rawValue] = match;
+      let value = rawValue;
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+        value = value.slice(1, -1);
+      }
+      process.env[name] = value;
+    }
+  }
+} catch {
+  // Sin .env: se usan las variables del entorno.
+}
+
 const publicDir = path.join(__dirname, "public");
+// SPA React-TS (vite build -> dist). Si el build existe, el servidor sirve la
+// SPA para las rutas publicas nuevas y deja las rutas legacy (portal/cliente,
+// admin, verificacion, manual) con sus HTML actuales hasta migrarlas.
+const webDistDir = path.join(__dirname, "dist");
+const webDistAvailable = existsSync(path.join(webDistDir, "index.html"));
 const dataDir = process.env.ARIAD_DATA_DIR || path.join(__dirname, "data");
 const cloudSyncAuditFile = path.join(dataDir, "cloud-sync-audit.jsonl");
 const cloudSyncLedgerFile = path.join(dataDir, "cloud-sync-batches.json");
@@ -218,12 +252,17 @@ const turnstileEnabled = Boolean(turnstileSiteKey && turnstileSecret);
 const isProduction = process.env.NODE_ENV === "production";
 const baseCsp = [
   "default-src 'self'",
-  `script-src 'self'${turnstileEnabled ? ` ${cloudflareTurnstileOrigin}` : ""}`,
+  // El acceso de tecnicos dibuja el recuadro anti-robot de Cloudflare
+  // siempre, no solo cuando el portal viejo lo tenia configurado.
+  `script-src 'self' ${cloudflareTurnstileOrigin}`,
   "style-src 'self'",
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
-  "connect-src 'self'",
-  `frame-src ${turnstileEnabled ? cloudflareTurnstileOrigin : "'none'"}`,
+  // La SPA habla directo con Supabase (auth + Edge Functions de
+  // AriadDesbloqueador en sdarsjdwnuimjruthjwz) y el backend con el proyecto
+  // de AriadGSM Cliente (duvpkpfivcnftxelgqtt).
+  "connect-src 'self' https://sdarsjdwnuimjruthjwz.supabase.co https://duvpkpfivcnftxelgqtt.supabase.co",
+  `frame-src ${cloudflareTurnstileOrigin}`,
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",
@@ -5954,6 +5993,16 @@ async function serveStatic(req, res, pathname) {
     return res.end();
   }
   if (pathname === "/") {
+    // SPA unificada: la portada es la de AriadDesbloqueador cuando el build
+    // existe; sin build se mantiene la landing legacy de AriadGSM.
+    if (webDistAvailable) {
+      return sendWebIndex(res, "/");
+    }
+    return sendPublicHtmlFile(res, "landing.html");
+  }
+  if (pathname === "/gsm-legacy" || pathname === "/gsm-legacy/") {
+    // Landing AriadGSM historica (con campaign tracking). /gsm ya es la
+    // pagina React; esto se mantiene para compatibilidad y tests.
     return sendPublicHtmlFile(res, "landing.html");
   }
   if (pathname === "/manual") {
@@ -5979,10 +6028,24 @@ async function serveStatic(req, res, pathname) {
     res.writeHead(403);
     return res.end("Forbidden");
   }
+  // Las rutas legacy (portal/cliente, admin) siguen leyendo public/ hasta su
+  // migracion a React. El resto prefiere el build del SPA (assets hasheados,
+  // fonts, imagenes copiadas de public/ por Vite).
+  const useWebDist = webDistAvailable && !portalRequest && !adminRequest;
+  const distResolved = useWebDist ? path.normalize(path.join(webDistDir, safePath)) : null;
 
   try {
-    const file = await fs.readFile(resolved);
-    const ext = path.extname(resolved).toLowerCase();
+    let filePath = resolved;
+    if (distResolved && distResolved.startsWith(webDistDir)) {
+      try {
+        await fs.readFile(distResolved);
+        filePath = distResolved;
+      } catch {
+        // El archivo no esta en dist: usar public/ (o caer al fallback SPA).
+      }
+    }
+    const file = await fs.readFile(filePath);
+    const ext = path.extname(filePath).toLowerCase();
     const type = {
       ".html": "text/html; charset=utf-8",
       ".css": "text/css; charset=utf-8",
@@ -5991,6 +6054,15 @@ async function serveStatic(req, res, pathname) {
       ".svg": "image/svg+xml",
       ".png": "image/png",
       ".jpg": "image/jpeg",
+      ".jpeg": "image/jpeg",
+      ".webp": "image/webp",
+      ".avif": "image/avif",
+      // Sin el tipo correcto, Google ignora robots.txt y el sitemap.
+      ".txt": "text/plain; charset=utf-8",
+      ".xml": "application/xml; charset=utf-8",
+      ".webmanifest": "application/manifest+json",
+      ".ico": "image/x-icon",
+      ".woff2": "font/woff2",
     }[ext] || "application/octet-stream";
     const cacheHeader = ext === ".html"
       ? "no-store"
@@ -6000,11 +6072,88 @@ async function serveStatic(req, res, pathname) {
     res.writeHead(200, { "Content-Type": type, "Cache-Control": cacheHeader });
     res.end(file);
   } catch {
+    if (useWebDist) {
+      return sendWebIndex(res, pathname);
+    }
     const fallbackFile = portalRequest ? "portal.html" : "index.html";
     const index = await fs.readFile(path.join(publicDir, fallbackFile));
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
     res.end(index);
   }
+}
+
+// Titulo y descripcion de cada pantalla de la web nueva.
+//
+// La web es una sola pagina que cambia de contenido sin recargar, asi que el
+// HTML que sale del servidor es siempre el mismo. La pagina corrige el titulo
+// con JavaScript al entrar, pero WhatsApp, Facebook y varios buscadores NO
+// ejecutan JavaScript: un enlace a /guia se veria con el titulo de la portada.
+// Por eso el titulo se reemplaza aca, antes de mandar el HTML.
+const webPageMeta = {
+  "/": null, // el del archivo ya es el de la portada
+  "/guia": {
+    title: "Guia de uso de Ari-Tool paso a paso | AriadGSM",
+    description: "Como usar Ari-Tool: requisitos, modo Fastboot, elegir el modelo y flashear sin errores. Guia en espanol para tecnicos de Tecno, Infinix e itel.",
+  },
+  "/soporte": {
+    title: "Soporte de Ari-Tool | AriadGSM",
+    description: "Soporte directo de Ari-Tool por WhatsApp: creditos, modelos compatibles, errores de flasheo y garantia. Atencion para tecnicos de Ariad GSM.",
+  },
+  "/gsm": {
+    title: "AriadGSM — Desbloqueo FRP Xiaomi y servicios GSM",
+    description: "AriadGSM (Ariad): desbloqueo FRP de Xiaomi, Redmi y POCO, cuentas Mi y servicios GSM para tecnicos de toda Latinoamerica.",
+  },
+  "/cuenta": {
+    title: "Entrar a mi cuenta de Ari-Tool | AriadGSM",
+    description: "Acceso de tecnicos a Ari-Tool: entra a tu cuenta, mira tus creditos y el historial de tus trabajos.",
+  },
+};
+
+function escapeHtmlAttr(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/** Reemplaza titulo, descripcion y direccion canonica segun la pantalla. */
+function applyWebPageMeta(html, pathname) {
+  const ruta = pathname.length > 1 ? pathname.replace(/\/+$/, "") : "/";
+  const canonical = `https://ariadgsm.com${ruta === "/" ? "/" : ruta}`;
+  let salida = html.replace(
+    /(<link rel="canonical" href=")[^"]*(")/,
+    `$1${escapeHtmlAttr(canonical)}$2`
+  ).replace(
+    /(<meta property="og:url" content=")[^"]*(")/,
+    `$1${escapeHtmlAttr(canonical)}$2`
+  );
+
+  const meta = webPageMeta[ruta];
+  if (!meta) return salida;
+
+  salida = salida
+    .replace(/<title>[^<]*<\/title>/, `<title>${escapeHtmlAttr(meta.title)}</title>`)
+    .replace(
+      /(<meta\s+name="description"\s+content=")[\s\S]*?(")/,
+      `$1${escapeHtmlAttr(meta.description)}$2`
+    )
+    .replace(
+      /(<meta property="og:title" content=")[^"]*(")/,
+      `$1${escapeHtmlAttr(meta.title)}$2`
+    )
+    .replace(
+      /(<meta\s+property="og:description"\s+content=")[\s\S]*?(")/,
+      `$1${escapeHtmlAttr(meta.description)}$2`
+    );
+  return salida;
+}
+
+async function sendWebIndex(res, pathname = "/") {
+  const index = await fs.readFile(path.join(webDistDir, "index.html"), "utf8");
+  const html = applyWebPageMeta(index, pathname);
+  res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
+  res.end(html);
 }
 
 await ensureDb();

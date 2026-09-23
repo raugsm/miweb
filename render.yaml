@@ -3,15 +3,18 @@ services:
     name: ariadgsm-ops
     runtime: node
     plan: standard
-    buildCommand: npm install
-    preDeployCommand: npm run postgres:migrate:apply
-    startCommand: npm start
+    buildCommand: pnpm install && pnpm build
+    preDeployCommand: pnpm run postgres:migrate:apply
+    startCommand: pnpm start
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
         value: production
       - key: ARIAD_DATA_DIR
         value: /opt/render/project/src/storage
+      # El panel de operadores vive en ops.ariadgsm.com: de aca sale el
+      # enlace de recuperar su contrasena. Si apunta a ariadgsm.com, ese
+      # enlace cae en la web publica de Ari-Tool y no sirve.
       - key: ARIAD_PUBLIC_URL
         value: https://ops.ariadgsm.com
       - key: ARIAD_MAIL_FROM

@@ -1,0 +1,43 @@
+import {
+  Cable,
+  CircleAlert,
+  FileCheck,
+  HardDrive,
+  Info,
+  Layers,
+  ListChecks,
+  MonitorCheck,
+  Package,
+  PackageX,
+  RefreshCcw,
+  SearchCheck,
+  ShieldAlert,
+  ShieldOff,
+  Smartphone,
+  TriangleAlert,
+  Usb,
+  Wrench,
+} from "lucide-react"
+
+export const iconMap = {
+  cable: Cable,
+  circleAlert: CircleAlert,
+  fileCheck: FileCheck,
+  hardDrive: HardDrive,
+  info: Info,
+  layers: Layers,
+  listChecks: ListChecks,
+  monitorCheck: MonitorCheck,
+  package: Package,
+  packageX: PackageX,
+  refreshCcw: RefreshCcw,
+  searchCheck: SearchCheck,
+  shieldAlert: ShieldAlert,
+  shieldOff: ShieldOff,
+  smartphone: Smartphone,
+  triangleAlert: TriangleAlert,
+  usb: Usb,
+  wrench: Wrench,
+} as const
+
+export type IconName = keyof typeof iconMap

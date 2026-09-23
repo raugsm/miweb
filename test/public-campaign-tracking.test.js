@@ -57,7 +57,7 @@ test("public landing exposes campaign tracking and records ad events", async () 
     const baseUrl = `http://127.0.0.1:${port}`;
     await waitForServer(baseUrl);
 
-    const landing = await fetch(`${baseUrl}/?src=meta_xiaomi_app&utm_campaign=meta_xiaomi_app`);
+    const landing = await fetch(`${baseUrl}/gsm-legacy?src=meta_xiaomi_app&utm_campaign=meta_xiaomi_app`);
     assert.equal(landing.status, 200);
     const html = await landing.text();
     assert.match(html, /AriadGSM Cliente para Windows/);

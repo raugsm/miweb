@@ -1,0 +1,53 @@
+import { lazy, Suspense } from "react"
+import { BrowserRouter, Route, Routes } from "react-router-dom"
+
+import { RootLayout } from "@/components/layout/RootLayout"
+import { ReleaseProvider } from "@/lib/release"
+import { HomePage } from "@/pages/HomePage"
+
+// Páginas secundarias en fragmentos separados: la portada carga solo lo que necesita.
+const GuidePage = lazy(() =>
+  import("@/pages/GuidePage").then((m) => ({ default: m.GuidePage }))
+)
+const SupportPage = lazy(() =>
+  import("@/pages/SupportPage").then((m) => ({ default: m.SupportPage }))
+)
+const AccountPage = lazy(() =>
+  import("@/pages/AccountPage").then((m) => ({ default: m.AccountPage }))
+)
+const GsmLandingPage = lazy(() =>
+  import("@/pages/gsm/GsmLandingPage").then((m) => ({ default: m.GsmLandingPage }))
+)
+const DashboardPage = lazy(() =>
+  import("@/pages/DashboardPage").then((m) => ({ default: m.DashboardPage }))
+)
+// Portal cliente FRP migrado a React (reemplaza a public/portal.html).
+const PortalPage = lazy(() =>
+  import("@/pages/gsm/portal/PortalPage").then((m) => ({ default: m.PortalPage }))
+)
+const NotFoundPage = lazy(() =>
+  import("@/pages/NotFoundPage").then((m) => ({ default: m.NotFoundPage }))
+)
+
+export default function App() {
+  return (
+    <ReleaseProvider>
+      <BrowserRouter>
+        <Suspense fallback={<div className="min-h-[60vh]" aria-busy="true" />}>
+          <Routes>
+            <Route element={<RootLayout />}>
+              <Route index element={<HomePage />} />
+              <Route path="guia" element={<GuidePage />} />
+              <Route path="soporte" element={<SupportPage />} />
+              <Route path="cuenta" element={<AccountPage />} />
+              <Route path="gsm" element={<GsmLandingPage />} />
+              <Route path="cliente" element={<PortalPage />} />
+              <Route path="panel" element={<DashboardPage />} />
+              <Route path="*" element={<NotFoundPage />} />
+            </Route>
+          </Routes>
+        </Suspense>
+      </BrowserRouter>
+    </ReleaseProvider>
+  )
+}
