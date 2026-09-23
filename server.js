@@ -5915,12 +5915,8 @@ const retiredPublicFiles = new Set([
   "/portal.css",
   // Landing y paginas viejas
   "/landing.html",
-  "/landing.css",
   "/landing-prices.js",
   "/landing-version.js",
-  "/campaign-tracking.js",
-  "/manual.html",
-  "/motorola-f4.html",
   "/verify.css",
   // Recuperacion de emergencia del dueno
   "/owner-recovery.js",
@@ -5934,7 +5930,17 @@ function requestUsesRetiredFile(pathname) {
     || retiredPublicFolders.some((carpeta) => pathname.startsWith(carpeta));
 }
 
-/** Rutas heredadas del portal Xiaomi: fuera del dominio publico. */
+/**
+ * Rutas retiradas del dominio publico.
+ *
+ * Son las del portal de pedidos Xiaomi, que nunca se uso, y la landing vieja
+ * que duplicaba la portada.
+ *
+ * NO entran aca las paginas de AriadGSM: /descargar (la app de cliente),
+ * /manual y /servicios/*. La pagina /gsm enlaza a las tres, y retirarlas la
+ * dejo con seis botones rotos. No salen en buscadores (robots.txt), pero
+ * siguen funcionando para quien llega desde /gsm.
+ */
 function requestUsesRetiredRoute(pathname) {
   return pathname === "/cliente"
     || pathname.startsWith("/cliente/")
@@ -5942,10 +5948,6 @@ function requestUsesRetiredRoute(pathname) {
     || pathname.startsWith("/pedido/")
     || pathname === "/gsm-legacy"
     || pathname === "/gsm-legacy/"
-    || pathname === "/manual"
-    || pathname === "/instrucciones"
-    || pathname === "/descargar"
-    || pathname.startsWith("/servicios/")
     || pathname.startsWith("/v/")
     || pathname === "/owner-recovery";
 }
@@ -6008,8 +6010,16 @@ async function redirectToLatestClientInstaller(res) {
       res.writeHead(503, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" });
       return res.end("El servicio de descarga estÃ¡ temporalmente no disponible.\nPor favor intentÃ¡ de nuevo en unos minutos.");
     }
+    // Se pide la descarga explicita, igual que en los botones de Ari-Tool:
+    // sin esto el navegador decide solo y puede abrir una pestana en vez de
+    // guardar el archivo.
+    const nombre = decodeURIComponent(
+      (downloadUrl.split("?")[0].split("/").pop() || "AriadGSM-Cliente.exe")
+    );
+    const separador = downloadUrl.includes("?") ? "&" : "?";
+    const urlDescarga = `${downloadUrl}${separador}download=${encodeURIComponent(nombre)}`;
     res.writeHead(302, {
-      Location: downloadUrl,
+      Location: urlDescarga,
       "Cache-Control": "no-store",
       "Referrer-Policy": "no-referrer",
     });

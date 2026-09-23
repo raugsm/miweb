@@ -2,8 +2,12 @@
 User-agent: *
 Allow: /
 
-# Pantallas internas: no tienen sentido en un buscador.
+# Pantallas internas y paginas de apoyo: funcionan, pero no salen en Google.
 Disallow: /panel
 Disallow: /api/
+Disallow: /manual
+Disallow: /instrucciones
+Disallow: /servicios/
+Disallow: /descargar
 
 Sitemap: https://ariadgsm.com/sitemap.xml

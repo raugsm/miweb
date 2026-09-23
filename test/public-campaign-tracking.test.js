@@ -220,7 +220,13 @@ test("public client download resolves the latest installer from Supabase", async
 
     const download = await fetch(`${baseUrl}/descargar`, { redirect: "manual" });
     assert.equal(download.status, 302);
-    assert.equal(download.headers.get("location"), remoteDownloadUrl);
+    // El enlace tiene que pedir la descarga, no solo apuntar al archivo: sin
+    // el parametro `download` el navegador decide solo y puede abrir una
+    // pestana en vez de guardarlo.
+    assert.equal(
+      download.headers.get("location"),
+      `${remoteDownloadUrl}?download=AriadGSM-Cliente-Setup-PerUser-v0.5.2.exe`
+    );
 
     assert.equal(supabaseRequests.length, 1, "latest version should be cached between public version and download requests");
     assert.equal(supabaseRequests[0].headers.apikey, "test-anon-key");
