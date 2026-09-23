@@ -1,5 +1,7 @@
 import { BentoGridSection } from "@/components/sections/BentoGridSection"
+import { GuideSection } from "@/components/sections/GuideSection"
 import { Hero } from "@/components/sections/Hero"
+import { SupportSection } from "@/components/sections/SupportSection"
 import { useSeo } from "@/lib/seo"
 
 export function HomePage() {
@@ -14,6 +16,11 @@ export function HomePage() {
     <>
       <Hero />
       <BentoGridSection />
+      {/* La guia y el soporte vivian en /guia y /soporte. Ahora son secciones
+          de la portada: el sitio publico queda con cuatro direcciones y el
+          tecnico no tiene que saltar de pagina para leer como se usa. */}
+      <GuideSection />
+      <SupportSection />
     </>
   )
 }

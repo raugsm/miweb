@@ -6,12 +6,6 @@ import { ReleaseProvider } from "@/lib/release"
 import { HomePage } from "@/pages/HomePage"
 
 // Páginas secundarias en fragmentos separados: la portada carga solo lo que necesita.
-const GuidePage = lazy(() =>
-  import("@/pages/GuidePage").then((m) => ({ default: m.GuidePage }))
-)
-const SupportPage = lazy(() =>
-  import("@/pages/SupportPage").then((m) => ({ default: m.SupportPage }))
-)
 const AccountPage = lazy(() =>
   import("@/pages/AccountPage").then((m) => ({ default: m.AccountPage }))
 )
@@ -37,8 +31,6 @@ export default function App() {
           <Routes>
             <Route element={<RootLayout />}>
               <Route index element={<HomePage />} />
-              <Route path="guia" element={<GuidePage />} />
-              <Route path="soporte" element={<SupportPage />} />
               <Route path="cuenta" element={<AccountPage />} />
               <Route path="gsm" element={<GsmLandingPage />} />
               <Route path="cliente" element={<PortalPage />} />

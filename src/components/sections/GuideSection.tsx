@@ -1,28 +1,21 @@
-﻿import { Container } from "@/components/Container"
+import { Container } from "@/components/Container"
 import { Icon } from "@/components/Icon"
 import { SectionHeading } from "@/components/SectionHeading"
 import { guidePage, guideSteps, troubleshootingItems } from "@/data/guide"
 import { requirements } from "@/data/product"
-import { useSeo } from "@/lib/seo"
 
-export function GuidePage() {
-  useSeo({
-    titulo: "Guía de uso de Ari-Tool paso a paso | AriadGSM",
-    descripcion:
-      "Cómo usar Ari-Tool: requisitos, modo Fastboot, elegir el modelo y flashear sin errores. Guía en español para técnicos de Tecno, Infinix e itel.",
-    ruta: "/guia",
-  })
+export function GuideSection() {
 
   return (
     <>
-      <section className="border-b border-line bg-carbon/40 py-14 sm:py-20">
+      <section id="guia" className="scroll-mt-16 border-b border-line bg-carbon/40 py-14 sm:py-20">
         <Container>
           <p className="text-xs font-medium tracking-[0.2em] text-foreground/45 uppercase">
             {guidePage.eyebrow}
           </p>
-          <h1 className="mt-3 text-4xl leading-[1.05] font-semibold tracking-tight text-balance text-foreground sm:text-5xl">
+          <h2 className="mt-3 text-4xl leading-[1.05] font-semibold tracking-tight text-balance text-foreground sm:text-5xl">
             {guidePage.title}
-          </h1>
+          </h2>
           <p className="mt-4 max-w-2xl text-lg leading-relaxed text-foreground/65">
             {guidePage.lead}
           </p>
@@ -34,9 +27,9 @@ export function GuidePage() {
           <div className="grid gap-12 lg:grid-cols-[0.85fr_1.4fr]">
             <aside>
               <div className="rounded-2xl border border-line bg-carbon p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] lg:sticky lg:top-20">
-                <h2 className="text-base font-semibold tracking-tight text-foreground">
+                <h3 className="text-base font-semibold tracking-tight text-foreground">
                   {guidePage.beforeStartTitle}
-                </h2>
+                </h3>
                 <ul className="mt-4 space-y-3">
                   {requirements.map((requirement) => (
                     <li
@@ -72,9 +65,9 @@ export function GuidePage() {
                       className="absolute top-11 bottom-[-2.5rem] left-[18px] w-px bg-line"
                     />
                   ) : null}
-                  <h2 className="text-xl font-semibold tracking-tight text-foreground">
+                  <h3 className="text-xl font-semibold tracking-tight text-foreground">
                     {step.title}
-                  </h2>
+                  </h3>
                   <p className="mt-2 text-sm leading-relaxed text-foreground/65 sm:text-base">
                     {step.intro}
                   </p>
@@ -124,9 +117,9 @@ export function GuidePage() {
                 <span className="flex size-9 items-center justify-center rounded-lg border border-line bg-field text-cyan">
                   <Icon name={item.icon} className="size-4" />
                 </span>
-                <h3 className="mt-4 text-base font-semibold tracking-tight text-foreground">
+                <h4 className="mt-4 text-base font-semibold tracking-tight text-foreground">
                   {item.title}
-                </h3>
+                </h4>
                 <p className="mt-2 text-sm leading-relaxed text-foreground/65">
                   {item.solution}
                 </p>

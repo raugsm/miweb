@@ -24,13 +24,13 @@ export const headerLinks: NavItem[] = [
 ]
 
 export const pageLinks: NavItem[] = [
-  { label: "Guía", href: "/guia" },
-  { label: "Soporte", href: "/soporte" },
+  { label: "Guía", href: "/#guia" },
+  { label: "Soporte", href: "/#soporte" },
 ]
 
 export const footerLinks: NavItem[] = [
-  { label: "Guía", href: "/guia" },
-  { label: "Soporte", href: "/soporte" },
+  { label: "Guía", href: "/#guia" },
+  { label: "Soporte", href: "/#soporte" },
   { label: "AriadGSM", href: "/gsm" },
 ]
 

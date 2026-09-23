@@ -1,4 +1,4 @@
-﻿import { Link } from "react-router-dom"
+import { Link } from "react-router-dom"
 import { ArrowRight, LifeBuoy, Wallet } from "lucide-react"
 
 import { Container } from "@/components/Container"
@@ -6,28 +6,21 @@ import { Icon } from "@/components/Icon"
 import { Button } from "@/components/ui/button"
 import { supportChecklist, supportPage, supportShortcuts } from "@/data/support"
 import { useRelease } from "@/lib/release"
-import { useSeo } from "@/lib/seo"
 
-export function SupportPage() {
-  useSeo({
-    titulo: "Soporte de Ari-Tool | AriadGSM",
-    descripcion:
-      "Soporte directo de Ari-Tool por WhatsApp: créditos, modelos compatibles, errores de flasheo y garantía. Atención para técnicos de Ariad GSM.",
-    ruta: "/soporte",
-  })
+export function SupportSection() {
 
   const release = useRelease()
 
   return (
     <>
-      <section className="border-b border-line bg-carbon/40 py-14 sm:py-20">
+      <section id="soporte" className="scroll-mt-16 border-b border-line bg-carbon/40 py-14 sm:py-20">
         <Container>
           <p className="text-xs font-medium tracking-[0.2em] text-foreground/45 uppercase">
             {supportPage.eyebrow}
           </p>
-          <h1 className="mt-3 text-4xl leading-[1.05] font-semibold tracking-tight text-balance text-foreground sm:text-5xl">
+          <h2 className="mt-3 text-4xl leading-[1.05] font-semibold tracking-tight text-balance text-foreground sm:text-5xl">
             {supportPage.title}
-          </h1>
+          </h2>
           <p className="mt-4 max-w-2xl text-lg leading-relaxed text-foreground/65">
             {supportPage.lead}
           </p>
@@ -41,9 +34,9 @@ export function SupportPage() {
               <span className="flex size-9 items-center justify-center rounded-lg border border-line bg-field text-cyan">
                 <LifeBuoy aria-hidden="true" className="size-4" />
               </span>
-              <h2 className="mt-4 text-base font-semibold tracking-tight text-foreground">
+              <h3 className="mt-4 text-base font-semibold tracking-tight text-foreground">
                 {supportPage.channelTitle}
-              </h2>
+              </h3>
               <p className="mt-3 text-sm leading-relaxed text-foreground/65">
                 {supportPage.channelBody}
               </p>
@@ -53,9 +46,9 @@ export function SupportPage() {
             </div>
 
             <div className="h-full rounded-2xl border border-line bg-carbon p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
-              <h2 className="text-base font-semibold tracking-tight text-foreground">
+              <h3 className="text-base font-semibold tracking-tight text-foreground">
                 {supportPage.checklistTitle}
-              </h2>
+              </h3>
               <p className="mt-1 text-sm text-foreground/55">
                 {supportPage.checklistLead}
               </p>
@@ -84,18 +77,18 @@ export function SupportPage() {
               <span className="flex size-9 items-center justify-center rounded-lg border border-line bg-field text-cyan">
                 <Wallet aria-hidden="true" className="size-4" />
               </span>
-              <h2 className="mt-4 text-base font-semibold tracking-tight text-foreground">
+              <h3 className="mt-4 text-base font-semibold tracking-tight text-foreground">
                 {supportPage.creditsTitle}
-              </h2>
+              </h3>
               <p className="mt-3 text-sm leading-relaxed text-foreground/65">
                 {supportPage.creditsBody}
               </p>
             </div>
 
             <div className="h-full rounded-2xl border border-line bg-carbon p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
-              <h2 className="text-base font-semibold tracking-tight text-foreground">
+              <h3 className="text-base font-semibold tracking-tight text-foreground">
                 WhatsApp de soporte
-              </h2>
+              </h3>
               <p className="mt-1 text-sm text-foreground/55">
                 Atención directa para accesos, recargas y problemas con la herramienta.
               </p>
@@ -112,9 +105,9 @@ export function SupportPage() {
 
       <section className="border-t border-line py-16 sm:py-24">
         <Container>
-          <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
+          <h3 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
             {supportPage.shortcutsTitle}
-          </h2>
+          </h3>
           <p className="mt-3 max-w-2xl text-base leading-relaxed text-foreground/65">
             {supportPage.shortcutsLead}
           </p>

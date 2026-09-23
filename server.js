@@ -6046,6 +6046,18 @@ async function serveStatic(req, res, pathname) {
     return res.end();
   }
 
+  // La guia y el soporte dejaron de ser paginas y pasaron a ser secciones de
+  // la portada. Quien tenga la direccion vieja guardada aterriza en la seccion
+  // en vez de en un error.
+  const seccionesDeLaPortada = { "/guia": "/#guia", "/soporte": "/#soporte" };
+  if (requestUsesPublicSite(req) && seccionesDeLaPortada[pathname]) {
+    res.writeHead(301, {
+      Location: seccionesDeLaPortada[pathname],
+      "Cache-Control": "no-store",
+    });
+    return res.end();
+  }
+
   if (pathname === "/owner-recovery") {
     if (!enableSetupPasswordReset) {
       res.writeHead(404, { "Cache-Control": "no-store" });
@@ -6205,14 +6217,6 @@ async function serveStatic(req, res, pathname) {
 // Por eso el titulo se reemplaza aca, antes de mandar el HTML.
 const webPageMeta = {
   "/": null, // el del archivo ya es el de la portada
-  "/guia": {
-    title: "Guia de uso de Ari-Tool paso a paso | AriadGSM",
-    description: "Como usar Ari-Tool: requisitos, modo Fastboot, elegir el modelo y flashear sin errores. Guia en espanol para tecnicos de Tecno, Infinix e itel.",
-  },
-  "/soporte": {
-    title: "Soporte de Ari-Tool | AriadGSM",
-    description: "Soporte directo de Ari-Tool por WhatsApp: creditos, modelos compatibles, errores de flasheo y garantia. Atencion para tecnicos de Ariad GSM.",
-  },
   "/gsm": {
     title: "AriadGSM — Desbloqueo FRP Xiaomi y servicios GSM",
     description: "AriadGSM (Ariad): desbloqueo FRP de Xiaomi, Redmi y POCO, cuentas Mi y servicios GSM para tecnicos de toda Latinoamerica.",

@@ -71,6 +71,6 @@ export const supportShortcuts: SupportShortcut[] = [
   {
     label: "Guía de uso",
     description: "El procedimiento paso a paso.",
-    href: "/guia",
+    href: "/#guia",
   },
 ]
