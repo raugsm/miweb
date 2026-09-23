@@ -7,6 +7,7 @@ import {
   footerContent,
   footerLinks,
   headerLinks,
+  legalLinks,
   product,
 } from "@/data/product"
 
@@ -83,10 +84,24 @@ export function SiteFooter() {
           </div>
         </div>
 
-        <div className="mt-12 border-t border-line pt-6">
-          <p className="font-display text-[10px] font-bold tracking-[0.18em] text-foreground/40 uppercase">
-            {footerContent.copyright}
-          </p>
+        <div className="mt-12 flex flex-col gap-4 border-t border-line pt-6 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <p className="font-display text-[10px] font-bold tracking-[0.18em] text-foreground/40 uppercase">
+              {footerContent.copyright}
+            </p>
+            <p className="mt-2 max-w-md text-[11px] leading-relaxed text-foreground/40">
+              {footerContent.professionalUse}
+            </p>
+          </div>
+          <ul className="flex flex-wrap gap-x-4 gap-y-2">
+            {legalLinks.map((link) => (
+              <li key={link.href}>
+                <Link to={link.href} className={linkClassName}>
+                  {link.label}
+                </Link>
+              </li>
+            ))}
+          </ul>
         </div>
       </Container>
     </footer>

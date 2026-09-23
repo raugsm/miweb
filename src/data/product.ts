@@ -55,6 +55,14 @@ export const footerLinks: NavItem[] = [
   { label: "AriadGSM", href: "/gsm" },
 ]
 
+/** Enlaces legales del pie: una sola página /legal con secciones ancladas. */
+export const legalLinks: NavItem[] = [
+  { label: "Términos", href: "/legal#terminos" },
+  { label: "Privacidad", href: "/legal#privacidad" },
+  { label: "Reembolsos", href: "/legal#reembolsos" },
+  { label: "Uso aceptable", href: "/legal#uso-aceptable" },
+]
+
 // Sin boton de descarga en la barra: confundia, porque aparecia en todas las
 // paginas sin decir que descargaba. Cada producto tiene el suyo donde
 // corresponde: Ari-Tool en la portada y AriadGSM Cliente en /gsm.
@@ -143,4 +151,7 @@ export const footerContent = {
   noticeTitle: "Antes de flashear",
   disclaimer:
     "El flasheo reescribe el firmware y borra los datos del equipo. Verificá el modelo y respaldá antes de empezar: cada proceso queda a cargo del técnico que lo ejecuta.",
+  /** Aviso de uso profesional en la barra inferior del pie (todas las páginas). */
+  professionalUse:
+    "Herramienta para uso profesional autorizado. Prohibido su uso en equipos robados, perdidos o sin autorización del propietario.",
 }

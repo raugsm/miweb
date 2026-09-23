@@ -6243,6 +6243,10 @@ const webPageMeta = {
     title: "Entrar a mi cuenta de Ari-Tool | AriadGSM",
     description: "Acceso de tecnicos a Ari-Tool: entra a tu cuenta, mira tus creditos y el historial de tus trabajos.",
   },
+  "/legal": {
+    title: "Politicas y terminos | AriadGSM",
+    description: "Terminos, privacidad, reembolsos y politica de uso aceptable de AriadGSM y Ari-Tool. Herramienta para uso profesional autorizado.",
+  },
 };
 
 function escapeHtmlAttr(value) {

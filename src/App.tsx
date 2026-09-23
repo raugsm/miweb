@@ -22,6 +22,10 @@ const PortalPage = lazy(() =>
 const NotFoundPage = lazy(() =>
   import("@/pages/NotFoundPage").then((m) => ({ default: m.NotFoundPage }))
 )
+// Políticas y términos (una sola página con secciones ancladas).
+const LegalPage = lazy(() =>
+  import("@/pages/LegalPage").then((m) => ({ default: m.LegalPage }))
+)
 
 export default function App() {
   return (
@@ -34,6 +38,7 @@ export default function App() {
             <Route path="gsm" element={<GsmLandingPage />} />
             <Route path="cliente" element={<PortalPage />} />
             <Route path="panel" element={<DashboardPage />} />
+            <Route path="legal" element={<LegalPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>
         </Routes>
