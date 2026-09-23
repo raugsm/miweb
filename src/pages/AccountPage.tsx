@@ -20,7 +20,6 @@ import {
 import { Container } from "@/components/Container"
 import { OtpInput } from "@/components/OtpInput"
 import { SearchableSelect } from "@/components/SearchableSelect"
-import { Turnstile } from "@/components/Turnstile"
 import { Button } from "@/components/ui/button"
 import { PAISES } from "@/data/paises"
 import { confirmar, entrarWeb, solicitarAcceso, verificado } from "@/lib/cuenta"
@@ -218,15 +217,6 @@ export function AccountPage() {
   // Se enciende cuando la contraseña falla: ofrece entrar con un código.
   const [ofrecerCodigo, setOfrecerCodigo] = useState(false)
 
-  // Vale anti-robot. Es de un solo uso: despues de mandarlo hay que pedir uno
-  // nuevo, por eso se borra en cuanto se usa y el recuadro se vuelve a dibujar.
-  const [vale, setVale] = useState("")
-  const [valeId, setValeId] = useState(0)
-  const renovarVale = () => {
-    setVale("")
-    setValeId((n) => n + 1)
-  }
-
   const [correo, setCorreo] = useState("")
   const [clave, setClave] = useState("")
   const [otp, setOtp] = useState("")
@@ -282,16 +272,7 @@ export function AccountPage() {
     try {
       // El login pasa por nuestra función: ahí se cuentan los fallos y, pasado
       // el tope, la cuenta se bloquea un rato en el origen.
-      const r = await entrarWeb(c, clave, vale)
-      renovarVale()
-
-      if (r.data?.error === "captcha") {
-        setAviso({
-          texto: "No se completó la comprobación anti-robot. Esperá a que el recuadro diga que estás listo y probá de nuevo.",
-          error: true,
-        })
-        return
-      }
+      const r = await entrarWeb(c, clave)
 
       if (r.data?.error === "bloqueo_temporal") {
         setAviso({
@@ -561,16 +542,7 @@ export function AccountPage() {
     setOcupado(true)
     setAviso(null)
     try {
-      const r = await solicitarAcceso(c, claveN, n, pais, vale)
-      renovarVale()
-
-      if (r.data?.error === "captcha") {
-        setAviso({
-          texto: "No se completó la comprobación anti-robot. Esperá a que el recuadro diga que estás listo y probá de nuevo.",
-          error: true,
-        })
-        return
-      }
+      const r = await solicitarAcceso(c, claveN, n, pais)
 
       // El servidor frena los registros en cadena desde la misma conexión o
       // con el mismo correo. A una persona no le pasa; a un robot, enseguida.
@@ -1008,14 +980,9 @@ export function AccountPage() {
                           onEnter={() => void entrar()}
                         />
                       </Campo>
-                      <Turnstile
-                        key={`entrar-${valeId}`}
-                        onToken={setVale}
-                        onVencido={() => setVale("")}
-                      />
                       <Button
                         type="button"
-                        className="mt-5 h-11 w-full rounded-xl font-medium"
+                        className="mt-6 h-11 w-full rounded-xl font-medium"
                         disabled={ocupado}
                         onClick={entrar}
                       >
@@ -1150,14 +1117,9 @@ export function AccountPage() {
                         />
                       </Campo>
 
-                      <Turnstile
-                        key={`crear-${valeId}`}
-                        onToken={setVale}
-                        onVencido={() => setVale("")}
-                      />
                       <Button
                         type="button"
-                        className="mt-5 h-11 w-full rounded-xl font-medium"
+                        className="mt-6 h-11 w-full rounded-xl font-medium"
                         disabled={!puedeCrear}
                         onClick={crear}
                       >

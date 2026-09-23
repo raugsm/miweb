@@ -50,14 +50,13 @@ async function edge<T>(funcion: string, cuerpo: object, jwt?: string): Promise<E
  * `error`:
  *   "credenciales"      correo o contraseña que no coinciden (no dice cuál)
  *   "bloqueo_temporal"  demasiados fallos seguidos; trae `minutos`
- *   "captcha"           no pasó la comprobación anti-robot
  */
-export function entrarWeb(correo: string, clave: string, captcha?: string) {
+export function entrarWeb(correo: string, clave: string) {
   return edge<{
     sesion?: { access_token: string; refresh_token: string; expires_in: number }
     error?: string
     minutos?: number
-  }>("acceso_entrar", { correo, clave, captcha: captcha ?? "" })
+  }>("acceso_entrar", { correo, clave })
 }
 
 /** Resumen del cliente para el dashboard (saldo, licencia, trabajos, movimientos). */
@@ -78,7 +77,6 @@ export function solicitarAcceso(
   clave: string,
   nombre: string,
   pais: string,
-  captcha?: string,
   telefono?: string
 ) {
   return edge<{ estado?: string; error?: string }>("acceso_solicitar", {
@@ -86,7 +84,6 @@ export function solicitarAcceso(
     clave,
     nombre,
     pais,
-    captcha: captcha ?? "",
     telefono: telefono ?? null,
   })
 }

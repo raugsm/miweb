@@ -10,24 +10,22 @@
 //   1. cuenta los fallos y, pasado el tope, BLOQUEA LA CUENTA en el origen.
 //      Ese bloqueo cierra las dos puertas, porque cae sobre la cuenta y no
 //      sobre el camino: ni la web ni la app entran mientras dure.
-//   2. valida el anti-robot (Turnstile) antes de tocar nada.
-//   3. deja anotado quién intentó, desde dónde y con qué resultado.
+//   2. deja anotado quién intentó, desde dónde y con qué resultado.
 //
 // El bloqueo es CORTO a propósito. Si fuera largo, cualquiera podría dejar sin
 // trabajar a un técnico tecleando mal su correo unas cuantas veces.
 //
-// POST { correo, clave, captcha? }
+// POST { correo, clave }
 //   200 { sesion: { access_token, refresh_token, expires_in } }
 //   401 { error: "credenciales" }        datos que no coinciden
 //   429 { error: "bloqueo_temporal", minutos }
-//   400 { error: "captcha" }
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { admin, anon, CORS, esCorreo, resp } from "../_shared/seguridad.ts";
 
 const VENTANA_MIN = 15;     // ventana en la que se cuentan los fallos
-const TOPE_CORREO = 8;      // fallos con el mismo correo antes de bloquear
-const TOPE_IP = 25;         // fallos desde la misma conexión
+const TOPE_CORREO = 6;      // fallos con el mismo correo antes de bloquear
+const TOPE_IP = 15;         // fallos desde la misma conexión
 const BLOQUEO_MIN = 15;     // cuánto dura el bloqueo de la cuenta
 
 function ipDe(req: Request): string | null {
@@ -90,31 +88,12 @@ async function bloquear(db: any, correo: string) {
   }
 }
 
-/** Turnstile. Si no hay secreto configurado, no se exige nada todavía. */
-async function captchaValido(token: string, ip: string | null): Promise<boolean> {
-  const secreto = Deno.env.get("TURNSTILE_SECRET");
-  if (!secreto) return true;
-  if (!token) return false;
-  try {
-    const r = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ secret: secreto, response: token, remoteip: ip ?? undefined }),
-    });
-    const j = await r.json();
-    return Boolean(j.success);
-  } catch {
-    return false;
-  }
-}
-
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   try {
     const b = await req.json().catch(() => ({}));
     const correo = String((b as { correo?: string }).correo ?? "").trim().toLowerCase();
     const clave = String((b as { clave?: string }).clave ?? "");
-    const captcha = String((b as { captcha?: string }).captcha ?? "");
 
     if (!esCorreo(correo) || !clave) return resp(400, { error: "datos_incompletos" });
 
@@ -133,13 +112,7 @@ serve(async (req) => {
       return resp(429, { error: "bloqueo_temporal", minutos: BLOQUEO_MIN });
     }
 
-    // 2. Anti-robot.
-    if (!await captchaValido(captcha, ip)) {
-      await anotar(db, correo, ip, false, "acceso_fallo");
-      return resp(400, { error: "captcha" });
-    }
-
-    // 3. La contraseña la comprueba Supabase, no nosotros: nunca la guardamos
+    // 2. La contraseña la comprueba Supabase, no nosotros: nunca la guardamos
     //    ni la vemos escrita en ningún lado.
     const { data, error } = await anon().auth.signInWithPassword({
       email: correo, password: clave,

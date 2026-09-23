@@ -18,26 +18,6 @@ const VENTANA_MIN = 60;
 const TOPE_POR_IP = 6;
 const TOPE_POR_CORREO = 3;
 
-/**
- * Anti-robot de Cloudflare. Si no hay secreto configurado no se exige nada,
- * para que la funcion siga andando en pruebas locales.
- */
-async function captchaValido(token: string, ip: string | null): Promise<boolean> {
-  const secreto = Deno.env.get("TURNSTILE_SECRET");
-  if (!secreto) return true;
-  if (!token) return false;
-  try {
-    const r = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ secret: secreto, response: token, remoteip: ip ?? undefined }),
-    });
-    const j = await r.json();
-    return Boolean(j.success);
-  } catch {
-    return false;
-  }
-}
 
 /** La IP real del visitante: Supabase la deja en x-forwarded-for. */
 function ipDe(req: Request): string | null {
@@ -88,7 +68,6 @@ serve(async (req) => {
     const nombre = String(b.nombre ?? "").trim();
     const pais = String(b.pais ?? "").trim().toUpperCase();
     const telefono = b.telefono ? String(b.telefono).trim() : null;
-    const captcha = String(b.captcha ?? "");
 
     if (!esCorreo(correo)) return resp(400, { error: "correo_invalido" });
     if (clave.length < 8) return resp(400, { error: "clave_corta" });
@@ -103,24 +82,6 @@ serve(async (req) => {
     if (!await hayCupo(db, correo, ip)) {
       await anotar(db, correo, ip, false, "bloqueo_ritmo");
       return resp(429, { error: "demasiados_intentos" });
-    }
-
-    // Anti-robot: SOLO a quien viene de un navegador.
-    //
-    // Esta funcion tambien la usa la app de escritorio, que no tiene navegador
-    // y no puede resolver un recuadro de Cloudflare. Exigirselo la dejaba sin
-    // poder crear cuentas.
-    //
-    // Un navegador manda siempre la cabecera Origin en un POST a otro dominio;
-    // un cliente nativo no la manda. Esa es la diferencia que se usa aca.
-    //
-    // Si, un robot puede omitir Origin para saltarse el recuadro. Por eso el
-    // freno por ritmo de mas arriba se aplica a TODOS por igual y no depende
-    // de esto: es el que de verdad corta los registros en cadena.
-    const desdeNavegador = Boolean(req.headers.get("origin"));
-    if (desdeNavegador && !await captchaValido(captcha, ip)) {
-      await anotar(db, correo, ip, false, "acceso_fallo");
-      return resp(400, { error: "captcha" });
     }
 
     // Filtro de usuario existente.

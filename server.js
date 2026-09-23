@@ -252,9 +252,7 @@ const turnstileEnabled = Boolean(turnstileSiteKey && turnstileSecret);
 const isProduction = process.env.NODE_ENV === "production";
 const baseCsp = [
   "default-src 'self'",
-  // El acceso de tecnicos dibuja el recuadro anti-robot de Cloudflare
-  // siempre, no solo cuando el portal viejo lo tenia configurado.
-  `script-src 'self' ${cloudflareTurnstileOrigin}`,
+  `script-src 'self'${turnstileEnabled ? ` ${cloudflareTurnstileOrigin}` : ""}`,
   "style-src 'self'",
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
@@ -262,7 +260,7 @@ const baseCsp = [
   // AriadDesbloqueador en sdarsjdwnuimjruthjwz) y el backend con el proyecto
   // de AriadGSM Cliente (duvpkpfivcnftxelgqtt).
   "connect-src 'self' https://sdarsjdwnuimjruthjwz.supabase.co https://duvpkpfivcnftxelgqtt.supabase.co",
-  `frame-src ${cloudflareTurnstileOrigin}`,
+  `frame-src ${turnstileEnabled ? cloudflareTurnstileOrigin : "'none'"}`,
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",
