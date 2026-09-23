@@ -43,7 +43,7 @@ export const sessionCta: NavItem = { label: "Iniciar sesión", href: "/cuenta" }
 
 export const heroContent = {
   kicker: "Security Plugin + AntiCrack · MediaTek",
-  title: "Remové el Security Plugin y detectá el AntiCrack.",
+  title: "Remoción de Security Plugin, lectura de AntiCrack.",
   lead: "Ari-Tool resuelve dos frentes en Tecno, Infinix e itel con MediaTek: remueve el bloqueo de administración remota y te reporta el estado del AntiCrack antes de flashear. Conectás por Fastboot, la ROM de tu modelo ya viene lista y el equipo vuelve a ser del cliente.",
   highlights: ["Security Plugin fuera", "AntiCrack sin sorpresas", "424 modelos, ROM lista"],
   primaryCta: "Descargar para Windows",
