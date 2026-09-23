@@ -55,13 +55,31 @@ function formatFecha(iso: string | null): string | null {
   })
 }
 
+/**
+ * Convierte la direccion del archivo en una descarga de verdad.
+ *
+ * Sin esto el navegador decide solo: el archivo llega con un tipo generico y,
+ * segun el navegador, se abre una pestana o se sale de la pagina en vez de
+ * bajarlo. El parametro `download` hace que el servidor conteste "esto es un
+ * archivo adjunto, guardalo", y ademas le pone nombre limpio.
+ *
+ * El atributo `download` del enlace no alcanza: los navegadores solo lo
+ * respetan si el archivo esta en el mismo dominio, y este vive en Supabase.
+ */
+function comoDescarga(url: string): string {
+  if (!url) return url
+  const nombre = url.split("/").pop() || "Ari-Tool.exe"
+  const separador = url.includes("?") ? "&" : "?"
+  return `${url}${separador}download=${encodeURIComponent(nombre)}`
+}
+
 function resolveRelease(live: LiveRelease | null, soporte: string): Release {
   if (live) {
     return {
       version: live.version,
       versionLabel: `v${live.version}`,
       buildDateLabel: formatFecha(live.fecha) ?? product.buildDateLabel,
-      downloadUrl: live.url || product.downloadPath,
+      downloadUrl: comoDescarga(live.url) || product.downloadPath,
       downloadAvailable: Boolean(live.url),
       live: true,
       soporte: soporte || live.soporte || SOPORTE_FALLBACK,

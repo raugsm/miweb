@@ -10,6 +10,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
+import { DownloadButton } from "@/components/DownloadButton"
 import { headerCta, headerLinks, pageLinks, product, sessionCta } from "@/data/product"
 import { useTheme } from "@/lib/theme"
 
@@ -59,13 +60,11 @@ export function MobileMenu({ open, onOpenChange }: MobileMenuProps) {
             {theme === "dark" ? "Modo claro" : "Modo oscuro"}
           </Button>
           <SheetClose asChild>
-            <Button
-              asChild
+            <DownloadButton
+              label={headerCta.label}
               variant="outline"
               className="h-11 w-full rounded-lg border-line bg-transparent font-medium text-foreground hover:border-foreground/30 hover:bg-foreground/[0.04]"
-            >
-              <Link to={headerCta.href}>{headerCta.label}</Link>
-            </Button>
+            />
           </SheetClose>
           <SheetClose asChild>
             <Button asChild className="h-11 w-full rounded-lg font-medium hover:bg-cobalt-deep">

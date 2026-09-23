@@ -4,6 +4,7 @@ import { Menu, Moon, Sun } from "lucide-react"
 
 import { Container } from "@/components/Container"
 import { Button } from "@/components/ui/button"
+import { DownloadButton } from "@/components/DownloadButton"
 import { headerCta, headerLinks, product, sessionCta } from "@/data/product"
 import { useTheme } from "@/lib/theme"
 
@@ -76,13 +77,14 @@ export function SiteHeader() {
             )}
           </Button>
 
-          <Button
-            asChild
+          {/* Descargaba nada: era un enlace a la misma portada. */}
+          <DownloadButton
+            label={headerCta.label}
             variant="outline"
+            size="default"
+            conIcono={false}
             className="hidden h-9 rounded-lg border-line bg-transparent px-4 text-sm font-medium text-foreground hover:border-foreground/30 hover:bg-foreground/[0.04] hover:text-foreground sm:inline-flex"
-          >
-            <Link to={headerCta.href}>{headerCta.label}</Link>
-          </Button>
+          />
 
           <Button asChild className="hidden h-9 rounded-lg px-4 text-sm font-medium sm:inline-flex">
             <Link to={sessionCta.href}>{sessionCta.label}</Link>
