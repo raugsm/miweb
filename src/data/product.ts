@@ -42,10 +42,10 @@ export const footerLinks: NavItem[] = [
 export const sessionCta: NavItem = { label: "Iniciar sesión", href: "/cuenta" }
 
 export const heroContent = {
-  kicker: "Security Plugin + AntiCrack · MediaTek",
-  title: "Remoción de Security Plugin, lectura de AntiCrack.",
-  lead: "Ari-Tool resuelve dos frentes en Tecno, Infinix e itel con MediaTek: remueve el bloqueo de administración remota y te reporta el estado del AntiCrack antes de flashear. Conectás por Fastboot, la ROM de tu modelo ya viene lista y el equipo vuelve a ser del cliente.",
-  highlights: ["Security Plugin fuera", "AntiCrack sin sorpresas", "424 modelos, ROM lista"],
+  kicker: "Security Plugin (MDM) + AntiCrack · MediaTek",
+  title: "Remoción de Security Plugin y AntiCrack.",
+  lead: "Ari-Tool trabaja equipos Tecno, Infinix e itel con MediaTek: remueve el Security Plugin (MDM) y el AntiCrack, con la ROM del modelo ya lista. Conectás por Fastboot, flasheás y el equipo vuelve a ser del cliente.",
+  highlights: ["Security Plugin fuera", "AntiCrack fuera", "424 modelos, ROM lista"],
   primaryCta: "Descargar para Windows",
   secondaryCta: "Ver el producto",
   trustSuffix: "Windows 10/11",
@@ -114,7 +114,7 @@ export const requirements: string[] = [
 
 export const footerContent = {
   tagline:
-    "Ari-Tool es la herramienta de AriadGSM para quitar el Security Plugin de equipos Tecno, Infinix e itel con MediaTek.",
+    "Ari-Tool es la herramienta de AriadGSM para remover el Security Plugin (MDM) y el AntiCrack de equipos Tecno, Infinix e itel con MediaTek.",
   navTitle: "Navegación",
   resourcesTitle: "Recursos",
   copyright: "© 2026 AriadGSM · Ariad. Todos los derechos reservados.",

@@ -6,9 +6,9 @@ import { useSeo } from "@/lib/seo"
 
 export function HomePage() {
   useSeo({
-    titulo: "Ari-Tool — Quitar el Security Plugin de Tecno, Infinix e itel | AriadGSM",
+    titulo: "Ari-Tool — Remover Security Plugin y AntiCrack (MDM) en Tecno, Infinix e itel | AriadGSM",
     descripcion:
-      "Ari-Tool de AriadGSM quita el bloqueo de administración remota (Security Plugin) en equipos Tecno, Infinix e itel con MediaTek. 424 modelos, ROM lista para flashear y cobertura incluida.",
+      "Ari-Tool de AriadGSM remueve el Security Plugin (MDM) y el AntiCrack en equipos Tecno, Infinix e itel con MediaTek. La ROM del modelo llega lista: conectás por Fastboot, flasheás y el equipo vuelve a ser del cliente. 424 modelos, Android 12 a 16.",
     ruta: "/",
   })
 
