@@ -1310,37 +1310,55 @@ async function publicClientAppFrpPriceReport() {
     }
     throw new Error("SUPABASE_ANON_KEY no esta configurada.");
   }
-  const [settingsRows, exchangeRateRows, paymentMethodRows, toolRows] = await Promise.all([
-    fetchSupabasePublicRows("public_client_settings", "key,value"),
-    fetchSupabasePublicRows("public_country_exchange_rates", "country_code,currency,rate"),
-    fetchSupabasePublicRows(
-      "public_payment_methods",
-      "id,country_code,method_name,display_order,fields,qr_storage_path",
-      "country_code.asc,display_order.asc,method_name.asc"
-    ),
-    // El alquiler de herramientas es opcional: si la vista no existe o falla,
-    // la landing sigue mostrando FRP y Cuentas MI.
-    fetchSupabasePublicRows(
-      "public_tools_available",
-      "id,name,brand,duration_hours,price_usdt,sort_order,cuentas_libres",
-      "sort_order.asc,name.asc"
-    ).catch((error) => {
-      console.warn("No se pudo cargar el alquiler de herramientas publico.", error?.message || error);
-      return [];
-    }),
-  ]);
-  const report = buildClientAppFrpPriceReport({
-    settingsRows,
-    exchangeRateRows,
-    paymentMethodRows,
-    toolRows,
-    updatedAt: nowIso(),
-  });
-  clientAppPriceReportCache = {
-    report,
-    expiresAt: now + clientAppPriceCacheTtlMs,
-  };
-  return report;
+  try {
+    const [settingsRows, exchangeRateRows, paymentMethodRows, toolRows] = await Promise.all([
+      fetchSupabasePublicRows("public_client_settings", "key,value"),
+      fetchSupabasePublicRows("public_country_exchange_rates", "country_code,currency,rate"),
+      fetchSupabasePublicRows(
+        "public_payment_methods",
+        "id,country_code,method_name,display_order,fields,qr_storage_path",
+        "country_code.asc,display_order.asc,method_name.asc"
+      ),
+      // El alquiler de herramientas es opcional: si la vista no existe o falla,
+      // la landing sigue mostrando FRP y Cuentas MI.
+      fetchSupabasePublicRows(
+        "public_tools_available",
+        "id,name,brand,duration_hours,price_usdt,sort_order,cuentas_libres",
+        "sort_order.asc,name.asc"
+      ).catch((error) => {
+        console.warn("No se pudo cargar el alquiler de herramientas publico.", error?.message || error);
+        return [];
+      }),
+    ]);
+    const report = buildClientAppFrpPriceReport({
+      settingsRows,
+      exchangeRateRows,
+      paymentMethodRows,
+      toolRows,
+      updatedAt: nowIso(),
+    });
+    clientAppPriceReportCache = {
+      report,
+      expiresAt: now + clientAppPriceCacheTtlMs,
+    };
+    return report;
+  } catch (error) {
+    // Blip transitorio del Supabase de AriadGSM Cliente (p. ej. un 404
+    // momentaneo): en vez de dejar la landing sin precios, se sigue sirviendo
+    // el ultimo reporte bueno aunque este vencido, y se reintenta pronto.
+    if (clientAppPriceReportCache.report) {
+      console.warn(
+        "Precios: fallo el refresco, se sirve el ultimo reporte bueno.",
+        error?.message || error
+      );
+      clientAppPriceReportCache = {
+        report: clientAppPriceReportCache.report,
+        expiresAt: now + 60_000,
+      };
+      return clientAppPriceReportCache.report;
+    }
+    throw error;
+  }
 }
 
 const {
