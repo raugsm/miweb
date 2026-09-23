@@ -2,11 +2,8 @@
 User-agent: *
 Allow: /
 
-# Pantallas internas o sin sentido para un buscador.
-Disallow: /admin
+# Pantallas internas: no tienen sentido en un buscador.
 Disallow: /panel
-Disallow: /owner-recovery
 Disallow: /api/
-Disallow: /pedido/
 
 Sitemap: https://ariadgsm.com/sitemap.xml

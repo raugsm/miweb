@@ -5867,6 +5867,89 @@ function requestUsesAdminShell(pathname) {
   return pathname === "/admin" || pathname.startsWith("/admin/");
 }
 
+/**
+ * ops.ariadgsm.com es el panel de operadores completo, no solo /admin.
+ * Ese subdominio nunca sirve la web publica de Ari-Tool.
+ */
+function requestUsesOpsHost(req) {
+  return requestHost(req) === "ops.ariadgsm.com";
+}
+
+/**
+ * Los dominios donde vive la web publica de Ari-Tool.
+ *
+ * Ahi solo existen /, /gsm, /cuenta y /panel. TODO lo demas que quedo del
+ * portal Xiaomi (el portal de pedidos, la landing vieja, el manual, los .html
+ * sueltos y el codigo del panel de operadores) deja de servirse: nunca se uso
+ * y estaba abierto a cualquiera que supiera la direccion.
+ *
+ * Se decide por HOST, no borrando codigo, por tres razones:
+ *   - ops.ariadgsm.com sigue sirviendo el panel de operadores igual que hoy;
+ *   - las pruebas arrancan el servidor en 127.0.0.1 y siguen pasando;
+ *   - si alguna vez hace falta revivir algo, es cambiar una lista.
+ */
+const publicSiteHosts = new Set(["ariadgsm.com", "www.ariadgsm.com"]);
+
+function requestUsesPublicSite(req) {
+  return publicSiteHosts.has(requestHost(req));
+}
+
+/**
+ * Archivos que NO se sirven en el dominio publico.
+ *
+ * Vite copia public/ entero dentro de dist/, asi que estos terminan en el
+ * build aunque la web nueva no los use: el codigo del panel de operadores
+ * (app.js, styles.css, index.html) y todo el portal Xiaomi. Se abrian por
+ * nombre de archivo aunque sus rutas estuvieran cortadas.
+ *
+ * Siguen sirviendose en ops.ariadgsm.com, que es donde hacen falta.
+ */
+const retiredPublicFiles = new Set([
+  // Panel de operadores
+  "/app.js",
+  "/styles.css",
+  "/index.html",
+  // Portal de pedidos Xiaomi
+  "/portal.html",
+  "/portal.js",
+  "/portal.css",
+  // Landing y paginas viejas
+  "/landing.html",
+  "/landing.css",
+  "/landing-prices.js",
+  "/landing-version.js",
+  "/campaign-tracking.js",
+  "/manual.html",
+  "/motorola-f4.html",
+  "/verify.css",
+  // Recuperacion de emergencia del dueno
+  "/owner-recovery.js",
+  "/owner-recovery.css",
+]);
+
+const retiredPublicFolders = ["/portal-modules/", "/portal-styles/", "/vendor/"];
+
+function requestUsesRetiredFile(pathname) {
+  return retiredPublicFiles.has(pathname)
+    || retiredPublicFolders.some((carpeta) => pathname.startsWith(carpeta));
+}
+
+/** Rutas heredadas del portal Xiaomi: fuera del dominio publico. */
+function requestUsesRetiredRoute(pathname) {
+  return pathname === "/cliente"
+    || pathname.startsWith("/cliente/")
+    || pathname === "/portal"
+    || pathname.startsWith("/pedido/")
+    || pathname === "/gsm-legacy"
+    || pathname === "/gsm-legacy/"
+    || pathname === "/manual"
+    || pathname === "/instrucciones"
+    || pathname === "/descargar"
+    || pathname.startsWith("/servicios/")
+    || pathname.startsWith("/v/")
+    || pathname === "/owner-recovery";
+}
+
 function normalizeLatestClientVersionInfo(record) {
   return {
     version: String(record?.version || "").trim(),
@@ -5944,6 +6027,15 @@ async function sendPublicHtmlFile(res, fileName) {
 }
 
 async function serveStatic(req, res, pathname) {
+  // Puerta del dominio publico. Lo que quedo del portal Xiaomi se manda a la
+  // portada con una redireccion permanente en vez de un 404: Google ya tenia
+  // indexadas /manual y /servicios/motorola-f4, y asi quien llegue por una de
+  // esas termina en la web nueva en lugar de en un error.
+  if (requestUsesPublicSite(req) && requestUsesRetiredRoute(pathname)) {
+    res.writeHead(301, { Location: "/", "Cache-Control": "no-store" });
+    return res.end();
+  }
+
   if (pathname === "/owner-recovery") {
     if (!enableSetupPasswordReset) {
       res.writeHead(404, { "Cache-Control": "no-store" });
@@ -5990,9 +6082,10 @@ async function serveStatic(req, res, pathname) {
     });
     return res.end();
   }
-  if (pathname === "/") {
-    // SPA unificada: la portada es la de AriadDesbloqueador cuando el build
-    // existe; sin build se mantiene la landing legacy de AriadGSM.
+  if (pathname === "/" && !requestUsesOpsHost(req)) {
+    // SPA unificada: la portada es Ari-Tool cuando el build existe; sin build
+    // se mantiene la landing legacy de AriadGSM. En ops.ariadgsm.com no entra
+    // nunca: ahi manda el panel de operadores.
     if (webDistAvailable) {
       return sendWebIndex(res, "/");
     }
@@ -6029,8 +6122,21 @@ async function serveStatic(req, res, pathname) {
   // Las rutas legacy (portal/cliente, admin) siguen leyendo public/ hasta su
   // migracion a React. El resto prefiere el build del SPA (assets hasheados,
   // fonts, imagenes copiadas de public/ por Vite).
-  const useWebDist = webDistAvailable && !portalRequest && !adminRequest;
+  const useWebDist = webDistAvailable && !portalRequest && !adminRequest
+    && !requestUsesOpsHost(req);
+
+  // En el dominio publico, public/ no se toca. Ahi viven el codigo del panel
+  // de operadores (app.js) y los .html del portal viejo, que se abrian por
+  // nombre de archivo aunque sus rutas no existieran.
+  const soloBuild = requestUsesPublicSite(req) && requestUsesRetiredFile(pathname);
   const distResolved = useWebDist ? path.normalize(path.join(webDistDir, safePath)) : null;
+
+  // En el dominio publico estos archivos no existen, aunque Vite los haya
+  // copiado al build: son el codigo del panel de operadores y el portal viejo.
+  if (soloBuild) {
+    res.writeHead(404, { "Cache-Control": "no-store" });
+    return res.end("Not found");
+  }
 
   try {
     let filePath = resolved;
