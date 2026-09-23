@@ -18,7 +18,7 @@ export function Panel({
   return (
     <Tag
       className={cn(
-        "group/panel relative overflow-hidden rounded-2xl border border-line bg-card shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-colors duration-300 hover:border-cobalt/40",
+        "group/panel relative overflow-hidden rounded-2xl border border-line bg-card shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition-[transform,border-color,box-shadow] duration-300 hover:-translate-y-0.5 hover:border-cobalt/40 hover:shadow-[0_20px_48px_-26px_rgba(0,82,212,0.55)]",
         className
       )}
       {...props}

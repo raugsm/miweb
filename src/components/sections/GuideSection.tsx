@@ -1,5 +1,6 @@
 import { Container } from "@/components/Container"
 import { Icon } from "@/components/Icon"
+import { Panel } from "@/components/Panel"
 import { SectionHeading } from "@/components/SectionHeading"
 import { guidePage, guideSteps, troubleshootingItems } from "@/data/guide"
 import { requirements } from "@/data/product"
@@ -10,15 +11,11 @@ export function GuideSection() {
     <>
       <section id="guia" className="scroll-mt-16 border-b border-line bg-carbon/40 py-14 sm:py-20">
         <Container>
-          <p className="text-xs font-medium tracking-[0.2em] text-foreground/45 uppercase">
-            {guidePage.eyebrow}
-          </p>
-          <h2 className="mt-3 text-4xl leading-[1.05] font-semibold tracking-tight text-balance text-foreground sm:text-5xl">
-            {guidePage.title}
-          </h2>
-          <p className="mt-4 max-w-2xl text-lg leading-relaxed text-foreground/65">
-            {guidePage.lead}
-          </p>
+          <SectionHeading
+            eyebrow={guidePage.eyebrow}
+            title={guidePage.title}
+            lead={guidePage.lead}
+          />
         </Container>
       </section>
 
@@ -26,8 +23,8 @@ export function GuideSection() {
         <Container>
           <div className="grid gap-12 lg:grid-cols-[0.85fr_1.4fr]">
             <aside>
-              <div className="rounded-2xl border border-line bg-carbon p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] lg:sticky lg:top-20">
-                <h3 className="text-base font-semibold tracking-tight text-foreground">
+              <Panel className="p-6 lg:sticky lg:top-20">
+                <h3 className="font-display text-base font-extrabold tracking-[0.02em] text-foreground uppercase">
                   {guidePage.beforeStartTitle}
                 </h3>
                 <ul className="mt-4 space-y-3">
@@ -47,7 +44,7 @@ export function GuideSection() {
                 <p className="mt-5 text-xs leading-relaxed text-foreground/45">
                   {guidePage.beforeStartNote}
                 </p>
-              </div>
+              </Panel>
             </aside>
 
             <ol className="space-y-10">
@@ -110,20 +107,17 @@ export function GuideSection() {
           />
           <div className="mt-10 grid gap-4 md:grid-cols-3">
             {troubleshootingItems.map((item) => (
-              <article
-                key={item.title}
-                className="rounded-2xl border border-line bg-carbon p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition-colors hover:border-line"
-              >
+              <Panel as="article" key={item.title} className="p-5">
                 <span className="flex size-9 items-center justify-center rounded-lg border border-line bg-field text-cyan">
                   <Icon name={item.icon} className="size-4" />
                 </span>
-                <h4 className="mt-4 text-base font-semibold tracking-tight text-foreground">
+                <h4 className="mt-4 font-display text-sm font-extrabold tracking-[0.02em] text-foreground uppercase">
                   {item.title}
                 </h4>
                 <p className="mt-2 text-sm leading-relaxed text-foreground/65">
                   {item.solution}
                 </p>
-              </article>
+              </Panel>
             ))}
           </div>
           <p className="mt-8 max-w-3xl text-sm leading-relaxed text-foreground/65">

@@ -1,4 +1,4 @@
-import { Download } from "lucide-react"
+import { Download, Loader2 } from "lucide-react"
 import type { ComponentProps } from "react"
 
 import { Button } from "@/components/ui/button"
@@ -21,7 +21,7 @@ export function DownloadButton({
   size = "lg",
   conIcono = true,
 }: DownloadButtonProps) {
-  const { downloadAvailable, downloadUrl } = useRelease()
+  const { downloadAvailable, downloadUrl, resolved } = useRelease()
 
   const buttonClassName = cn(
     "h-11 rounded-lg px-5 font-medium",
@@ -29,6 +29,24 @@ export function DownloadButton({
     className
   )
   const icon = conIcono ? <Download aria-hidden="true" /> : null
+
+  // Todavía consultando la versión: en vez de un botón muerto sin explicación,
+  // un estado "preparando" que late. Recién al asentarse se decide si hay
+  // descarga o no, y así el paso a habilitado no es un salto brusco.
+  if (!resolved) {
+    return (
+      <Button
+        size={size}
+        variant={variant}
+        className={cn(buttonClassName, "pointer-events-none")}
+        aria-busy="true"
+        disabled
+      >
+        {conIcono ? <Loader2 aria-hidden="true" className="animate-spin" /> : null}
+        <span className="animate-pulse">{label}</span>
+      </Button>
+    )
+  }
 
   if (downloadAvailable) {
     return (
@@ -44,8 +62,7 @@ export function DownloadButton({
     )
   }
 
-  // Sin release publicada el boton queda inactivo: ya no existe una seccion
-  // de descarga a la que enviar al visitante.
+  // Ya se resolvió y no hay release publicada: botón inactivo de verdad.
   return (
     <Button size={size} variant={variant} className={buttonClassName} disabled>
       {icon}

@@ -5,6 +5,7 @@ import { Container } from "@/components/Container"
 import { Flag } from "@/components/Flag"
 import { GridPattern, Kicker, Panel } from "@/components/Panel"
 import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   gsmMotorola,
   gsmPage,
@@ -70,6 +71,31 @@ function PriceGroup({
   )
 }
 
+/** Esqueleto de precios: espeja la grilla real para que no haya salto ni pop-in. */
+function PriceGroupSkeleton() {
+  return (
+    <div className="price-group" role="status" aria-busy="true">
+      <span className="sr-only">Cargando precios</span>
+      <Skeleton className="h-3 w-40 rounded-full" />
+      <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="rounded-xl border border-line bg-foreground/[0.02] p-4">
+            <div className="flex items-center gap-2.5">
+              <Skeleton className="h-5 w-7 rounded" />
+              <div className="min-w-0 flex-1">
+                <Skeleton className="h-3.5 w-24" />
+                <Skeleton className="mt-1.5 h-2.5 w-16" />
+              </div>
+            </div>
+            <Skeleton className="mt-3 h-6 w-20" />
+            <Skeleton className="mt-2 h-2.5 w-24" />
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export function GsmLandingPage() {
   useSeo({
     titulo: "AriadGSM — Desbloqueo FRP Xiaomi y servicios GSM",
@@ -93,7 +119,9 @@ export function GsmLandingPage() {
       setReport(payload?.report ?? null)
       setFailed(false)
     } catch {
-      setReport(null)
+      // No nulificar el report: un parpadeo de red no debe borrar la grilla
+      // que ya se está viendo. Solo marcamos el fallo; si nunca hubo datos, el
+      // render muestra el error, y si ya había, se conservan.
       setFailed(true)
     }
   }, [])
@@ -208,12 +236,12 @@ export function GsmLandingPage() {
           </p>
 
           <div className="mt-10 space-y-8">
-            {failed ? (
+            {!report && failed ? (
               <p className="text-sm text-foreground/50">
                 No se pudieron cargar los precios. Consulta por WhatsApp.
               </p>
             ) : !report ? (
-              <p className="text-sm text-foreground/50">Cargando precios actuales...</p>
+              <PriceGroupSkeleton />
             ) : (
               <>
                 {report.prices.length ? (

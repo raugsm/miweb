@@ -34,6 +34,12 @@ export type Release = {
   downloadAvailable: boolean
   live: boolean
   soporte: string
+  /**
+   * false hasta que la primera consulta a Supabase se asienta (con éxito o
+   * error). Deja distinguir "todavía cargando" de "no hay versión": el botón
+   * de descarga muestra un loader en vez de aparecer muerto sin explicación.
+   */
+  resolved: boolean
 }
 
 function formatFecha(iso: string | null): string | null {
@@ -73,7 +79,7 @@ function comoDescarga(url: string): string {
   return `${url}${separador}download=${encodeURIComponent(nombre)}`
 }
 
-function resolveRelease(live: LiveRelease | null, soporte: string): Release {
+function resolveRelease(live: LiveRelease | null, soporte: string, resolved: boolean): Release {
   if (live) {
     return {
       version: live.version,
@@ -83,6 +89,7 @@ function resolveRelease(live: LiveRelease | null, soporte: string): Release {
       downloadAvailable: Boolean(live.url),
       live: true,
       soporte: soporte || live.soporte || SOPORTE_FALLBACK,
+      resolved,
     }
   }
 
@@ -94,14 +101,16 @@ function resolveRelease(live: LiveRelease | null, soporte: string): Release {
     downloadAvailable: product.downloadAvailable,
     live: false,
     soporte: soporte || SOPORTE_FALLBACK,
+    resolved,
   }
 }
 
-const ReleaseContext = createContext<Release>(resolveRelease(null, ""))
+const ReleaseContext = createContext<Release>(resolveRelease(null, "", false))
 
 export function ReleaseProvider({ children }: { children: ReactNode }) {
   const [live, setLive] = useState<LiveRelease | null>(null)
   const [soporte, setSoporte] = useState<string>("")
+  const [resolved, setResolved] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -151,6 +160,11 @@ export function ReleaseProvider({ children }: { children: ReactNode }) {
         )
       } catch {
         // Sin conexión o sin versión publicada: la página sigue con los datos locales.
+      } finally {
+        // Con éxito o error, la primera consulta ya se asentó: los loaders paran.
+        if (alive) {
+          setResolved(true)
+        }
       }
     }
 
@@ -189,7 +203,7 @@ export function ReleaseProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const value = useMemo(() => resolveRelease(live, soporte), [live, soporte])
+  const value = useMemo(() => resolveRelease(live, soporte, resolved), [live, soporte, resolved])
 
   return <ReleaseContext.Provider value={value}>{children}</ReleaseContext.Provider>
 }

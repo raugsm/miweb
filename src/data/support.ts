@@ -14,8 +14,8 @@ export type SupportShortcut = {
 
 export const supportPage = {
   eyebrow: "Soporte",
-  title: "Soporte con tu proveedor",
-  lead: "El canal oficial es el WhatsApp de soporte.",
+  title: "Soporte por WhatsApp, directo",
+  lead: "Accesos, recargas y errores de flasheo. Te responde una persona, no un bot.",
   channelTitle: "Canal oficial",
   channelBody:
     "Escribinos por WhatsApp: ahí se gestionan accesos, recargas de créditos y cualquier problema con la herramienta.",

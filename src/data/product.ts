@@ -42,10 +42,10 @@ export const footerLinks: NavItem[] = [
 export const sessionCta: NavItem = { label: "Iniciar sesión", href: "/cuenta" }
 
 export const heroContent = {
-  kicker: "Security Plugin · Tecno, Infinix e itel",
-  title: "Sacá el Security Plugin y devolvé el equipo libre.",
-  lead: "Ari-Tool quita el bloqueo de administración remota de equipos Tecno, Infinix e itel con MediaTek. La ROM de tu modelo ya viene lista: conectás, flasheás y el equipo vuelve a ser del cliente.",
-  highlights: ["424 modelos en catálogo", "ROM lista para flashear", "Cobertura incluida"],
+  kicker: "Security Plugin + AntiCrack · MediaTek",
+  title: "Sacá el Security Plugin y detectá el AntiCrack.",
+  lead: "Ari-Tool resuelve dos frentes en Tecno, Infinix e itel con MediaTek: saca el bloqueo de administración remota y te reporta el estado del AntiCrack antes de flashear. Conectás por Fastboot, la ROM de tu modelo ya viene lista y el equipo vuelve a ser del cliente.",
+  highlights: ["Security Plugin fuera", "AntiCrack sin sorpresas", "424 modelos, ROM lista"],
   primaryCta: "Descargar para Windows",
   secondaryCta: "Ver el producto",
   trustSuffix: "Windows 10/11",
@@ -53,41 +53,36 @@ export const heroContent = {
 
 export const productSection = {
   eyebrow: "Producto",
-  title: "Una herramienta de escritorio con control total",
-  lead: "Sin preparar firmware ni buscar archivos sueltos: elegís el modelo, la ROM llega lista y la herramienta te guía en cada escritura.",
+  title: "Una sola herramienta, control total",
+  lead: "Todo en una app de escritorio: catálogo listo, proceso guiado y validaciones en cada escritura.",
 }
 
 export const bento = {
-  productCard: {
-    title: "ROM lista",
-    caption:
-      "No tenés que armar el paquete ni conseguir el firmware. Elegís el modelo y la ROM ya viene preparada para escribir.",
-    tableTitle: "Particiones que se escriben",
-    partitions: [
-      { name: "product", size: "", status: "Lista", progress: 100 },
-      { name: "system", size: "", status: "Lista", progress: 100 },
-      { name: "system_ext", size: "", status: "Lista", progress: 100 },
-      { name: "vbmeta", size: "", status: "Verificada", progress: 100 },
-    ],
-  },
-  modelsCard: {
-    kicker: "Compatibilidad",
-    value: "424",
-    unit: "modelos en catálogo",
+  // Tarjeta única: "ROM lista" + "Compatibilidad" fusionadas. La tabla de
+  // particiones se retiró a propósito: nombraba el mecanismo interno que no
+  // debe verse. En su lugar, un lado técnico orientado al cliente.
+  catalogCard: {
+    kicker: "Escritorio · Windows",
+    title: "La ROM de tu modelo, ya viene lista",
+    caption: "Elegís el modelo del catálogo y escribís. Sin buscar archivos ni armar paquetes.",
+    stat: 424,
+    statUnit: "modelos en catálogo",
     brands: ["Infinix", "Tecno", "itel"],
-    // Modelos tomados del catálogo real, no inventados.
-    examplesTitle: "Algunos de los que trabajamos",
+    readoutTitle: "Compatibilidad",
+    mode: "Fastboot",
+    // Modelos 2026 verificados contra el catálogo real, no inventados.
     examples: [
-      "TECNO Spark 20 Pro",
-      "TECNO Camon 40 Pro",
-      "TECNO Pop 4",
+      "Infinix Note 50 Pro+ 5G",
       "Infinix Hot 50 Pro Plus",
-      "Infinix Note 50 Pro",
-      "Infinix Smart 8",
-      "itel A60s",
-      "itel A70",
+      "Infinix Zero 40 5G",
+      "TECNO Camon 40 Premier",
+      "TECNO Camon 40 Pro 5G",
+      "TECNO Spark 50 Pro",
+      "itel A100",
+      "itel A95 5G",
+      "itel City 100",
     ],
-    caption: "Chipset MediaTek · Android 12 al 16. Consultá tu modelo desde la app.",
+    meta: "Chipset MediaTek · Android 12 a 16 · Consultá tu modelo desde la app.",
   },
   controlCard: {
     kicker: "Proceso",

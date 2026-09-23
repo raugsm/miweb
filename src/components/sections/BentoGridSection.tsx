@@ -1,17 +1,22 @@
-﻿import type { ReactNode } from "react"
-import { Check, Cpu, Monitor, ShieldCheck, Smartphone, Usb } from "lucide-react"
+import { useRef, type ReactNode } from "react"
+import { Check, Monitor, ShieldCheck, Smartphone, Usb } from "lucide-react"
 
 import { Container } from "@/components/Container"
+import { CountUp } from "@/components/CountUp"
 import { GridPattern, Kicker, Panel } from "@/components/Panel"
 import { SectionHeading } from "@/components/SectionHeading"
 import { bento, productSection } from "@/data/product"
+import { useInView } from "@/hooks/use-in-view"
 import { cn } from "@/lib/utils"
 
 export function BentoGridSection() {
-  const { productCard, modelsCard, controlCard, warrantyCard } = bento
+  const { catalogCard, controlCard, warrantyCard } = bento
+  const sectionRef = useRef<HTMLElement>(null)
+  const inView = useInView(sectionRef)
 
   return (
     <section
+      ref={sectionRef}
       id="producto"
       aria-labelledby="producto-title"
       className="scroll-mt-20 py-16 sm:py-24"
@@ -25,10 +30,11 @@ export function BentoGridSection() {
         />
 
         <div className="mt-12 grid gap-4 md:grid-cols-3">
-          {/* ROM lista: tabla de particiones */}
-          <Panel as="article" glow className="p-6 sm:p-7 md:col-span-2">
+          {/* Catálogo + ROM lista (tarjeta fusionada, ancho completo) */}
+          <Panel as="article" glow className="p-6 sm:p-7 md:col-span-3">
             <GridPattern />
-            <div className="relative grid gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
+            <div className="relative grid gap-8 lg:grid-cols-[0.85fr_1.15fr] lg:items-center">
+              {/* Izquierda: ROM lista + 424 + marcas */}
               <div className="min-w-0">
                 <div className="flex items-center gap-3">
                   <img
@@ -36,100 +42,71 @@ export function BentoGridSection() {
                     alt=""
                     width={169}
                     height={112}
- loading="lazy"
- decoding="async"
+                    loading="lazy"
+                    decoding="async"
                     className="h-7 w-auto object-contain"
                   />
-                  <Kicker>Escritorio · Windows</Kicker>
+                  <Kicker>{catalogCard.kicker}</Kicker>
                 </div>
                 <h3 className="mt-6 font-display text-2xl font-extrabold tracking-[0.02em] text-foreground uppercase">
-                  {productCard.title}
+                  {catalogCard.title}
                 </h3>
                 <p className="mt-3 max-w-sm text-sm leading-relaxed text-foreground/60">
-                  {productCard.caption}
+                  {catalogCard.caption}
                 </p>
-              </div>
 
-              <div className="min-w-0 rounded-xl border border-line bg-foreground/[0.03] p-4 dark:bg-[#0b0c10]/90">
-                <div className="flex items-center justify-between gap-4">
-                  <Kicker className="text-foreground/45">{productCard.tableTitle}</Kicker>
-                  <span className="inline-flex items-center gap-1.5 font-display text-[10px] font-bold tracking-[0.2em] text-cyan uppercase">
-                    <span className="size-1.5 rounded-full bg-cyan shadow-[0_0_8px_#7dd3fc]" />
-                    Fastboot
-                  </span>
+                <div className="mt-7 flex items-end gap-4">
+                  <CountUp
+                    target={catalogCard.stat}
+                    run={inView}
+                    className="bg-[linear-gradient(140deg,var(--foreground),#4d8dff)] bg-clip-text font-display text-6xl leading-none font-extrabold tracking-tight text-transparent tabular-nums [-webkit-background-clip:text] sm:text-7xl"
+                  />
+                  <p className="max-w-[7rem] pb-1.5 font-display text-[11px] font-bold tracking-[0.2em] text-foreground/50 uppercase">
+                    {catalogCard.statUnit}
+                  </p>
                 </div>
-                <ul className="mt-4 space-y-2.5">
-                  {productCard.partitions.map((partition) => (
-                    <li key={partition.name} className="grid grid-cols-[4.5rem_1fr_auto] items-center gap-3">
-                      <span className="truncate font-mono text-xs text-foreground/80">
-                        {partition.name}
-                      </span>
-                      <span className="h-1.5 overflow-hidden rounded-full bg-foreground/[0.07]">
-                        <span
-                          className={cn(
-                            "block h-full rounded-full bg-gradient-to-r from-cobalt to-[#4d8dff]",
-                            partition.progress < 100 && "animate-pulse"
-                          )}
-                          style={{ width: `${partition.progress}%` }}
-                        />
-                      </span>
-                      <span className="flex items-center gap-2 text-right">
-                        <span className="hidden font-mono text-[11px] text-foreground/35 sm:inline">
-                          {partition.size}
-                        </span>
-                        <span
-                          className={cn(
-                            "inline-flex h-5 min-w-[5.5rem] items-center justify-center rounded-full border px-2 font-display text-[9px] font-bold tracking-[0.16em] uppercase",
-                            partition.progress < 100
-                              ? "border-line text-foreground/45"
-                              : "border-cobalt/40 bg-cobalt/15 text-kicker"
-                          )}
-                        >
-                          {partition.status}
-                        </span>
-                      </span>
+
+                <ul className="mt-5 flex flex-wrap gap-2">
+                  {catalogCard.brands.map((brand) => (
+                    <li
+                      key={brand}
+                      className="inline-flex h-7 items-center rounded-full border border-line bg-foreground/[0.03] px-3 font-display text-[10px] font-bold tracking-[0.18em] text-foreground/80 uppercase"
+                    >
+                      {brand}
                     </li>
                   ))}
                 </ul>
               </div>
-            </div>
-          </Panel>
 
-          {/* Compatibilidad */}
-          <Panel as="article" className="flex flex-col p-6 sm:p-7">
-            <div className="flex items-center justify-between gap-3">
-              <Kicker>{modelsCard.kicker}</Kicker>
-              <Cpu aria-hidden="true" className="size-4 text-foreground/35" />
+              {/* Derecha: lectura de compatibilidad (reemplaza la tabla de particiones) */}
+              <div className="min-w-0 rounded-xl border border-line bg-foreground/[0.03] p-4 dark:bg-[#0b0c10]/90 sm:p-5">
+                <div className="flex items-center justify-between gap-4">
+                  <Kicker className="text-foreground/45">{catalogCard.readoutTitle}</Kicker>
+                  <span className="inline-flex items-center gap-1.5 font-display text-[10px] font-bold tracking-[0.2em] text-cyan uppercase">
+                    <span className="size-1.5 rounded-full bg-cyan shadow-[0_0_8px_#7dd3fc]" />
+                    {catalogCard.mode}
+                  </span>
+                </div>
+                <ul className="mt-4 grid grid-cols-1 gap-x-5 gap-y-2 sm:grid-cols-2">
+                  {catalogCard.examples.map((modelo) => (
+                    <li
+                      key={modelo}
+                      className="flex items-center gap-2 text-[13px] leading-tight text-foreground/70"
+                    >
+                      <Check
+                        aria-hidden="true"
+                        className="size-3.5 shrink-0 text-cobalt/70"
+                        strokeWidth={2.5}
+                      />
+                      <span className="truncate">{modelo}</span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-4 border-t border-line pt-3 text-xs leading-relaxed text-foreground/50">
+                  {catalogCard.meta}
+                </p>
+              </div>
             </div>
-            <p className="mt-auto pt-10 font-display text-6xl leading-none font-extrabold tracking-tight text-foreground sm:text-7xl">
-              {modelsCard.value}
-            </p>
-            <p className="mt-3 font-display text-[11px] font-bold tracking-[0.22em] text-foreground/50 uppercase">
-              {modelsCard.unit}
-            </p>
-            <ul className="mt-5 flex flex-wrap gap-2">
-              {modelsCard.brands.map((brand) => (
-                <li
-                  key={brand}
-                  className="inline-flex h-7 items-center rounded-full border border-line bg-foreground/[0.03] px-3 font-display text-[10px] font-bold tracking-[0.18em] text-foreground/80 uppercase"
-                >
-                  {brand}
-                </li>
-              ))}
-            </ul>
-            <div className="mt-5 border-t border-line pt-4">
-              <p className="font-display text-[10px] font-bold tracking-[0.2em] text-foreground/40 uppercase">
-                {modelsCard.examplesTitle}
-              </p>
-              <ul className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1.5">
-                {modelsCard.examples.map((modelo) => (
-                  <li key={modelo} className="text-[13px] text-foreground/65">
-                    {modelo}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <p className="mt-4 text-sm text-foreground/55">{modelsCard.caption}</p>
           </Panel>
 
           {/* Control de cada fase */}

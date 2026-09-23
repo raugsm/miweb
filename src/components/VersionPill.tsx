@@ -27,7 +27,18 @@ export function VersionPill({ tone = "dark", label, className }: VersionPillProp
           tone === "light" ? "bg-cobalt" : "bg-cyan"
         )}
       />
-      {label ?? release.versionLabel}
+      {label ?? (release.resolved ? (
+        release.versionLabel
+      ) : (
+        // Reserva el ancho para que el pill no salte al llegar la versión real.
+        <span
+          aria-hidden="true"
+          className={cn(
+            "inline-block h-3 w-12 animate-pulse rounded-full",
+            tone === "light" ? "bg-black/10" : "bg-foreground/15"
+          )}
+        />
+      ))}
     </span>
   )
 }

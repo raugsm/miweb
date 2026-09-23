@@ -57,7 +57,10 @@ export function Hero() {
               {heroContent.title}
             </h1>
 
-            <p className="mt-6 max-w-2xl text-[13px] leading-[1.8] font-semibold tracking-[0.08em] text-pretty text-foreground/70 uppercase sm:text-sm">
+            {/* Sentence case a propósito: un párrafo largo en mayúsculas se lee
+                mal y da aire de plantilla. El uppercase queda solo en el
+                kicker, el título y los chips. */}
+            <p className="mt-6 max-w-xl font-sans text-sm leading-relaxed text-pretty text-foreground/70 sm:text-[15px]">
               {heroContent.lead}
             </p>
 

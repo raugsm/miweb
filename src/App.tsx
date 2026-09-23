@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react"
+import { lazy } from "react"
 import { BrowserRouter, Route, Routes } from "react-router-dom"
 
 import { RootLayout } from "@/components/layout/RootLayout"
@@ -27,18 +27,16 @@ export default function App() {
   return (
     <ReleaseProvider>
       <BrowserRouter>
-        <Suspense fallback={<div className="min-h-[60vh]" aria-busy="true" />}>
-          <Routes>
-            <Route element={<RootLayout />}>
-              <Route index element={<HomePage />} />
-              <Route path="cuenta" element={<AccountPage />} />
-              <Route path="gsm" element={<GsmLandingPage />} />
-              <Route path="cliente" element={<PortalPage />} />
-              <Route path="panel" element={<DashboardPage />} />
-              <Route path="*" element={<NotFoundPage />} />
-            </Route>
-          </Routes>
-        </Suspense>
+        <Routes>
+          <Route element={<RootLayout />}>
+            <Route index element={<HomePage />} />
+            <Route path="cuenta" element={<AccountPage />} />
+            <Route path="gsm" element={<GsmLandingPage />} />
+            <Route path="cliente" element={<PortalPage />} />
+            <Route path="panel" element={<DashboardPage />} />
+            <Route path="*" element={<NotFoundPage />} />
+          </Route>
+        </Routes>
       </BrowserRouter>
     </ReleaseProvider>
   )
