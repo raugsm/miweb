@@ -12,7 +12,8 @@
     <link rel="preload" href="/fonts/montserrat-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/mano-garantia.avif" as="image" fetchpriority="high" />
-    <link rel="preload" href="/world-map.svg" as="image" />
+    <!-- El mapa de partículas del fondo es decorativo y lo carga su componente
+         al montarse; precargarlo solo disparaba el aviso "preload sin usar". -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0B0B0C" />
     <meta
