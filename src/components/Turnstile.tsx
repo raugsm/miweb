@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 
+import { useTheme } from "@/lib/theme"
+
 /**
  * Recuadro anti-robot de Cloudflare (Turnstile).
  *
@@ -77,6 +79,9 @@ export function Turnstile({ onToken, onVencido }: TurnstileProps) {
   // bloqueador, un corte de red o un dominio sin registrar, y cada uno se
   // arregla distinto.
   const [falla, setFalla] = useState<string | null>(null)
+  // "auto" se guia por el sistema operativo, no por el tema del sitio: sobre
+  // la tarjeta oscura salia un recuadro blanco. Se le pasa el tema nuestro.
+  const { theme } = useTheme()
   // En refs para que volver a dibujar el formulario no rehaga el recuadro:
   // cada dibujado nuevo pierde el vale que el visitante ya había conseguido.
   const alToken = useRef(onToken)
@@ -93,7 +98,7 @@ export function Turnstile({ onToken, onVencido }: TurnstileProps) {
         if (!vivo || !caja.current || !window.turnstile) return
         id = window.turnstile.render(caja.current, {
           sitekey: TURNSTILE_SITE_KEY,
-          theme: "auto",
+          theme,
           language: "es",
           callback: (token) => {
             setFalla(null)
@@ -123,7 +128,7 @@ export function Turnstile({ onToken, onVencido }: TurnstileProps) {
         }
       }
     }
-  }, [])
+  }, [theme])
 
   return (
     <div className="mt-5">
