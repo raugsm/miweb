@@ -4,7 +4,7 @@ import { Menu, Moon, Sun } from "lucide-react"
 
 import { Container } from "@/components/Container"
 import { Button } from "@/components/ui/button"
-import { crossNav, mainNav, product, sessionCta } from "@/data/product"
+import { crossNav, downloadNav, mainNav, product, sessionCta } from "@/data/product"
 import { useScrollSpy } from "@/hooks/use-scroll-spy"
 import { useTheme } from "@/lib/theme"
 import { cn } from "@/lib/utils"
@@ -24,12 +24,17 @@ export function SiteHeader() {
   // "Dónde estoy": en la portada lo dice el scroll (scrollspy); en /gsm, la ruta.
   const { pathname, hash } = useLocation()
   const onHome = pathname === "/"
-  const spy = useScrollSpy(["producto", "guia", "soporte"], onHome)
+  const spy = useScrollSpy(
+    ["producto", "caracteristicas", "dispositivos", "precios", "guia", "faq", "soporte"],
+    onHome
+  )
   const activeSection = onHome
     ? spy ?? (hash ? hash.slice(1) : null)
     : pathname.startsWith("/gsm")
       ? "gsm"
-      : null
+      : pathname.startsWith("/descargas")
+        ? "descargas"
+        : null
 
   function openMenu() {
     setMenuRequested(true)
@@ -84,6 +89,26 @@ export function SiteHeader() {
               </Link>
             )
           })}
+
+          <Link
+            to={downloadNav.href}
+            aria-current={activeSection === "descargas" ? "page" : undefined}
+            className={cn(
+              "group relative rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
+              activeSection === "descargas"
+                ? "text-foreground"
+                : "text-foreground/65 hover:text-foreground"
+            )}
+          >
+            {downloadNav.label}
+            <span
+              aria-hidden="true"
+              className={cn(
+                "pointer-events-none absolute inset-x-3 -bottom-px h-0.5 origin-left rounded-full bg-gradient-to-r from-cobalt to-cyan transition-transform duration-300",
+                activeSection === "descargas" ? "scale-x-100" : "scale-x-0 group-hover:scale-x-100"
+              )}
+            />
+          </Link>
 
           <span aria-hidden="true" className="mx-2 h-4 w-px bg-line" />
 

@@ -1,8 +1,20 @@
-﻿import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { Download, LifeBuoy, RefreshCw, Wallet } from "lucide-react"
+import {
+  Activity,
+  Download,
+  HelpCircle,
+  LifeBuoy,
+  RefreshCw,
+  ShieldCheck,
+  TrendingDown,
+  TrendingUp,
+  Wallet,
+} from "lucide-react"
 
 import { Container } from "@/components/Container"
+import { OnboardingTour, type TourStep } from "@/components/OnboardingTour"
+import { RecargaBinance } from "@/components/RecargaBinance"
 import { SearchableSelect } from "@/components/SearchableSelect"
 import { Button } from "@/components/ui/button"
 import { PAISES } from "@/data/paises"
@@ -11,6 +23,41 @@ import { supabase } from "@/lib/supabase"
 
 const inputClass =
   "mt-1 h-11 w-full rounded-lg border border-line bg-field px-3 text-sm text-foreground placeholder:text-foreground/30 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+
+const TOUR_KEY = "ariad-tour-panel-v1"
+
+const tourSteps: TourStep[] = [
+  {
+    id: "tour-saldo",
+    title: "Tus créditos",
+    body: "Este es tu saldo. Cada proceso descuenta créditos: 1 crédito = 1 proceso = $1. Sin créditos no se puede iniciar un proceso.",
+  },
+  {
+    id: "tour-recargar",
+    title: "Recargá al instante",
+    body: "Pagás con Binance Pay: te damos el monto exacto y un código, pagás desde tu Binance y los créditos entran solos, sin avisar a nadie.",
+  },
+  {
+    id: "tour-descargar",
+    title: "Descargá la app",
+    body: "Bajá Ari-Tool para Windows: es el programa donde hacés los procesos (remover Security Plugin y AntiCrack).",
+  },
+  {
+    id: "tour-stats",
+    title: "Tu resumen",
+    body: "De un vistazo: procesos hechos, créditos usados, créditos cargados y el estado de tu cuenta.",
+  },
+  {
+    id: "tour-pasos",
+    title: "Cómo se trabaja",
+    body: "En la app: elegí el modelo, confirmá y flasheá. La ROM de tu modelo ya viene lista; el crédito se descuenta al terminar.",
+  },
+  {
+    id: "tour-historial",
+    title: "Tu historial",
+    body: "Cada recarga y cada proceso quedan registrados acá, con fecha y detalle. Así siempre sabés en qué anda tu cuenta.",
+  },
+]
 
 function fmtFecha(iso: string): string {
   try {
@@ -64,6 +111,34 @@ function Badge({ className, children }: { className: string; children: React.Rea
   )
 }
 
+// Tarjeta de estadística con ícono y micro-interacción al pasar el cursor.
+function StatCard({
+  icon,
+  label,
+  value,
+  hint,
+  valueClass = "text-foreground",
+}: {
+  icon: React.ReactNode
+  label: string
+  value: React.ReactNode
+  hint: string
+  valueClass?: string
+}) {
+  return (
+    <div className="group rounded-2xl border border-line bg-card p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition-[transform,border-color] duration-300 hover:-translate-y-0.5 hover:border-cobalt/40">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-medium tracking-[0.14em] text-foreground/45 uppercase">{label}</p>
+        <span className="flex size-8 items-center justify-center rounded-lg border border-line bg-field text-foreground/50 transition-colors group-hover:text-cyan">
+          {icon}
+        </span>
+      </div>
+      <p className={`mt-2 text-3xl font-semibold tracking-tight ${valueClass}`}>{value}</p>
+      <p className="mt-1 text-xs text-foreground/45">{hint}</p>
+    </div>
+  )
+}
+
 export function DashboardPage() {
   const nav = useNavigate()
   const [cargando, setCargando] = useState(true)
@@ -74,6 +149,9 @@ export function DashboardPage() {
   const [nombreC, setNombreC] = useState("")
   const [paisC, setPaisC] = useState("PE")
   const [creando, setCreando] = useState(false)
+  const [jwt, setJwt] = useState("")
+  const [recarga, setRecarga] = useState(false)
+  const [tour, setTour] = useState(false)
 
   const cargar = useCallback(async () => {
     setCargando(true)
@@ -85,6 +163,7 @@ export function DashboardPage() {
         return
       }
       setCorreo(ses.user.email ?? "")
+      setJwt(ses.access_token)
       const r = await resumenCliente(ses.access_token)
       if (r.ok && r.data) {
         setDatos(r.data)
@@ -119,6 +198,36 @@ export function DashboardPage() {
     void cargar()
   }, [cargar])
 
+  // Tutorial automático SOLO la primera vez que un técnico entra a su panel.
+  // Se marca como visto AL ABRIRLO (no al cerrarlo): así nunca reaparece solo,
+  // ni aunque recargue la página o vuelva a entrar. El ref evita repetirlo dentro
+  // de la misma sesión aunque los datos se recarguen (Actualizar, recarga, etc.).
+  // Para verlo de nuevo cuando quiera, está el botón "Ver tutorial".
+  const tourAuto = useRef(false)
+  useEffect(() => {
+    if (modo !== "datos" || error || cargando || !datos) return
+    if (tourAuto.current) return
+    let vista = false
+    try {
+      vista = Boolean(localStorage.getItem(TOUR_KEY))
+    } catch {
+      vista = false
+    }
+    if (vista) return
+    tourAuto.current = true
+    try {
+      localStorage.setItem(TOUR_KEY, "1")
+    } catch {
+      /* sin persistencia: el ref igual evita repetirlo en esta sesión */
+    }
+    const t = window.setTimeout(() => setTour(true), 700)
+    return () => window.clearTimeout(t)
+  }, [modo, error, cargando, datos])
+
+  function cerrarTour() {
+    setTour(false)
+  }
+
   async function salir() {
     await supabase.auth.signOut()
     nav("/cuenta")
@@ -145,19 +254,26 @@ export function DashboardPage() {
   }
 
   const wsp = datos?.parametros?.soporte_whatsapp ?? ""
-  const costo = datos?.parametros?.credito_por_tramite ?? "5"
+  const costo = datos?.parametros?.credito_por_tramite ?? "1"
   const precio = datos?.parametros?.precio_credito_usd ?? "1"
   const saldo = datos?.saldo ?? 0
-  const costoNum = parseInt(costo, 10) || 5
+  const costoNum = parseInt(costo, 10) || 1
   const alcanza = saldo >= costoNum
+  const procesosPosibles = Math.floor(saldo / costoNum)
   const totales = datos?.totales ?? { procesos: 0, consumidos: 0, recargados: 0 }
+  const cred = (n: number) => (n === 1 ? "crédito" : "créditos")
+  const proc = (n: number) => (n === 1 ? "proceso" : "procesos")
 
   return (
     <>
-      <section className="border-b border-line bg-carbon/40 py-12 sm:py-16">
+      <section className="relative overflow-hidden border-b border-line bg-carbon/40 py-12 sm:py-16">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -top-24 right-0 h-64 w-96 rounded-full bg-[radial-gradient(closest-side,rgba(0,82,212,0.16),transparent)]"
+        />
         <Container>
           <div className="flex flex-wrap items-end justify-between gap-4">
-            <div className="min-w-0">
+            <div className="min-w-0 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2 motion-safe:duration-500">
               <p className="text-xs font-medium tracking-[0.2em] text-foreground/45 uppercase">
                 Mi panel
               </p>
@@ -167,6 +283,17 @@ export function DashboardPage() {
               {correo ? <p className="mt-2 text-sm text-foreground/55">{correo}</p> : null}
             </div>
             <div className="flex flex-wrap gap-2">
+              {modo === "datos" && !error ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-10 rounded-lg border-line bg-transparent text-foreground hover:border-cobalt/40 hover:bg-foreground/[0.04]"
+                  onClick={() => setTour(true)}
+                >
+                  <HelpCircle aria-hidden="true" className="size-4" />
+                  Ver tutorial
+                </Button>
+              ) : null}
               <Button
                 type="button"
                 variant="outline"
@@ -174,7 +301,7 @@ export function DashboardPage() {
                 onClick={() => void cargar()}
                 disabled={cargando}
               >
-                <RefreshCw aria-hidden="true" className="size-4" />
+                <RefreshCw aria-hidden="true" className={`size-4 ${cargando ? "animate-spin" : ""}`} />
                 {cargando ? "Actualizando…" : "Actualizar"}
               </Button>
               <Button
@@ -193,7 +320,7 @@ export function DashboardPage() {
       <section className="py-12 sm:py-16">
         <Container>
           {modo === "completar" ? (
-            <div className="mx-auto max-w-xl rounded-2xl border border-line bg-carbon p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+            <div className="mx-auto max-w-xl rounded-2xl border border-line bg-card p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
               <h2 className="text-base font-semibold tracking-tight text-foreground">
                 Completá tu registro
               </h2>
@@ -231,7 +358,7 @@ export function DashboardPage() {
               </Button>
             </div>
           ) : error === "sin_cuenta" ? (
-            <div className="mx-auto max-w-xl rounded-2xl border border-line bg-carbon p-6">
+            <div className="mx-auto max-w-xl rounded-2xl border border-line bg-card p-6">
               <h2 className="text-base font-semibold tracking-tight text-foreground">
                 Tu cuenta todavía no está activa
               </h2>
@@ -248,7 +375,7 @@ export function DashboardPage() {
               ) : null}
             </div>
           ) : error === "conexion" ? (
-            <div className="mx-auto max-w-xl rounded-2xl border border-line bg-carbon p-6">
+            <div className="mx-auto max-w-xl rounded-2xl border border-line bg-card p-6">
               <h2 className="text-base font-semibold tracking-tight text-foreground">
                 No se pudo cargar tu panel
               </h2>
@@ -264,85 +391,104 @@ export function DashboardPage() {
               </Button>
             </div>
           ) : (
-            <>
+            <div className="motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-3 motion-safe:duration-500">
               {/* SALDO + ACCIONES */}
               <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
-                <div className="relative overflow-hidden rounded-2xl border border-cobalt/25 bg-[linear-gradient(135deg,#E8F0FC_0%,#F4F8FE_60%,#EEF3FB_100%)] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] dark:border-[#2C4A78] dark:bg-[linear-gradient(135deg,#10203C_0%,#0A1424_60%,#0C1626_100%)]">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
+                <div
+                  id="tour-saldo"
+                  className="relative overflow-hidden rounded-2xl border border-cobalt/25 bg-[linear-gradient(135deg,#E8F0FC_0%,#F4F8FE_60%,#EEF3FB_100%)] p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] dark:border-[#2C4A78] dark:bg-[linear-gradient(135deg,#10203C_0%,#0A1424_60%,#0C1626_100%)]"
+                >
+                  <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute -top-16 -right-10 h-48 w-48 rounded-full bg-[radial-gradient(closest-side,rgba(0,82,212,0.35),transparent)]"
+                  />
+                  <div className="relative flex items-start justify-between gap-4">
+                    <div className="min-w-0">
                       <p className="text-xs font-medium tracking-[0.2em] text-cobalt uppercase dark:text-[#7FB3FF]">
                         Créditos disponibles
                       </p>
-                      <p className="mt-2 text-5xl font-semibold tracking-tight text-[#0A1424] dark:text-white">
+                      <p className="mt-2 text-5xl font-semibold tracking-tight text-[#0A1424] tabular-nums dark:text-white">
                         {cargando && !datos ? "—" : saldo}
                       </p>
                       <p className="mt-3 text-sm leading-relaxed text-[#26354F]/70 dark:text-white/65">
-                        {precio} USD por crédito · cada proceso cuesta {costo} créditos ($
+                        {precio} USD por crédito · cada proceso cuesta {costoNum} {cred(costoNum)} ($
                         {(Number(precio) * costoNum).toFixed(0)}).
                       </p>
                       <p className={`mt-2 text-sm font-medium ${alcanza ? "text-[#0E7A4C] dark:text-[#7CE6B4]" : "text-[#B42318] dark:text-[#F0A49D]"}`}>
                         {alcanza
-                          ? `Tenés para ${Math.floor(saldo / costoNum)} proceso${Math.floor(saldo / costoNum) === 1 ? "" : "s"}.`
-                          : `Te faltan ${costoNum - saldo} crédito${costoNum - saldo === 1 ? "" : "s"} para tu próximo proceso.`}
+                          ? `Tenés para ${procesosPosibles} ${proc(procesosPosibles)}.`
+                          : `Te faltan ${costoNum - saldo} ${cred(costoNum - saldo)} para tu próximo proceso.`}
                       </p>
                     </div>
                     <span className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-cobalt/25 bg-cobalt/10 text-cobalt dark:border-[#2C4A78] dark:bg-[#0E1B30] dark:text-[#7FB3FF]">
                       <Wallet aria-hidden="true" className="size-5" />
                     </span>
                   </div>
-                  {wsp ? (
-                    <div className="mt-5 flex flex-wrap gap-2">
-                      <Button asChild className="h-10 rounded-lg font-medium">
-                        <a href={wsp} target="_blank" rel="noreferrer">
-                          Recargar por WhatsApp
-                        </a>
-                      </Button>
+                  <div className="relative mt-5 flex flex-wrap gap-2">
+                    <Button
+                      id="tour-recargar"
+                      type="button"
+                      className="h-10 rounded-lg font-medium hover:bg-cobalt-deep"
+                      onClick={() => setRecarga(true)}
+                    >
+                      <span aria-hidden="true" className="text-base leading-none">◈</span>
+                      Recargar con Binance Pay
+                    </Button>
+                    {wsp ? (
                       <Button
                         asChild
                         variant="outline"
                         className="h-10 rounded-lg border-line bg-transparent text-foreground hover:border-foreground/30 hover:bg-foreground/[0.04]"
                       >
-                        <a href="/">
-                          <Download aria-hidden="true" className="size-4" />
-                          Descargar app
+                        <a href={wsp} target="_blank" rel="noreferrer">
+                          Recargar por WhatsApp
                         </a>
                       </Button>
-                    </div>
-                  ) : null}
+                    ) : null}
+                    <Button
+                      id="tour-descargar"
+                      asChild
+                      variant="outline"
+                      className="h-10 rounded-lg border-line bg-transparent text-foreground hover:border-foreground/30 hover:bg-foreground/[0.04]"
+                    >
+                      <a href="/descargas">
+                        <Download aria-hidden="true" className="size-4" />
+                        Descargar app
+                      </a>
+                    </Button>
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="rounded-2xl border border-line bg-carbon p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
-                    <p className="text-xs font-medium tracking-[0.14em] text-foreground/45 uppercase">
-                      Procesos
-                    </p>
-                    <p className="mt-2 text-3xl font-semibold tracking-tight text-foreground">
-                      {totales.procesos}
-                    </p>
-                    <p className="mt-1 text-xs text-foreground/45">realizados en total</p>
-                  </div>
-                  <div className="rounded-2xl border border-line bg-carbon p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
-                    <p className="text-xs font-medium tracking-[0.14em] text-foreground/45 uppercase">
-                      Consumidos
-                    </p>
-                    <p className="mt-2 text-3xl font-semibold tracking-tight text-[#F0C97D]">
-                      {totales.consumidos}
-                    </p>
-                    <p className="mt-1 text-xs text-foreground/45">créditos usados</p>
-                  </div>
-                  <div className="rounded-2xl border border-line bg-carbon p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
-                    <p className="text-xs font-medium tracking-[0.14em] text-foreground/45 uppercase">
-                      Recargados
-                    </p>
-                    <p className="mt-2 text-3xl font-semibold tracking-tight text-[#7CE6B4]">
-                      {totales.recargados}
-                    </p>
-                    <p className="mt-1 text-xs text-foreground/45">créditos cargados</p>
-                  </div>
-                  <div className="rounded-2xl border border-line bg-carbon p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
-                    <p className="text-xs font-medium tracking-[0.14em] text-foreground/45 uppercase">
-                      Estado
-                    </p>
+                <div id="tour-stats" className="grid grid-cols-2 gap-4">
+                  <StatCard
+                    icon={<Activity aria-hidden="true" className="size-4" />}
+                    label="Procesos"
+                    value={totales.procesos}
+                    hint="realizados en total"
+                  />
+                  <StatCard
+                    icon={<TrendingDown aria-hidden="true" className="size-4" />}
+                    label="Consumidos"
+                    value={totales.consumidos}
+                    hint="créditos usados"
+                    valueClass="text-[#F0C97D]"
+                  />
+                  <StatCard
+                    icon={<TrendingUp aria-hidden="true" className="size-4" />}
+                    label="Recargados"
+                    value={totales.recargados}
+                    hint="créditos cargados"
+                    valueClass="text-[#7CE6B4]"
+                  />
+                  <div className="group rounded-2xl border border-line bg-card p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition-[transform,border-color] duration-300 hover:-translate-y-0.5 hover:border-cobalt/40">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-medium tracking-[0.14em] text-foreground/45 uppercase">
+                        Estado
+                      </p>
+                      <span className="flex size-8 items-center justify-center rounded-lg border border-line bg-field text-foreground/50 transition-colors group-hover:text-cyan">
+                        <ShieldCheck aria-hidden="true" className="size-4" />
+                      </span>
+                    </div>
                     <p className="mt-3">
                       <Badge className="border-[#1C5A44] bg-[#0F2E24] text-[#7CE6B4]">Activa</Badge>
                     </p>
@@ -352,13 +498,16 @@ export function DashboardPage() {
               </div>
 
               {/* CÓMO FUNCIONA */}
-              <div className="mt-4 grid gap-4 sm:grid-cols-3">
+              <div id="tour-pasos" className="mt-4 grid gap-4 sm:grid-cols-3">
                 {[
                   { n: "1", t: "Elegí el modelo", d: "Conectá el equipo en fastboot: la app lo detecta solo." },
                   { n: "2", t: "Confirmá", d: "La ROM de tu modelo ya viene lista (descuenta los créditos del proceso)." },
                   { n: "3", t: "Flasheá", d: "Flasheo guiado paso a paso, con verificación final." },
                 ].map((p) => (
-                  <div key={p.n} className="flex items-start gap-3 rounded-2xl border border-line bg-carbon p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+                  <div
+                    key={p.n}
+                    className="flex items-start gap-3 rounded-2xl border border-line bg-card p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition-[transform,border-color] duration-300 hover:-translate-y-0.5 hover:border-cobalt/40"
+                  >
                     <span className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-[#2A4C86] bg-[#14213C] text-sm font-semibold text-[#A9C8F7]">
                       {p.n}
                     </span>
@@ -371,8 +520,8 @@ export function DashboardPage() {
               </div>
 
               {/* TABLAS */}
-              <div className="mt-8 grid gap-4 lg:grid-cols-2">
-                <div className="rounded-2xl border border-line bg-carbon p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+              <div id="tour-historial" className="mt-8 grid gap-4 lg:grid-cols-2">
+                <div className="rounded-2xl border border-line bg-card p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
                   <div className="flex items-center justify-between gap-3">
                     <h2 className="text-base font-semibold tracking-tight text-foreground">
                       Últimos movimientos
@@ -425,7 +574,7 @@ export function DashboardPage() {
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-line bg-carbon p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+                <div className="rounded-2xl border border-line bg-card p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
                   <div className="flex items-center justify-between gap-3">
                     <h2 className="text-base font-semibold tracking-tight text-foreground">
                       Últimos procesos
@@ -475,7 +624,7 @@ export function DashboardPage() {
               </div>
 
               {/* SOPORTE */}
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-line bg-carbon p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-line bg-card p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
                 <div className="flex items-center gap-3">
                   <span className="flex size-9 items-center justify-center rounded-lg border border-line bg-field text-cyan">
                     <LifeBuoy aria-hidden="true" className="size-4" />
@@ -496,10 +645,20 @@ export function DashboardPage() {
                   </Button>
                 ) : null}
               </div>
-            </>
+            </div>
           )}
         </Container>
       </section>
+
+      {recarga && jwt ? (
+        <RecargaBinance
+          jwt={jwt}
+          onClose={() => setRecarga(false)}
+          onConfirmado={() => void cargar()}
+        />
+      ) : null}
+
+      <OnboardingTour steps={tourSteps} open={tour} onClose={cerrarTour} />
     </>
   )
 }

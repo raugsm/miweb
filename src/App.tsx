@@ -26,6 +26,10 @@ const NotFoundPage = lazy(() =>
 const LegalPage = lazy(() =>
   import("@/pages/LegalPage").then((m) => ({ default: m.LegalPage }))
 )
+// Descarga: última versión (en vivo) + changelog.
+const DownloadPage = lazy(() =>
+  import("@/pages/DownloadPage").then((m) => ({ default: m.DownloadPage }))
+)
 
 export default function App() {
   return (
@@ -38,6 +42,7 @@ export default function App() {
             <Route path="gsm" element={<GsmLandingPage />} />
             <Route path="cliente" element={<PortalPage />} />
             <Route path="panel" element={<DashboardPage />} />
+            <Route path="descargas" element={<DownloadPage />} />
             <Route path="legal" element={<LegalPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Route>

@@ -103,3 +103,38 @@ export function confirmar(jwt: string) {
 export function completarCuenta(jwt: string, nombre: string, pais: string) {
   return edge<{ estado?: string; error?: string }>("cuenta_completar", { nombre, pais }, jwt)
 }
+
+// --- Recarga de créditos con Binance Pay DIRECTO (Binance→Binance de Ariad) ---
+// El técnico paga desde su Binance a la cuenta de Ariad, con MONTO EXACTO y el
+// CÓDIGO en la nota. Un vigía de fondo lee Binance y acredita solo (sin botón de
+// "ya pagué"). Anti-fraude: código único obligatorio + monto exacto + una sola vez.
+
+export type CobroCreado = {
+  cobro_id: string
+  codigo: string // "ARI-XXXX-XXXX" — OBLIGATORIO en la nota del pago
+  monto: string // "1.00" — monto EXACTO en USDT
+  creditos: number
+  vence_en: string
+  destino?: string // ID/alias de Binance Pay de Ariad (a quién pagar)
+  pago_url?: string // link de Binance Pay (para el QR), si está configurado
+  error?: string
+}
+
+export type CobroEstado = {
+  estado: string // creado | confirmado | caducado | ...
+  pagado: boolean
+  codigo?: string
+  monto_unidad?: number
+  vence_en?: string
+  error?: string
+}
+
+/** Crea un cobro de recarga: devuelve monto exacto + código para la nota + destino. */
+export function pagoCobroCrear(jwt: string, creditos: number) {
+  return edge<CobroCreado>("pago_cobro_crear", { creditos }, jwt)
+}
+
+/** Consulta si el cobro ya se confirmó (el vigía lo detecta solo). */
+export function pagoCobroEstado(jwt: string, cobro_id: string) {
+  return edge<CobroEstado>("pago_cobro_estado", { cobro_id }, jwt)
+}
