@@ -37,11 +37,14 @@ export function RecargaBinance({
   jwt,
   onClose,
   onConfirmado,
+  producto = "credito",
 }: {
   jwt: string
   onClose: () => void
   onConfirmado: () => void
+  producto?: "credito" | "licencia"
 }) {
+  const esLicencia = producto === "licencia"
   const [paso, setPaso] = useState<Paso>("elegir")
   const [creditos, setCreditos] = useState(1)
   const [creando, setCreando] = useState(false)
@@ -54,13 +57,15 @@ export function RecargaBinance({
   async function generar() {
     setErr(null)
     const c = Math.trunc(creditos)
-    if (!(c >= 1 && c <= 5000)) {
+    if (!esLicencia && !(c >= 1 && c <= 5000)) {
       setErr("Elegí una cantidad válida (1 a 5000).")
       return
     }
     setCreando(true)
     try {
-      const r = await pagoCobroCrear(jwt, c)
+      const r = esLicencia
+        ? await pagoCobroCrear(jwt, 0, "licencia")
+        : await pagoCobroCrear(jwt, c, "credito")
       if (!r.ok || !r.data || r.data.error || !r.data.cobro_id) {
         setErr("No se pudo generar el pago. Probá de nuevo en un momento.")
         return
@@ -159,48 +164,72 @@ export function RecargaBinance({
             <span className="text-base font-bold">◈</span>
           </span>
           <h2 className="text-base font-semibold tracking-tight text-foreground">
-            Recargar con Binance Pay
+            {esLicencia ? "Comprar licencia — Binance Pay" : "Recargar con Binance Pay"}
           </h2>
         </div>
 
         {paso === "elegir" ? (
           <div className="mt-5">
-            <p className="text-sm leading-relaxed text-foreground/65">
-              Pagás desde tu Binance a la cuenta de Ariad. Se acredita solo cuando el
-              pago llega (no hace falta avisar). 1 crédito = 1 USDT.
-            </p>
-            <label className="mt-5 block text-xs font-medium tracking-[0.14em] text-foreground/45 uppercase">
-              ¿Cuántos créditos?
-            </label>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {PAQUETES.map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => setCreditos(p)}
-                  className={`h-10 min-w-14 rounded-lg border px-3 text-sm font-medium transition-colors ${
-                    creditos === p
-                      ? "border-cobalt bg-cobalt text-white"
-                      : "border-line bg-field text-foreground/70 hover:border-cobalt/40"
-                  }`}
-                >
-                  {p}
-                </button>
-              ))}
-            </div>
-            <div className="mt-3">
-              <input
-                type="number"
-                min={1}
-                max={5000}
-                value={creditos}
-                onChange={(e) => setCreditos(Number(e.target.value))}
-                className="h-11 w-full rounded-lg border border-line bg-field px-3 text-sm text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
-              />
-              <p className="mt-2 text-sm text-foreground/55">
-                Total a pagar: <span className="font-semibold text-foreground">{creditos || 0}.00 USDT</span>
-              </p>
-            </div>
+            {esLicencia ? (
+              <>
+                <p className="text-sm leading-relaxed text-foreground/65">
+                  Pagás desde tu Binance a la cuenta de Ariad. Se activa sola cuando el pago
+                  llega (no hace falta avisar).
+                </p>
+                <div className="mt-5 rounded-xl border border-cobalt/40 bg-cobalt/[0.06] p-4 dark:bg-[#0E1B30]">
+                  <p className="text-xs font-medium tracking-[0.14em] text-cobalt uppercase dark:text-[#7FB3FF]">
+                    Licencia anual
+                  </p>
+                  <p className="mt-1 text-3xl font-semibold tracking-tight text-foreground">
+                    $25 <span className="text-sm font-medium text-foreground/55">/ 1 año</span>
+                  </p>
+                  <ul className="mt-3 space-y-1.5 text-sm text-foreground/70">
+                    <li>· Procesos ilimitados en 1 PC durante 1 año.</li>
+                    <li>· Se ata a tu cuenta y a la PC donde la actives.</li>
+                    <li>· Si ya tenés licencia vigente, se extiende +1 año.</li>
+                  </ul>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-sm leading-relaxed text-foreground/65">
+                  Pagás desde tu Binance a la cuenta de Ariad. Se acredita solo cuando el
+                  pago llega (no hace falta avisar). 1 crédito = 1 USDT.
+                </p>
+                <label className="mt-5 block text-xs font-medium tracking-[0.14em] text-foreground/45 uppercase">
+                  ¿Cuántos créditos?
+                </label>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {PAQUETES.map((p) => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setCreditos(p)}
+                      className={`h-10 min-w-14 rounded-lg border px-3 text-sm font-medium transition-colors ${
+                        creditos === p
+                          ? "border-cobalt bg-cobalt text-white"
+                          : "border-line bg-field text-foreground/70 hover:border-cobalt/40"
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-3">
+                  <input
+                    type="number"
+                    min={1}
+                    max={5000}
+                    value={creditos}
+                    onChange={(e) => setCreditos(Number(e.target.value))}
+                    className="h-11 w-full rounded-lg border border-line bg-field px-3 text-sm text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+                  />
+                  <p className="mt-2 text-sm text-foreground/55">
+                    Total a pagar: <span className="font-semibold text-foreground">{creditos || 0}.00 USDT</span>
+                  </p>
+                </div>
+              </>
+            )}
             {err ? <p className="mt-3 text-sm font-medium text-[#B42318] dark:text-[#F0A49D]">{err}</p> : null}
             <Button
               type="button"
@@ -282,7 +311,9 @@ export function RecargaBinance({
                 cobro.destino ? "Elegí la cuenta de Ariad (arriba) o escaneá el QR." : "Enviá a la cuenta de Ariad de Binance Pay.",
                 `Poné el monto EXACTO: ${cobro.monto} USDT.`,
                 `Pegá el código ${cobro.codigo} en la nota.`,
-                "Confirmá. Los créditos aparecen solos en unos segundos.",
+                esLicencia
+                  ? "Confirmá. La licencia se activa sola en unos segundos."
+                  : "Confirmá. Los créditos aparecen solos en unos segundos.",
               ].map((t, i) => (
                 <li key={i} className="flex items-start gap-2.5">
                   <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md border border-line bg-field text-[11px] font-semibold text-foreground/60">
@@ -316,7 +347,9 @@ export function RecargaBinance({
               ¡Pago confirmado!
             </h3>
             <p className="mt-2 text-sm text-foreground/65">
-              Se acreditaron tus créditos. Ya podés usarlos.
+              {esLicencia
+                ? "Tu licencia quedó activa. Actívala en tu PC desde Ari-Tool y procesás sin gastar créditos."
+                : "Se acreditaron tus créditos. Ya podés usarlos."}
             </p>
             <Button
               type="button"

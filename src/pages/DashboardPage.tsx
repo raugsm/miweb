@@ -151,6 +151,7 @@ export function DashboardPage() {
   const [creando, setCreando] = useState(false)
   const [jwt, setJwt] = useState("")
   const [recarga, setRecarga] = useState(false)
+  const [recargaProducto, setRecargaProducto] = useState<"credito" | "licencia">("credito")
   const [tour, setTour] = useState(false)
 
   const cargar = useCallback(async () => {
@@ -429,10 +430,18 @@ export function DashboardPage() {
                       id="tour-recargar"
                       type="button"
                       className="h-10 rounded-lg font-medium hover:bg-cobalt-deep"
-                      onClick={() => setRecarga(true)}
+                      onClick={() => { setRecargaProducto("credito"); setRecarga(true) }}
                     >
                       <span aria-hidden="true" className="text-base leading-none">◈</span>
                       Recargar con Binance Pay
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="h-10 rounded-lg border-cobalt/40 bg-transparent text-foreground hover:border-cobalt hover:bg-cobalt/[0.06]"
+                      onClick={() => { setRecargaProducto("licencia"); setRecarga(true) }}
+                    >
+                      Licencia anual · $25
                     </Button>
                     {wsp ? (
                       <Button
@@ -653,6 +662,7 @@ export function DashboardPage() {
       {recarga && jwt ? (
         <RecargaBinance
           jwt={jwt}
+          producto={recargaProducto}
           onClose={() => setRecarga(false)}
           onConfirmado={() => void cargar()}
         />

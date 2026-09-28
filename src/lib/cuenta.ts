@@ -112,7 +112,8 @@ export function completarCuenta(jwt: string, nombre: string, pais: string) {
 export type CobroCreado = {
   cobro_id: string
   codigo: string // "ARI-XXXX-XXXX" — OBLIGATORIO en la nota del pago
-  monto: string // "1.00" — monto EXACTO en USDT
+  monto: string // "1.00" créditos o "25.00" licencia — monto EXACTO en USDT
+  producto?: "credito" | "licencia"
   creditos: number
   vence_en: string
   destino?: string // ID/alias de Binance Pay de Ariad (a quién pagar)
@@ -129,9 +130,18 @@ export type CobroEstado = {
   error?: string
 }
 
-/** Crea un cobro de recarga: devuelve monto exacto + código para la nota + destino. */
-export function pagoCobroCrear(jwt: string, creditos: number) {
-  return edge<CobroCreado>("pago_cobro_crear", { creditos }, jwt)
+/**
+ * Crea un cobro con Binance Pay. `producto`:
+ *  - "credito": recarga de `creditos` créditos (1 crédito = 1 USD).
+ *  - "licencia": licencia anual (USD 25); `creditos` se ignora.
+ * Devuelve monto exacto + código para la nota + destino/QR.
+ */
+export function pagoCobroCrear(
+  jwt: string,
+  creditos: number,
+  producto: "credito" | "licencia" = "credito"
+) {
+  return edge<CobroCreado>("pago_cobro_crear", { creditos, producto }, jwt)
 }
 
 /** Consulta si el cobro ya se confirmó (el vigía lo detecta solo). */
