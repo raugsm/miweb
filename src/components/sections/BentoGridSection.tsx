@@ -2,17 +2,14 @@ import { useRef, type ReactNode } from "react"
 import { Check, Monitor, ShieldCheck, Smartphone, Usb } from "lucide-react"
 
 import { Container } from "@/components/Container"
-import { CountUp } from "@/components/CountUp"
 import { GridPattern, Kicker, Panel } from "@/components/Panel"
 import { SectionHeading } from "@/components/SectionHeading"
 import { bento, productSection } from "@/data/product"
-import { useInView } from "@/hooks/use-in-view"
 import { cn } from "@/lib/utils"
 
 export function BentoGridSection() {
   const { catalogCard, controlCard, warrantyCard } = bento
   const sectionRef = useRef<HTMLElement>(null)
-  const inView = useInView(sectionRef)
 
   return (
     <section
@@ -56,11 +53,9 @@ export function BentoGridSection() {
                 </p>
 
                 <div className="mt-7 flex items-end gap-4">
-                  <CountUp
-                    target={catalogCard.stat}
-                    run={inView}
-                    className="bg-[linear-gradient(140deg,var(--foreground),#4d8dff)] bg-clip-text font-display text-6xl leading-none font-extrabold tracking-tight text-transparent tabular-nums [-webkit-background-clip:text] sm:text-7xl"
-                  />
+                  <span className="bg-[linear-gradient(140deg,var(--foreground),#4d8dff)] bg-clip-text font-display text-6xl leading-none font-extrabold tracking-tight text-transparent tabular-nums [-webkit-background-clip:text] sm:text-7xl">
+                    {catalogCard.stat}
+                  </span>
                   <p className="max-w-[7rem] pb-1.5 font-display text-[11px] font-bold tracking-[0.2em] text-foreground/50 uppercase">
                     {catalogCard.statUnit}
                   </p>

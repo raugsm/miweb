@@ -437,8 +437,7 @@ export function DashboardPage() {
                     </Button>
                     <Button
                       type="button"
-                      variant="outline"
-                      className="h-10 rounded-lg border-cobalt/40 bg-transparent text-foreground hover:border-cobalt hover:bg-cobalt/[0.06]"
+                      className="h-10 rounded-lg font-medium hover:bg-cobalt-deep"
                       onClick={() => { setRecargaProducto("licencia"); setRecarga(true) }}
                     >
                       Licencia anual · $25

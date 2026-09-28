@@ -80,14 +80,7 @@ export function PricingSection() {
                     {plan.cta.label}
                   </Button>
                 ) : (
-                  <Button
-                    asChild
-                    variant={plan.featured ? undefined : "outline"}
-                    className={cn(
-                      "mt-7 h-11 rounded-lg font-medium",
-                      !plan.featured && "border-line bg-transparent text-foreground hover:border-foreground/30"
-                    )}
-                  >
+                  <Button asChild className="mt-7 h-11 rounded-lg font-medium hover:bg-cobalt-deep">
                     <Link to={plan.cta.href}>{plan.cta.label}</Link>
                   </Button>
                 )}
