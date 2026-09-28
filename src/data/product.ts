@@ -172,8 +172,8 @@ export const footerContent = {
 }
 
 // ------------------------------------------------------------------
-// PRECIOS · el modelo es pago por uso (créditos) + una licencia futura.
-// 1 crédito = 1 USD = 1 proceso. El cobro se hace recién al terminar.
+// PRECIOS · pago por uso (créditos, 1 = 1 USD = 1 proceso) + licencia anual
+// (USD 25/año: procesos ilimitados en 1 PC). Ambos se pagan con Binance Pay.
 // ------------------------------------------------------------------
 export type PricingPlan = {
   name: string
@@ -214,19 +214,17 @@ export const pricing: {
       cta: { label: "Crear cuenta y recargar", href: "/cuenta" },
     },
     {
-      name: "Licencia",
+      name: "Licencia anual",
       price: "$25",
-      unit: "próximamente",
-      tagline: "Plan por período",
-      badge: "Próximamente",
+      unit: "al año",
+      tagline: "Procesos ilimitados en 1 PC",
       features: [
-        "Un plan por período, pensado para taller.",
-        "Los procesos se siguen pagando con créditos.",
-        "Activación por cuenta.",
-        "Te contamos los detalles cuando esté lista.",
+        "1 año de procesos ilimitados en la PC donde la actives.",
+        "En esa PC no gastás créditos.",
+        "Se paga con Binance Pay y se activa sola.",
+        "Renovable: extiende +1 año.",
       ],
-      cta: { label: "Avisarme", href: "/#soporte" },
-      disabled: true,
+      cta: { label: "Crear cuenta y activar", href: "/cuenta" },
     },
   ],
   note: "Precios en dólares (USDT). El proceso formatea los datos del equipo: respaldá antes de empezar.",
@@ -350,7 +348,7 @@ export const faqs: { eyebrow: string; title: string; lead: string; items: Faq[] 
     },
     {
       q: "¿Puedo cambiar de PC?",
-      a: "Sí, tu cuenta te sigue: entrás desde otra PC con tu correo y contraseña. Pero cambiar de PC no incluye procesos: para procesar seguís necesitando créditos, y cada proceso descuenta créditos de tu saldo.",
+      a: "Sí, tu cuenta te sigue: entrás desde otra PC con tu correo y contraseña. Pero la licencia queda atada a la PC donde la activaste; en una PC distinta (sin licencia ahí) cada proceso cuesta 1 crédito. Los créditos sí te siguen en cualquier PC.",
     },
     {
       q: "¿Cuándo se me cobra un proceso?",
@@ -370,7 +368,7 @@ export const faqs: { eyebrow: string; title: string; lead: string; items: Faq[] 
     },
     {
       q: "¿Cómo funciona la licencia?",
-      a: "Estamos por lanzar una licencia ($25, próximamente). Los procesos se siguen pagando con créditos: la licencia no los reemplaza. Te contamos los detalles cuando esté lista.",
+      a: "La licencia anual cuesta $25 y dura 1 año. Te da procesos ilimitados en 1 PC: en esa PC no gastás créditos. En otra PC (o sin licencia) cada proceso cuesta 1 crédito. Se paga con Binance Pay desde tu panel y se activa en tu PC la primera vez que trabajás.",
     },
   ],
 }
