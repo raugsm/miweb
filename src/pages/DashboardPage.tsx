@@ -15,7 +15,6 @@ import {
 import { Container } from "@/components/Container"
 import { OnboardingTour, type TourStep } from "@/components/OnboardingTour"
 import { RecargaBinance } from "@/components/RecargaBinance"
-import { RecargaYape } from "@/components/RecargaYape"
 import { SearchableSelect } from "@/components/SearchableSelect"
 import { Button } from "@/components/ui/button"
 import { PAISES } from "@/data/paises"
@@ -153,7 +152,6 @@ export function DashboardPage() {
   const [jwt, setJwt] = useState("")
   const [recarga, setRecarga] = useState(false)
   const [recargaProducto, setRecargaProducto] = useState<"credito" | "licencia">("credito")
-  const [recargaMetodo, setRecargaMetodo] = useState<"binance" | "yape">("binance")
   const [tour, setTour] = useState(false)
 
   const cargar = useCallback(async () => {
@@ -432,34 +430,17 @@ export function DashboardPage() {
                       id="tour-recargar"
                       type="button"
                       className="h-10 rounded-lg font-medium hover:bg-cobalt-deep"
-                      onClick={() => { setRecargaMetodo("binance"); setRecargaProducto("credito"); setRecarga(true) }}
+                      onClick={() => { setRecargaProducto("credito"); setRecarga(true) }}
                     >
                       <span aria-hidden="true" className="text-base leading-none">◈</span>
                       Recargar con Binance Pay
                     </Button>
                     <Button
                       type="button"
-                      className="h-10 rounded-lg font-medium text-white hover:opacity-90"
-                      style={{ backgroundColor: "#742384" }}
-                      onClick={() => { setRecargaMetodo("yape"); setRecargaProducto("credito"); setRecarga(true) }}
-                    >
-                      <span aria-hidden="true" className="text-base leading-none font-bold">Y</span>
-                      Recargar con Yape (S/)
-                    </Button>
-                    <Button
-                      type="button"
                       className="h-10 rounded-lg font-medium hover:bg-cobalt-deep"
-                      onClick={() => { setRecargaMetodo("binance"); setRecargaProducto("licencia"); setRecarga(true) }}
+                      onClick={() => { setRecargaProducto("licencia"); setRecarga(true) }}
                     >
                       Licencia anual · $45
-                    </Button>
-                    <Button
-                      type="button"
-                      className="h-10 rounded-lg font-medium text-white hover:opacity-90"
-                      style={{ backgroundColor: "#742384" }}
-                      onClick={() => { setRecargaMetodo("yape"); setRecargaProducto("licencia"); setRecarga(true) }}
-                    >
-                      Licencia con Yape · S/157.50
                     </Button>
                     {wsp ? (
                       <Button
@@ -677,17 +658,8 @@ export function DashboardPage() {
         </Container>
       </section>
 
-      {recarga && jwt && recargaMetodo === "binance" ? (
+      {recarga && jwt ? (
         <RecargaBinance
-          jwt={jwt}
-          producto={recargaProducto}
-          onClose={() => setRecarga(false)}
-          onConfirmado={() => void cargar()}
-        />
-      ) : null}
-
-      {recarga && jwt && recargaMetodo === "yape" ? (
-        <RecargaYape
           jwt={jwt}
           producto={recargaProducto}
           onClose={() => setRecarga(false)}
