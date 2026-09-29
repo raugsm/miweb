@@ -181,7 +181,7 @@ export function RecargaBinance({
                     Licencia anual
                   </p>
                   <p className="mt-1 text-3xl font-semibold tracking-tight text-foreground">
-                    $25 <span className="text-sm font-medium text-foreground/55">/ 1 año</span>
+                    $45 <span className="text-sm font-medium text-foreground/55">/ 1 año</span>
                   </p>
                   <ul className="mt-3 space-y-1.5 text-sm text-foreground/70">
                     <li>· Procesos ilimitados en 1 PC durante 1 año.</li>

@@ -173,7 +173,7 @@ export const footerContent = {
 
 // ------------------------------------------------------------------
 // PRECIOS · pago por uso (créditos, 1 = 1 USD = 1 proceso) + licencia anual
-// (USD 25/año: procesos ilimitados en 1 PC). Ambos se pagan con Binance Pay.
+// (USD 45/año: procesos ilimitados en 1 PC). Ambos se pagan con Binance Pay.
 // ------------------------------------------------------------------
 export type PricingPlan = {
   name: string
@@ -215,7 +215,7 @@ export const pricing: {
     },
     {
       name: "Licencia anual",
-      price: "$25",
+      price: "$45",
       unit: "al año",
       tagline: "Procesos ilimitados en 1 PC",
       features: [
@@ -368,7 +368,7 @@ export const faqs: { eyebrow: string; title: string; lead: string; items: Faq[] 
     },
     {
       q: "¿Cómo funciona la licencia?",
-      a: "La licencia anual cuesta $25 y dura 1 año. Te da procesos ilimitados en 1 PC: en esa PC no gastás créditos. En otra PC (o sin licencia) cada proceso cuesta 1 crédito. Se paga con Binance Pay desde tu panel y se activa en tu PC la primera vez que trabajás.",
+      a: "La licencia anual cuesta $45 y dura 1 año. Te da procesos ilimitados en 1 PC: en esa PC no gastás créditos. En otra PC (o sin licencia) cada proceso cuesta 1 crédito. Se paga con Binance Pay desde tu panel y se activa en tu PC la primera vez que trabajás.",
     },
   ],
 }

@@ -440,7 +440,7 @@ export function DashboardPage() {
                       className="h-10 rounded-lg font-medium hover:bg-cobalt-deep"
                       onClick={() => { setRecargaProducto("licencia"); setRecarga(true) }}
                     >
-                      Licencia anual · $25
+                      Licencia anual · $45
                     </Button>
                     {wsp ? (
                       <Button
