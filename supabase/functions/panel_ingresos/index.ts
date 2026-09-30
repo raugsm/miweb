@@ -1,9 +1,11 @@
 // panel_ingresos (solo dueño): seguimiento y control de TODOS los ingresos (Yape + Binance).
-// Lee el libro de ingresos y permite resolver revisiones / atribuir pagos no casados.
+// Lee el libro de ingresos y permite resolver revisiones / atribuir / reverso / listar cobros.
 // POST { accion, ... } + JWT del dueño:
 //   { accion: "resumen", dias? }                    → { totales, diario, pendientes, revisiones }
 //   { accion: "resolver", revision, cobro, txid }   → resuelve una revisión Yape ambigua (elige el par)
 //   { accion: "atribuir", txid, cobro }             → atribuye manualmente un pago no casado a un cobro
+//   { accion: "reverso", txid }                     → aplica devolución sobre un txid ya acreditado
+//   { accion: "cobros_abiertos", usuario? }         → lista cobros no confirmados (para atribuir)
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { admin, CORS, exigirDueno, resp } from "./seguridad.ts";
 
@@ -42,6 +44,20 @@ serve(async (req) => {
         { p_txid: b.txid, p_cobro: b.cobro });
       if (error) { console.error("atribuir", JSON.stringify(error)); return resp(500, { error: "fallo" }); }
       return resp(200, data ?? {});
+    }
+
+    if (accion === "reverso") {
+      if (typeof b.txid !== "string" || !b.txid) return resp(400, { error: "faltan_datos" });
+      const { data, error } = await db.schema("pago").rpc("reverso_aplicar", { p_txid: b.txid });
+      if (error) { console.error("reverso", JSON.stringify(error)); return resp(500, { error: "fallo" }); }
+      return resp(200, data ?? {});
+    }
+
+    if (accion === "cobros_abiertos") {
+      const usuario = (typeof b.usuario === "string" && UUID.test(b.usuario)) ? b.usuario : null;
+      const { data, error } = await db.schema("pago").rpc("panel_cobros_abiertos", { p_usuario: usuario });
+      if (error) { console.error("cobros_abiertos", JSON.stringify(error)); return resp(500, { error: "fallo" }); }
+      return resp(200, { cobros: data ?? [] });
     }
 
     return resp(400, { error: "accion_desconocida" });
