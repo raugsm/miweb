@@ -111,7 +111,7 @@ export function completarCuenta(jwt: string, nombre: string, pais: string) {
 
 export type CobroCreado = {
   cobro_id: string
-  codigo: string // "ARI-XXXX-XXXX" — OBLIGATORIO en la nota del pago
+  codigo: string // "ARI-XXXX" — OBLIGATORIO en la nota del pago
   monto: string // "1.00" créditos o "25.00" licencia — monto EXACTO en USDT
   producto?: "credito" | "licencia"
   creditos: number
@@ -147,4 +147,104 @@ export function pagoCobroCrear(
 /** Consulta si el cobro ya se confirmó (el vigía lo detecta solo). */
 export function pagoCobroEstado(jwt: string, cobro_id: string) {
   return edge<CobroEstado>("pago_cobro_estado", { cobro_id }, jwt)
+}
+
+// --- Recarga / licencia con YAPE PROPIO (Perú, en soles) ---
+// El técnico paga por Yape al número de Ariad con el MONTO EXACTO. Un teléfono lector
+// ve la notificación y la manda firmada al backend. Después el cliente INGRESA el
+// CÓDIGO DE SEGURIDAD de 3 dígitos de su comprobante: el backend lo cruza con el pago
+// visto (monto + código + ventana) y acredita una sola vez. Doble verificación.
+
+export type YapeCobro = {
+  cobro_id: string
+  codigo: string // referencia interna del cobro (no es el código de seguridad)
+  monto: string // "3.50" — monto EXACTO a pagar en soles
+  moneda: string // "PEN"
+  producto: "credito" | "licencia"
+  creditos: number
+  vence_en: string
+  destino: string // número/nombre Yape de Ariad
+  error?: string
+}
+
+export type YapeConfirmacion = {
+  ok: boolean
+  casado?: boolean
+  ya?: boolean
+  // esperando | codigo_invalido | codigo_incorrecto | bloqueado | en_revision | bloqueo_temporal | ...
+  motivo?: string
+  minutos?: number // en bloqueado/bloqueo_temporal: minutos aproximados de pausa
+  intentos_restantes?: number // en codigo_incorrecto: intentos que quedan antes del bloqueo
+  soporte?: boolean // true cuando conviene derivar al cliente a soporte
+  intentos?: number
+  producto?: string
+  creditos?: number
+  saldo?: number
+  error?: string
+}
+
+export type YapeEstadoCobro = {
+  cobro_id?: string
+  codigo_formato?: string
+  monto_unidad?: number // CENTIMOS de sol
+  estado?: string // creado | confirmado | caducado | ...
+  vence_en?: string
+  error?: string
+}
+
+/**
+ * Crea un cobro Yape. `producto`:
+ *  - "credito": recarga de `creditos` créditos.
+ *  - "licencia": licencia anual; `creditos` se ignora.
+ * Devuelve monto exacto en soles + número Yape de Ariad.
+ */
+export function yapeCrear(
+  jwt: string,
+  creditos: number,
+  producto: "credito" | "licencia" = "credito"
+) {
+  return edge<YapeCobro>("yape_crear", { creditos, producto }, jwt)
+}
+
+/** Confirma el pago cruzando el código de seguridad del comprobante del cliente. */
+export function yapeConfirmar(jwt: string, cobro_id: string, codigo: string) {
+  return edge<YapeConfirmacion>("yape_confirmar", { cobro_id, codigo }, jwt)
+}
+
+/** Estado del cobro Yape (para polling, por si se casó por otra vía). */
+export function yapeEstado(jwt: string, cobro_id: string) {
+  return edge<YapeEstadoCobro>("yape_estado", { cobro_id }, jwt)
+}
+
+// --- UN SOLO PAGO ACTIVO A LA VEZ (Binance o Yape) ---
+// El técnico tiene como máximo un cobro en curso. `cobroActivo` lo trae para retomar
+// el flujo (resumible tras recargar la página); `cobroCancelar` lo libera para empezar otro.
+
+export type CobroActivo = {
+  cobro_id: string
+  metodo: "yape" | "binance"
+  estado: string // creado | en_espera | retenido | en_revision
+  vence_en: string
+  producto: "credito" | "licencia"
+  creditos: number
+  monto: string // "3.50" (Yape S/) o "1.00" (Binance USDT)
+  moneda: string // "PEN" | "USD"
+  codigo: string // Binance: ARI-XXXX (va en la nota). Yape: referencia interna.
+  codigo_declarado: string | null // Yape: último código de seguridad que declaró el cliente
+  destino: string // número Yape / ID de Binance Pay
+  pago_url: string // Binance: link para el QR
+}
+
+/** Trae el cobro EN CURSO del técnico (cualquier método) para retomarlo, o `null`. */
+export function cobroActivo(jwt: string) {
+  return edge<{ activo: CobroActivo | null }>("pago_cobro_activo", {}, jwt)
+}
+
+/** Cancela el cobro en curso para poder empezar otro. Si ya pagó, igual se acredita. */
+export function cobroCancelar(jwt: string, cobro_id: string) {
+  return edge<{ ok?: boolean; cancelado?: boolean; ya?: boolean; motivo?: string }>(
+    "pago_cobro_cancelar",
+    { cobro_id },
+    jwt
+  )
 }

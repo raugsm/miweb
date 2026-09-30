@@ -14,7 +14,7 @@ import {
 
 import { Container } from "@/components/Container"
 import { OnboardingTour, type TourStep } from "@/components/OnboardingTour"
-import { RecargaBinance } from "@/components/RecargaBinance"
+import { RecargaPanel } from "@/components/RecargaPanel"
 import { SearchableSelect } from "@/components/SearchableSelect"
 import { Button } from "@/components/ui/button"
 import { PAISES } from "@/data/paises"
@@ -34,8 +34,8 @@ const tourSteps: TourStep[] = [
   },
   {
     id: "tour-recargar",
-    title: "Recargá al instante",
-    body: "Pagás con Binance Pay: te damos el monto exacto y un código, pagás desde tu Binance y los créditos entran solos, sin avisar a nadie.",
+    title: "Recargá en 3 toques",
+    body: "Tocá acá y elegí cómo pagar: Binance Pay (USDT) o Yape en soles. Te damos el monto exacto, los datos y un QR que podés ampliar para escanear. Se acredita solo cuando llega tu pago, sin avisarle a nadie. Un pago a la vez: si te confundís, lo cancelás y hacés otro.",
   },
   {
     id: "tour-descargar",
@@ -151,8 +151,27 @@ export function DashboardPage() {
   const [creando, setCreando] = useState(false)
   const [jwt, setJwt] = useState("")
   const [recarga, setRecarga] = useState(false)
-  const [recargaProducto, setRecargaProducto] = useState<"credito" | "licencia">("credito")
+  const [recargaProd, setRecargaProd] = useState<"credito" | "licencia">("credito")
+  const [hayActivo, setHayActivo] = useState(false)
   const [tour, setTour] = useState(false)
+
+  function irAlPanel() {
+    setTimeout(() => {
+      document.getElementById("recarga-panel")?.scrollIntoView({ behavior: "smooth", block: "start" })
+    }, 60)
+  }
+
+  function abrirRecarga(prod: "credito" | "licencia") {
+    setRecargaProd(prod)
+    setRecarga(true)
+    irAlPanel()
+  }
+
+  // Cuando ya hay un pago en curso, solo bajamos al panel (sin tocar el producto del cobro).
+  function verPago() {
+    setRecarga(true)
+    irAlPanel()
+  }
 
   const cargar = useCallback(async () => {
     setCargando(true)
@@ -430,18 +449,21 @@ export function DashboardPage() {
                       id="tour-recargar"
                       type="button"
                       className="h-10 rounded-lg font-medium hover:bg-cobalt-deep"
-                      onClick={() => { setRecargaProducto("credito"); setRecarga(true) }}
+                      onClick={() => (hayActivo ? verPago() : abrirRecarga("credito"))}
                     >
-                      <span aria-hidden="true" className="text-base leading-none">◈</span>
-                      Recargar con Binance Pay
+                      <Wallet aria-hidden="true" className="size-4" />
+                      {hayActivo ? "Ver mi pago en curso" : "Recargar créditos"}
                     </Button>
-                    <Button
-                      type="button"
-                      className="h-10 rounded-lg font-medium hover:bg-cobalt-deep"
-                      onClick={() => { setRecargaProducto("licencia"); setRecarga(true) }}
-                    >
-                      Licencia anual · $45
-                    </Button>
+                    {!hayActivo ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-10 rounded-lg border-line bg-transparent text-foreground hover:border-cobalt/40 hover:bg-foreground/[0.04]"
+                        onClick={() => abrirRecarga("licencia")}
+                      >
+                        Comprar licencia anual
+                      </Button>
+                    ) : null}
                     {wsp ? (
                       <Button
                         asChild
@@ -503,6 +525,21 @@ export function DashboardPage() {
                     <p className="mt-2 text-xs text-foreground/45">cuenta al día</p>
                   </div>
                 </div>
+              </div>
+
+              {/* RECARGA (inline, un solo pago activo a la vez, resumible) */}
+              <div className="mt-4 empty:mt-0">
+                {jwt ? (
+                  <RecargaPanel
+                    jwt={jwt}
+                    abrir={recarga}
+                    productoInicial={recargaProd}
+                    parametros={datos?.parametros}
+                    onConfirmado={() => void cargar()}
+                    onCerrar={() => setRecarga(false)}
+                    onActivoChange={setHayActivo}
+                  />
+                ) : null}
               </div>
 
               {/* CÓMO FUNCIONA */}
@@ -657,15 +694,6 @@ export function DashboardPage() {
           )}
         </Container>
       </section>
-
-      {recarga && jwt ? (
-        <RecargaBinance
-          jwt={jwt}
-          producto={recargaProducto}
-          onClose={() => setRecarga(false)}
-          onConfirmado={() => void cargar()}
-        />
-      ) : null}
 
       <OnboardingTour steps={tourSteps} open={tour} onClose={cerrarTour} />
     </>
