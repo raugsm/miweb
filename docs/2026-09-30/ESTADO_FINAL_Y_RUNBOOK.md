@@ -137,7 +137,9 @@ where ( :pagador is null or pa.pagador = :pagador )
 
 **Config (en `negocio.parametro`):** `yape_activo=true`, `yape_precio_credito_pen=3.50`, `yape_precio_licencia_pen=157.50`, `yape_destino`, `binance_pay_id`, `binance_pay_url`. (Editar solo con service_role.)
 
-**Crons activos:** `pago_vigia` (cada minuto — conciliar Binance), `yape_barrer` (cada 5 min — caduca cobros no pagados + barrido de huérfanos Yape a 24h).
+**Crons activos:** `pago_vigia` (**cada 15s** — conciliar Binance; bajado de 60s el 2026-10-01 para confirmar pagos en ~10–20s, pedido FRP; `cron.alter_job(2, '15 seconds')`, pg_cron 1.6.4), `yape_barrer` (cada 5 min — caduca cobros no pagados + barrido de huérfanos Yape a 24h).
+
+**Latencia de confirmación Binance:** el vigía (`pago_conciliar`) es autosuficiente — lee Binance en vivo (`/sapi/v1/pay/transactions`, clave solo-lectura del Vault), ingesta y concilia TODO de una pasada. El cliente NO consulta Binance: hace poll de `pago_cobro_estado` (solo DB) cada ~5s y libera con `estado=='confirmado'`. Con el vigía a 15s → confirmación típica 10–15s, peor caso ~20s. La cadencia hacia Binance la gobierna SOLO el vigía (4 llamadas/min), nunca los polls del cliente. Si hiciera falta bajar más, evaluar un edge "nudge" throttled antes que acoplar Binance a `pago_cobro_estado`.
 
 **Monitoreo del lector:** `select version_codigo, activo, ultimo_latido, pendientes from pago.yape_dispositivo where dispositivo='fbe581ec8e3b418cb2004bf2f0c7b2ef';` — `ultimo_latido` reciente = vivo; `pendientes>0` = tiene pagos sin enviar.
 
