@@ -15,14 +15,14 @@ export type SupportShortcut = {
 export const supportPage = {
   eyebrow: "Soporte",
   title: "Soporte por WhatsApp, directo",
-  lead: "Accesos, recargas y errores de flasheo. Te responde una persona, no un bot.",
+  lead: "Accesos, errores de flasheo y dudas. Te responde una persona, no un bot.",
   channelTitle: "Canal oficial",
   channelBody:
-    "Escribinos por WhatsApp: ahí se gestionan accesos, recargas de créditos y cualquier problema con la herramienta.",
+    "Escribinos por WhatsApp: ahí se gestionan accesos y cualquier problema con la herramienta. Las recargas ya son automáticas desde tu panel.",
   channelTip: "Ten el equipo y el reporte a mano.",
   creditsTitle: "Cómo funcionan los créditos",
   creditsBody:
-    "Cada proceso cuesta 5 créditos ($5). Tu proveedor recarga los créditos por WhatsApp; el saldo y el historial se ven en Mi cuenta y en la app.",
+    "Cada proceso cuesta 1 crédito ($1) y se cobra recién cuando termina bien. Recargás al instante desde tu panel (Binance Pay, o Yape en Perú) y los créditos se acreditan en segundos; el saldo y el historial se ven en Mi cuenta y en la app.",
   checklistTitle: "Qué incluir en el reporte",
   checklistLead: "Un reporte preciso acelera el diagnóstico.",
   shortcutsTitle: "Respuestas rápidas",
