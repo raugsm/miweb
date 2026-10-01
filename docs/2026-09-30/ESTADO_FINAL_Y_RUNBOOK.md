@@ -55,6 +55,7 @@ Todas aditivas, en español, 6FN, service_role-only, probadas con self-rollback.
 | 11 (2026-10-01) | `..._pago_lote11_multiservicio_satelites.sql` | satélites `cobro_servicio(servicio, referencia_externa)` + `cobro_idem(idempotency_key)` + backfill (créditos/licencia/servicio) |
 | 12 (2026-10-01) | `..._pago_lote12_multiservicio_crear.sql` | `cobro_crear_servicio` acepta servicio/referencia_externa/idempotency_key (idempotencia); `cobro_crear` y `cobro_crear_yape` auto-etiquetan servicio=creditos\|licencia |
 | 13 (2026-10-01) | `..._pago_lote13_multiservicio_lecturas.sql` | servicio + referencia_externa en `v_ingreso` / `cobro_ver` / `panel_movimientos` / `panel_ingresos_resumen` (+ bloque `por_servicio`) |
+| 14 (2026-10-01) | `..._pago_lote14_yape_servicio_pe.sql` | cobro de **servicio por Yape** (solo PE): `cobro_crear_servicio_yape` (PEN/céntimos, gating país=='PE' + yape_activo, idempotencia) + `yape_acreditar_par` consciente de servicio (sin recarga → solo confirma, sin crédito) |
 
 **Garantías vigentes:** exactly-once (`acreditacion` PK `cobro_id` + UNIQUE `pago_txid`); RLS deny-all en las ~38 tablas de `pago`; funciones `service_role`-only; tablas de dinero append-only; nada se borra (se trabaja por estados).
 
@@ -192,6 +193,19 @@ La pasarela dejó de estar atada a "créditos": ahora es **la pasarela de pago d
 - Dos bases hoy (pasarela `sdarsjdwnuimjruthjwz` + backend FRP de Erasmo `duvpkpfivcnftxelgqtt`/`ariadsoporte-prod`); la convergencia futura a una base se apoya en `referencia_externa` (pago↔pedido ya enlazados).
 
 **Contrato para el agente del panel/servicios:** ver también `GUIA_COBRO_YAPE.md` (método Yape) y los Lotes 11–13 en `supabase/migrations/`.
+
+### Servicio por Yape (solo Perú) — Lote 14 (2026-10-01)
+
+La pasarela multi-servicio ahora también cobra por **Yape** (antes solo Binance). Primer consumidor: FRP para técnicos de Perú. Diferencia de fondo con Binance: **Yape NO es sin-tipeo**. En Binance el pagador escribe el código ARI único en la nota (la API lo devuelve → casación 1:1 sola). En Yape lo único que el lector capta es MONTO + código de seguridad de 3 díg, y ese código lo genera Yape al pagar (el pagador no lo elige). Por eso el técnico **declara** el código de 3 díg de su comprobante → se auto-verifica 1:1 contra lo que leyó el lector (sin comprobante/foto, sin humano). Es el **Modelo A** (elegido por el dueño); el Modelo B (sin tipeo vía monto con céntimos únicos) quedó descartado por ahora (precio FRP variable → el motor tendría que asignar céntimos únicos).
+
+**Contrato (lo que usa el servicio):**
+- Crear: edge **`pago_cobro_servicio_yape_crear`** (NO es el de Binance). `POST { monto, servicio?, referencia_externa?, idempotency_key?, motivo? } + JWT` → `{ cobro_id, codigo, monto (texto PEN), moneda:"PEN", producto:"servicio", servicio, referencia_externa, idempotente, vence_en, destino (nº/nombre Yape a pagar) }`. FRP manda `servicio:"frp"` + `referencia_externa` + `idempotency_key`. Gating **país=='PE'** + `yape_activo` lo hace la función SQL (`pago.cobro_crear_servicio_yape`): un no-PE recibe `pais_no_habilitado` (403).
+- Confirmar: edge EXISTENTE **`yape_confirmar`** `POST { cobro_id, codigo } + JWT` (codigo = 3 díg del comprobante) → `yape_declarar` → `yape_casar_cobro` → `yape_acreditar_par` (ahora consciente de servicio: sin recarga → solo confirma, sin crédito). Devuelve `{ ok, casado?|ya?|motivo }` (`esperando` = aún no llegó el pago; `en_revision` = ambiguo; `casado` = confirmado).
+- Estado: edge EXISTENTE **`pago_cobro_estado`** (sirve igual para Yape). Poll ~5s, liberar SOLO con `estado=='confirmado'`.
+
+**Latencia:** el lector A16 (v2) ya intenta casar al ingerir (`yape_ingerir → yape_casar_pago`). Técnico declara el código → casa al instante si el pago ya llegó, o apenas el lector postea la notif (segundos). Típico ~10–15s. Depende de que el teléfono reciba+postee la notif (ya endurecido Doze/foreground).
+
+**Garantías:** reusa el motor Yape probado (casación 1:1, cola de revisión para ambiguos, exactly-once por `acreditacion`). `yape_acreditar_par` distingue servicio por ausencia de `cobro_recarga` → un cobro de servicio jamás acredita créditos/licencia. Unidades: Yape en céntimos de sol (no se cruza con Binance USD×1e8 porque la casación es por fuente). Validado con prueba self-rollback (gating PE, idempotencia, casación servicio → confirmado delta=0 sin crédito).
 
 ## 10. Índice de documentación (`docs/2026-09-30/`)
 
