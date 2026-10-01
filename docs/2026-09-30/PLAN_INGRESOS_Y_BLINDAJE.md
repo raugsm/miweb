@@ -7,6 +7,9 @@
 
 ---
 
+> **Estado final + runbook operativo:** ver [`ESTADO_FINAL_Y_RUNBOOK.md`](ESTADO_FINAL_Y_RUNBOOK.md).
+> Este documento es el registro de diseño y de la revisión adversarial.
+
 ## 0. Idea central
 
 Lo que el dueño pide — *"seguimiento de todos los ingresos (Binance + Yape) para saber con certeza y tener mejor control"* — **no se puede lograr sobre el motor actual**, porque el motor pierde y oculta ingresos en silencio. Por eso este plan tiene dos partes que van juntas:
