@@ -6,6 +6,7 @@
 //   { accion: "atribuir", txid, cobro }             → atribuye manualmente un pago no casado a un cobro
 //   { accion: "reverso", txid }                     → aplica devolución sobre un txid ya acreditado
 //   { accion: "cobros_abiertos", usuario? }         → lista cobros no confirmados (para atribuir)
+//   { accion: "movimientos", metodo, dias?, estado? } → lista pagos de v_ingreso (pestaña "Todos")
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { admin, CORS, exigirDueno, resp } from "./seguridad.ts";
 
@@ -58,6 +59,16 @@ serve(async (req) => {
       const { data, error } = await db.schema("pago").rpc("panel_cobros_abiertos", { p_usuario: usuario });
       if (error) { console.error("cobros_abiertos", JSON.stringify(error)); return resp(500, { error: "fallo" }); }
       return resp(200, { cobros: data ?? [] });
+    }
+
+    if (accion === "movimientos") {
+      const metodo = (b.metodo === "yape" || b.metodo === "binance") ? b.metodo : null;
+      const dias = Math.min(365, Math.max(1, Math.trunc(Number(b.dias ?? 30))));
+      const estado = (typeof b.estado === "string" && b.estado) ? b.estado : null;
+      const { data, error } = await db.schema("pago").rpc("panel_movimientos",
+        { p_metodo: metodo, p_dias: dias, p_estado: estado });
+      if (error) { console.error("movimientos", JSON.stringify(error)); return resp(500, { error: "fallo" }); }
+      return resp(200, { movimientos: data ?? [] });
     }
 
     return resp(400, { error: "accion_desconocida" });
