@@ -52,6 +52,9 @@ Todas aditivas, en español, 6FN, service_role-only, probadas con self-rollback.
 | 9 | `..._pago_lote9_panel_movimientos.sql` | `panel_movimientos(metodo,dias?,estado?)` — pestaña "Todos" |
 | 10a | `..._pago_lote10a_enum_archivado.sql` | Enum `estado_pago_visto += 'archivado'` |
 | 10b | `..._pago_lote10b_archivar_yape_prueba.sql` | `v_ingreso` excluye `'archivado'` + archivado inicial de Yape de prueba |
+| 11 (2026-10-01) | `..._pago_lote11_multiservicio_satelites.sql` | satélites `cobro_servicio(servicio, referencia_externa)` + `cobro_idem(idempotency_key)` + backfill (créditos/licencia/servicio) |
+| 12 (2026-10-01) | `..._pago_lote12_multiservicio_crear.sql` | `cobro_crear_servicio` acepta servicio/referencia_externa/idempotency_key (idempotencia); `cobro_crear` y `cobro_crear_yape` auto-etiquetan servicio=creditos\|licencia |
+| 13 (2026-10-01) | `..._pago_lote13_multiservicio_lecturas.sql` | servicio + referencia_externa en `v_ingreso` / `cobro_ver` / `panel_movimientos` / `panel_ingresos_resumen` (+ bloque `por_servicio`) |
 
 **Garantías vigentes:** exactly-once (`acreditacion` PK `cobro_id` + UNIQUE `pago_txid`); RLS deny-all en las ~38 tablas de `pago`; funciones `service_role`-only; tablas de dinero append-only; nada se borra (se trabaja por estados).
 
@@ -145,9 +148,11 @@ where ( :pagador is null or pa.pagador = :pagador )
 ## 8. Estado actual (al cierre)
 
 - **Motor:** en producción, blindado y verificado.
+- **Pasarela multi-servicio:** generalizada (Lotes 11–13) — ya no atada a créditos; cualquier servicio de la empresa cobra por la misma infra. Ver §9.
 - **Lector A16:** v2 activo, latiendo, capturando el nombre del pagador.
 - **Web:** publicada a `main` (Render).
-- **Panel admin (otro agente):** integrado; pestaña por defecto "Todos"; muestra `pagador`, `tipo` ("Yape recibido"), "Sin asignar" para no casados; auto-refresh ~12s.
+- **Panel admin (otro agente):** integrado; pestaña por defecto "Todos"; muestra `pagador`, `tipo` ("Yape recibido"), "Sin asignar" para no casados; auto-refresh ~12s. Ahora recibe `servicio` + `referencia_externa` + `por_servicio` para distinguir créditos/licencia/FRP.
+- **FRP (cliente de Erasmo):** primer consumidor externo de la pasarela; paga por Binance vía `pago_cobro_servicio_crear` (`servicio:"frp"`). Sus pedidos siguen en su backend (`ariadsoporte-prod`), enlazados por `referencia_externa`.
 - **Datos:** panel limpio — Yape 0 visible, Binance 1 real (KendySalazar). Todo lo de prueba archivado (reversible, en bitácora).
 
 **Pendientes / follow-ups:**
@@ -155,10 +160,38 @@ where ( :pagador is null or pa.pagador = :pagador )
 2. Pasar el `.exe` nuevo del panel a producción cuando el dueño cierre/reabra (lo maneja el otro agente).
 3. Opcional: mostrar en el panel el código Binance normalizado cuando la nota trae texto extra.
 4. Prueba real final de demo (Yape + Binance en vivo) antes del video.
+5. Opcional: tarjetas KPI `por_servicio` en el panel (lo decide el agente del panel).
+6. Futuro: camino Yape multi-servicio (hoy el service-cobro es solo Binance).
+7. Futuro: convergencia de las 2 bases a 1 (apoyada en `referencia_externa`).
 
 ---
 
-## 9. Índice de documentación (`docs/2026-09-30/`)
+## 9. Pasarela multi-servicio (2026-10-01)
+
+La pasarela dejó de estar atada a "créditos": ahora es **la pasarela de pago de la empresa** y cualquier servicio (Ari-Tool créditos/licencia, FRP, y futuros) cuelga de la misma infra (mismo teléfono/número, misma casación, mismo exactly-once y anti-fraude). El **primer consumidor real externo** es la Herramienta FRP (cliente de Erasmo) pagando por Binance.
+
+**Qué se agregó (aditivo, Lotes 11–13):**
+- **`pago.cobro_servicio(cobro_id pk, servicio text, referencia_externa text)`** — etiqueta cada cobro con su `servicio` (slug en texto, NO enum, para no acoplar) + una `referencia_externa` (id del servicio dueño). Valores de `servicio`: `creditos`, `licencia`, `frp`, y futuros (`cuenta_mi`, `consultar`, …) — se agrega un servicio nuevo con solo un slug nuevo, sin migración.
+- **`pago.cobro_idem(idempotency_key pk, cobro_id)`** — idempotencia de creación: misma key → devuelve el cobro existente (anti cobro-doble por reintento). Advisory lock por key.
+- **Auto-etiqueta:** `cobro_crear`/`cobro_crear_yape` etiquetan `creditos`/`licencia` solos; `cobro_crear_servicio` toma el `servicio` del parámetro. Backfill de todos los cobros previos.
+- **Expuesto** en `v_ingreso`, `cobro_ver`, `panel_movimientos`, `panel_ingresos_resumen` (+ bloque `por_servicio`).
+
+**Contrato de integración (lo que usa un servicio — hoy Binance; service-cobro):**
+- Crear: edge **`pago_cobro_servicio_crear`** (v2) `POST { monto, servicio, referencia_externa?, idempotency_key?, motivo? } + JWT` → `{ cobro_id, codigo, monto, producto:"servicio", servicio, referencia_externa, idempotente, vence_en, destino, pago_url }`. Confirmación automática por el vigía (Binance, código ARI único → casación 1:1). FRP manda `servicio:"frp"`, `referencia_externa:<lote_id (LOCAL) | DeviceId/pedido_ref (GLOBAL)>`, `idempotency_key:<GUID por intento>`.
+- Estado: edge **`pago_cobro_estado`** (v2) `POST { cobro_id } + JWT` → `{ estado, pagado, codigo, monto_unidad, vence_en, servicio, referencia_externa }`. El servicio consumidor **libera su entrega SOLO con `estado=='confirmado'`** (no por reloj local); hay gracia server-side en `caducado`; re-verificar al retomar.
+- Panel: `panel_ingresos` acción `movimientos` y `resumen.pendientes[]` traen `servicio` + `referencia_externa`; `resumen.por_servicio[]` = `{servicio, moneda, acreditado, pagos_acreditados}`. El panel mapea `servicio`→ "Tipo" (Créditos / Licencia / Servicio FRP; null → "—/sin asignar" en pagos no casados).
+
+**Cómo sumar un servicio nuevo:** crear el cobro con `pago_cobro_servicio_crear` pasando `servicio:"<slug>"` + su `referencia_externa`; consultar estado con `pago_cobro_estado`; liberar con `confirmado`. No hace falta tocar el motor. (El service-cobro NO tiene "un solo activo por usuario" → un técnico puede tener varios cobros-servicio abiertos, uno por pedido. No hay hold por monto en servicio.)
+
+**Notas / límites:**
+- `servicio` en `v_ingreso`/movimientos sale del cobro casado (vía acreditacion) → en pagos NO casados queda null (aún no se sabe de qué servicio es). `pago_cobro_estado` sí lo trae directo (por cobro).
+- Idempotencia: misma `idempotency_key` devuelve el cobro con sus datos ORIGINALES (ignora cambios de monto/referencia del reintento) — correcto para un reintento.
+- Hoy el service-cobro es **Binance**; para un Yape multi-servicio habría que agregar un camino análogo (no hecho aún).
+- Dos bases hoy (pasarela `sdarsjdwnuimjruthjwz` + backend FRP de Erasmo `duvpkpfivcnftxelgqtt`/`ariadsoporte-prod`); la convergencia futura a una base se apoya en `referencia_externa` (pago↔pedido ya enlazados).
+
+**Contrato para el agente del panel/servicios:** ver también `GUIA_COBRO_YAPE.md` (método Yape) y los Lotes 11–13 en `supabase/migrations/`.
+
+## 10. Índice de documentación (`docs/2026-09-30/`)
 
 - **`ESTADO_FINAL_Y_RUNBOOK.md`** (este) — estado final, arquitectura, APK, limpiezas y runbook operativo.
 - **`PLAN_INGRESOS_Y_BLINDAJE.md`** — plan + hallazgos de la revisión adversarial + estado de implementación por lote.
