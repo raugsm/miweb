@@ -173,7 +173,7 @@ export const footerContent = {
 
 // ------------------------------------------------------------------
 // PRECIOS · pago por uso (créditos, 1 = 1 USD = 1 proceso) + licencia anual
-// (USD 45/año: procesos ilimitados en 1 PC). Ambos se pagan con Binance Pay.
+// (USD 45/año: procesos ilimitados en 1 PC). Ambos se pagan con Binance Pay (o Yape en Perú).
 // ------------------------------------------------------------------
 export type PricingPlan = {
   name: string
@@ -207,7 +207,7 @@ export const pricing: {
       features: [
         "Pagás solo cuando trabajás.",
         "El cobro se hace al terminar el proceso, no antes.",
-        "Recarga al instante con Binance Pay desde tu panel.",
+        "Recarga al instante con Binance Pay (o Yape en Perú) desde tu panel.",
         "Cobertura incluida en cada proceso.",
         "Tus créditos no vencen.",
       ],
@@ -221,7 +221,7 @@ export const pricing: {
       features: [
         "1 año de procesos ilimitados en la PC donde la actives.",
         "En esa PC no gastás créditos.",
-        "Se paga con Binance Pay y se activa sola.",
+        "Se paga con Binance Pay (o Yape en Perú) y se activa sola.",
         "Renovable: extiende +1 año.",
       ],
       cta: { label: "Crear cuenta y activar", href: "/cuenta" },
@@ -344,7 +344,7 @@ export const faqs: { eyebrow: string; title: string; lead: string; items: Faq[] 
     },
     {
       q: "¿Cómo pago o recargo créditos?",
-      a: "Desde tu panel, con Binance Pay: pagás el monto exacto con el código que te damos y los créditos se acreditan solos en segundos. 1 crédito = 1 USD = 1 proceso.",
+      a: "Desde tu panel, con Binance Pay o Yape (Perú): seguís los pasos que te muestra el panel y los créditos se acreditan en segundos. 1 crédito = 1 USD = 1 proceso.",
     },
     {
       q: "¿Puedo cambiar de PC?",
@@ -368,7 +368,7 @@ export const faqs: { eyebrow: string; title: string; lead: string; items: Faq[] 
     },
     {
       q: "¿Cómo funciona la licencia?",
-      a: "La licencia anual cuesta $45 y dura 1 año. Te da procesos ilimitados en 1 PC: en esa PC no gastás créditos. En otra PC (o sin licencia) cada proceso cuesta 1 crédito. Se paga con Binance Pay desde tu panel y se activa en tu PC la primera vez que trabajás.",
+      a: "La licencia anual cuesta $45 y dura 1 año. Te da procesos ilimitados en 1 PC: en esa PC no gastás créditos. En otra PC (o sin licencia) cada proceso cuesta 1 crédito. Se paga con Binance Pay (o Yape en Perú) desde tu panel y se activa en tu PC la primera vez que trabajás.",
     },
   ],
 }

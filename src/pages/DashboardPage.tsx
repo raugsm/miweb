@@ -471,7 +471,7 @@ export function DashboardPage() {
                         className="h-10 rounded-lg border-line bg-transparent text-foreground hover:border-foreground/30 hover:bg-foreground/[0.04]"
                       >
                         <a href={wsp} target="_blank" rel="noreferrer">
-                          Recargar por WhatsApp
+                          Soporte por WhatsApp
                         </a>
                       </Button>
                     ) : null}
