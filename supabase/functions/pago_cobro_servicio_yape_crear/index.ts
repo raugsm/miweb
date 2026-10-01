@@ -7,7 +7,7 @@
 //
 // POST { monto, servicio?, referencia_externa?, idempotency_key?, motivo? } + JWT
 //   -> 200 { cobro_id, codigo, monto, moneda:"PEN", producto:"servicio", servicio, referencia_externa,
-//            idempotente, vence_en, destino }
+//            idempotente, vence_en, destino, destino_numero, destino_titular, destino_qr, entidad }
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { admin, CORS, exigirSesion, resp } from "./seguridad.ts";
@@ -54,13 +54,30 @@ serve(async (req) => {
       servicio?: string; referencia_externa?: string | null; idempotente?: boolean;
     };
 
-    // Destino Yape de Ariad (número/nombre a mostrar), configurable por el dueño.
-    let destino = "";
+    // Destino Yape de Ariad (configurable por el dueño). Campos separados para el front:
+    // número + titular (para verificar al yapear) + QR estático "Mi QR" (sin monto embebido).
+    let destino = "", destino_numero = "", destino_titular = "";
+    let destino_qr: string | null = null;
     try {
-      const { data: p } = await db.schema("negocio")
-        .from("parametro").select("valor").eq("clave", "yape_destino").maybeSingle();
-      destino = (p as { valor?: string } | null)?.valor ?? "";
-    } catch { /* sin parámetro: el front muestra los pasos manuales */ }
+      const { data: params } = await db.schema("negocio").from("parametro")
+        .select("clave,valor").in("clave", ["yape_destino", "yape_destino_numero", "yape_destino_titular", "yape_destino_qr"]);
+      for (const p of (params ?? []) as { clave: string; valor: string }[]) {
+        if (p.clave === "yape_destino") destino = p.valor ?? "";
+        if (p.clave === "yape_destino_numero") destino_numero = p.valor ?? "";
+        if (p.clave === "yape_destino_titular") destino_titular = p.valor ?? "";
+        if (p.clave === "yape_destino_qr") destino_qr = (p.valor ?? "") || null;
+      }
+    } catch { /* sin parámetros: el front muestra los pasos manuales */ }
+    // Fallback: si faltan número/titular, parsear "Titular (número)".
+    if ((!destino_numero || !destino_titular) && destino) {
+      const m = destino.match(/^(.*?)\s*\(([^)]+)\)\s*$/);
+      if (m) {
+        if (!destino_titular) destino_titular = m[1].trim();
+        if (!destino_numero) destino_numero = m[2].trim();
+      } else if (!destino_titular) {
+        destino_titular = destino;
+      }
+    }
 
     return resp(200, {
       cobro_id: d.cobro_id,
@@ -73,6 +90,10 @@ serve(async (req) => {
       idempotente: d.idempotente ?? false,
       vence_en: d.vence_en,
       destino,
+      destino_numero,
+      destino_titular,
+      destino_qr,
+      entidad: "Yape",
     });
   } catch (e) {
     const m = (e as Error).message;
