@@ -243,12 +243,47 @@ export function AccountPage() {
 
   const fuerza = useMemo(() => fuerzaClave(claveN), [claveN])
   const coinciden = claveN.length > 0 && claveN === claveN2
-  const puedeCrear =
-    nombre.trim().length > 0 &&
-    correoN.includes("@") &&
-    claveValida(claveN) &&
-    coinciden &&
-    !ocupado
+
+  // Lee el valor REAL de un campo desde el DOM. Hace falta porque el autocompletado
+  // del navegador / gestor de contraseñas puede rellenar los campos SIN disparar el
+  // onChange de React (típico en Safari/iOS, Android y autofill al cargar): en ese
+  // caso el estado queda vacío aunque el usuario vea todo lleno, y los botones y las
+  // validaciones no lo veían. Leyendo del DOM al enviar, el valor autocompletado
+  // siempre se toma en cuenta.
+  const leer = (id: string) =>
+    typeof document !== "undefined"
+      ? ((document.getElementById(id) as HTMLInputElement | null)?.value ?? "")
+      : ""
+
+  // Vuelca al estado lo que el navegador autocompletó al CARGAR la página, para que
+  // la UI (requisitos de la contraseña, "coinciden", etc.) refleje lo ya escrito.
+  // Solo con timers de montaje: NO se escucha "focusin" porque ese setState en el
+  // foco del botón dispara un re-render que se come el primer click del envío.
+  // La corrección real no depende de esto: el botón siempre es clickeable y los
+  // handlers (crear/entrar) leen el valor directo del DOM al enviar.
+  useEffect(() => {
+    const sync = () => {
+      const campos: [string, (v: string) => void][] = [
+        ["correo", setCorreo],
+        ["clave", setClave],
+        ["correoR", setCorreo],
+        ["nombre", setNombre],
+        ["correoN", setCorreoN],
+        ["claveN", setClaveN],
+        ["claveN2", setClaveN2],
+      ]
+      for (const [id, set] of campos) {
+        const el = document.getElementById(id) as HTMLInputElement | null
+        if (el && el.value) set(el.value)
+      }
+    }
+    const t1 = window.setTimeout(sync, 250)
+    const t2 = window.setTimeout(sync, 900)
+    return () => {
+      window.clearTimeout(t1)
+      window.clearTimeout(t2)
+    }
+  }, [])
 
   async function cerrarSesion() {
     await supabase.auth.signOut({ scope: "local" })
@@ -258,12 +293,15 @@ export function AccountPage() {
 
   async function entrar() {
     if (ocupado) return
-    const c = correo.trim().toLowerCase()
+    const c = (leer("correo") || correo).trim().toLowerCase()
+    const claveLogin = leer("clave") || clave
+    if (c !== correo) setCorreo(c)
+    if (claveLogin !== clave) setClave(claveLogin)
     if (c.length < 5 || !c.includes("@")) {
       setAviso({ texto: "Escribí tu correo para continuar.", error: true })
       return
     }
-    if (clave.length === 0) {
+    if (claveLogin.length === 0) {
       setAviso({ texto: "Escribí tu contraseña.", error: true })
       return
     }
@@ -272,7 +310,7 @@ export function AccountPage() {
     try {
       // El login pasa por nuestra función: ahí se cuentan los fallos y, pasado
       // el tope, la cuenta se bloquea un rato en el origen.
-      const r = await entrarWeb(c, clave)
+      const r = await entrarWeb(c, claveLogin)
 
       if (r.data?.error === "bloqueo_temporal") {
         setAviso({
@@ -335,7 +373,8 @@ export function AccountPage() {
   /** Salida cuando la contraseña no sirve: se entra con un código al correo. */
   async function entrarConCodigo() {
     if (ocupado) return
-    const c = correo.trim().toLowerCase()
+    const c = (leer("correo") || leer("correoR") || correo).trim().toLowerCase()
+    if (c !== correo) setCorreo(c)
     if (c.length < 5 || !c.includes("@")) {
       setAviso({ texto: "Escribí tu correo para continuar.", error: true })
       return
@@ -438,7 +477,8 @@ export function AccountPage() {
 
   async function pedirCodigoClave() {
     if (ocupado) return
-    const c = correo.trim().toLowerCase()
+    const c = (leer("correoR") || leer("correo") || correo).trim().toLowerCase()
+    if (c !== correo) setCorreo(c)
     if (c.length < 5 || !c.includes("@")) {
       setAviso({ texto: "Escribí el correo de tu cuenta.", error: true })
       return
@@ -533,16 +573,43 @@ export function AccountPage() {
 
   async function crear() {
     if (ocupado) return
-    const n = nombre.trim()
-    const c = correoN.trim().toLowerCase()
-    if (claveN !== claveN2) {
+    // Se leen los valores REALES del DOM (ver `leer`): si el navegador autocompletó
+    // sin disparar onChange, el estado estaría vacío y no se podría registrar.
+    const n = (leer("nombre") || nombre).trim()
+    const c = (leer("correoN") || correoN).trim().toLowerCase()
+    const cl = leer("claveN") || claveN
+    const cl2 = leer("claveN2") || claveN2
+    if (n !== nombre.trim()) setNombre(n)
+    if (c !== correoN.trim().toLowerCase()) setCorreoN(c)
+    if (cl !== claveN) setClaveN(cl)
+    if (cl2 !== claveN2) setClaveN2(cl2)
+
+    // Validación completa acá (el botón ya no se deshabilita por el estado): así un
+    // campo autocompletado en silencio no deja al técnico trabado sin saber por qué.
+    if (!n) {
+      setAviso({ texto: "Escribí tu nombre de usuario.", error: true })
+      return
+    }
+    if (c.length < 5 || !c.includes("@")) {
+      setAviso({ texto: "Escribí un correo válido.", error: true })
+      return
+    }
+    if (!claveValida(cl)) {
+      setAviso({
+        texto:
+          "La contraseña necesita 8 caracteres o más, con una minúscula, una mayúscula y un número.",
+        error: true,
+      })
+      return
+    }
+    if (cl !== cl2) {
       setAviso({ texto: "Las contraseñas no coinciden.", error: true })
       return
     }
     setOcupado(true)
     setAviso(null)
     try {
-      const r = await solicitarAcceso(c, claveN, n, pais)
+      const r = await solicitarAcceso(c, cl, n, pais)
 
       // El servidor frena los registros en cadena desde la misma conexión o
       // con el mismo correo. A una persona no le pasa; a un robot, enseguida.
@@ -1120,7 +1187,7 @@ export function AccountPage() {
                       <Button
                         type="button"
                         className="mt-6 h-11 w-full rounded-xl font-medium"
-                        disabled={!puedeCrear}
+                        disabled={ocupado}
                         onClick={crear}
                       >
                         {ocupado ? (
