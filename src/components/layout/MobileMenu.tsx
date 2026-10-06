@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom"
-import { BookOpen, Boxes, Download, LifeBuoy, Moon, Smartphone, Sun, Tag } from "lucide-react"
+import { BookOpen, Boxes, Download, LayoutGrid, LifeBuoy, Moon, Smartphone, Sun, Tag } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -11,7 +11,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
-import { crossNav, downloadNav, mainNav, product, sessionCta } from "@/data/product"
+import { brand, crossNav, downloadNav, mainNav, sessionCta } from "@/data/product"
 import { useTheme } from "@/lib/theme"
 import { cn } from "@/lib/utils"
 
@@ -23,6 +23,7 @@ type MobileMenuProps = {
 }
 
 const iconoPorSeccion: Record<string, LucideIcon> = {
+  servicios: LayoutGrid,
   producto: Boxes,
   precios: Tag,
   dispositivos: Smartphone,
@@ -44,7 +45,7 @@ export function MobileMenu({ open, onOpenChange, activeSection }: MobileMenuProp
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="border-line">
         <SheetHeader>
-          <SheetTitle>{product.name}</SheetTitle>
+          <SheetTitle>{brand.name}</SheetTitle>
           <SheetDescription>Navegación del sitio</SheetDescription>
         </SheetHeader>
         <nav aria-label="Navegación móvil" className="flex flex-col gap-1 px-3">

@@ -1,14 +1,14 @@
-﻿import { Link } from "react-router-dom"
+import { Link } from "react-router-dom"
 
 import { Container } from "@/components/Container"
 import { Kicker } from "@/components/Panel"
 import { VersionPill } from "@/components/VersionPill"
 import {
+  brand,
   footerContent,
   footerLinks,
   headerLinks,
   legalLinks,
-  product,
 } from "@/data/product"
 
 const linkClassName =
@@ -26,12 +26,12 @@ export function SiteFooter() {
           <div className="min-w-0">
             <Link
               to="/"
-              aria-label={`${product.name}, ir al inicio`}
+              aria-label={`${brand.name}, ir al inicio`}
               className="inline-flex items-center gap-2.5 rounded-md focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
             >
               <img
                 src="/ariad-logo.webp"
-                alt="Logotipo de Ari-Tool"
+                alt="Logotipo de AriadGSM"
                 width={169}
                 height={112}
  loading="lazy"
@@ -39,7 +39,7 @@ export function SiteFooter() {
                 className="h-7 w-auto"
               />
               <span className="font-display text-sm font-extrabold tracking-[0.08em] text-foreground uppercase">
-                {product.name}
+                {brand.name}
               </span>
             </Link>
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-foreground/55">

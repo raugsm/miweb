@@ -19,8 +19,10 @@ export const product: Product = {
 export type NavItem = { label: string; href: string }
 
 export const headerLinks: NavItem[] = [
-  { label: "Producto", href: "/#producto" },
-  { label: "AriadGSM", href: "/gsm" },
+  { label: "Inicio", href: "/" },
+  { label: "Servicios", href: "/#servicios" },
+  { label: "App AriadGSM", href: "/gsm" },
+  { label: "Mi cuenta", href: "/cuenta" },
 ]
 
 /**
@@ -30,11 +32,12 @@ export const headerLinks: NavItem[] = [
  */
 export type MainNavItem = { label: string; href: string; section: string; hint: string }
 
+// En el mismo orden en que aparecen las secciones en la portada.
 export const mainNav: MainNavItem[] = [
-  { label: "Producto", href: "/#producto", section: "producto", hint: "Qué hace Ari-Tool" },
-  { label: "Precios", href: "/#precios", section: "precios", hint: "Créditos y licencia" },
+  { label: "Servicios", href: "/#servicios", section: "servicios", hint: "Todo lo que hacemos" },
+  { label: "Ari-Tool", href: "/#producto", section: "producto", hint: "Security Plugin y AntiCrack" },
   { label: "Dispositivos", href: "/#dispositivos", section: "dispositivos", hint: "Marcas y modelos" },
-  { label: "Servicios", href: "/#servicios", section: "servicios", hint: "Xiaomi FRP, Cuentas MI, Motorola y más" },
+  { label: "Precios", href: "/#precios", section: "precios", hint: "Créditos y licencia" },
   { label: "Guía", href: "/#guia", section: "guia", hint: "Cómo usarlo, paso a paso" },
   { label: "Soporte", href: "/#soporte", section: "soporte", hint: "WhatsApp y ayuda" },
 ]
@@ -47,12 +50,12 @@ export const downloadNav: MainNavItem = {
   hint: "Última versión y novedades",
 }
 
-/** AriadGSM es otra sección/producto: va aparte, no como una sección de la portada. */
+/** La app de servicios remotos (Xiaomi Reset + FRP, Cuentas MI) tiene su propia página. */
 export const crossNav: MainNavItem = {
-  label: "AriadGSM Cliente",
+  label: "App AriadGSM",
   href: "/gsm",
   section: "gsm",
-  hint: "App de servicios: Xiaomi Reset + FRP, Cuentas MI y más",
+  hint: "Xiaomi Reset + FRP y Cuentas MI, con precio por país",
 }
 
 export const pageLinks: NavItem[] = [
@@ -61,15 +64,13 @@ export const pageLinks: NavItem[] = [
 ]
 
 export const footerLinks: NavItem[] = [
-  { label: "Producto", href: "/#producto" },
-  { label: "Precios", href: "/#precios" },
+  { label: "Ari-Tool", href: "/#producto" },
   { label: "Dispositivos", href: "/#dispositivos" },
-  { label: "Servicios GSM", href: "/#servicios" },
+  { label: "Precios", href: "/#precios" },
   { label: "Descargar", href: "/descargas" },
   { label: "Guía", href: "/#guia" },
   { label: "Preguntas frecuentes", href: "/#faq" },
   { label: "Soporte", href: "/#soporte" },
-  { label: "AriadGSM Cliente", href: "/gsm" },
 ]
 
 /** Enlaces legales del pie: una sola página /legal con secciones ancladas. */
@@ -82,23 +83,61 @@ export const legalLinks: NavItem[] = [
 
 // Sin boton de descarga en la barra: confundia, porque aparecia en todas las
 // paginas sin decir que descargaba. Cada producto tiene el suyo donde
-// corresponde: Ari-Tool en la portada y AriadGSM Cliente en /gsm.
+// corresponde: Ari-Tool en la portada y la app AriadGSM en /gsm.
 
 /** Acceso de clientes: reemplaza al item "Mi cuenta" que antes vivia en el menu. */
 export const sessionCta: NavItem = { label: "Iniciar sesión", href: "/cuenta" }
 
+/**
+ * La marca del sitio. Ari-Tool es uno de nuestros servicios; la casa es
+ * AriadGSM, y así se presenta en el encabezado, el menú y el pie.
+ */
+export const brand = { name: "AriadGSM" }
+
+/**
+ * Hero de la portada: una sola empresa con todo el catálogo. Nada de "dos
+ * mundos" ni de "estamos migrando": el cliente ve AriadGSM y todo lo que hace.
+ */
 export const heroContent = {
-  kicker: "Security Plugin (MDM) + AntiCrack · MediaTek",
-  title: "Remoción de Security Plugin y AntiCrack.",
-  lead: "Ari-Tool trabaja equipos Tecno, Infinix e itel con MediaTek: remueve el Security Plugin (MDM) y el AntiCrack, con la ROM del modelo ya lista. Conectás por Fastboot, flasheás y el equipo vuelve a ser del cliente.",
-  highlights: ["Security Plugin fuera", "AntiCrack fuera", "424 modelos, ROM lista"],
-  primaryCta: "Descargar para Windows",
-  secondaryCta: "Ver el producto",
-  trustSuffix: "Windows 10/11",
+  kicker: "Ariad GSM",
+  titleLead: "Todo para desbloquear,",
+  titleHighlight: "en un solo lugar.",
+  lead: "Software y servicios remotos para técnicos, con pagos automáticos y soporte directo por WhatsApp.",
+  primaryCta: { label: "Ver servicios", href: "#servicios" },
+  secondaryCta: { label: "Descargar Ari-Tool", href: "/descargas" },
+  services: [
+    "Ari-Tool · Tecno, Infinix, itel",
+    "Xiaomi Reset + FRP",
+    "Cuentas MI",
+    "Motorola F4",
+    "Servicios especiales",
+  ],
+  status: "Sistemas en línea",
+  /** Consola de arranque de la primera visita (texto real, no adorno). */
+  boot: [
+    { text: "> ariad.sys  iniciando…", ok: false },
+    { text: "> Ari-Tool · 424 modelos", ok: true },
+    { text: "> servicios remotos · Xiaomi · Motorola · MI", ok: true },
+    { text: "> pagos · Binance Pay · Yape", ok: true },
+    { text: "> conexión segura", ok: true },
+  ],
+  panelLeft: {
+    kicker: "Compatibilidad",
+    value: 424,
+    label: "modelos soportados",
+    detail: "Tecno · Infinix · itel",
+  },
+  panelRight: {
+    kicker: "Android",
+    from: 12,
+    to: 16,
+    label: "versiones cubiertas",
+    detail: "MediaTek · Fastboot",
+  },
 }
 
 export const productSection = {
-  eyebrow: "Producto",
+  eyebrow: "Ari-Tool",
   title: "Una sola herramienta, control total",
   lead: "Todo en una app de escritorio: catálogo listo, proceso guiado y validaciones en cada escritura.",
 }
@@ -160,7 +199,7 @@ export const requirements: string[] = [
 
 export const footerContent = {
   tagline:
-    "AriadGSM, una sola casa para técnicos: el software Ari-Tool (remueve Security Plugin/MDM y AntiCrack en Tecno, Infinix e itel) y nuestros servicios remotos de siempre — Xiaomi Reset + FRP, Cuentas MI, Motorola y más.",
+    "AriadGSM: software y servicios remotos para técnicos. Ari-Tool (Security Plugin/MDM y AntiCrack en Tecno, Infinix e itel), Xiaomi Reset + FRP, Cuentas MI, Motorola y más.",
   navTitle: "Navegación",
   resourcesTitle: "Recursos",
   copyright: "© 2026 AriadGSM · Ariad. Todos los derechos reservados.",

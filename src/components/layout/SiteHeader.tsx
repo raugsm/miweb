@@ -1,10 +1,10 @@
-﻿import { lazy, Suspense, useState } from "react"
+import { lazy, Suspense, useState } from "react"
 import { Link, useLocation } from "react-router-dom"
 import { Menu, Moon, Sun } from "lucide-react"
 
 import { Container } from "@/components/Container"
 import { Button } from "@/components/ui/button"
-import { crossNav, downloadNav, mainNav, product, sessionCta } from "@/data/product"
+import { brand, crossNav, downloadNav, mainNav, sessionCta } from "@/data/product"
 import { useScrollSpy } from "@/hooks/use-scroll-spy"
 import { useTheme } from "@/lib/theme"
 import { cn } from "@/lib/utils"
@@ -25,7 +25,7 @@ export function SiteHeader() {
   const { pathname, hash } = useLocation()
   const onHome = pathname === "/"
   const spy = useScrollSpy(
-    ["producto", "caracteristicas", "dispositivos", "precios", "guia", "faq", "soporte"],
+    ["servicios", "producto", "caracteristicas", "dispositivos", "precios", "guia", "faq", "soporte"],
     onHome
   )
   const activeSection = onHome
@@ -46,19 +46,19 @@ export function SiteHeader() {
       <Container className="flex h-14 items-center justify-between gap-4">
         <Link
           to="/"
-          aria-label={`${product.name}, ir al inicio`}
+          aria-label={`${brand.name}, ir al inicio`}
           className="flex min-w-0 items-center gap-2.5 rounded-md focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
         >
           <img
             src="/ariad-logo.webp"
-            alt="Logotipo de Ari-Tool"
+            alt="Logotipo de AriadGSM"
             width={169}
             height={112}
             fetchPriority="high"
             className="h-7 w-auto"
           />
           <span className="truncate font-heading text-[15px] font-semibold tracking-tight text-foreground">
-            {product.name}
+            {brand.name}
           </span>
         </Link>
 

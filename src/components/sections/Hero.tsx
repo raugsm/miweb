@@ -1,129 +1,328 @@
-﻿import { useRef } from "react"
-import { ArrowRight, Check } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
+import { Link } from "react-router-dom"
+import { ArrowRight } from "lucide-react"
 
 import { Container } from "@/components/Container"
-import { DownloadButton } from "@/components/DownloadButton"
-import WorldMapAscii from "@/components/registry/world-map-ascii/world-map-ascii"
-import { heroContent, product } from "@/data/product"
+import { CountUp } from "@/components/CountUp"
+import { Button } from "@/components/ui/button"
+import type { HeroScene } from "@/components/hero/hero-scene"
+import { heroContent } from "@/data/product"
 import { useInView } from "@/hooks/use-in-view"
 import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion"
-import { useRelease } from "@/lib/release"
+import { cn } from "@/lib/utils"
 
+// La secuencia larga (consola + armado del logo) se ve una vez por sesión.
+// Al volver a la portada, el logo se arma rápido y el texto ya está a la vista.
+const INTRO_KEY = "ariad-hero-intro"
+
+function introYaVista(): boolean {
+  try {
+    return sessionStorage.getItem(INTRO_KEY) === "1"
+  } catch {
+    return false
+  }
+}
+
+function marcarIntroVista() {
+  try {
+    sessionStorage.setItem(INTRO_KEY, "1")
+  } catch {
+    // sin almacenamiento: la próxima visita repite la intro, no pasa nada
+  }
+}
+
+/** Glifo AR estático: respaldo sin WebGL y primer cuadro en visitas repetidas. */
+function GlyphAR({ className }: { className?: string }) {
+  return (
+    <svg viewBox="94 157 330 230" width="330" height="230" aria-hidden="true" className={className}>
+      <g transform="translate(58 78) scale(0.39)">
+        <path d="M92 790L362 202H505L790 790H610L552 660H338L281 790Z" fill="#fff" />
+        <path
+          d="M508 202H790C887 202 933 274 896 363L854 463C832 516 790 544 728 548L897 790H699L548 562H473L531 428H712C742 428 765 414 776 388L790 354C805 319 785 292 744 292H467Z"
+          fill="#fff"
+        />
+        <path d="M414 368L365 520H498L447 368Z" fill="#04060d" />
+        <path d="M506 202L366 520" stroke="#04060d" strokeWidth="34" strokeLinecap="round" />
+        <path d="M338 660H552" stroke="#04060d" strokeWidth="38" strokeLinecap="round" />
+        <path d="M548 562L699 790" stroke="#04060d" strokeWidth="32" strokeLinecap="round" />
+      </g>
+    </svg>
+  )
+}
+
+/** Consola de arranque: escribe las líneas de a poco, como un sistema que inicia. */
+function BootConsole() {
+  const lines = heroContent.boot
+  const [state, setState] = useState({ line: 0, chars: 0 })
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setState((s) => {
+        if (s.line >= lines.length) return s
+        const next = s.chars + 2
+        return next >= lines[s.line].text.length ? { line: s.line + 1, chars: 0 } : { ...s, chars: next }
+      })
+    }, 16)
+    return () => window.clearInterval(id)
+  }, [lines])
+
+  return (
+    <div
+      aria-hidden="true"
+      className="pointer-events-none absolute bottom-[18%] left-1/2 -translate-x-1/2 font-mono text-[11px] leading-[1.9] whitespace-pre text-[#7aa9ff] sm:text-xs"
+    >
+      {lines.slice(0, state.line).map((l) => (
+        <div key={l.text}>
+          {l.text}
+          {l.ok ? <span className="text-[#3dff9a]">{"  [ OK ]"}</span> : null}
+        </div>
+      ))}
+      <div>
+        {state.line < lines.length ? lines[state.line].text.slice(0, state.chars) : ""}
+        <span className="inline-block h-[13px] w-[7px] animate-pulse bg-[#7aa9ff] align-[-2px]" />
+      </div>
+    </div>
+  )
+}
+
+type SceneState = "loading" | "ready" | "failed"
+
+/**
+ * Hero de la portada. Fondo siempre oscuro (en ambos temas) con la escena 3D:
+ * las partículas arman el logo AR, que queda rodeado por un HUD tecnológico.
+ * Three.js se descarga aparte y solo si hay WebGL; si no, queda el logo fijo.
+ */
 export function Hero() {
-  const { versionLabel } = useRelease()
-  const sectionRef = useRef<HTMLElement>(null)
-  const reducedMotion = usePrefersReducedMotion()
-  const inView = useInView(sectionRef)
+  const hostRef = useRef<HTMLElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const stageRef = useRef<HTMLDivElement>(null)
+  const panelLeftRef = useRef<HTMLDivElement>(null)
+  const panelRightRef = useRef<HTMLDivElement>(null)
+  const sceneRef = useRef<HeroScene | null>(null)
+  const activeRef = useRef(true)
+
+  const reduced = usePrefersReducedMotion()
+  const inView = useInView(hostRef)
+  const [quick] = useState(introYaVista)
+  const [initialReduced] = useState(reduced)
+  const [sceneState, setSceneState] = useState<SceneState>("loading")
+  const [revealed, setRevealed] = useState(quick || reduced)
+  const [solid, setSolid] = useState(false)
+  const [pageHidden, setPageHidden] = useState(false)
+
+  // Monta la escena una sola vez.
+  useEffect(() => {
+    let cancelled = false
+    let scene: HeroScene | null = null
+
+    import("@/components/hero/hero-scene")
+      .then(({ createHeroScene }) => {
+        const canvas = canvasRef.current
+        const host = hostRef.current
+        const stage = stageRef.current
+        const left = panelLeftRef.current
+        const right = panelRightRef.current
+        if (cancelled || !canvas || !host || !stage || !left || !right) return
+        try {
+          scene = createHeroScene({
+            canvas,
+            host,
+            stage,
+            panels: { left, right },
+            reduced: initialReduced,
+            quick,
+            onFormed: () => {
+              setRevealed(true)
+              marcarIntroVista()
+            },
+            onSolid: () => setSolid(true),
+          })
+        } catch {
+          scene = null
+        }
+        if (!scene) {
+          setSceneState("failed")
+          setRevealed(true)
+          return
+        }
+        sceneRef.current = scene
+        setSceneState("ready")
+        scene.setActive(activeRef.current)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setSceneState("failed")
+        setRevealed(true)
+      })
+
+    return () => {
+      cancelled = true
+      scene?.destroy()
+      sceneRef.current = null
+    }
+  }, [initialReduced, quick])
+
+  // Red de seguridad: el texto nunca queda oculto más de unos segundos.
+  useEffect(() => {
+    if (revealed) return
+    const id = window.setTimeout(() => setRevealed(true), 4200)
+    return () => window.clearTimeout(id)
+  }, [revealed])
+
+  // Pausa la animación fuera de pantalla o con la pestaña oculta.
+  useEffect(() => {
+    const onVis = () => setPageHidden(document.visibilityState === "hidden")
+    document.addEventListener("visibilitychange", onVis)
+    return () => document.removeEventListener("visibilitychange", onVis)
+  }, [])
+  useEffect(() => {
+    activeRef.current = inView && !pageHidden
+    sceneRef.current?.setActive(activeRef.current)
+  }, [inView, pageHidden])
+
+  const showBoot = !quick && !initialReduced && !revealed
+  const showStaticLogo = sceneState === "failed" || (quick && sceneState === "loading")
+  const reveal = (delayMs: number) => ({
+    className: cn(
+      "transition-[opacity,translate] duration-700 ease-out motion-reduce:transition-none",
+      revealed ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
+    ),
+    style: { transitionDelay: revealed ? `${delayMs}ms` : "0ms" },
+  })
+  const r = (delayMs: number, extra: string) => {
+    const v = reveal(delayMs)
+    return { className: cn(v.className, extra), style: v.style }
+  }
 
   return (
     <section
-      ref={sectionRef}
+      ref={hostRef}
       aria-labelledby="hero-title"
-      className="relative isolate overflow-hidden border-b border-line font-tech"
+      className="relative isolate flex min-h-[max(640px,calc(100svh-3.5rem))] flex-col overflow-hidden border-b border-line bg-[#04060d] text-white"
     >
-      {/* Fondo: mapa mundi de partículas */}
-      <div aria-hidden="true" className="absolute inset-0 -z-10">
-        <WorldMapAscii
-          color="#4d8dff"
-          particleSize={0.85}
-          density={7}
-          mouseRadius={90}
-          drift={0.05}
-          paused={reducedMotion || !inView}
-          interactionTarget={sectionRef}
-          className="opacity-80 [mask-image:radial-gradient(ellipse_70%_75%_at_50%_50%,black_35%,transparent_100%)]"
-        />
-        {/* Halo azul central */}
-        <div className="absolute top-1/2 left-1/2 h-[42rem] w-[68rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(closest-side,rgba(0,82,212,0.16),transparent)]" />
-        {/* Degradados de legibilidad */}
-        <div className="absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-background to-transparent" />
-        <div className="absolute inset-x-0 bottom-0 h-36 bg-gradient-to-t from-background to-transparent" />
-        <div className="absolute inset-y-0 left-0 w-full bg-gradient-to-r from-background/85 via-background/40 to-transparent lg:w-[62%]" />
+      {/* Fondo: resplandor azul, escena 3D, viñeta y líneas de monitor */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(1100px_650px_at_50%_30%,rgba(32,112,252,0.14),transparent_62%)]"
+      />
+      <canvas ref={canvasRef} aria-hidden="true" className="absolute inset-0 -z-10 size-full" />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 -z-10 bg-[linear-gradient(to_bottom,transparent_50%,rgba(4,6,13,0.88)_92%),radial-gradient(130%_110%_at_50%_35%,transparent_60%,rgba(2,3,8,0.6)_100%)]"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 -z-10 bg-[repeating-linear-gradient(to_bottom,rgba(255,255,255,0.018)_0_1px,transparent_1px_3px)] opacity-40"
+      />
+
+      {/* Estado, arriba a la izquierda */}
+      <div
+        aria-hidden="true"
+        className={cn(
+          "pointer-events-none absolute top-4 left-4 flex items-center gap-2 font-mono text-[10px] tracking-[0.16em] text-[#5d74a3] uppercase transition-opacity duration-700 sm:left-6",
+          revealed ? "opacity-100" : "opacity-0"
+        )}
+      >
+        <span className="size-1.5 animate-pulse rounded-full bg-[#3dff9a] shadow-[0_0_10px_#3dff9a]" />
+        {heroContent.status}
       </div>
 
-      <Container className="relative py-16 sm:py-24 lg:py-28">
-        <div className="grid items-center gap-14 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:gap-10">
-          {/* Columna de texto */}
-          <div className="min-w-0">
-            <p className="inline-flex items-center gap-2 rounded-full border border-cobalt/40 bg-cobalt/10 px-3 py-1 font-display text-[11px] font-bold tracking-[0.2em] text-kicker uppercase">
-              <span className="size-1.5 rounded-full bg-[#4d8dff] shadow-[0_0_10px_#4d8dff]" />
-              {heroContent.kicker}
-            </p>
-
-            <h1
-              id="hero-title"
-              className="mt-6 max-w-2xl font-display text-[2.1rem] leading-[1.12] font-extrabold tracking-[0.04em] text-balance text-foreground uppercase sm:text-5xl lg:text-[3.4rem]"
-            >
-              {heroContent.title}
-            </h1>
-
-            {/* Sentence case a propósito: un párrafo largo en mayúsculas se lee
-                mal y da aire de plantilla. El uppercase queda solo en el
-                kicker, el título y los chips. */}
-            <p className="mt-6 max-w-xl font-sans text-sm leading-relaxed text-pretty text-foreground/70 sm:text-[15px]">
-              {heroContent.lead}
-            </p>
-
-            <ul className="mt-7 flex flex-wrap gap-x-6 gap-y-2.5 text-xs font-bold tracking-[0.14em] text-foreground/75 uppercase">
-              {heroContent.highlights.map((item) => (
-                <li key={item} className="inline-flex items-center gap-2">
-                  <Check
-                    aria-hidden="true"
-                    className="size-4 shrink-0 text-cyan"
-                    strokeWidth={2.5}
-                  />
-                  {item}
-                </li>
-              ))}
-            </ul>
-
-            <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
-              <DownloadButton
-                label={heroContent.primaryCta}
-                className="text-xs font-bold tracking-[0.14em] uppercase"
-              />
-              <a
-                href="#producto"
-                className="group inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-line bg-foreground/[0.03] px-5 text-xs font-bold tracking-[0.14em] text-foreground uppercase transition-colors hover:border-foreground/30 hover:bg-foreground/[0.06] focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
-              >
-                {heroContent.secondaryCta}
-                <ArrowRight
-                  aria-hidden="true"
-                  className="size-4 transition-transform group-hover:translate-x-0.5"
-                />
-              </a>
-            </div>
-
-            <p className="mt-6 text-xs font-semibold tracking-[0.16em] text-foreground/50 uppercase">
-              {product.name} {versionLabel} · {heroContent.trustSuffix}
-            </p>
-          </div>
-
-          {/* Columna visual: mano con el certificado de garantia en pantalla */}
-          <div className="relative flex min-w-0 items-center justify-center lg:justify-end">
-            <div
-              aria-hidden="true"
-              className="absolute top-1/2 left-1/2 h-[30rem] w-[30rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(closest-side,rgba(77,141,255,0.30),rgba(0,82,212,0.14)_45%,rgba(0,82,212,0.04)_70%,transparent)] sm:h-[38rem] sm:w-[38rem]"
-            />
-            <div
-              aria-hidden="true"
-              className="absolute top-1/2 left-1/2 h-[22rem] w-[22rem] -translate-x-1/2 -translate-y-1/2 rounded-full border border-cobalt/25 sm:h-[30rem] sm:w-[30rem]"
-            />
-            <div
-              aria-hidden="true"
-              className="absolute top-1/2 left-1/2 h-[28rem] w-[28rem] -translate-x-1/2 -translate-y-1/2 rounded-full border border-cobalt/10 sm:h-[38rem] sm:w-[38rem]"
-            />
-            <img
-              src="/mano-garantia.avif"
-              alt="Mano sosteniendo un celular que muestra el certificado de garantía del equipo"
-              width={632}
-              height={1024}
-              fetchPriority="high"
-              decoding="async"
-              className="relative h-[24rem] w-auto max-w-full object-contain drop-shadow-[0_30px_60px_rgba(0,82,212,0.45)] motion-safe:animate-hero-float sm:h-[30rem] lg:h-[34rem] xl:h-[36rem]"
-            />
-          </div>
+      {/* Paneles de datos: la escena los ubica al final de las pistas de circuito */}
+      <div
+        ref={panelLeftRef}
+        aria-hidden="true"
+        className={cn(
+          "pointer-events-none absolute hidden w-[190px] -translate-y-1/2 text-right font-mono transition-opacity duration-700",
+          solid ? "opacity-100" : "opacity-0"
+        )}
+      >
+        <div className="text-[10px] tracking-[0.2em] text-[#5d74a3] uppercase">{heroContent.panelLeft.kicker}</div>
+        <div className="mt-2 mb-1.5 font-display text-[44px] leading-none font-extrabold tracking-tight text-white">
+          <CountUp target={heroContent.panelLeft.value} run={solid} durationMs={1400} />
         </div>
+        <div className="text-[11px] leading-relaxed text-[#9db0d4]">
+          {heroContent.panelLeft.label}
+          <br />
+          {heroContent.panelLeft.detail}
+        </div>
+        <div className="mt-3 h-0.5 bg-[linear-gradient(270deg,transparent,#2070fc)]" />
+      </div>
+      <div
+        ref={panelRightRef}
+        aria-hidden="true"
+        className={cn(
+          "pointer-events-none absolute hidden w-[190px] -translate-y-1/2 font-mono transition-opacity duration-700",
+          solid ? "opacity-100" : "opacity-0"
+        )}
+      >
+        <div className="text-[10px] tracking-[0.2em] text-[#5d74a3] uppercase">{heroContent.panelRight.kicker}</div>
+        <div className="mt-2 mb-1.5 font-display text-[44px] leading-none font-extrabold tracking-tight text-white">
+          {heroContent.panelRight.from} <span className="text-[22px] text-[#7aa9ff]">→</span> {heroContent.panelRight.to}
+        </div>
+        <div className="text-[11px] leading-relaxed text-[#9db0d4]">
+          {heroContent.panelRight.label}
+          <br />
+          {heroContent.panelRight.detail}
+        </div>
+        <div className="mt-3 h-0.5 bg-[linear-gradient(90deg,transparent,#2070fc)]" />
+      </div>
+
+      {/* Zona del logo: la escena centra y escala el AR acá adentro */}
+      <div ref={stageRef} className="relative flex min-h-[200px] flex-1 items-center justify-center">
+        <GlyphAR
+          className={cn(
+            "h-[clamp(110px,22vh,190px)] w-auto shrink-0 drop-shadow-[0_0_28px_rgba(32,112,252,0.85)] transition-opacity duration-500",
+            showStaticLogo ? "opacity-100" : "opacity-0"
+          )}
+        />
+      </div>
+
+      {showBoot ? <BootConsole /> : null}
+
+      <Container className="relative flex flex-col items-center pt-2 pb-12 text-center sm:pb-16">
+        <p {...r(0, "font-display text-[13px] font-black tracking-[0.32em] text-white uppercase sm:text-sm")}>
+          Ariad <span className="text-[#7aa9ff]">GSM</span>
+        </p>
+        <h1
+          id="hero-title"
+          {...r(100, "mt-3.5 max-w-[18ch] font-display text-[2rem] leading-[1.05] font-extrabold tracking-tight text-balance sm:text-5xl lg:text-[3.4rem]")}
+        >
+          {heroContent.titleLead}{" "}
+          <span className="bg-[linear-gradient(100deg,#fff_0%,#7aa9ff_60%,#2070fc_100%)] bg-clip-text text-transparent">
+            {heroContent.titleHighlight}
+          </span>
+        </h1>
+        <p {...r(220, "mt-4 max-w-[54ch] text-[15px] leading-relaxed text-pretty text-[#9db0d4] sm:text-lg")}>
+          {heroContent.lead}
+        </p>
+        <div {...r(340, "mt-6 flex flex-wrap justify-center gap-3")}>
+          <Button
+            asChild
+            className="h-11 rounded-xl bg-[#2070fc] px-6 text-[15px] font-semibold text-white shadow-[0_10px_30px_-8px_rgba(32,112,252,0.65)] hover:bg-[#3b83ff]"
+          >
+            <a href={heroContent.primaryCta.href}>
+              {heroContent.primaryCta.label}
+              <ArrowRight aria-hidden="true" className="size-4" />
+            </a>
+          </Button>
+          <Button
+            asChild
+            variant="outline"
+            className="h-11 rounded-xl border-white/15 bg-white/[0.03] px-6 text-[15px] font-semibold text-white hover:border-[#7aa9ff]/60 hover:bg-[#7aa9ff]/10 hover:text-white"
+          >
+            <Link to={heroContent.secondaryCta.href}>{heroContent.secondaryCta.label}</Link>
+          </Button>
+        </div>
+        <ul {...r(480, "mt-6 flex max-w-3xl flex-wrap justify-center gap-2")} aria-label="Servicios">
+          {heroContent.services.map((s) => (
+            <li
+              key={s}
+              className="rounded-full border border-[#7aa9ff]/20 bg-[#7aa9ff]/[0.05] px-3 py-1.5 text-xs text-white/90"
+            >
+              {s}
+            </li>
+          ))}
+        </ul>
       </Container>
     </section>
   )
