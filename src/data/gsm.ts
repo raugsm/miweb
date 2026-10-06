@@ -73,3 +73,47 @@ export const gsmMotorola = {
 }
 
 export const gsmWhatsappSupportUrl = "https://wa.me/51961751354"
+export const gsmVentasWhatsappUrl =
+  "https://wa.me/51970748831?text=Hola%2C%20quiero%20consultar%20un%20servicio%20de%20AriadGSM"
+
+/**
+ * Sección "Servicios AriadGSM" que vive en la PORTADA (home). Existe para que un
+ * cliente de siempre —que entra y ve Ari-Tool— vea de una que los servicios
+ * remotos de AriadGSM SIGUEN activos (no se dejaron de vender). Es la pieza que
+ * une las dos caras: software Ari-Tool + servicios remotos, una sola casa.
+ */
+export const serviciosGsm = {
+  id: "servicios",
+  eyebrow: "AriadGSM · Servicios remotos",
+  title: "Y seguimos con todos los servicios de siempre.",
+  lead:
+    "Ari-Tool es nuestro software para Tecno, Infinix e itel. Pero AriadGSM es toda la casa: los servicios remotos para técnicos siguen 100% activos, con la misma cuenta y el mismo WhatsApp de siempre.",
+  items: [
+    {
+      titulo: "Xiaomi Reset + FRP",
+      descripcion:
+        "El servicio de siempre, ahora desde la app AriadGSM Cliente para Windows: precio por país, pedido guiado y proceso remoto.",
+      etiqueta: "App · precio por país",
+    },
+    {
+      titulo: "Cuentas MI (Xiaomi)",
+      descripcion:
+        "Gestión de cuenta MI de Xiaomi. Consultá disponibilidad y precio por país dentro de la app.",
+      etiqueta: "App",
+    },
+    {
+      titulo: "Motorola F4",
+      descripcion:
+        "Modelos soportados por procesador y modalidad. Se valida y atiende directo con ventas por WhatsApp.",
+      etiqueta: "WhatsApp ventas",
+    },
+    {
+      titulo: "Servicios especiales",
+      descripcion:
+        "Otras marcas y pedidos puntuales que no están en la app se coordinan directo con ventas por WhatsApp.",
+      etiqueta: "WhatsApp",
+    },
+  ],
+  appCta: { label: "Ver servicios y precios", href: "/gsm" },
+  waCta: { label: "Consultar por WhatsApp", href: gsmVentasWhatsappUrl },
+}

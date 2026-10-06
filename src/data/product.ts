@@ -34,6 +34,7 @@ export const mainNav: MainNavItem[] = [
   { label: "Producto", href: "/#producto", section: "producto", hint: "Qué hace Ari-Tool" },
   { label: "Precios", href: "/#precios", section: "precios", hint: "Créditos y licencia" },
   { label: "Dispositivos", href: "/#dispositivos", section: "dispositivos", hint: "Marcas y modelos" },
+  { label: "Servicios", href: "/#servicios", section: "servicios", hint: "Xiaomi FRP, Cuentas MI, Motorola y más" },
   { label: "Guía", href: "/#guia", section: "guia", hint: "Cómo usarlo, paso a paso" },
   { label: "Soporte", href: "/#soporte", section: "soporte", hint: "WhatsApp y ayuda" },
 ]
@@ -48,10 +49,10 @@ export const downloadNav: MainNavItem = {
 
 /** AriadGSM es otra sección/producto: va aparte, no como una sección de la portada. */
 export const crossNav: MainNavItem = {
-  label: "AriadGSM",
+  label: "AriadGSM Cliente",
   href: "/gsm",
   section: "gsm",
-  hint: "Desbloqueo FRP de Xiaomi y más",
+  hint: "App de servicios: Xiaomi Reset + FRP, Cuentas MI y más",
 }
 
 export const pageLinks: NavItem[] = [
@@ -63,11 +64,12 @@ export const footerLinks: NavItem[] = [
   { label: "Producto", href: "/#producto" },
   { label: "Precios", href: "/#precios" },
   { label: "Dispositivos", href: "/#dispositivos" },
+  { label: "Servicios GSM", href: "/#servicios" },
   { label: "Descargar", href: "/descargas" },
   { label: "Guía", href: "/#guia" },
   { label: "Preguntas frecuentes", href: "/#faq" },
   { label: "Soporte", href: "/#soporte" },
-  { label: "AriadGSM", href: "/gsm" },
+  { label: "AriadGSM Cliente", href: "/gsm" },
 ]
 
 /** Enlaces legales del pie: una sola página /legal con secciones ancladas. */
@@ -158,7 +160,7 @@ export const requirements: string[] = [
 
 export const footerContent = {
   tagline:
-    "Ari-Tool es la herramienta de AriadGSM para remover el Security Plugin (MDM) y el AntiCrack de equipos Tecno, Infinix e itel con MediaTek.",
+    "AriadGSM, una sola casa para técnicos: el software Ari-Tool (remueve Security Plugin/MDM y AntiCrack en Tecno, Infinix e itel) y nuestros servicios remotos de siempre — Xiaomi Reset + FRP, Cuentas MI, Motorola y más.",
   navTitle: "Navegación",
   resourcesTitle: "Recursos",
   copyright: "© 2026 AriadGSM · Ariad. Todos los derechos reservados.",
