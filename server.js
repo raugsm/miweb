@@ -1297,6 +1297,28 @@ async function fetchSupabasePublicRows(tableName, select, order = "") {
   return Array.isArray(payload) ? payload : [];
 }
 
+// Precios publicos FRP + Cuentas MI vienen del GATEWAY (Ariad_SecurityPlugin) desde
+// 2026-10-11: Peter decidio que los precios se manejan desde esa base. La edge
+// `precio_publico` devuelve {settings, tasas} con el shape historico del builder.
+const precioPublicoGatewayUrl = String(
+  process.env.ARIAD_PRECIO_PUBLICO_URL ||
+    "https://sdarsjdwnuimjruthjwz.supabase.co/functions/v1/precio_publico"
+).replace(/\/+$/, "");
+
+async function fetchPrecioPublicoGateway() {
+  const response = await fetch(precioPublicoGatewayUrl, {
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error(`precio_publico gateway HTTP ${response.status}`);
+  }
+  const payload = await response.json();
+  if (!Array.isArray(payload?.settings) || !Array.isArray(payload?.tasas)) {
+    throw new Error("precio_publico gateway shape invalido");
+  }
+  return { settingsRows: payload.settings, exchangeRateRows: payload.tasas };
+}
+
 async function publicClientAppFrpPriceReport() {
   const now = Date.now();
   if (clientAppPriceReportCache.report && clientAppPriceReportCache.expiresAt > now) {
@@ -1305,15 +1327,14 @@ async function publicClientAppFrpPriceReport() {
   const key = supabaseAnonKey();
   if (!key) {
     if (!warnedMissingSupabaseAnonKeyForPrices) {
-      console.warn("SUPABASE_ANON_KEY no esta configurada; /api/public/frp-prices no puede leer precios de AriadGSM Cliente.");
+      console.warn("SUPABASE_ANON_KEY no esta configurada; /api/public/frp-prices no puede leer metodos de pago de AriadGSM Cliente.");
       warnedMissingSupabaseAnonKeyForPrices = true;
     }
     throw new Error("SUPABASE_ANON_KEY no esta configurada.");
   }
   try {
-    const [settingsRows, exchangeRateRows, paymentMethodRows, toolRows] = await Promise.all([
-      fetchSupabasePublicRows("public_client_settings", "key,value"),
-      fetchSupabasePublicRows("public_country_exchange_rates", "country_code,currency,rate"),
+    const [{ settingsRows, exchangeRateRows }, paymentMethodRows, toolRows] = await Promise.all([
+      fetchPrecioPublicoGateway(),
       fetchSupabasePublicRows(
         "public_payment_methods",
         "id,country_code,method_name,display_order,fields,qr_storage_path",
