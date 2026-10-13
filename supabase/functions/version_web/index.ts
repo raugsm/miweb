@@ -65,9 +65,20 @@ serve(async (req) => {
       return resp(200, { version: null, soporte });
     }
 
+    // BLINDAJE (13-oct, tras el incidente 9.9.9): solo se publica una version que
+    // este REGISTRADA en negocio.version_app (canal estable, estado activo). Una
+    // carpeta suelta en el bucket (pruebas, subidas a medias) no engaña el "numero
+    // mas alto" aunque sea mayor.
+    const { data: registradas } = await db.schema("negocio")
+      .from("version_app").select("version")
+      .eq("canal", "estable").eq("estado", "activo");
+    const permitidas = new Set(
+      ((registradas ?? []) as { version: string }[]).map((v) => String(v.version))
+    );
+
     // Las carpetas vienen sin id. Solo las que son un número de versión.
     const versiones = (carpetas as Entrada[] ?? [])
-      .filter((x) => x.id === null && esVersion(x.name))
+      .filter((x) => x.id === null && esVersion(x.name) && permitidas.has(x.name))
       .map((x) => x.name)
       .sort(comparar);
 
