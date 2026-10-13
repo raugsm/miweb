@@ -190,7 +190,14 @@ const publicBaseUrl = String(process.env.ARIAD_PUBLIC_URL || process.env.RENDER_
 const mailFrom = process.env.ARIAD_MAIL_FROM || '"AriadGSM Soporte" <soporte@ariadgsm.com>';
 const customerPortalBaseUrl = resolveCustomerPortalBaseUrl();
 const releaseCommit = releaseCommitFromEnv(process.env);
-const supabaseProjectUrl = String(process.env.SUPABASE_URL || "https://duvpkpfivcnftxelgqtt.supabase.co").replace(/\/+$/, "");
+// CORTE de la base vieja de Erasmo (13-oct, OK Peter): la web lee SIEMPRE del
+// proyecto A (sdarsjdwnuimjruthjwz). Si Render todavia tiene env viejas de B
+// (duvpkpfivcnftxelgqtt), se ignoran. La publishable key de A es publica por diseno.
+const supabaseProjectUrl = String(
+  process.env.SUPABASE_URL && !String(process.env.SUPABASE_URL).includes("duvpkpfivcnftxelgqtt")
+    ? process.env.SUPABASE_URL
+    : "https://sdarsjdwnuimjruthjwz.supabase.co"
+).replace(/\/+$/, "");
 const supabaseRestUrl = `${supabaseProjectUrl}/rest/v1`;
 const latestClientVersionRpcUrl = `${supabaseRestUrl}/rpc/get_latest_client_version`;
 const latestClientVersionCacheTtlMs = 5 * 60 * 1000;
@@ -1271,7 +1278,11 @@ function portalFrpPriceSuggestion(db, clientId, quantity, canUseBenefits, benefi
 }
 
 function supabaseAnonKey() {
-  return String(process.env.SUPABASE_ANON_KEY || "").trim();
+  const env = String(process.env.SUPABASE_ANON_KEY || "").trim();
+  // Si la env es la anon vieja de B (su JWT contiene el ref de B), se ignora:
+  // la web usa la publishable key de A (publica por diseno).
+  if (env && !env.includes("duvpkpfivcnftxelgqtt")) return env;
+  return "sb_publishable_XVMUL7TMS7SjAtKV42Hn6g_Bpksm3Ux";
 }
 
 async function fetchSupabasePublicRows(tableName, select, order = "") {

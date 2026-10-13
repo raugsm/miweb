@@ -44,6 +44,7 @@ test("public landing exposes campaign tracking and records ad events", async () 
       PORT: String(port),
       ARIAD_DATA_DIR: dataDir,
       ARIAD_STORAGE_DRIVER: "json",
+      SUPABASE_URL: "",
       SUPABASE_ANON_KEY: "",
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -92,14 +93,14 @@ test("public landing exposes campaign tracking and records ad events", async () 
 
     const version = await fetch(`${baseUrl}/api/public/latest-client-version`);
     assert.equal(version.status, 200);
-    assert.deepEqual(await version.json(), {
-      available: false,
-      version: "",
-      publishedAt: "",
-    });
+    // Corte de la base vieja (13-oct): la web resuelve SIEMPRE desde el proyecto A
+    // con la publishable key embebida, aun sin env. Espera la version real de A.
+    const versionBody = await version.json();
+    assert.equal(versionBody.available, true);
+    assert.match(String(versionBody.version), /^[0-9]+\.[0-9]+\.[0-9]+$/);
 
     const download = await fetch(`${baseUrl}/descargar`, { redirect: "manual" });
-    assert.equal(download.status, 503);
+    assert.equal(download.status, 302);
 
     const ignoredEvent = await fetch(`${baseUrl}/api/public/campaign-event`, {
       method: "POST",

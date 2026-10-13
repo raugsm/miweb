@@ -21,6 +21,12 @@ services:
         value: '"AriadGSM Soporte" <soporte@ariadgsm.com>'
       - key: ARIAD_SETUP_TOKEN
         generateValue: true
+      # CORTE de la base vieja de Erasmo (13-oct, OK Peter): la web lee todo del
+      # proyecto A (sdarsjdwnuimjruthjwz). La publishable key es publica por diseno.
+      - key: SUPABASE_URL
+        value: https://sdarsjdwnuimjruthjwz.supabase.co
+      - key: SUPABASE_ANON_KEY
+        value: sb_publishable_XVMUL7TMS7SjAtKV42Hn6g_Bpksm3Ux
     disk:
       name: ariadgsm-ops-data
       mountPath: /opt/render/project/src/storage
