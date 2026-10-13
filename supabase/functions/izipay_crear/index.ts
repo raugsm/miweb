@@ -51,7 +51,7 @@ serve(async (req) => {
     const montoPen = producto === "licencia" ? precioLic : precioCred * creditos;
     if (!(montoPen > 0)) return resp(500, { error: "precio_no_configurado" });
     if (montoPen > TOPE_YAPE_PEN) return resp(400, { error: "monto_excede_yape" });
-    const montoUsd = producto === "licencia" ? 45 : creditos; // registro (1 credito = 1 USD; licencia = 45 USD)
+    const montoUsd = producto === "licencia" ? 25 : creditos; // registro (1 credito = 1 USD; licencia = 25 USD)
     const amountTxt = montoPen.toFixed(2); // web-core: amount es STRING "N.00" (no centimos)
 
     const merchant = Deno.env.get("IZIPAY_MERCHANT_CODE");

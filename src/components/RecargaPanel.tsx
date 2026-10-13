@@ -133,7 +133,8 @@ export function RecargaPanel({
   // Precios desde parámetros de negocio (con fallback), para que el preview no mienta.
   const precioCredYape = Number(parametros?.yape_precio_credito_pen ?? 3.5) || 3.5
   const precioCredBin = Number(parametros?.precio_credito_usd ?? 1) || 1
-  const precioLicYape = Number(parametros?.yape_precio_licencia_pen ?? 157.5) || 157.5
+  const precioLicYape = Number(parametros?.yape_precio_licencia_pen ?? 88.75) || 88.75
+  const precioLicBin = Number(parametros?.precio_licencia_usd ?? 25) || 25
   const precioCred = metodo === "yape" ? precioCredYape : precioCredBin
   const simbolo = metodo === "yape" ? "S/ " : ""
   const sufijo = metodo === "yape" ? "" : " USDT"
@@ -459,7 +460,7 @@ export function RecargaPanel({
   // Producto vigente: si hay un pago en curso, manda el del cobro (no el selector).
   const prodVigente: Producto = cobro ? cobro.producto : producto
   const esLicencia = prodVigente === "licencia"
-  const totalNum = esLicencia ? (metodo === "yape" ? precioLicYape : 45) : (creditos || 0) * precioCred
+  const totalNum = esLicencia ? (metodo === "yape" ? precioLicYape : precioLicBin) : (creditos || 0) * precioCred
   const totalTexto = `${simbolo}${totalNum.toFixed(2)}${sufijo}`
   const mmss = `${String(Math.floor(restante / 60)).padStart(2, "0")}:${String(restante % 60).padStart(2, "0")}`
 
