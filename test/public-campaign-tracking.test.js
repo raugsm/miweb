@@ -162,7 +162,7 @@ test("public landing exposes campaign tracking and records ad events", async () 
 });
 
 test("public client download resolves the latest installer from Supabase", async () => {
-  const remoteDownloadUrl = "https://duvpkpfivcnftxelgqtt.supabase.co/storage/v1/object/public/app-resources/installers/v0.5.2/AriadGSM-Cliente-Setup-PerUser-v0.5.2.exe";
+  const remoteDownloadUrl = "https://sdarsjdwnuimjruthjwz.supabase.co/storage/v1/object/public/releases/_test/AriadGSM-Cliente-Setup-PerUser-v0.5.2.exe";
   const supabaseRequests = [];
   const supabasePort = await freePort();
   const supabaseServer = createHttpServer((req, res) => {

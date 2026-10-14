@@ -167,7 +167,7 @@ export const bento = {
       "itel A95 5G",
       "itel City 100",
     ],
-    meta: "Chipset MediaTek · Android 12 a 16 · Consultá tu modelo desde la app.",
+    meta: "Chipset MediaTek · Android 15 y 16 · Consultá tu modelo desde la app.",
   },
   controlCard: {
     kicker: "Proceso",
@@ -314,7 +314,7 @@ export const features: { eyebrow: string; title: string; lead: string; groups: F
       items: [
         "424 modelos en catálogo.",
         "Tecno, Infinix e itel con MediaTek.",
-        "Android 12 a 16.",
+        "Android 15 y 16.",
       ],
     },
     {
@@ -405,7 +405,7 @@ export const faqs: { eyebrow: string; title: string; lead: string; items: Faq[] 
     },
     {
       q: "¿Qué marcas y modelos soporta?",
-      a: "Tecno, Infinix e itel con chipset MediaTek: 424 modelos, Android 12 a 16. El catálogo se consulta desde la app.",
+      a: "Tecno, Infinix e itel con chipset MediaTek: 424 modelos, Android 15 y 16. El catálogo se consulta desde la app.",
     },
     {
       q: "¿Cómo funciona la licencia?",

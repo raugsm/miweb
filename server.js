@@ -200,6 +200,17 @@ const supabaseProjectUrl = String(
 ).replace(/\/+$/, "");
 const supabaseRestUrl = `${supabaseProjectUrl}/rest/v1`;
 const latestClientVersionRpcUrl = `${supabaseRestUrl}/rpc/get_latest_client_version`;
+// CORTE PARCIAL (14-oct, OK Peter): todo lee de A MENOS los precios del ALQUILER
+// de herramientas, que todavia viven en B (duvpkpfivcnftxelgqtt) y se migran
+// pronto a una sola web. La publishable/anon key de B es publica por diseno.
+const supabaseProjectUrlB = String(
+  process.env.ARIAD_SUPABASE_B_URL || "https://duvpkpfivcnftxelgqtt.supabase.co"
+).replace(/\/+$/, "");
+const supabaseRestUrlB = `${supabaseProjectUrlB}/rest/v1`;
+const supabaseAnonKeyB = String(
+  process.env.ARIAD_SUPABASE_B_ANON_KEY ||
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR1dnBrcGZpdmNuZnR4ZWxncXR0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgyMDY1NzAsImV4cCI6MjA5Mzc4MjU3MH0.ecIzn_Zd1xf7hfSwYYKKN9XMWY4TbcA9jamuhBO3L60"
+).trim();
 const latestClientVersionCacheTtlMs = 5 * 60 * 1000;
 const clientAppPriceCacheTtlMs = 5 * 1000;
 let latestClientVersionCache = { info: null, expiresAt: 0 };
@@ -265,7 +276,8 @@ const baseCsp = [
   "font-src 'self' data:",
   // La SPA habla directo con Supabase (auth + Edge Functions de
   // AriadDesbloqueador en sdarsjdwnuimjruthjwz) y el backend con el proyecto
-  // de AriadGSM Cliente (duvpkpfivcnftxelgqtt).
+  // de AriadGSM Cliente (duvpkpfivcnftxelgqtt): el ALQUILER de herramientas
+  // todavía depende de B por la web (se migra pronto a una sola web).
   "connect-src 'self' https://sdarsjdwnuimjruthjwz.supabase.co https://duvpkpfivcnftxelgqtt.supabase.co",
   `frame-src ${turnstileEnabled ? cloudflareTurnstileOrigin : "'none'"}`,
   "frame-ancestors 'none'",
@@ -1285,19 +1297,19 @@ function supabaseAnonKey() {
   return "sb_publishable_XVMUL7TMS7SjAtKV42Hn6g_Bpksm3Ux";
 }
 
-async function fetchSupabasePublicRows(tableName, select, order = "") {
-  const key = supabaseAnonKey();
-  if (!key) {
+async function fetchSupabasePublicRows(tableName, select, order = "", restUrl = supabaseRestUrl, key = supabaseAnonKey()) {
+  const anonKey = key;
+  if (!anonKey) {
     throw new Error("SUPABASE_ANON_KEY no esta configurada.");
   }
-  const url = new URL(`${supabaseRestUrl}/${tableName}`);
+  const url = new URL(`${restUrl}/${tableName}`);
   url.searchParams.set("select", select);
   if (order) url.searchParams.set("order", order);
   const response = await fetch(url, {
     method: "GET",
     headers: {
-      apikey: key,
-      Authorization: `Bearer ${key}`,
+      apikey: anonKey,
+      Authorization: `Bearer ${anonKey}`,
       Accept: "application/json",
     },
   });
@@ -1352,11 +1364,14 @@ async function publicClientAppFrpPriceReport() {
         "country_code.asc,display_order.asc,method_name.asc"
       ),
       // El alquiler de herramientas es opcional: si la vista no existe o falla,
-      // la landing sigue mostrando FRP y Cuentas MI.
+      // la landing sigue mostrando FRP y Cuentas MI. Mientras el alquiler no se
+      // migre a una sola web, sus precios salen de B (OK Peter, 14-oct).
       fetchSupabasePublicRows(
         "public_tools_available",
         "id,name,brand,duration_hours,price_usdt,sort_order,cuentas_libres",
-        "sort_order.asc,name.asc"
+        "sort_order.asc,name.asc",
+        supabaseRestUrlB,
+        supabaseAnonKeyB
       ).catch((error) => {
         console.warn("No se pudo cargar el alquiler de herramientas publico.", error?.message || error);
         return [];

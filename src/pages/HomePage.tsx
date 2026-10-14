@@ -13,7 +13,7 @@ export function HomePage() {
   useSeo({
     titulo: "AriadGSM — Ari-Tool (Security Plugin y AntiCrack), Xiaomi FRP, Cuentas MI y Motorola",
     descripcion:
-      "AriadGSM: software y servicios remotos para técnicos. Ari-Tool remueve el Security Plugin (MDM) y el AntiCrack en Tecno, Infinix e itel con MediaTek (424 modelos, Android 12 a 16). Además Xiaomi Reset + FRP, Cuentas MI, Motorola F4 y servicios especiales.",
+      "AriadGSM: software y servicios remotos para técnicos. Ari-Tool remueve el Security Plugin (MDM) y el AntiCrack en Tecno, Infinix e itel con MediaTek (424 modelos, Android 15 y 16). Además Xiaomi Reset + FRP, Cuentas MI, Motorola F4 y servicios especiales.",
     ruta: "/",
   })
 
