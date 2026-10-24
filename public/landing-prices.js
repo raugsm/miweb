@@ -64,17 +64,12 @@ function renderRentalGroups(rentals) {
   }
   rentalPriceGroups.innerHTML = usable
     .map((rental) => {
-      // Sin cuentas libres la app cobra el piso base + recargo, ya incluido
-      // en estos montos. Solo se avisa cuando el dashboard lo confirma.
-      const aviso = rental.agotada
-        ? `<p class="price-group-note">Sin stock ahora: se consigue afuera, +${escapeHtml(
-            Number(rental.recargoUsdt || 0).toFixed(2)
-          )} USDT ya incluido en el precio.</p>`
-        : "";
+      // Regla de Peter (23-oct): el cliente no se entera si no hay cuenta
+      // disponible. Solo ve herramienta, horas y precio (el recargo ya viene
+      // incluido en los montos que manda el reporte).
       return `
       <div class="price-group">
         <h3 class="price-group-title">Alquiler de herramientas - ${escapeHtml(rental.name)}</h3>
-        ${aviso}
         <div class="price-list">${rental.prices.map(renderPriceCard).join("")}</div>
       </div>
     `;

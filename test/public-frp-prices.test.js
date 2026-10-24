@@ -180,10 +180,12 @@ test("an exhausted tool pool publishes the price with the external surcharge", (
   ]);
 
   const dft = report.rentals[0];
-  assert.equal(dft.agotada, true);
-  assert.equal(dft.precioBaseUsdt, 2.1);
-  assert.equal(dft.recargoUsdt, 1);
+  // 2.10 base + 1 USDT de recargo externo, sin decirlo.
   assert.equal(dft.priceUsdt, 3.1);
+  // Regla de Peter (23-oct): el reporte publico no delata el agotado.
+  for (const hidden of ["agotada", "cuentasLibres", "precioBaseUsdt", "recargoUsdt"]) {
+    assert.equal(hidden in dft, false, `${hidden} no debe salir en el reporte publico`);
+  }
 });
 
 test("a tool with free accounts publishes its base price untouched", () => {
@@ -192,10 +194,7 @@ test("a tool with free accounts publishes its base price untouched", () => {
   ]);
 
   const tool = report.rentals[0];
-  assert.equal(tool.agotada, false);
-  assert.equal(tool.recargoUsdt, 0);
   assert.equal(tool.priceUsdt, 0.7);
-  assert.equal(tool.precioBaseUsdt, 0.7);
 });
 
 test("a missing cuentas_libres never invents a surcharge", () => {
@@ -207,10 +206,7 @@ test("a missing cuentas_libres never invents a surcharge", () => {
     };
     if (rawValue !== undefined) tool.cuentas_libres = rawValue;
     const rental = rentalReport([tool]).rentals[0];
-    assert.equal(rental.agotada, false, `cuentas_libres=${String(rawValue)} no debe marcar agotada`);
-    assert.equal(rental.recargoUsdt, 0);
-    assert.equal(rental.priceUsdt, 1);
-    assert.equal(rental.cuentasLibres, null);
+    assert.equal(rental.priceUsdt, 1, `cuentas_libres=${String(rawValue)} no debe sumar recargo`);
   }
 });
 
@@ -283,10 +279,11 @@ test("public landing renders separate FRP and Cuentas MI price groups", () => {
   assert.match(html, /id="public-rental-price-groups"/);
   assert.match(source, /report\?\.miPrices/);
   assert.match(source, /Alquiler de herramientas - \$\{escapeHtml\(rental\.name\)\}/);
-  // El aviso de stock agotado solo se pinta cuando el reporte lo confirma.
-  assert.match(source, /rental\.agotada/);
-  assert.match(source, /Sin stock ahora/);
-  assert.match(source, /price-group-note/);
+  // Regla de Peter (23-oct): el cliente no se entera si no hay cuenta disponible.
+  // La landing no pinta ningun aviso de stock; solo herramienta, horas y precio.
+  assert.doesNotMatch(source, /rental\.agotada/);
+  assert.doesNotMatch(source, /Sin stock ahora/);
+  assert.doesNotMatch(source, /price-group-note/);
 });
 
 test("public landing prices refresh near-live from app dashboard endpoint", () => {

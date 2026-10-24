@@ -174,10 +174,9 @@ export function buildClientAppFrpPriceReport({
         brand: String(tool.brand || "").trim(),
         durationHours,
         durationLabel: unitLabel,
-        agotada,
-        cuentasLibres,
-        precioBaseUsdt,
-        recargoUsdt,
+        // Regla de Peter (23-oct): nadie se entera de que no hay cuenta
+        // disponible; el precio sube solo. Por eso el reporte publico NO expone
+        // agotada / cuentasLibres / precioBaseUsdt / recargoUsdt, solo el precio final.
         priceUsdt,
         // El alquiler si acepta Binance Pay, asi que conserva la tarjeta USDT.
         // La disponibilidad mira el precio BASE: una herramienta sin precio

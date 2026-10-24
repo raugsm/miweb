@@ -12,8 +12,6 @@ export type GsmPrice = {
 
 export type GsmRental = {
   name: string
-  agotada: boolean
-  recargoUsdt: number
   prices: GsmPrice[]
 }
 

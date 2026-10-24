@@ -251,15 +251,12 @@ export function GsmLandingPage() {
                   <PriceGroup title="Xiaomi Cuentas MI" prices={report.miPrices} />
                 ) : null}
                 {rentals.map((rental) => (
+                  // Regla de Peter (23-oct): el cliente no se entera si no hay cuenta
+                  // disponible; solo ve herramienta, horas y precio.
                   <PriceGroup
                     key={rental.name}
                     title={`Alquiler de herramientas - ${rental.name}`}
                     prices={rental.prices}
-                    note={
-                      rental.agotada
-                        ? `Sin stock ahora: se consigue afuera, +${Number(rental.recargoUsdt || 0).toFixed(2)} USDT ya incluido en el precio.`
-                        : undefined
-                    }
                   />
                 ))}
               </>
