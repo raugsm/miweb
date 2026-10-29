@@ -12,6 +12,7 @@
 2. **Funciones del panel sin control de capacidad.** `pago.validar_confirmar`, `sop_frp.pago_ficha`, `pago_candidatos`, `pagador_banear`, `conciliacion_auditoria` y `pendientes_de_servir` se podían invocar con cualquier JWT `authenticated`. Ahora exigen `sop_frp.gestion`/`config.gestion` (o `service_role`).
 3. **Reserva de liberación cruzada.** `sop_frp.liberacion_reservar` aceptaba un `p_taller_uid` ajeno. Ahora exige que coincida con `auth.uid()` salvo `service_role`.
 4. **Credenciales Postgres en documentación.** `docs/specs/_sesion-19-postgres-fase-1-gate.md` contenía una URL de Postgres con usuario/clave. Se reemplazó por placeholders, pero **sigue en el historial de Git**: hay que rotar la clave del Postgres de Render y actualizar `DATABASE_URL`.
+5. **Guard de CMI #1278 restaurado.** Una migración posterior de reembolsos reemplazó `pedido_taller_pagar_saldo` sin el chequeo de comprobante; se volvió a aplicar el guard con `20261029240000_cmi_pagar_saldo_comprobante_restore.sql` y se verificó.
 
 ## Alto / medio — mitigado o pendiente
 
@@ -26,7 +27,7 @@
 
 ## Cambios aplicados
 
-- Migraciones: `20261029233000_endurecer_funciones_anon.sql`, `20261029233100_guard_panel_funciones.sql`, `20261029234000_storage_limites.sql`, `20261029235000_liberacion_reservar_auth.sql`.
+- Migraciones: `20261029233000_endurecer_funciones_anon.sql`, `20261029233100_guard_panel_funciones.sql`, `20261029234000_storage_limites.sql`, `20261029235000_liberacion_reservar_auth.sql`, `20261029240000_cmi_pagar_saldo_comprobante_restore.sql`.
 - Auth: `disable_signup=true` en Supabase.
 - Código local: `server.js`, `package.json`, `pnpm-lock.yaml`, documentación saneada.
 - Verificación: `pnpm audit --prod` 0; `pnpm build` OK; `pnpm test` 126/126.
