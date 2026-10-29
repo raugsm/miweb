@@ -74,22 +74,16 @@ serve(async (req) => {
       return resp(200, REINTENTAR);
     }
 
-    // Reclamar la fila: solo pasa de pendiente → pagado una vez.
-    const { data: marca } = await db.schema("negocio").from("recarga")
-      .update({ estado: "pagado", pagado_en: new Date().toISOString() })
-      .eq("codigo", r.codigo).eq("estado", "pendiente").select("codigo");
-    if (!marca || (marca as unknown[]).length === 0) return resp(200, OK); // otro webhook la tomó
-
-    // Sumar los créditos. Si falla, se devuelve la fila a pendiente para reintentar.
-    const { error: eCred } = await db.schema("negocio").rpc("credito_mover", {
-      p_usuario: r.usuario_ref, p_delta: r.creditos, p_tipo: "recarga",
-      p_motivo: "Recarga MixPay", p_referencia: r.codigo, p_actor: null,
+    // Acreditar y pasar a pagado en UNA sola transacción.
+    // negocio.recarga_acreditar hace el *100 de centavos y es idempotente por código:
+    // si otro webhook ya la procesó, devuelve { ok:true, ya_procesado:true }.
+    const { data: acreditada, error: eCred } = await db.schema("negocio").rpc("recarga_acreditar", {
+      p_recarga: r.codigo,
+      p_actor: null,
     });
-    if (eCred) {
-      console.error("credito_mover_fallo", JSON.stringify(eCred));
-      await db.schema("negocio").from("recarga")
-        .update({ estado: "pendiente", pagado_en: null }).eq("codigo", r.codigo);
-      return resp(200, REINTENTAR); // que MixPay reintente
+    if (eCred || !acreditada || (acreditada as { ok?: boolean }).ok !== true) {
+      console.error("recarga_acreditar_fallo", JSON.stringify(eCred ?? acreditada));
+      return resp(200, REINTENTAR); // MixPay reintenta; la fila sigue pendiente
     }
     return resp(200, OK);
   } catch (e) {
