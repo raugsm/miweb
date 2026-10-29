@@ -29,13 +29,12 @@ serve(async (req) => {
   if (req.method !== "POST") return resp(405, { error: "metodo" });
   try {
     const db = admin();
-    let secreto = Deno.env.get("YAPE_HMAC_SECRETO") ?? "";
-    if (!secreto) {
-      try {
-        const { data } = await db.schema("pago").rpc("secreto_leer", { p_nombre: "yape_hmac_secreto" });
-        secreto = typeof data === "string" ? data : "";
-      } catch { /* sin vault */ }
-    }
+    let secreto = "";
+    try {
+      const { data } = await db.schema("pago").rpc("secreto_leer", { p_nombre: "yape_hmac_secreto" });
+      secreto = typeof data === "string" ? data : "";
+    } catch { /* sin vault */ }
+    if (!secreto) secreto = Deno.env.get("YAPE_HMAC_SECRETO") ?? "";
     if (!secreto) { console.error("yape_hmac_no_config"); return resp(500, { error: "config" }); }
 
     const raw = await req.text();
