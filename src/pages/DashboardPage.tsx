@@ -153,6 +153,7 @@ export function DashboardPage() {
   const [recarga, setRecarga] = useState(false)
   const [recargaProd, setRecargaProd] = useState<"credito" | "licencia">("credito")
   const [hayActivo, setHayActivo] = useState(false)
+  const [verTodosMov, setVerTodosMov] = useState(false)
   const [tour, setTour] = useState(false)
 
   function irAlPanel() {
@@ -276,11 +277,15 @@ export function DashboardPage() {
   const wsp = datos?.parametros?.soporte_whatsapp ?? ""
   const costo = datos?.parametros?.credito_por_tramite ?? "1"
   const precio = datos?.parametros?.precio_credito_usd ?? "1"
-  const saldo = datos?.saldo ?? 0
+  const saldo = datos?.saldo_usd ?? datos?.saldo ?? 0
   const costoNum = parseInt(costo, 10) || 1
   const alcanza = saldo >= costoNum
   const procesosPosibles = Math.floor(saldo / costoNum)
   const totales = datos?.totales ?? { procesos: 0, consumidos: 0, recargados: 0 }
+  const movimientos = datos?.movimientos ?? []
+  const movimientosVisibles = verTodosMov ? movimientos : movimientos.slice(0, 6)
+  const fmtCreditos = (n: number) =>
+    n.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   const cred = (n: number) => (n === 1 ? "crédito" : "créditos")
   const proc = (n: number) => (n === 1 ? "proceso" : "procesos")
 
@@ -428,7 +433,7 @@ export function DashboardPage() {
                         Créditos disponibles
                       </p>
                       <p className="mt-2 text-5xl font-semibold tracking-tight text-[#0A1424] tabular-nums dark:text-white">
-                        {cargando && !datos ? "—" : saldo}
+                        {cargando && !datos ? "-" : fmtCreditos(saldo)}
                       </p>
                       <p className="mt-3 text-sm leading-relaxed text-[#26354F]/70 dark:text-white/65">
                         {precio} USD por crédito · cada proceso cuesta {costoNum} {cred(costoNum)} ($
@@ -437,7 +442,7 @@ export function DashboardPage() {
                       <p className={`mt-2 text-sm font-medium ${alcanza ? "text-[#0E7A4C] dark:text-[#7CE6B4]" : "text-[#B42318] dark:text-[#F0A49D]"}`}>
                         {alcanza
                           ? `Tenés para ${procesosPosibles} ${proc(procesosPosibles)}.`
-                          : `Te faltan ${costoNum - saldo} ${cred(costoNum - saldo)} para tu próximo proceso.`}
+                          : `Te faltan ${fmtCreditos(costoNum - saldo)} ${cred(costoNum - saldo)} para tu próximo proceso.`}
                       </p>
                     </div>
                     <span className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-cobalt/25 bg-cobalt/10 text-cobalt dark:border-[#2C4A78] dark:bg-[#0E1B30] dark:text-[#7FB3FF]">
@@ -585,7 +590,7 @@ export function DashboardPage() {
                         </tr>
                       </thead>
                       <tbody className="text-foreground/75">
-                        {(datos?.movimientos ?? []).length === 0 ? (
+                        {movimientos.length === 0 ? (
                           <tr>
                             <td colSpan={5} className="py-4 text-sm text-foreground/45">
                               Todavía no hay movimientos. Cuando recargues o hagas un proceso, acá
@@ -593,30 +598,47 @@ export function DashboardPage() {
                             </td>
                           </tr>
                         ) : (
-                          (datos?.movimientos ?? []).map((m, i) => (
-                            <tr key={`${m.fecha_registro}-${i}`} className="border-t border-line">
-                              <td className="py-2.5 pr-3 whitespace-nowrap">{fmtFecha(m.fecha_registro)}</td>
-                              <td className="py-2.5 pr-3">
-                                <Badge className={tipoColor[m.tipo] ?? "border-line bg-[#0E1B30] text-white/70"}>
-                                  {tipoLabel[m.tipo] ?? m.tipo}
-                                </Badge>
-                              </td>
-                              <td
-                                className={`py-2.5 pr-3 font-medium ${m.cantidad >= 0 ? "text-[#7CE6B4]" : "text-[#F0A49D]"}`}
-                              >
-                                {m.cantidad >= 0 ? `+${m.cantidad}` : m.cantidad}
-                              </td>
-                              <td className="py-2.5 pr-3">{m.saldo_despues}</td>
-                              <td className="py-2.5 text-foreground/55">
-                                {m.motivo}
-                                {m.referencia ? ` · ${m.referencia}` : ""}
-                              </td>
-                            </tr>
-                          ))
+                          movimientosVisibles.map((m, i) => {
+                            const cantidad = m.cantidad_usd ?? m.cantidad / 100
+                            const saldoMov = (m.saldo_despues_centavos ?? m.saldo_despues) / 100
+                            const detalle = `${m.motivo}${m.referencia ? ` · ${m.referencia}` : ""}`
+                            return (
+                              <tr key={`${m.fecha_registro}-${i}`} className="border-t border-line">
+                                <td className="py-2.5 pr-3 whitespace-nowrap">{fmtFecha(m.fecha_registro)}</td>
+                                <td className="py-2.5 pr-3">
+                                  <Badge className={tipoColor[m.tipo] ?? "border-line bg-[#0E1B30] text-white/70"}>
+                                    {tipoLabel[m.tipo] ?? m.tipo}
+                                  </Badge>
+                                </td>
+                                <td
+                                  className={`py-2.5 pr-3 font-medium whitespace-nowrap ${cantidad >= 0 ? "text-[#7CE6B4]" : "text-[#F0A49D]"}`}
+                                >
+                                  {cantidad >= 0 ? `+${fmtCreditos(cantidad)}` : fmtCreditos(cantidad)}
+                                </td>
+                                <td className="py-2.5 pr-3 whitespace-nowrap tabular-nums">{fmtCreditos(saldoMov)}</td>
+                                <td className="py-2.5 text-foreground/55">
+                                  <div className="max-w-[200px] truncate" title={detalle}>
+                                    {detalle}
+                                  </div>
+                                </td>
+                              </tr>
+                            )
+                          })
                         )}
                       </tbody>
                     </table>
                   </div>
+                  {movimientos.length > 6 ? (
+                    <div className="mt-3 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => setVerTodosMov((v) => !v)}
+                        className="text-xs font-medium text-cyan hover:underline"
+                      >
+                        {verTodosMov ? "Ver menos" : `Ver todos (${movimientos.length})`}
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="rounded-2xl border border-line bg-card p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">

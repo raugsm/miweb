@@ -3,14 +3,20 @@ import { SUPABASE_KEY, SUPABASE_URL } from "@/lib/supabase"
 export type ResumenCliente = {
   nombre: string
   saldo: number
+  saldo_centavos?: number
+  saldo_usd?: number
   totales: { procesos: number; consumidos: number; recargados: number }
   trabajos: { folio: string; estado: string; fecha: string; modelo: string }[]
   movimientos: {
     tipo: string
     cantidad: number
+    cantidad_centavos?: number
+    cantidad_usd?: number
     saldo_despues: number
+    saldo_despues_centavos?: number
     motivo: string
     referencia: string
+    servicio?: string
     fecha_registro: string
   }[]
   parametros: Record<string, string>
