@@ -1,6 +1,6 @@
--- 20261029190000_creditos_recarga_manual_cmi.sql â€” Ari-Web, 29-oct-2026
--- CMI: pagar_con_saldo rechaza comprobante enviado + pago_via en el JSON.
--- Web: wrappers de recarga manual en sop_frp (sop_credito no esta expuesto).
+-- 20261029190000_cmi_pagar_saldo_guard.sql — Ari-Web, 29-oct-2026
+-- CMI: pedido_taller_pagar_saldo rechaza comprobante enviado (#1278).
+-- CMI: pedido_json_taller devuelve pago_via='saldo' para que el panel no rotule Yape/Binance.
 -- PROPUESTA: no aplicar sin OK escrito de Peter.
 CREATE OR REPLACE FUNCTION sop_cuenta_mi.pedido_taller_pagar_saldo(p_pedido_id uuid, p_pais text)
  RETURNS jsonb
@@ -132,81 +132,3 @@ AS $function$
   left join rs  on true;
 $function$
 ;
-
--- =====================================================================
--- Wrappers de recarga manual en sop_frp (sop_credito no esta expuesto).
--- El web /panel llama a estas RPC con el JWT del taller.
--- =====================================================================
-create or replace function sop_frp.recarga_paises()
-returns jsonb language sql stable security definer
-set search_path to 'sop_config', 'public' as $fn$
-  select jsonb_build_object('ok', true, 'paises',
-    coalesce(jsonb_agg(jsonb_build_object('pais', pais, 'moneda', upper(moneda::text), 'tasa', tasa) order by pais), '[]'::jsonb))
-    from sop_config.tasa_cambio where estado = 'activo';
-$fn$;
-revoke all on function sop_frp.recarga_paises() from public, anon;
-grant execute on function sop_frp.recarga_paises() to authenticated, service_role;
-
-create or replace function sop_frp.recarga_precio(p_creditos integer, p_pais text)
-returns jsonb language sql stable security definer
-set search_path to 'sop_credito', 'public' as $fn$
-  select sop_credito.recarga_precio(p_creditos, p_pais);
-$fn$;
-revoke all on function sop_frp.recarga_precio(integer, text) from public, anon;
-grant execute on function sop_frp.recarga_precio(integer, text) to authenticated, service_role;
-
-create or replace function sop_frp.recarga_comprobante_crear(p_creditos integer, p_pais text, p_ruta text)
-returns jsonb language sql security definer
-set search_path to 'sop_credito', 'public' as $fn$
-  select sop_credito.recarga_comprobante_crear(p_creditos, p_pais, p_ruta);
-$fn$;
-revoke all on function sop_frp.recarga_comprobante_crear(integer, text, text) from public, anon;
-grant execute on function sop_frp.recarga_comprobante_crear(integer, text, text) to authenticated, service_role;
-
-create or replace function sop_frp.recargas(p_limite integer default 20)
-returns jsonb language sql stable security definer
-set search_path to 'sop_credito', 'public' as $fn$
-  select sop_credito.recargas(p_limite);
-$fn$;
-revoke all on function sop_frp.recargas(integer) from public, anon;
-grant execute on function sop_frp.recargas(integer) to authenticated, service_role;
-
-create or replace function sop_frp.recarga_instrucciones(p_pais text)
-returns jsonb language plpgsql stable security definer
-set search_path to 'negocio', 'sop_config', 'public' as $fn$
-declare
-  v_pais text := lower(nullif(btrim(p_pais), ''));
-  v_metodos jsonb;
-begin
-  -- Transferencias locales del panel (CL/CO/MX, etc.)
-  select coalesce(jsonb_agg(jsonb_build_object('nombre', m.nombre, 'campos', m.campos, 'qr_ruta', m.qr_ruta) order by m.orden), '[]'::jsonb)
-    into v_metodos
-    from sop_config.metodo_pago m
-   where m.pais = v_pais and m.estado = 'activo';
-
-  -- Peru: Yape propio (no hay fila de transferencia para PE).
-  if v_pais = 'pe' then
-    v_metodos := jsonb_build_array(jsonb_build_object(
-      'nombre', 'Yape',
-      'campos', jsonb_build_object(
-        'Numero', (select valor from negocio.parametro where clave = 'yape_destino_numero' and estado = 'activo'),
-        'Titular', (select valor from negocio.parametro where clave = 'yape_destino_titular' and estado = 'activo')
-      ),
-      'qr_ruta', (select valor from negocio.parametro where clave = 'yape_destino_qr' and estado = 'activo')
-    )) || v_metodos;
-  end if;
-
-  -- Binance Pay global.
-  v_metodos := v_metodos || jsonb_build_array(jsonb_build_object(
-    'nombre', 'Binance Pay',
-    'campos', jsonb_build_object(
-      'ID', (select valor from negocio.parametro where clave = 'binance_pay_id' and estado = 'activo'),
-      'Link', (select valor from negocio.parametro where clave = 'binance_pay_url' and estado = 'activo')
-    ),
-    'qr_ruta', null
-  ));
-
-  return jsonb_build_object('ok', true, 'pais', v_pais, 'metodos', v_metodos);
-end $fn$;
-revoke all on function sop_frp.recarga_instrucciones(text) from public, anon;
-grant execute on function sop_frp.recarga_instrucciones(text) to authenticated, service_role;

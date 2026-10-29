@@ -15,7 +15,6 @@ import {
 import { Container } from "@/components/Container"
 import { OnboardingTour, type TourStep } from "@/components/OnboardingTour"
 import { RecargaPanel } from "@/components/RecargaPanel"
-import { RecargaManualPanel } from "@/components/RecargaManualPanel"
 import { SearchableSelect } from "@/components/SearchableSelect"
 import { Button } from "@/components/ui/button"
 import { PAISES } from "@/data/paises"
@@ -151,10 +150,7 @@ export function DashboardPage() {
   const [paisC, setPaisC] = useState("PE")
   const [creando, setCreando] = useState(false)
   const [jwt, setJwt] = useState("")
-  const [recarga, setRecarga] = useState(() => {
-    if (typeof window === "undefined") return false
-    return new URLSearchParams(window.location.search).get("recarga") === "manual"
-  })
+  const [recarga, setRecarga] = useState(false)
   const [recargaProd, setRecargaProd] = useState<"credito" | "licencia">("credito")
   const [hayActivo, setHayActivo] = useState(false)
   const [tour, setTour] = useState(false)
@@ -165,16 +161,8 @@ export function DashboardPage() {
     }, 60)
   }
 
-  useEffect(() => {
-    if (!recarga) return
-    if (typeof window === "undefined") return
-    if (new URLSearchParams(window.location.search).get("recarga") !== "manual") return
-    irAlPanel()
-  }, [recarga])
-
   function abrirRecarga(prod: "credito" | "licencia") {
     setRecargaProd(prod)
-    if (prod === "credito") setHayActivo(false)
     setRecarga(true)
     irAlPanel()
   }
@@ -542,25 +530,15 @@ export function DashboardPage() {
               {/* RECARGA (inline, un solo pago activo a la vez, resumible) */}
               <div className="mt-4 empty:mt-0">
                 {jwt ? (
-                  recargaProd === "credito" ? (
-                    <RecargaManualPanel
-                      jwt={jwt}
-                      abrir={recarga}
-                      parametros={datos?.parametros}
-                      onConfirmado={() => void cargar()}
-                      onCerrar={() => setRecarga(false)}
-                    />
-                  ) : (
-                    <RecargaPanel
-                      jwt={jwt}
-                      abrir={recarga}
-                      productoInicial={recargaProd}
-                      parametros={datos?.parametros}
-                      onConfirmado={() => void cargar()}
-                      onCerrar={() => setRecarga(false)}
-                      onActivoChange={setHayActivo}
-                    />
-                  )
+                  <RecargaPanel
+                    jwt={jwt}
+                    abrir={recarga}
+                    productoInicial={recargaProd}
+                    parametros={datos?.parametros}
+                    onConfirmado={() => void cargar()}
+                    onCerrar={() => setRecarga(false)}
+                    onActivoChange={setHayActivo}
+                  />
                 ) : null}
               </div>
 
