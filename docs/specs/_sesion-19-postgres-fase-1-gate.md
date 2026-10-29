@@ -176,7 +176,7 @@ node scripts/postgres/apply-migrations.mjs --help
 npm.cmd test
 node --check public/app.js
 node --check public/portal.js
-node --input-type=module -e "import { redactedPostgresUrl } from './server/db/postgres.js'; const out = redactedPostgresUrl('postgresql://realuser:secretpass@example.internal:5432/ariad'); if (out.includes('realuser') || out.includes('secretpass')) process.exit(1); console.log(out);"
+node --input-type=module -e "import { redactedPostgresUrl } from './server/db/postgres.js'; const out = redactedPostgresUrl('postgresql://USER:PASSWORD@example.internal:5432/ariad'); if (out.includes('realuser') || out.includes('secretpass')) process.exit(1); console.log(out);"
 ```
 
 Resultados:
@@ -203,7 +203,7 @@ Reporte recibido desde Render Shell de `ariadgsm-ops`:
   "kind": "ariadgsm-postgres-connection-check",
   "generatedAt": "2026-05-06T00:16:29.840Z",
   "sanitized": true,
-  "connection": "postgresql://user:redacted@dpg-d7t8dld7vvec73fdp9e0-a/ariadgsm_postgres",
+  "connection": "postgresql://USER:PASSWORD@dpg-d7t8dld7vvec73fdp9e0-a/ariadgsm_postgres",
   "ok": true,
   "postgres": {
     "database": "ariadgsm_postgres",
@@ -236,7 +236,7 @@ Reporte recibido desde Render Shell:
   "generatedAt": "2026-05-06T00:17:18.729Z",
   "sanitized": true,
   "apply": false,
-  "connection": "postgresql://user:redacted@dpg-d7t8dld7vvec73fdp9e0-a/ariadgsm_postgres",
+  "connection": "postgresql://USER:PASSWORD@dpg-d7t8dld7vvec73fdp9e0-a/ariadgsm_postgres",
   "migrationsDir": "/opt/render/project/src/migrations",
   "dryRunWrites": false,
   "migrations": [
@@ -271,7 +271,7 @@ Reporte recibido desde Render Shell:
   "generatedAt": "2026-05-06T00:18:52.436Z",
   "sanitized": true,
   "apply": true,
-  "connection": "postgresql://user:redacted@dpg-d7t8dld7vvec73fdp9e0-a/ariadgsm_postgres",
+  "connection": "postgresql://USER:PASSWORD@dpg-d7t8dld7vvec73fdp9e0-a/ariadgsm_postgres",
   "migrationsDir": "/opt/render/project/src/migrations",
   "dryRunWrites": false,
   "migrations": [
@@ -306,7 +306,7 @@ Reporte recibido desde Render Shell despues de aplicar DDL:
   "generatedAt": "2026-05-06T00:19:29.151Z",
   "sanitized": true,
   "apply": false,
-  "connection": "postgresql://user:redacted@dpg-d7t8dld7vvec73fdp9e0-a/ariadgsm_postgres",
+  "connection": "postgresql://USER:PASSWORD@dpg-d7t8dld7vvec73fdp9e0-a/ariadgsm_postgres",
   "migrationsDir": "/opt/render/project/src/migrations",
   "dryRunWrites": false,
   "migrations": [

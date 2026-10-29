@@ -285,11 +285,15 @@ const baseCsp = [
   "form-action 'self'",
   "object-src 'none'",
 ].join("; ");
-const allowedApiHosts = new Set(["ariadgsm.com", "www.ariadgsm.com", "ops.ariadgsm.com"]);
+const allowedApiHosts = new Set([
+  "ariadgsm.com",
+  "www.ariadgsm.com",
+  "ops.ariadgsm.com",
+  "ariadgsm-ops.onrender.com",
+]);
 
 function isAllowedApiOrigin(req) {
-  const reqHost = String(req.headers.host || "").split(":")[0].toLowerCase();
-  const allowed = new Set([...allowedApiHosts, reqHost]);
+  const allowed = new Set(allowedApiHosts);
   if (!isProduction) {
     allowed.add("localhost");
     allowed.add("127.0.0.1");
@@ -3120,7 +3124,20 @@ function htmlEscape(value) {
 }
 
 function clientIp(req) {
-  return cleanText(String(req.headers["x-forwarded-for"] || "").split(",")[0] || req.socket?.remoteAddress || "unknown", 80);
+  // Cloudflare está delante de Render: cf-connecting-ip es la IP real y no se
+  // puede falsificar desde el navegador. Si no hay CF, usamos la última IP de
+  // X-Forwarded-For (la que agrega el proxy de Render), no la primera, para que
+  // un X-Forwarded-For enviado por el cliente no saltee el rate limit.
+  if (req.headers["cf-ray"]) {
+    const cf = cleanText(String(req.headers["cf-connecting-ip"] || ""), 80);
+    if (cf) return cf;
+  }
+  const xff = String(req.headers["x-forwarded-for"] || "")
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const candidate = xff.length ? xff[xff.length - 1] : req.socket?.remoteAddress || "unknown";
+  return cleanText(candidate, 80);
 }
 
 async function sendPasswordResetEmail(user, token) {
