@@ -614,10 +614,21 @@ export function RecargaPanel({
               <input
                 id="recarga-creditos"
                 type="number"
+                inputMode="numeric"
                 min={10}
                 max={5000}
-                value={creditos}
-                onChange={(e) => setCreditos(Number(e.target.value))}
+                step={1}
+                placeholder="Mínimo 10"
+                value={creditos === 0 ? "" : String(creditos)}
+                onChange={(e) => {
+                  const raw = e.target.value
+                  if (raw === "") {
+                    setCreditos(0)
+                    return
+                  }
+                  const n = Math.trunc(Number(raw))
+                  if (Number.isFinite(n)) setCreditos(n)
+                }}
                 className="mt-3 h-11 w-full rounded-lg border border-line bg-field px-3 text-sm text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
               />
             </div>
