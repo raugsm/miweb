@@ -23,7 +23,7 @@ type Metodo = "binance" | "yape"
 type Producto = "credito" | "licencia"
 type Fase = "cargando" | "elegir" | "pagar" | "validando" | "listo" | "vencido"
 
-const PAQUETES = [1, 5, 10, 20, 50]
+const PAQUETES = [10, 20, 50] // decisión Peter 24/27-oct: packs 10/20/50 + otro monto, mínimo 10 (igual que la app)
 const YAPE_VIOLETA = "#742384"
 
 // Ícono de marca (Yape/Binance) en chip blanco: contraste asegurado en cualquier fondo/tema.
@@ -112,7 +112,7 @@ export function RecargaPanel({
   const [metodo, setMetodo] = useState<Metodo>("binance")
   const [producto, setProducto] = useState<Producto>(productoInicial)
   const [validandoTipo, setValidandoTipo] = useState<"esperando" | "error" | "bloqueado">("esperando")
-  const [creditos, setCreditos] = useState(1)
+  const [creditos, setCreditos] = useState(10)
   const [cobro, setCobro] = useState<CobroVivo | null>(null)
   const [qr, setQr] = useState<string | null>(null)
   const [restante, setRestante] = useState(0)
@@ -304,8 +304,8 @@ export function RecargaPanel({
     if (creando) return
     setErr(null)
     const c = Math.trunc(creditos)
-    if (producto === "credito" && !(c >= 1 && c <= 5000)) {
-      setErr("Elegí una cantidad válida (1 a 5000).")
+    if (producto === "credito" && !(c >= 10 && c <= 5000)) {
+      setErr("Elegí una cantidad válida (mínimo 10, máximo 5000).")
       return
     }
     setCreando(true)
@@ -614,7 +614,7 @@ export function RecargaPanel({
               <input
                 id="recarga-creditos"
                 type="number"
-                min={1}
+                min={10}
                 max={5000}
                 value={creditos}
                 onChange={(e) => setCreditos(Number(e.target.value))}
