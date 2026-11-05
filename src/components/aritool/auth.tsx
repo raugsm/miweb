@@ -19,7 +19,7 @@ const AZUL = { bg: "#0f1a2e", bd: "#1e3a5f", fg: "#bfdbfe" }
 
 export function AuthShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen items-start justify-center px-5 py-12 sm:items-center" style={{ background: C.page, fontFamily: "Inter, system-ui, sans-serif", lineHeight: 1.2 }}>
+    <div className="flex min-h-screen items-start justify-center px-5 py-12 sm:items-center" style={{ background: C.page, fontFamily: "Inter, system-ui, sans-serif", lineHeight: "normal" }}>
       {children}
     </div>
   )
@@ -41,7 +41,7 @@ export function CabezaAuth({ titulo, texto }: { titulo: string; texto?: string }
     <div className="flex w-full flex-col items-start gap-2">
       <img src="/aritool-logo.png" alt="AriTool" className="size-11 object-contain" />
       <div style={{ color: C.title, fontWeight: 700, fontSize: 24 }}>{titulo}</div>
-      {texto ? <div className="w-full" style={{ color: C.muted, fontSize: 14, lineHeight: 1.45 }}>{texto}</div> : null}
+      {texto ? <div className="w-full" style={{ color: C.muted, fontSize: 14, lineHeight: "20px" }}>{texto}</div> : null}
     </div>
   )
 }
@@ -51,7 +51,7 @@ export function Banner({ tipo, icono: Icono, children }: { tipo: "rojo" | "ambar
   return (
     <div className="flex w-full items-start gap-2.5" style={{ background: e.bg, border: `1px solid ${e.bd}`, borderRadius: 10, padding: 12 }}>
       <Icono className="size-[18px] shrink-0" style={{ color: e.fg }} />
-      <span className="flex-1" style={{ color: e.fg, fontSize: 13, lineHeight: 1.45 }}>{children}</span>
+      <span className="flex-1" style={{ color: e.fg, fontSize: 13, lineHeight: "19px" }}>{children}</span>
     </div>
   )
 }
@@ -156,21 +156,21 @@ function OjoIcono() {
 
 export function BotonPrimario({ children, icono: Icono, to }: { children: React.ReactNode; icono?: LucideIcon; to?: string }) {
   const cls = "flex w-full items-center justify-center gap-2 text-white"
-  const sty = { background: C.blue, borderRadius: 10, padding: "13px 18px", fontWeight: 600, fontSize: 15 } as const
+  const sty = { background: C.blue, borderRadius: 10, padding: "13px 18px", fontWeight: 600, fontSize: 15, lineHeight: "18px" } as const
   const inner = <>{Icono ? <Icono className="size-4" /> : null}{children}</>
   return to ? <Link to={to} className={cls} style={sty}>{inner}</Link> : <button type="button" className={cls} style={sty}>{inner}</button>
 }
 
 export function BotonSecundario({ children, icono: Icono, to }: { children: React.ReactNode; icono?: LucideIcon; to?: string }) {
   const cls = "flex w-full items-center justify-center gap-2"
-  const sty = { border: `1px solid ${C.borderAlt}`, color: C.text, borderRadius: 10, padding: "13px 18px", fontWeight: 600, fontSize: 15 } as const
+  const sty = { border: `1px solid ${C.borderAlt}`, color: C.text, borderRadius: 10, padding: "13px 18px", fontWeight: 600, fontSize: 15, lineHeight: "18px" } as const
   const inner = <>{Icono ? <Icono className="size-4" style={{ color: C.text }} /> : null}{children}</>
   return to ? <Link to={to} className={cls} style={sty}>{inner}</Link> : <button type="button" className={cls} style={sty}>{inner}</button>
 }
 
 export function BotonPausa({ children, icono: Icono }: { children: React.ReactNode; icono: LucideIcon }) {
   return (
-    <button type="button" disabled className="flex w-full items-center justify-center gap-2" style={{ background: C.border, border: `1px solid ${C.borderSoft}`, color: C.faint, borderRadius: 10, padding: "13px 18px", fontWeight: 600, fontSize: 15 }}>
+    <button type="button" disabled className="flex w-full items-center justify-center gap-2" style={{ background: C.border, border: `1px solid ${C.borderSoft}`, color: C.faint, borderRadius: 10, padding: "13px 18px", fontWeight: 600, fontSize: 15, lineHeight: "18px" }}>
       <Icono className="size-4" style={{ color: C.faint }} />
       {children}
     </button>

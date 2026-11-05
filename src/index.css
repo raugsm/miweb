@@ -40,7 +40,9 @@
     font-style: normal;
     font-display: swap;
     font-weight: 100 900;
-    src: url(/fonts/inter.woff2) format('woff2-variations');
+    /* Inter 3.19, la misma que usa el Figma. La 4.x es más angosta (números, títulos grandes) y
+       cambia los anchos de texto y los cortes de línea. No actualizar sin volver a medir. */
+    src: url(/fonts/inter-3.19.woff2) format('woff2-variations');
 }
 
 @custom-variant dark (&:is(.dark *));

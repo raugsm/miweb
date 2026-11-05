@@ -1,6 +1,7 @@
 import { lazy, Suspense } from "react"
 import { BrowserRouter, Route, Routes } from "react-router-dom"
 
+import { MarcoAriTool } from "@/components/aritool/Marco"
 import { RootLayout } from "@/components/layout/RootLayout"
 import { ReleaseProvider } from "@/lib/release"
 import { HomePage } from "@/pages/HomePage"
@@ -50,6 +51,10 @@ const DescargarAriToolPage = lazy(() =>
 const CuentaPage = lazy(() =>
   import("@/pages/CuentaPage").then((m) => ({ default: m.CuentaPage }))
 )
+// W16: en el cambio a la web nueva pasa a ser la ruta "*" (hoy la tiene la web vieja).
+const NoExistePage = lazy(() =>
+  import("@/pages/NoExistePage").then((m) => ({ default: m.NoExistePage }))
+)
 // TEMPORAL: índice único que embebe TODAS las pantallas de preview en un solo link.
 const PreviewIndex = lazy(() =>
   import("@/pages/PreviewIndex").then((m) => ({ default: m.PreviewIndex }))
@@ -60,63 +65,73 @@ export default function App() {
     <ReleaseProvider>
       <BrowserRouter>
         <Routes>
-          {/* TEMPORAL: vista previa de la grilla, fuera del layout viejo. */}
-          <Route
-            path="preview-alquiler"
-            element={
-              <Suspense fallback={null}>
-                <PreviewAlquiler />
-              </Suspense>
-            }
-          />
-          <Route
-            path="preview-home"
-            element={
-              <Suspense fallback={null}>
-                <HomeAriTool />
-              </Suspense>
-            }
-          />
-          <Route
-            path="preview-app"
-            element={
-              <Suspense fallback={null}>
-                <AppAriToolPage />
-              </Suspense>
-            }
-          />
-          <Route
-            path="preview-novedades"
-            element={
-              <Suspense fallback={null}>
-                <NovedadesPage />
-              </Suspense>
-            }
-          />
-          <Route
-            path="preview-descargar"
-            element={
-              <Suspense fallback={null}>
-                <DescargarAriToolPage />
-              </Suspense>
-            }
-          />
-          <Route
-            path="preview-cuenta"
-            element={
-              <Suspense fallback={null}>
-                <CuentaPage />
-              </Suspense>
-            }
-          />
-          <Route
-            path="preview"
-            element={
-              <Suspense fallback={null}>
-                <PreviewIndex />
-              </Suspense>
-            }
-          />
+          {/* Páginas AriTool (hoy en vista previa), fuera del layout viejo. */}
+          <Route element={<MarcoAriTool />}>
+            <Route
+              path="preview-alquiler"
+              element={
+                <Suspense fallback={null}>
+                  <PreviewAlquiler />
+                </Suspense>
+              }
+            />
+            <Route
+              path="preview-home"
+              element={
+                <Suspense fallback={null}>
+                  <HomeAriTool />
+                </Suspense>
+              }
+            />
+            <Route
+              path="preview-app"
+              element={
+                <Suspense fallback={null}>
+                  <AppAriToolPage />
+                </Suspense>
+              }
+            />
+            <Route
+              path="preview-novedades"
+              element={
+                <Suspense fallback={null}>
+                  <NovedadesPage />
+                </Suspense>
+              }
+            />
+            <Route
+              path="preview-descargar"
+              element={
+                <Suspense fallback={null}>
+                  <DescargarAriToolPage />
+                </Suspense>
+              }
+            />
+            <Route
+              path="preview-cuenta"
+              element={
+                <Suspense fallback={null}>
+                  <CuentaPage />
+                </Suspense>
+              }
+            />
+            <Route
+              path="preview-404"
+              element={
+                <Suspense fallback={null}>
+                  <NoExistePage />
+                </Suspense>
+              }
+            />
+            <Route
+              path="preview"
+              element={
+                <Suspense fallback={null}>
+                  <PreviewIndex />
+                </Suspense>
+              }
+            />
+          </Route>
           <Route element={<RootLayout />}>
             <Route index element={<HomePage />} />
             <Route path="cuenta" element={<AccountPage />} />

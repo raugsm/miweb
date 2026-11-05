@@ -1,74 +1,26 @@
 /**
  * Inicio AriTool — computadora (W1 1059:2) + celular (W2 1063:2), aprobados por Peter 4-nov.
  * Fuente Inter, colores y medidas exactos (Ari-Diseño). Precios/catálogo EN VIVO (usePrecios).
- * Dark-only. Assets reales: flag-icons, /brand (yape, binance, xiaomi), WhatsApp oficial inline,
- * íconos de herramientas en /tools. Desktop y móvil se muestran por breakpoint (lg).
+ * Dark-only. Barra, menú y pie son los compartidos (components/aritool/chrome). Assets reales:
+ * flag-icons, /brand (yape, binance, xiaomi), íconos de herramientas en /tools.
+ * Desktop y móvil se muestran por breakpoint (lg).
  *
- * Pendiente: versión de la app en Descarga (cablear a release). TFM sin ícono (círculo neutro).
- * El menú del celular (W3) es una primera versión, a afinar con el nodo 1064:25734.
+ * Pendiente: TFM sin ícono (círculo neutro).
  */
-import { ArrowRight, ChevronDown, ChevronRight, Copy, CreditCard, Download, Info, LogIn, Menu, Monitor, Search, X, Zap } from "lucide-react"
+import { ArrowRight, Copy, CreditCard, Download, Info, Minus, Monitor, Search, Square, X, Zap } from "lucide-react"
 import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
 
 import { Flag } from "@/components/Flag"
-import { RUTAS } from "@/components/aritool/chrome"
+import { BuscadorCelular, BuscadorCompu } from "@/components/aritool/buscador"
+import { C, Cont, FranjaSoporte, HeaderDesktop, HeaderMobile, IconoWA, LogoAriCaja, LogoTool, MenuMobile, PieDesktop, PieMobile, RUTAS, WA, useAncla } from "@/components/aritool/chrome"
 import { descargaDe } from "@/data/descargas"
 import { usePrecios } from "@/hooks/use-precios"
+import { NOMBRE_WEB } from "@/lib/buscador"
 import { usePais } from "@/lib/pais"
-import { formatearPrecio, paisesDisponibles, type HerramientaPrecio, type Moneda, type Precios, type ServicioPrecio } from "@/lib/precios"
+import { formatearPrecio, nombreMoneda, paisesDisponibles, type HerramientaPrecio, type Precios, type ServicioPrecio } from "@/lib/precios"
 import { useRelease } from "@/lib/release"
-import { cn } from "@/lib/utils"
 
-const C = {
-  page: "#060a12",
-  card: "#0a101c",
-  cardAlt: "#0c1322",
-  iconBg: "#111a2b",
-  border: "#141c2a",
-  borderAlt: "#243049",
-  borderSoft: "#1b2433",
-  title: "#f3f4f6",
-  text: "#e5e7eb",
-  green: "#34d399",
-  blue: "#3b82f6",
-  link: "#93c5fd",
-  muted: "#8b95a7",
-  muted2: "#aab3c2",
-  faint: "#5b6475",
-  waBg: "#0b1a14",
-  waBorder: "#1f5b3a",
-  waGreen: "#25D366",
-  waText: "#4ade80",
-  pcBorder: "#1e3a5f",
-}
-
-const ICONOS_OK = new Set(["android_multi_tool", "dft_pro", "tsm_tool_pro", "unlock_tool", "ts_tool", "tr_tools_pro"])
-const NOMBRE_WEB: Record<string, string> = { cuenta_mi: "Cuenta MI" }
-const WA = "https://wa.me/51935186037"
-
-function IconoWA({ className, style }: { className?: string; style?: React.CSSProperties }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className} style={style} aria-hidden="true">
-      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.71.306 1.263.489 1.694.625.712.227 1.36.195 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
-    </svg>
-  )
-}
-
-function Cont({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <div className={cn("mx-auto w-full max-w-[1440px] px-5 md:px-10 xl:px-20", className)}>{children}</div>
-}
-
-function simboloMoneda(m: Moneda): string {
-  if (m === "pen") return "S/"
-  if (m === "usdt" || m === "usd") return "USDT"
-  return "$"
-}
-function nombreMoneda(m: Moneda): string {
-  if (m === "pen") return "soles"
-  if (m === "usdt" || m === "usd") return "USDT"
-  return "pesos"
-}
 function nombreServicio(s: ServicioPrecio | null, clave: string, fallback: string): string {
   return NOMBRE_WEB[clave] ?? s?.nombre ?? fallback
 }
@@ -76,121 +28,102 @@ function precioServicio(s: ServicioPrecio | null): string {
   return s?.precio_local != null ? formatearPrecio(s.precio_local, s.moneda) : "Precio en la app"
 }
 
-function LogoTool({ clave, size = 52, apagado = false }: { clave: string; size?: number; apagado?: boolean }) {
-  if (ICONOS_OK.has(clave)) {
-    return <img src={`/tools/${clave}.svg`} alt="" className={cn("shrink-0 rounded-full object-cover", apagado && "opacity-45")} style={{ width: size, height: size }} />
-  }
-  return <div aria-hidden="true" className="shrink-0 rounded-full" style={{ width: size, height: size, background: C.border, opacity: apagado ? 0.6 : 1 }} />
+// El crédito de la app sale del catálogo (negocio.parametro), igual que en la página App AriTool.
+function precioApp(datos: Precios | null): string {
+  return datos?.app?.credito_usd != null ? `$${datos.app.credito_usd} por proceso` : "Precio en la app"
 }
 
 // ======================= DESKTOP (W1) =======================
-function PaisSelector({ datos }: { datos: Precios | null }) {
-  const { pais, setPais } = usePais()
-  const [abierto, setAbierto] = useState(false)
-  const lista = paisesDisponibles(datos)
-  const actual = datos?.pais
-  const etiqueta = actual ? `${actual.nombre} · ${simboloMoneda(actual.moneda)}` : "País"
+// Ventana de la app de la portada (W1 1075:1840, W2 1075:3). Se arma con la captura real + barra +
+// sombras por CSS, y no con una imagen que trae su propio margen, para que mida lo que mide en el
+// Figma a cualquier ancho. `u` = 1 px del diseño de compu (la ventana mide 686 × 506).
+function VentanaApp({ u, arriba, trazo }: { u: string; arriba: string; trazo: number }) {
+  const px = (n: number) => `calc(${u} * ${n})`
+  const control = { color: C.faint, flexShrink: 0 }
   return (
-    <div className="relative">
-      <button type="button" onClick={() => setAbierto((v) => !v)} className="flex items-center gap-2" style={{ border: `1px solid ${C.borderSoft}`, borderRadius: 8, padding: "7px 10px" }}>
-        <Flag code={pais.toLowerCase()} shape="rect" style={{ width: 18, height: 12 }} />
-        <span style={{ color: C.muted2, fontWeight: 500, fontSize: 13 }}>{etiqueta}</span>
-        <ChevronDown className="size-[14px]" style={{ color: C.muted }} />
-      </button>
-      {abierto ? (
-        <div className="absolute right-0 z-50 mt-2 w-52 overflow-hidden rounded-xl py-1" style={{ border: `1px solid ${C.border}`, background: C.card }}>
-          {lista.map((p) => (
-            <button key={p.codigo} type="button" onClick={() => { setPais(p.codigo); setAbierto(false) }} className="flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-white/5" style={{ color: pais === p.codigo ? C.text : C.muted2, fontSize: 13 }}>
-              <Flag code={p.codigo.toLowerCase()} shape="rect" style={{ width: 18, height: 12 }} />
-              {p.nombre}
-            </button>
-          ))}
-        </div>
-      ) : null}
+    <div className="absolute left-0 flex flex-col overflow-hidden" style={{ top: arriba, width: px(686), background: C.cardAlt, border: `${px(1)} solid ${C.borderAlt}`, borderRadius: px(12), boxShadow: `0 0 ${px(80)} rgba(59,130,246,0.18), 0 ${px(24)} ${px(60)} rgba(0,0,0,0.55)` }}>
+      <div className="flex items-center" style={{ gap: px(8), padding: `${px(8)} ${px(12)}` }}>
+        <img src="/aritool-logo.png" alt="" style={{ width: px(16), height: px(16), borderRadius: px(4) }} />
+        <span style={{ color: C.muted2, fontWeight: 500, fontSize: px(12), lineHeight: px(15) }}>AriTool</span>
+        <span className="flex-1" />
+        <Minus strokeWidth={trazo} style={{ ...control, width: px(13), height: px(13) }} />
+        <Square strokeWidth={trazo} style={{ ...control, width: px(11), height: px(11) }} />
+        <X strokeWidth={trazo} style={{ ...control, width: px(13), height: px(13) }} />
+      </div>
+      <img src="/hero-captura.png" alt="App AriTool" className="block select-none object-cover" style={{ width: px(684), height: px(472) }} draggable={false} />
     </div>
   )
 }
 
-function HeaderDesktop({ datos }: { datos: Precios | null }) {
-  const menu: { t: string; href?: string; to?: string }[] = [
-    { t: "Alquiler", href: "#alquiler" },
-    { t: "Servicios", href: "#servicios" },
-    { t: "App AriTool", to: RUTAS.app },
-    { t: "Novedades", to: RUTAS.novedades },
-  ]
-  const estMenu = { fontWeight: 500, fontSize: 14, color: C.muted2 } as const
+function Burbuja({ clave, izq, arriba, lado, sombra }: { clave: string; izq: string; arriba: string; lado: string; sombra: string }) {
+  return <img src={`/tools/${clave}.svg`} alt="" className="absolute rounded-full" style={{ left: izq, top: arriba, width: lado, height: lado, filter: `drop-shadow(${sombra})` }} draggable={false} />
+}
+
+function AppCompu() {
+  const u = "calc(100cqw / 684)"
+  const px = (n: number) => `calc(${u} * ${n})`
+  const sombra = "0 10px 12px rgba(0,0,0,0.5)"
   return (
-    <header className="sticky top-0 z-40 backdrop-blur" style={{ borderBottom: `1px solid ${C.border}`, background: `${C.page}f2` }}>
-      <Cont className="flex h-[79px] items-center">
-        <Link to={RUTAS.inicio} className="flex shrink-0 items-center gap-2.5">
-          <img src="/aritool-logo.png" alt="AriTool" className="size-[38px] rounded-lg" />
-          <span style={{ color: C.title, fontWeight: 700, fontSize: 19 }}>AriTool</span>
-        </Link>
-        <nav className="ml-9 flex items-center gap-7">
-          {menu.map((m) => m.to
-            ? <Link key={m.t} to={m.to} className="transition-colors hover:text-white" style={estMenu}>{m.t}</Link>
-            : <a key={m.t} href={m.href} className="transition-colors hover:text-white" style={estMenu}>{m.t}</a>)}
-        </nav>
-        <div className="flex-1" />
-        <div className="flex items-center gap-3">
-          <a href={datos?.soporte.whatsapp ?? WA} target="_blank" rel="noreferrer" className="flex items-center gap-2" style={{ background: C.waBg, border: `1px solid ${C.waBorder}`, borderRadius: 999, padding: "5px 14px 5px 5px" }}>
-            <span className="flex size-[30px] items-center justify-center rounded-full" style={{ background: C.waGreen }}><IconoWA className="size-[18px]" style={{ color: "#fff" }} /></span>
-            <span className="flex flex-col leading-tight">
-              <span style={{ color: C.waText, fontWeight: 700, fontSize: 9, letterSpacing: "0.8px" }}>SOPORTE WHATSAPP</span>
-              <span style={{ color: C.title, fontWeight: 600, fontSize: 14 }}>+51 935 186 037</span>
-            </span>
-          </a>
-          <PaisSelector datos={datos} />
-          <Link to={RUTAS.cuenta} className="flex items-center gap-2" style={{ background: C.cardAlt, border: `1.5px solid ${C.blue}`, borderRadius: 8, padding: "10px 18px 10px 16px" }}>
-            <LogIn className="size-[16px]" style={{ color: C.text }} />
-            <span style={{ color: C.text, fontWeight: 600, fontSize: 14 }}>Ingresar</span>
-          </Link>
-        </div>
-      </Cont>
-    </header>
+    <div className="relative aspect-[684/518] w-full" style={{ containerType: "inline-size" }}>
+      <VentanaApp u={u} arriba={px(6)} trazo={2} />
+      <Burbuja clave="unlock_tool" izq={px(-34)} arriba={px(60)} lado={px(72)} sombra={sombra} />
+      <Burbuja clave="dft_pro" izq={px(-30)} arriba={px(360)} lado={px(64)} sombra={sombra} />
+      <Burbuja clave="tsm_tool_pro" izq={px(650)} arriba={px(140)} lado={px(60)} sombra={sombra} />
+      <Burbuja clave="android_multi_tool" izq={px(640)} arriba={px(400)} lado={px(56)} sombra={sombra} />
+    </div>
   )
 }
 
-function HeroDesktop({ datos }: { datos: Precios | null }) {
+function AppCelular() {
+  // En el celular la ventana ocupa todo el ancho (350 de 350): 1 px de compu = ancho / 686.
+  const px = (n: number) => `calc(100cqw * ${n} / 350)`
+  const sombra = "0 8px 9px rgba(0,0,0,0.5)"
+  return (
+    <div className="relative mt-2.5 aspect-[350/274.163] w-full" style={{ containerType: "inline-size" }}>
+      <VentanaApp u="calc(100cqw / 686)" arriba={px(10)} trazo={1} />
+      <Burbuja clave="unlock_tool" izq="-8px" arriba="-6px" lado={px(44)} sombra={sombra} />
+      <Burbuja clave="dft_pro" izq={`calc(100% + 6px - ${px(40)})`} arriba={px(170)} lado={px(40)} sombra={sombra} />
+    </div>
+  )
+}
+
+function HeroDesktop({ datos, busqueda }: { datos: Precios | null; busqueda: string }) {
   const r = useRelease()
   return (
-    <section className="relative overflow-hidden">
-      <div className="pointer-events-none absolute inset-0" style={{ background: "radial-gradient(620px 420px at 22% 42%, rgba(59,130,246,0.22), transparent 70%)" }} />
+    <section className="relative z-10">
+      <div className="pointer-events-none absolute inset-0" style={{ background: "radial-gradient(90.91% 45.45% at -21.82% 50%, rgba(59,130,246,0.22), rgba(59,130,246,0))" }} />
       <Cont className="relative grid items-center gap-[56px] py-16 lg:grid-cols-[540px_1fr]">
         <div className="max-w-[540px]">
-          <p className="uppercase" style={{ color: C.link, fontWeight: 700, fontSize: 12, letterSpacing: "1.4px" }}>AriTool · para técnicos de celulares</p>
+          <p className="uppercase" style={{ color: C.link, fontWeight: 700, fontSize: 12, lineHeight: "15px", letterSpacing: "1.4px" }}>AriTool · para técnicos de celulares</p>
           <h1 className="mt-5" style={{ color: C.title, fontWeight: 700, fontSize: 52, lineHeight: "108%" }}>Todo tu taller<br />en una sola app.</h1>
           <p className="mt-5" style={{ color: C.muted, fontSize: 18, lineHeight: "150%" }}>Alquilá herramientas por horas, liberá Xiaomi y gestioná Cuentas MI. Pagás con Yape o Binance y empezás al instante.</p>
-          <div className="mt-7 flex h-[54px] items-center gap-3" style={{ background: C.cardAlt, border: `1px solid ${C.borderAlt}`, borderRadius: 12, padding: "0 18px" }}>
-            <Search className="size-5" style={{ color: C.faint }} />
-            <span style={{ color: C.faint, fontSize: 16 }}>Buscá: Unlock, FRP, Cuenta MI…</span>
-          </div>
+          <BuscadorCompu className="mt-5" inicial={busqueda} />
           <div className="mt-5 flex flex-wrap items-center gap-4">
             <a href={r.downloadUrl} className="flex h-[46px] items-center gap-2 text-white" style={{ background: C.blue, borderRadius: 10, padding: "0 22px" }}>
               <Download className="size-[18px]" /><span style={{ fontWeight: 600, fontSize: 15 }}>Descargar AriTool</span>
             </a>
             <span style={{ color: C.muted, fontSize: 14 }}>Gratis · Windows 10 y 11</span>
           </div>
-          <div className="mt-6 flex flex-wrap items-center gap-2.5">
+          <div className="mt-5 flex flex-wrap items-center gap-2.5 pt-[6px]">
             <span className="flex size-[26px] items-center justify-center overflow-hidden rounded-md bg-white"><img src="/brand/yape.webp" alt="Yape" className="size-[22px] object-contain" /></span>
             <span className="flex size-[26px] items-center justify-center overflow-hidden rounded-md bg-white"><img src="/brand/binance.webp" alt="Binance" className="size-[22px] object-contain" /></span>
-            <span className="ml-1" style={{ color: C.muted2, fontSize: 13 }}>Pagos al instante</span>
-            <span className="mx-1 size-1 rounded-full" style={{ background: "#2a3650" }} />
+            <span style={{ color: C.muted2, fontSize: 13 }}>Pagos al instante</span>
+            <span className="size-1 rounded-full" style={{ background: "#2a3650" }} />
             <IconoWA className="size-[17px]" style={{ color: C.waGreen }} />
             <a href={datos?.soporte.whatsapp ?? WA} target="_blank" rel="noreferrer" style={{ color: C.muted2, fontSize: 13 }}>Soporte +51 935 186 037</a>
           </div>
         </div>
-        <div className="relative"><img src="/hero-app.png" alt="App AriTool" className="h-auto w-full select-none" draggable={false} /></div>
+        <AppCompu />
       </Cont>
     </section>
   )
 }
 
-function Titulo({ texto, derecha }: { texto: string; derecha?: string }) {
+function Titulo({ texto, derecha, chico }: { texto: string; derecha?: string; chico?: boolean }) {
   return (
     <div className="flex items-center justify-between">
-      <h2 className="uppercase" style={{ color: C.muted, fontWeight: 700, fontSize: 12, letterSpacing: "1.2px" }}>{texto}</h2>
-      {derecha ? <span style={{ color: C.faint, fontSize: 13 }}>{derecha}</span> : null}
+      <h2 className="uppercase" style={{ color: C.muted, fontWeight: 700, fontSize: chico ? 11 : 12, lineHeight: chico ? "13px" : "15px", letterSpacing: chico ? "1.1px" : "1.2px" }}>{texto}</h2>
+      {derecha ? <span style={{ color: C.faint, fontSize: chico ? 12 : 13, lineHeight: chico ? "15px" : "16px" }}>{derecha}</span> : null}
     </div>
   )
 }
@@ -198,11 +131,11 @@ function Titulo({ texto, derecha }: { texto: string; derecha?: string }) {
 function TarjetaHerr({ h }: { h: HerramientaPrecio }) {
   if (!h.disponible) {
     return (
-      <div className="flex items-center gap-[14px] rounded-xl p-4" style={{ border: `1px solid ${C.border}`, background: C.card }}>
+      <div data-ancla={h.clave} className="flex items-center gap-[14px] rounded-xl p-4" style={{ border: `1px solid ${C.border}`, background: C.card }}>
         <LogoTool clave={h.clave} apagado />
         <div className="flex min-w-0 flex-col gap-[3px]">
-          <div className="truncate" style={{ color: C.muted, fontWeight: 600, fontSize: 16 }}>{h.nombre}</div>
-          <div style={{ color: C.faint, fontSize: 13 }}>Próximamente</div>
+          <div className="truncate" style={{ color: C.muted, fontWeight: 600, fontSize: 16, lineHeight: "19px" }}>{h.nombre}</div>
+          <div style={{ color: C.faint, fontSize: 13, lineHeight: "16px" }}>Próximamente</div>
         </div>
       </div>
     )
@@ -210,16 +143,16 @@ function TarjetaHerr({ h }: { h: HerramientaPrecio }) {
   const precio = h.precio_local != null ? formatearPrecio(h.precio_local, h.moneda) : "Precio en la app"
   const desc = descargaDe(h.clave)
   return (
-    <div className="flex items-center gap-[14px] rounded-xl p-4" style={{ border: `1px solid ${C.border}`, background: C.card }}>
+    <div data-ancla={h.clave} className="flex items-center gap-[14px] rounded-xl p-4" style={{ border: `1px solid ${C.border}`, background: C.card }}>
       <LogoTool clave={h.clave} />
       <div className="flex min-w-0 flex-col gap-1">
-        <div className="truncate" style={{ color: C.text, fontWeight: 600, fontSize: 16 }}>{h.nombre}</div>
-        <div className="flex items-baseline gap-2">
-          <span style={{ color: C.green, fontWeight: 700, fontSize: 16 }}>{precio}</span>
-          <span style={{ color: C.muted, fontSize: 13 }}>{h.horas} h de uso</span>
+        <div className="truncate" style={{ color: C.text, fontWeight: 600, fontSize: 16, lineHeight: "19px" }}>{h.nombre}</div>
+        <div className="flex items-baseline gap-2 whitespace-nowrap">
+          <span style={{ color: C.green, fontWeight: 700, fontSize: 16, lineHeight: "19px" }}>{precio}</span>
+          <span style={{ color: C.muted, fontSize: 13, lineHeight: "16px" }}>{h.horas} h de uso</span>
         </div>
         {desc ? (
-          <a href={desc.pagina} target="_blank" rel="noreferrer" className="inline-flex items-center gap-[5px]" style={{ color: C.link, fontWeight: 500, fontSize: 13 }}>
+          <a href={desc.pagina} target="_blank" rel="noreferrer" className="inline-flex items-center gap-[5px] whitespace-nowrap pt-[2px]" style={{ color: C.link, fontWeight: 500, fontSize: 13, lineHeight: "16px" }}>
             <Download className="size-[13px]" strokeWidth={2} />Descargar programa
           </a>
         ) : null}
@@ -244,7 +177,7 @@ function TarjetaSkeleton() {
 function AlquilerDesktop({ cargando, error, datos, refrescar }: { cargando: boolean; error: boolean; datos: Precios | null; refrescar: () => void }) {
   const herrs = datos ? datos.herramientas.slice().sort((a, b) => Number(b.disponible) - Number(a.disponible)) : []
   return (
-    <section id="alquiler" className="scroll-mt-24 pb-9">
+    <section id="alquiler" data-ancla="alquiler" className="scroll-mt-24 pb-9">
       <Cont>
         <Titulo texto="Alquiler de herramientas" derecha="Precio por uso, en tu moneda" />
         {error && !datos ? (
@@ -253,11 +186,11 @@ function AlquilerDesktop({ cargando, error, datos, refrescar }: { cargando: bool
             <button type="button" onClick={refrescar} className="mt-3 inline-flex h-9 items-center rounded-lg px-4 text-white" style={{ background: C.blue, fontSize: 14, fontWeight: 600 }}>Reintentar</button>
           </div>
         ) : (
-          <div className="mt-[14px] grid grid-cols-1 gap-[14px] sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-[14px] grid grid-cols-3 items-center gap-[14px] xl:grid-cols-4">
             {cargando && !datos ? Array.from({ length: 8 }).map((_, i) => <TarjetaSkeleton key={i} />) : herrs.map((h) => <TarjetaHerr key={h.clave} h={h} />)}
           </div>
         )}
-        <p className="mt-[14px] flex items-center gap-2" style={{ color: C.muted, fontSize: 14 }}>
+        <p className="mt-[14px] flex items-center gap-2 pt-1" style={{ color: C.muted, fontSize: 14, lineHeight: "17px" }}>
           <Info className="size-4 shrink-0" />Bajás el programa de cada herramienta acá y alquilás la cuenta en la app AriTool.
         </p>
       </Cont>
@@ -265,15 +198,15 @@ function AlquilerDesktop({ cargando, error, datos, refrescar }: { cargando: bool
   )
 }
 
-function TarjetaServicioDesktop({ logo, nombre, precio, nota }: { logo: React.ReactNode; nombre: string; precio: string; nota: string }) {
+function TarjetaServicioDesktop({ ancla, logo, nombre, precio, nota }: { ancla?: string; logo: React.ReactNode; nombre: string; precio: string; nota: string }) {
   return (
-    <div className="flex items-center gap-[14px] rounded-xl p-4" style={{ border: `1px solid ${C.border}`, background: C.card }}>
+    <div data-ancla={ancla} className="flex items-center gap-[14px] rounded-xl p-4" style={{ border: `1px solid ${C.border}`, background: C.card }}>
       {logo}
       <div className="flex min-w-0 flex-col gap-1">
-        <div className="truncate" style={{ color: C.text, fontWeight: 600, fontSize: 16 }}>{nombre}</div>
-        <div className="flex items-baseline gap-2">
-          <span style={{ color: C.green, fontWeight: 700, fontSize: 16 }}>{precio}</span>
-          <span style={{ color: C.muted, fontSize: 13 }}>{nota}</span>
+        <div className="truncate" style={{ color: C.text, fontWeight: 600, fontSize: 16, lineHeight: "19px" }}>{nombre}</div>
+        <div className="flex items-baseline gap-2 whitespace-nowrap">
+          <span style={{ color: C.green, fontWeight: 700, fontSize: 16, lineHeight: "19px" }}>{precio}</span>
+          <span style={{ color: C.muted, fontSize: 13, lineHeight: "16px" }}>{nota}</span>
         </div>
       </div>
     </div>
@@ -281,28 +214,24 @@ function TarjetaServicioDesktop({ logo, nombre, precio, nota }: { logo: React.Re
 }
 
 const LogoXiaomi = <img src="/brand/xiaomi.png" alt="" className="size-[52px] shrink-0 rounded-[10px]" />
-const LogoAri = (
-  <span className="flex size-[52px] shrink-0 items-center justify-center rounded-[10px]" style={{ background: C.iconBg, border: `1px solid ${C.borderAlt}` }}>
-    <img src="/aritool-logo.png" alt="" className="size-[34px]" />
-  </span>
-)
+const LogoAri = <LogoAriCaja lado={52} radio={13} />
 
 function ServiciosDesktop({ datos }: { datos: Precios | null }) {
   const find = (clave: string) => datos?.servicios.find((s) => s.clave === clave) ?? null
   const frp = find("xiaomi_frp")
   const cm = find("cuenta_mi")
   return (
-    <section id="servicios" className="scroll-mt-24 pb-9">
+    <section id="servicios" data-ancla="servicios" className="scroll-mt-24 pb-9">
       <Cont>
         <Titulo texto="Servicios" />
-        <div className="mt-[14px] grid grid-cols-1 gap-[14px] lg:grid-cols-3">
-          <TarjetaServicioDesktop logo={LogoXiaomi} nombre={nombreServicio(frp, "xiaomi_frp", "Xiaomi Reset + FRP")} precio={precioServicio(frp)} nota="Remoto · desde la app" />
-          <TarjetaServicioDesktop logo={LogoXiaomi} nombre={nombreServicio(cm, "cuenta_mi", "Cuenta MI")} precio={precioServicio(cm)} nota="Remoto · desde la app" />
-          <TarjetaServicioDesktop logo={LogoAri} nombre="AriTool · Security Plugin y AntiCrack" precio="$1 por proceso" nota="Tecno · Infinix · itel" />
+        <div className="mt-[14px] grid grid-cols-2 gap-[14px] xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(379px,1fr)]">
+          <TarjetaServicioDesktop ancla="xiaomi_frp" logo={LogoXiaomi} nombre={nombreServicio(frp, "xiaomi_frp", "Xiaomi Reset + FRP")} precio={precioServicio(frp)} nota="Remoto · desde la app" />
+          <TarjetaServicioDesktop ancla="cuenta_mi" logo={LogoXiaomi} nombre={nombreServicio(cm, "cuenta_mi", "Cuenta MI")} precio={precioServicio(cm)} nota="Remoto · desde la app" />
+          <TarjetaServicioDesktop logo={LogoAri} nombre="AriTool · Security Plugin y AntiCrack" precio={precioApp(datos)} nota="Tecno · Infinix · itel" />
         </div>
-        <p className="mt-[14px] flex flex-wrap items-center gap-1.5" style={{ color: C.muted, fontSize: 14 }}>
+        <p className="mt-[14px] flex flex-wrap items-center gap-2 pt-1" style={{ color: C.muted, fontSize: 14, lineHeight: "17px" }}>
           Otras marcas: Motorola F4 · Samsung · pedidos especiales
-          <a href={WA} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1" style={{ color: C.link, fontWeight: 500 }}>Consultar por WhatsApp<ArrowRight className="size-[14px]" /></a>
+          <a href={WA} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2" style={{ color: C.link, fontWeight: 500 }}>Consultar por WhatsApp<ArrowRight className="size-[14px]" /></a>
         </p>
       </Cont>
     </section>
@@ -314,8 +243,8 @@ function Paso({ icono, titulo, texto, extra }: { icono: React.ReactNode; titulo:
     <div className="flex gap-[14px]">
       <span className="flex size-10 shrink-0 items-center justify-center" style={{ background: C.cardAlt, border: `1px solid ${C.borderSoft}`, borderRadius: 10, color: C.link }}>{icono}</span>
       <div>
-        <div style={{ color: C.text, fontWeight: 600, fontSize: 15 }}>{titulo}</div>
-        <div className="mt-1" style={{ color: C.muted, fontSize: 13 }}>{texto}</div>
+        <div style={{ color: C.text, fontWeight: 600, fontSize: 15, lineHeight: "18px" }}>{titulo}</div>
+        <div className="mt-1" style={{ color: C.muted, fontSize: 13, lineHeight: "16px" }}>{texto}</div>
         {extra}
       </div>
     </div>
@@ -327,12 +256,12 @@ function ComoFunciona() {
     <section className="pb-9">
       <Cont>
         <Titulo texto="Cómo funciona" />
-        <div className="mt-[14px] grid grid-cols-1 gap-10 sm:grid-cols-3">
+        <div className="mt-[14px] grid grid-cols-3 items-center gap-10">
           <Paso icono={<Monitor className="size-[18px]" />} titulo="1. Descargá AriTool" texto="En tu PC con Windows 10 u 11. No se instala." />
           <Paso icono={<CreditCard className="size-[18px]" />} titulo="2. Elegí y pagá" texto="Con Yape, Binance o tu saldo." extra={
-            <div className="mt-2 flex items-center gap-2">
-              <span className="flex size-[30px] items-center justify-center overflow-hidden rounded-md bg-white"><img src="/brand/yape.webp" alt="Yape" className="size-[26px] object-contain" /></span>
-              <span className="flex size-[30px] items-center justify-center overflow-hidden rounded-md bg-white"><img src="/brand/binance.webp" alt="Binance" className="size-[26px] object-contain" /></span>
+            <div className="mt-1 flex items-center gap-1.5 pt-1">
+              <span className="flex size-[30px] items-center justify-center overflow-hidden rounded-[7px] bg-white"><img src="/brand/yape.webp" alt="Yape" className="size-[26px] object-contain" /></span>
+              <span className="flex size-[30px] items-center justify-center overflow-hidden rounded-[7px] bg-white"><img src="/brand/binance.webp" alt="Binance" className="size-[26px] object-contain" /></span>
             </div>
           } />
           <Paso icono={<Zap className="size-[18px]" />} titulo="3. Usalo al instante" texto="La cuenta o el servicio te llega en la app." />
@@ -350,16 +279,16 @@ function Descarga() {
         <Titulo texto="Descarga" />
         <div className="mt-[14px] rounded-xl p-6" style={{ border: `1px solid ${C.border}`, background: C.card }}>
           <div className="flex items-center gap-3">
-            <span className="flex size-10 items-center justify-center rounded-[10px]" style={{ background: C.iconBg, border: `1px solid ${C.borderAlt}` }}><img src="/aritool-logo.png" alt="" className="size-7" /></span>
+            <LogoAriCaja lado={40} radio={10} />
             <div>
-              <div style={{ color: C.title, fontWeight: 700, fontSize: 18 }}>AriTool para Windows</div>
-              <div style={{ color: C.muted2, fontSize: 14 }}>Versión {r.version} · {r.buildDateLabel}</div>
+              <div style={{ color: C.title, fontWeight: 700, fontSize: 18, lineHeight: "22px" }}>AriTool para Windows</div>
+              <div className="mt-0.5" style={{ color: C.muted2, fontSize: 14, lineHeight: "17px" }}>Versión {r.version} · {r.buildDateLabel}</div>
             </div>
           </div>
-          <p className="mt-4" style={{ color: C.muted, fontSize: 13 }}>Windows 10 u 11 de 64 bits · es portable, no se instala · se actualiza sola</p>
-          <div className="mt-4 flex flex-wrap items-center gap-4">
-            <a href={r.downloadUrl} className="flex items-center gap-2 text-white" style={{ background: C.blue, borderRadius: 8, padding: "10px 16px", fontWeight: 600, fontSize: 14 }}><Download className="size-[16px]" />Descargar</a>
-            <Link to={RUTAS.novedades} className="inline-flex items-center gap-1.5" style={{ color: C.link, fontWeight: 500, fontSize: 13 }}>Qué cambió en la {r.version}<ArrowRight className="size-[13px]" /></Link>
+          <p className="mt-2.5" style={{ color: C.muted, fontSize: 13, lineHeight: "16px" }}>Windows 10 u 11 de 64 bits · es portable, no se instala · se actualiza sola</p>
+          <div className="mt-2.5 flex flex-wrap items-center gap-4 pt-[6px]">
+            <a href={r.downloadUrl} className="flex items-center gap-2 text-white" style={{ background: C.blue, borderRadius: 8, padding: "10px 16px", fontWeight: 600, fontSize: 14, lineHeight: "17px" }}><Download className="size-[16px]" />Descargar</a>
+            <Link to={RUTAS.novedades} className="inline-flex items-center gap-1.5" style={{ color: C.link, fontWeight: 500, fontSize: 13, lineHeight: "16px" }}>Qué cambió en la {r.version}<ArrowRight className="size-[13px]" /></Link>
           </div>
         </div>
       </Cont>
@@ -367,53 +296,13 @@ function Descarga() {
   )
 }
 
-function PieDesktop() {
-  return (
-    <footer style={{ borderTop: `1px solid ${C.border}` }}>
-      <Cont className="flex items-center gap-7 py-7">
-        <div className="flex items-center gap-2">
-          <img src="/aritool-logo.png" alt="" className="size-6 rounded-md" />
-          <span style={{ color: C.text, fontWeight: 700, fontSize: 15 }}>AriTool</span>
-          <span style={{ color: C.faint, fontSize: 13 }}>© 2026</span>
-        </div>
-        <a href="#" style={{ color: C.muted, fontSize: 13 }}>Términos</a>
-        <a href="#" style={{ color: C.muted, fontSize: 13 }}>Privacidad</a>
-      </Cont>
-    </footer>
-  )
-}
-
 // ======================= MÓVIL (W2 / W3) =======================
-function HeaderMobile({ onMenu }: { onMenu: () => void }) {
-  return (
-    <header className="sticky top-0 z-40" style={{ borderBottom: `1px solid ${C.border}`, background: `${C.page}f2` }}>
-      <div className="flex h-16 items-center gap-3 px-5">
-        <Link to={RUTAS.inicio} className="flex items-center gap-2"><img src="/aritool-logo.png" alt="AriTool" className="size-7 rounded-lg" /><span style={{ color: C.title, fontWeight: 700, fontSize: 17 }}>AriTool</span></Link>
-        <div className="flex-1" />
-        <Link to={RUTAS.cuenta} className="flex h-[35px] items-center gap-1.5 rounded-lg px-3" style={{ background: C.cardAlt, border: `1.5px solid ${C.blue}` }}><LogIn className="size-[15px]" style={{ color: C.text }} /><span style={{ color: C.text, fontWeight: 600, fontSize: 13 }}>Ingresar</span></Link>
-        <button type="button" aria-label="Buscar" className="p-1"><Search className="size-[22px]" style={{ color: C.muted2 }} /></button>
-        <button type="button" aria-label="Menú" onClick={onMenu} className="p-1"><Menu className="size-[22px]" style={{ color: C.muted2 }} /></button>
-      </div>
-    </header>
-  )
-}
-
-function FranjaSoporte({ datos }: { datos: Precios | null }) {
-  return (
-    <a href={datos?.soporte.whatsapp ?? WA} target="_blank" rel="noreferrer" className="flex h-9 items-center justify-center gap-2" style={{ background: C.waBg, borderBottom: "1px solid #14532d" }}>
-      <IconoWA className="size-4" style={{ color: C.waGreen }} />
-      <span style={{ color: "#86efac", fontWeight: 500, fontSize: 13 }}>Soporte</span>
-      <span style={{ color: C.title, fontWeight: 700, fontSize: 14 }}>+51 935 186 037</span>
-    </a>
-  )
-}
-
 function PaisLineaMobile({ datos }: { datos: Precios | null }) {
   const { pais, setPais } = usePais()
   const [open, setOpen] = useState(false)
   const texto = datos ? `Precios en ${nombreMoneda(datos.pais.moneda)} (${datos.pais.nombre})` : "Precios"
   return (
-    <div className="relative mt-2.5 flex items-center gap-1.5">
+    <div className="relative mt-2.5 flex items-center gap-1.5 pt-0.5">
       <Flag code={pais.toLowerCase()} shape="rect" style={{ width: 18, height: 12 }} />
       <span style={{ color: C.muted, fontWeight: 400, fontSize: 12 }}>{texto}</span>
       <button type="button" onClick={() => setOpen((v) => !v)} style={{ color: C.link, fontWeight: 500, fontSize: 12 }}>Cambiar</button>
@@ -430,17 +319,17 @@ function PaisLineaMobile({ datos }: { datos: Precios | null }) {
   )
 }
 
-function HeroMobile({ datos }: { datos: Precios | null }) {
+function HeroMobile({ datos, onBuscar }: { datos: Precios | null; onBuscar: () => void }) {
   return (
-    <section className="px-5 py-7">
-      <p className="uppercase" style={{ color: C.link, fontWeight: 700, fontSize: 11, letterSpacing: "1.2px" }}>AriTool · para técnicos</p>
-      <h1 className="mt-2.5" style={{ color: C.title, fontWeight: 700, fontSize: 28, lineHeight: "116%" }}>Todo tu taller<br />en una sola app.</h1>
-      <p className="mt-2.5" style={{ color: C.muted, fontSize: 15, lineHeight: "145%" }}>Alquilá herramientas por horas, liberá Xiaomi y gestioná Cuentas MI.</p>
-      <div className="mt-2.5 flex h-12 items-center gap-2.5" style={{ background: C.cardAlt, border: `1px solid ${C.borderAlt}`, borderRadius: 12, padding: "0 15px" }}>
-        <Search className="size-[18px]" style={{ color: C.faint }} /><span style={{ color: C.faint, fontSize: 15 }}>Buscá: Unlock, FRP, Cuenta MI…</span>
-      </div>
+    <section className="px-5 py-7" style={{ background: "radial-gradient(55.56% 83.33% at 11.11% 8.33%, rgba(59,130,246,0.2), rgba(59,130,246,0))" }}>
+      <p className="uppercase" style={{ color: C.link, fontWeight: 700, fontSize: 11, lineHeight: "13px", letterSpacing: "1.3px" }}>AriTool · para técnicos</p>
+      <h1 className="mt-2.5" style={{ color: C.title, fontWeight: 700, fontSize: 28, lineHeight: 1.15 }}>Todo tu taller<br />en una sola app.</h1>
+      <p className="mt-2.5" style={{ color: C.muted, fontSize: 15, lineHeight: 1.4 }}>Alquilá herramientas por horas, liberá Xiaomi y gestioná Cuentas MI.</p>
+      <button type="button" onClick={onBuscar} className="mt-2.5 flex h-12 w-full items-center gap-2.5 text-left" style={{ background: C.cardAlt, border: `1px solid ${C.borderAlt}`, borderRadius: 12, padding: "0 14px" }}>
+        <Search className="size-[18px]" style={{ color: C.muted }} /><span style={{ color: C.faint, fontSize: 15 }}>Buscá: Unlock, FRP, Cuenta MI…</span>
+      </button>
       <PaisLineaMobile datos={datos} />
-      <div className="mt-2.5"><img src="/hero-app-mobile.png" alt="App AriTool" className="w-full rounded-[6px]" draggable={false} /></div>
+      <AppCelular />
     </section>
   )
 }
@@ -449,16 +338,16 @@ function TarjetaHerrMobile({ h }: { h: HerramientaPrecio }) {
   const precio = h.precio_local != null ? formatearPrecio(h.precio_local, h.moneda) : "Precio en la app"
   const desc = descargaDe(h.clave)
   return (
-    <div className="flex min-w-0 flex-col overflow-hidden rounded-xl p-3" style={{ border: `1px solid ${C.border}`, background: C.card }}>
+    <div data-ancla={h.clave} className="flex min-w-0 flex-col overflow-hidden rounded-xl p-3" style={{ border: `1px solid ${C.border}`, background: C.card }}>
       <LogoTool clave={h.clave} size={40} />
-      <div className="mt-3 w-full truncate" style={{ color: C.text, fontWeight: 600, fontSize: 14 }}>{h.nombre}</div>
-      <div className="mt-1 flex items-baseline gap-1.5">
-        <span style={{ color: C.green, fontWeight: 700, fontSize: 14 }}>{precio}</span>
-        <span style={{ color: C.muted, fontSize: 12 }}>{h.horas} h</span>
+      <div className="mt-2 w-full truncate" style={{ color: C.text, fontWeight: 600, fontSize: 14, lineHeight: "17px" }}>{h.nombre}</div>
+      <div className="mt-2 flex items-baseline gap-1.5">
+        <span style={{ color: C.green, fontWeight: 700, fontSize: 14, lineHeight: "17px" }}>{precio}</span>
+        <span style={{ color: C.muted, fontSize: 12, lineHeight: "15px" }}>{h.horas} h</span>
       </div>
       {desc ? (
-        <a href={desc.pagina} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1" style={{ color: C.link, fontWeight: 500, fontSize: 12 }}>
-          <Download className="size-[12px]" strokeWidth={2} />Descargar programa
+        <a href={desc.pagina} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-[5px] whitespace-nowrap pt-[2px]" style={{ color: C.link, fontWeight: 500, fontSize: 12, lineHeight: "15px" }}>
+          <Download className="size-[12px] max-[374px]:hidden" strokeWidth={2} />Descargar programa
         </a>
       ) : null}
     </div>
@@ -467,14 +356,14 @@ function TarjetaHerrMobile({ h }: { h: HerramientaPrecio }) {
 
 function TarjetaProximamenteMobile({ items }: { items: HerramientaPrecio[] }) {
   return (
-    <div className="flex min-w-0 flex-col overflow-hidden rounded-xl p-3" style={{ border: `1px solid ${C.border}`, background: C.card }}>
+    <div data-ancla={items.map((h) => h.clave).join(" ")} className="flex min-w-0 flex-col overflow-hidden rounded-xl p-3" style={{ border: `1px solid ${C.border}`, background: C.card }}>
       <div className="flex">
         {items.slice(0, 3).map((h, i) => (
           <span key={h.clave} style={{ marginLeft: i === 0 ? 0 : -10 }}><LogoTool clave={h.clave} size={40} apagado /></span>
         ))}
       </div>
-      <div className="mt-3" style={{ color: C.muted, fontWeight: 600, fontSize: 14 }}>{items.length} más</div>
-      <div className="mt-1" style={{ color: C.faint, fontSize: 12 }}>Próximamente</div>
+      <div className="mt-2" style={{ color: C.muted, fontWeight: 600, fontSize: 14, lineHeight: "17px" }}>{items.length} más</div>
+      <div className="mt-2" style={{ color: C.faint, fontSize: 12, lineHeight: "15px" }}>Próximamente</div>
     </div>
   )
 }
@@ -483,13 +372,13 @@ function AlquilerMobile({ datos }: { datos: Precios | null }) {
   const disp = datos ? datos.herramientas.filter((h) => h.disponible) : []
   const apag = datos ? datos.herramientas.filter((h) => !h.disponible) : []
   return (
-    <section className="px-5 pb-6">
-      <Titulo texto="Alquiler de herramientas" derecha="precio por uso" />
-      <div className="mt-2.5 grid grid-cols-2 gap-2.5">
+    <section data-ancla="alquiler" className="scroll-mt-16 px-5 pb-6">
+      <Titulo chico texto="Alquiler de herramientas" derecha="precio por uso" />
+      <div className="mt-2.5 grid grid-cols-2 items-start gap-2.5">
         {disp.map((h) => <TarjetaHerrMobile key={h.clave} h={h} />)}
         {apag.length ? <TarjetaProximamenteMobile items={apag} /> : null}
       </div>
-      <p className="mt-3.5 flex items-center gap-2" style={{ color: C.muted, fontSize: 13 }}>
+      <p className="mt-2.5 flex items-center gap-2 pt-1" style={{ color: C.muted, fontSize: 12, lineHeight: "15px" }}>
         <Info className="size-[14px] shrink-0" />Bajás el programa acá y alquilás la cuenta en la app.
       </p>
     </section>
@@ -498,33 +387,33 @@ function AlquilerMobile({ datos }: { datos: Precios | null }) {
 
 function ServiciosMobile({ datos }: { datos: Precios | null }) {
   const find = (clave: string) => datos?.servicios.find((s) => s.clave === clave) ?? null
-  const fila = (logo: React.ReactNode, nombre: string, precio: string, nota: string) => (
-    <div className="flex items-center gap-3 rounded-xl p-3" style={{ border: `1px solid ${C.border}`, background: C.card }}>
+  const fila = (logo: React.ReactNode, nombre: string, precio: string, nota: string, ancla?: string) => (
+    <div data-ancla={ancla} className="flex items-center gap-3 rounded-xl p-3" style={{ border: `1px solid ${C.border}`, background: C.card }}>
       <span className="shrink-0">{logo}</span>
       <div className="flex min-w-0 flex-col">
-        <div className="truncate" style={{ color: C.text, fontWeight: 600, fontSize: 14 }}>{nombre}</div>
-        <div className="mt-0.5 flex items-baseline gap-1.5">
-          <span style={{ color: C.green, fontWeight: 700, fontSize: 14 }}>{precio}</span>
-          <span style={{ color: C.muted, fontSize: 12 }}>{nota}</span>
+        <div className="truncate" style={{ color: C.text, fontWeight: 600, fontSize: 14, lineHeight: "17px" }}>{nombre}</div>
+        <div className="mt-[3px] flex items-baseline gap-1.5">
+          <span style={{ color: C.green, fontWeight: 700, fontSize: 14, lineHeight: "17px" }}>{precio}</span>
+          <span style={{ color: C.muted, fontSize: 12, lineHeight: "15px" }}>{nota}</span>
         </div>
       </div>
     </div>
   )
   const xiaomi = <img src="/brand/xiaomi.png" alt="" className="size-10 rounded-lg" />
-  const ari = <span className="flex size-10 items-center justify-center rounded-lg" style={{ background: C.iconBg, border: `1px solid ${C.borderAlt}` }}><img src="/aritool-logo.png" alt="" className="size-7" /></span>
+  const ari = <LogoAriCaja lado={40} radio={10} />
   const frp = find("xiaomi_frp")
   const cm = find("cuenta_mi")
   return (
-    <section className="px-5 pb-6">
-      <Titulo texto="Servicios" />
+    <section data-ancla="servicios" className="scroll-mt-16 px-5 pb-6">
+      <Titulo chico texto="Servicios" />
       <div className="mt-2.5 flex flex-col gap-2.5">
-        {fila(xiaomi, nombreServicio(frp, "xiaomi_frp", "Xiaomi Reset + FRP"), precioServicio(frp), "remoto")}
-        {fila(xiaomi, nombreServicio(cm, "cuenta_mi", "Cuenta MI"), precioServicio(cm), "remoto")}
-        {fila(ari, "AriTool · Security Plugin", "$1 por proceso", "Tecno · Infinix · itel")}
+        {fila(xiaomi, nombreServicio(frp, "xiaomi_frp", "Xiaomi Reset + FRP"), precioServicio(frp), "remoto", "xiaomi_frp")}
+        {fila(xiaomi, nombreServicio(cm, "cuenta_mi", "Cuenta MI"), precioServicio(cm), "remoto", "cuenta_mi")}
+        {fila(ari, "AriTool · Security Plugin", precioApp(datos), "Tecno · Infinix · itel")}
       </div>
-      <p className="mt-3.5 flex flex-col gap-1" style={{ color: C.muted, fontSize: 13 }}>
+      <p className="mt-2.5 flex flex-col gap-0.5 pt-0.5" style={{ color: C.muted, fontSize: 13, lineHeight: "16px" }}>
         <span>Otras marcas: Motorola F4 · Samsung · especiales</span>
-        <a href={WA} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1" style={{ color: C.link, fontWeight: 500 }}>Consultar por WhatsApp<ArrowRight className="size-[13px]" /></a>
+        <a href={WA} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5" style={{ color: C.link, fontWeight: 500 }}>Consultar por WhatsApp<ArrowRight className="size-[13px]" /></a>
       </p>
     </section>
   )
@@ -536,10 +425,10 @@ function EnTuPC({ datos }: { datos: Precios | null }) {
       <div className="rounded-2xl p-4" style={{ background: C.cardAlt, border: `1px solid ${C.pcBorder}` }}>
         <div className="flex items-center gap-2.5">
           <Monitor className="size-5" style={{ color: C.link }} />
-          <span style={{ color: C.title, fontWeight: 700, fontSize: 16 }}>AriTool se usa en tu PC</span>
+          <span style={{ color: C.title, fontWeight: 700, fontSize: 16, lineHeight: "19px" }}>AriTool se usa en tu PC</span>
         </div>
-        <p className="mt-2.5" style={{ color: C.muted, fontSize: 14 }}>Mandate el enlace y abrilo en tu computadora con Windows.</p>
-        <a href={datos?.soporte.whatsapp ?? WA} target="_blank" rel="noreferrer" className="mt-3.5 flex h-[42px] items-center justify-center gap-2 rounded-lg text-white" style={{ background: C.blue }}>
+        <p className="mt-2.5" style={{ color: C.muted2, fontSize: 13, lineHeight: "18px" }}>Mandate el enlace y abrilo en tu computadora con Windows.</p>
+        <a href={datos?.soporte.whatsapp ?? WA} target="_blank" rel="noreferrer" className="mt-2.5 flex h-[42px] items-center justify-center gap-2 rounded-lg text-white" style={{ background: C.blue }}>
           <IconoWA className="size-[18px]" style={{ color: "#fff" }} /><span style={{ fontWeight: 600, fontSize: 14 }}>Enviarme el enlace por WhatsApp</span>
         </a>
         <button type="button" className="mt-2.5 flex h-[43px] w-full items-center justify-center gap-2 rounded-lg" style={{ border: `1px solid ${C.borderAlt}`, color: C.text }}>
@@ -550,96 +439,20 @@ function EnTuPC({ datos }: { datos: Precios | null }) {
   )
 }
 
-function PieMobile() {
-  return (
-    <footer style={{ borderTop: `1px solid ${C.border}` }}>
-      <div className="p-5">
-        <div className="flex items-center gap-2">
-          <img src="/aritool-logo.png" alt="" className="size-[22px] rounded-md" />
-          <span style={{ color: C.text, fontWeight: 700, fontSize: 14 }}>AriTool</span>
-          <span style={{ color: C.faint, fontSize: 12 }}>© 2026</span>
-        </div>
-        <div className="mt-3" style={{ color: C.muted, fontSize: 12 }}>Términos · Privacidad</div>
-      </div>
-    </footer>
-  )
-}
-
-function MenuMobile({ datos, onClose }: { datos: Precios | null; onClose: () => void }) {
-  const { pais, setPais } = usePais()
-  const r = useRelease()
-  const [paisOpen, setPaisOpen] = useState(false)
-  const nDisp = datos ? datos.herramientas.filter((h) => h.disponible).length : 0
-  const paisTxt = datos ? `${datos.pais.nombre} · precios en ${nombreMoneda(datos.pais.moneda)}` : "País"
-  const opciones: { t: string; s: string; href?: string; to?: string }[] = [
-    { t: "Alquiler de herramientas", s: datos ? `${nDisp} herramientas` : "", href: "#alquiler" },
-    { t: "Servicios", s: "Xiaomi FRP · Cuenta MI", href: "#servicios" },
-    { t: "App AriTool", s: "Security Plugin y AntiCrack", to: RUTAS.app },
-    { t: "Novedades", s: `versión ${r.version}`, to: RUTAS.novedades },
-  ]
-  return (
-    <div className="fixed inset-0 z-50 flex flex-col lg:hidden" style={{ background: C.page }}>
-      <div className="flex h-[57px] items-center justify-between px-5" style={{ borderBottom: `1px solid ${C.border}` }}>
-        <div className="flex items-center gap-2"><img src="/aritool-logo.png" alt="" className="size-7 rounded-lg" /><span style={{ color: C.title, fontWeight: 700, fontSize: 17 }}>AriTool</span></div>
-        <button type="button" aria-label="Cerrar" onClick={onClose} className="p-1"><X className="size-[22px]" style={{ color: C.muted2 }} /></button>
-      </div>
-      <nav className="flex flex-col px-5 pt-2">
-        {opciones.map((o) => {
-          const cont = (
-            <>
-              <span className="flex flex-col">
-                <span style={{ color: C.text, fontWeight: 600, fontSize: 17 }}>{o.t}</span>
-                <span className="mt-0.5" style={{ color: C.muted, fontSize: 13 }}>{o.s}</span>
-              </span>
-              <ChevronRight className="size-[18px]" style={{ color: C.muted }} />
-            </>
-          )
-          const cls = "flex items-center justify-between"
-          const sty = { height: 72, borderBottom: `1px solid ${C.border}` }
-          return o.to
-            ? <Link key={o.t} to={o.to} onClick={onClose} className={cls} style={sty}>{cont}</Link>
-            : <a key={o.t} href={o.href} onClick={onClose} className={cls} style={sty}>{cont}</a>
-        })}
-      </nav>
-      <div className="flex flex-col gap-3 px-5 pb-6 pt-6">
-        <div className="relative">
-          <button type="button" onClick={() => setPaisOpen((v) => !v)} className="flex h-[43px] w-full items-center gap-2" style={{ border: `1px solid ${C.borderSoft}`, borderRadius: 10, padding: "0 12px" }}>
-            <Flag code={pais.toLowerCase()} shape="rect" style={{ width: 18, height: 12 }} />
-            <span style={{ color: C.muted2, fontWeight: 500, fontSize: 14 }}>{paisTxt}</span>
-            <span className="flex-1" />
-            <ChevronDown className="size-4" style={{ color: C.muted }} />
-          </button>
-          {paisOpen ? (
-            <div className="absolute bottom-[48px] left-0 z-50 max-h-64 w-full overflow-auto rounded-xl py-1" style={{ border: `1px solid ${C.border}`, background: C.card }}>
-              {paisesDisponibles(datos).map((p) => (
-                <button key={p.codigo} type="button" onClick={() => { setPais(p.codigo); setPaisOpen(false) }} className="flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-white/5" style={{ color: pais === p.codigo ? C.text : C.muted2, fontSize: 14 }}>
-                  <Flag code={p.codigo.toLowerCase()} shape="rect" style={{ width: 18, height: 12 }} />{p.nombre}
-                </button>
-              ))}
-            </div>
-          ) : null}
-        </div>
-        <Link to={RUTAS.cuenta} onClick={onClose} className="flex h-11 items-center justify-center gap-2" style={{ background: C.cardAlt, border: `1.5px solid ${C.blue}`, borderRadius: 10 }}>
-          <LogIn className="size-[16px]" style={{ color: C.text }} /><span style={{ color: C.text, fontWeight: 600, fontSize: 14 }}>Ingresar</span>
-        </Link>
-        <a href={datos?.soporte.whatsapp ?? WA} target="_blank" rel="noreferrer" className="flex items-center gap-3" style={{ background: C.waBg, border: `1px solid ${C.waBorder}`, borderRadius: 12, padding: 12 }}>
-          <span className="flex size-9 items-center justify-center rounded-full" style={{ background: C.waGreen }}><IconoWA className="size-[21px]" style={{ color: "#fff" }} /></span>
-          <span className="flex flex-col"><span style={{ color: "#86efac", fontWeight: 500, fontSize: 12 }}>Soporte por WhatsApp</span><span style={{ color: C.title, fontWeight: 700, fontSize: 17 }}>+51 935 186 037</span></span>
-        </a>
-      </div>
-    </div>
-  )
-}
-
 export function HomeAriTool() {
   const { cargando, error, datos, refrescar } = usePrecios()
   const { setPais } = usePais()
   const [menuAbierto, setMenuAbierto] = useState(false)
+  // ?q=frp abre la web ya buscando (en compu, la lista bajo el buscador; en celular, la pantalla de buscar).
+  const [busqueda] = useState(() => new URLSearchParams(window.location.search).get("q") ?? "")
+  const [buscando, setBuscando] = useState(false)
+  useAncla()
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const q = params.get("pais")
     if (q) setPais(q.toUpperCase())
     if (params.get("menu") === "1") setMenuAbierto(true)
+    if (busqueda && !window.matchMedia("(min-width: 1024px)").matches) setBuscando(true)
     const prev = document.body.style.background
     document.body.style.background = C.page
     return () => {
@@ -648,12 +461,12 @@ export function HomeAriTool() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   return (
-    <div className="min-h-screen overflow-x-hidden" style={{ background: C.page, color: C.text, fontFamily: "Inter, system-ui, sans-serif", lineHeight: 1.2 }}>
+    <div className="min-h-screen overflow-x-hidden" style={{ background: C.page, color: C.text, fontFamily: "Inter, system-ui, sans-serif", lineHeight: "normal" }}>
       {/* DESKTOP */}
       <div className="hidden lg:block">
         <HeaderDesktop datos={datos} />
         <main>
-          <HeroDesktop datos={datos} />
+          <HeroDesktop datos={datos} busqueda={busqueda} />
           <AlquilerDesktop cargando={cargando} error={error} datos={datos} refrescar={refrescar} />
           <ServiciosDesktop datos={datos} />
           <ComoFunciona />
@@ -666,13 +479,14 @@ export function HomeAriTool() {
         <HeaderMobile onMenu={() => setMenuAbierto(true)} />
         <FranjaSoporte datos={datos} />
         <main>
-          <HeroMobile datos={datos} />
+          <HeroMobile datos={datos} onBuscar={() => setBuscando(true)} />
           <AlquilerMobile datos={datos} />
           <ServiciosMobile datos={datos} />
           <EnTuPC datos={datos} />
         </main>
         <PieMobile />
         {menuAbierto ? <MenuMobile datos={datos} onClose={() => setMenuAbierto(false)} /> : null}
+        {buscando ? <BuscadorCelular inicial={busqueda} onClose={() => setBuscando(false)} /> : null}
       </div>
     </div>
   )

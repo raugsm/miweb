@@ -8,7 +8,7 @@ import { ArrowRight, Copy, Download, Monitor, RefreshCw, Shield } from "lucide-r
 import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
 
-import { C, FranjaSoporte, HeaderDesktop, HeaderMobile, IconoWA, MenuMobile, PieDesktop, PieMobile, RUTAS, WA } from "@/components/aritool/chrome"
+import { C, FranjaSoporte, HeaderDesktop, HeaderMobile, IconoWA, LogoAriCaja, MenuMobile, PieDesktop, PieMobile, RUTAS, WA } from "@/components/aritool/chrome"
 import { usePrecios } from "@/hooks/use-precios"
 import { usePais } from "@/lib/pais"
 import { useRelease } from "@/lib/release"
@@ -25,46 +25,44 @@ const AYUDA_M = [
 function ContenidoDesktop() {
   const r = useRelease()
   return (
-    <main className="px-20 pb-16 pt-10">
+    <main className="px-20 pb-14 pt-12">
       <div className="mx-auto max-w-[1280px]">
-        <h1 style={{ color: C.title, fontWeight: 700, fontSize: 42 }}>Descargar AriTool</h1>
+        <h1 style={{ color: C.title, fontWeight: 700, fontSize: 34, lineHeight: "41px" }}>Descargar AriTool</h1>
         <div className="mt-7 grid grid-cols-2 items-start gap-5">
-          <div className="rounded-[14px] p-6" style={{ background: C.card, border: `1px solid ${C.border}` }}>
-            <div className="flex items-center gap-3">
-              <span className="flex size-12 items-center justify-center rounded-xl" style={{ background: C.iconBg, border: `1px solid ${C.borderAlt}` }}>
-                <img src="/aritool-logo.png" alt="" className="size-8" />
-              </span>
+          <div className="rounded-[14px] p-7" style={{ background: C.card, border: `1px solid ${C.border}` }}>
+            <div className="flex items-center gap-3.5">
+              <LogoAriCaja lado={52} radio={13} />
               <div>
-                <div style={{ color: C.title, fontWeight: 700, fontSize: 20 }}>AriTool para Windows</div>
-                <div className="mt-0.5" style={{ color: C.muted2, fontSize: 14 }}>Versión {r.version} · publicada el {r.buildDateLabel}</div>
+                <div style={{ color: C.title, fontWeight: 700, fontSize: 22, lineHeight: "27px" }}>AriTool para Windows</div>
+                <div className="mt-[3px]" style={{ color: C.muted2, fontSize: 14, lineHeight: "17px" }}>Versión {r.version} · publicada el {r.buildDateLabel}</div>
               </div>
             </div>
-            <p className="mt-4" style={{ color: C.muted, fontSize: 13 }}>Windows 10 u 11 de 64 bits · es portable, no se instala · se actualiza sola</p>
-            <div className="mt-5 flex flex-wrap gap-3">
-              <a href={r.downloadUrl} className="flex items-center gap-2 text-white" style={{ background: C.blue, borderRadius: 9, padding: "11px 18px", fontWeight: 600, fontSize: 14 }}>
+            <p className="mt-3.5" style={{ color: C.muted, fontSize: 14, lineHeight: "17px" }}>Windows 10 u 11 de 64 bits · es portable, no se instala · se actualiza sola</p>
+            <div className="mt-3.5 flex flex-wrap items-center gap-3 pt-1">
+              <a href={r.downloadUrl} className="flex items-center gap-2 text-white" style={{ background: C.blue, borderRadius: 9, padding: "11px 18px", fontWeight: 600, fontSize: 14, lineHeight: "17px" }}>
                 <Download className="size-[16px]" />Descargar AriTool
               </a>
-              <button type="button" className="flex items-center gap-2" style={{ border: `1px solid ${C.borderAlt}`, color: C.text, borderRadius: 9, padding: "11px 18px", fontWeight: 600, fontSize: 14 }}>
+              <button type="button" className="flex items-center gap-2" style={{ border: `1px solid ${C.borderAlt}`, color: C.text, borderRadius: 9, padding: "11px 18px", fontWeight: 600, fontSize: 14, lineHeight: "17px" }}>
                 <Copy className="size-[16px]" />Copiar enlace
               </button>
             </div>
           </div>
-          <div className="rounded-[14px] p-6" style={{ background: C.card, border: `1px solid ${C.border}` }}>
-            <p className="uppercase" style={{ color: C.muted, fontWeight: 700, fontSize: 12, letterSpacing: "1.2px" }}>Si algo no anda</p>
+          <div className="rounded-[14px] p-7" style={{ background: C.card, border: `1px solid ${C.border}` }}>
+            <p className="uppercase" style={{ color: C.muted, fontWeight: 700, fontSize: 11, lineHeight: "13px", letterSpacing: "1.1px" }}>Si algo no anda</p>
             <div className="mt-4 flex flex-col gap-4">
               {AYUDA.map((a) => (
                 <div key={a.t} className="flex gap-3">
-                  <a.icon className="mt-0.5 size-[18px] shrink-0" style={{ color: C.link }} />
+                  <a.icon className="size-[18px] shrink-0" style={{ color: C.link }} />
                   <div>
-                    <div style={{ color: C.text, fontWeight: 600, fontSize: 15 }}>{a.t}</div>
-                    <div className="mt-0.5" style={{ color: C.muted2, fontSize: 13 }}>{a.s}</div>
+                    <div style={{ color: C.text, fontWeight: 600, fontSize: 14, lineHeight: "17px" }}>{a.t}</div>
+                    <div className="mt-[3px]" style={{ color: C.muted2, fontSize: 13, lineHeight: "18px" }}>{a.s}</div>
                   </div>
                 </div>
               ))}
             </div>
           </div>
         </div>
-        <Link to={RUTAS.novedades} className="mt-6 inline-flex items-center gap-1.5" style={{ color: C.link, fontWeight: 500, fontSize: 14 }}>
+        <Link to={RUTAS.novedades} className="mt-7 flex w-fit items-center gap-1.5" style={{ color: C.link, fontWeight: 500, fontSize: 14, lineHeight: "17px" }}>
           ¿Qué cambió en esta versión? Ver novedades <ArrowRight className="size-[14px]" />
         </Link>
       </div>
@@ -78,18 +76,18 @@ function ContenidoMobile({ datos }: { datos: { soporte: { whatsapp: string | nul
   return (
     <main>
       <section className="px-5 pb-6 pt-7">
-        <h1 style={{ color: C.title, fontWeight: 700, fontSize: 28 }}>Descargar AriTool</h1>
-        <p className="mt-2" style={{ color: C.muted, fontSize: 14 }}>Versión {r.version} · Windows 10 u 11 · no se instala · se actualiza sola</p>
+        <h1 style={{ color: C.title, fontWeight: 700, fontSize: 28, lineHeight: "34px" }}>Descargar AriTool</h1>
+        <p className="mt-1.5" style={{ color: C.muted, fontSize: 14, lineHeight: "20px" }}>Versión {r.version} · Windows 10 u 11 · no se instala · se actualiza sola</p>
       </section>
 
       <section className="px-5 pb-6">
         <div className="rounded-2xl p-4" style={{ background: C.cardAlt, border: `1px solid ${C.pcBorder}` }}>
           <div className="flex items-center gap-2.5">
             <Monitor className="size-5" style={{ color: C.link }} />
-            <span style={{ color: C.title, fontWeight: 700, fontSize: 16 }}>AriTool se usa en tu PC</span>
+            <span style={{ color: C.title, fontWeight: 700, fontSize: 16, lineHeight: "19px" }}>AriTool se usa en tu PC</span>
           </div>
-          <p className="mt-2.5" style={{ color: C.muted, fontSize: 14 }}>Mandate el enlace y abrilo en tu computadora con Windows.</p>
-          <a href={wa} target="_blank" rel="noreferrer" className="mt-3.5 flex h-[42px] items-center justify-center gap-2 rounded-lg text-white" style={{ background: C.blue }}>
+          <p className="mt-2.5" style={{ color: C.muted2, fontSize: 13, lineHeight: "18px" }}>Mandate el enlace y abrilo en tu computadora con Windows.</p>
+          <a href={wa} target="_blank" rel="noreferrer" className="mt-2.5 flex h-[42px] items-center justify-center gap-2 rounded-lg text-white" style={{ background: C.blue }}>
             <IconoWA className="size-[18px]" style={{ color: "#fff" }} /><span style={{ fontWeight: 600, fontSize: 14 }}>Enviarme el enlace por WhatsApp</span>
           </a>
           <button type="button" className="mt-2.5 flex h-[43px] w-full items-center justify-center gap-2 rounded-lg" style={{ border: `1px solid ${C.borderAlt}`, color: C.text }}>
@@ -98,16 +96,16 @@ function ContenidoMobile({ datos }: { datos: { soporte: { whatsapp: string | nul
         </div>
       </section>
 
-      <section className="px-5 pb-6">
+      <section className="px-5 pb-3">
         <div className="rounded-[14px]" style={{ background: C.card, border: `1px solid ${C.border}`, padding: 18 }}>
-          <p className="uppercase" style={{ color: C.muted, fontWeight: 700, fontSize: 11, letterSpacing: "1.1px" }}>Si algo no anda</p>
+          <p className="uppercase" style={{ color: C.muted, fontWeight: 700, fontSize: 11, lineHeight: "13px", letterSpacing: "1.1px" }}>Si algo no anda</p>
           <div className="mt-3.5 flex flex-col gap-3.5">
             {AYUDA_M.map((a) => (
               <div key={a.t} className="flex gap-2.5">
-                <a.icon className="mt-0.5 size-[17px] shrink-0" style={{ color: C.link }} />
+                <a.icon className="size-[17px] shrink-0" style={{ color: C.link }} />
                 <div>
-                  <div style={{ color: C.text, fontWeight: 600, fontSize: 14 }}>{a.t}</div>
-                  <div className="mt-0.5" style={{ color: C.muted2, fontSize: 13 }}>{a.s}</div>
+                  <div style={{ color: C.text, fontWeight: 600, fontSize: 14, lineHeight: "17px" }}>{a.t}</div>
+                  <div className="mt-[3px]" style={{ color: C.muted2, fontSize: 13, lineHeight: "18px" }}>{a.s}</div>
                 </div>
               </div>
             ))}
@@ -116,7 +114,7 @@ function ContenidoMobile({ datos }: { datos: { soporte: { whatsapp: string | nul
       </section>
 
       <section className="px-5 pb-6">
-        <Link to={RUTAS.novedades} className="inline-flex items-center gap-1.5" style={{ color: C.link, fontWeight: 500, fontSize: 13 }}>
+        <Link to={RUTAS.novedades} className="flex w-fit items-center gap-1.5" style={{ color: C.link, fontWeight: 500, fontSize: 13, lineHeight: "16px" }}>
           ¿Qué cambió? Ver novedades <ArrowRight className="size-[13px]" />
         </Link>
       </section>
@@ -139,7 +137,7 @@ export function DescargarAriToolPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   return (
-    <div className="min-h-screen overflow-x-hidden" style={{ background: C.page, color: C.text, fontFamily: "Inter, system-ui, sans-serif", lineHeight: 1.2 }}>
+    <div className="min-h-screen overflow-x-hidden" style={{ background: C.page, color: C.text, fontFamily: "Inter, system-ui, sans-serif", lineHeight: "normal" }}>
       <div className="hidden lg:block">
         <HeaderDesktop datos={datos} />
         <ContenidoDesktop />

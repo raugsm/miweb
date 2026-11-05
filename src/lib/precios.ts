@@ -124,8 +124,17 @@ export function paisesDisponibles(
   return PAISES
 }
 
-/** País recordado > región del navegador (es-PE → PE) > WW. Siempre uno de PAISES. */
+/** ?pais= de la dirección (y se recuerda) > país recordado > región del navegador (es-PE → PE) > WW. Siempre uno de PAISES. */
 export function detectarPais(): string {
+  try {
+    const pedido = new URLSearchParams(window.location.search).get("pais")?.toUpperCase()
+    if (pedido && CODIGOS.has(pedido)) {
+      recordarPais(pedido)
+      return pedido
+    }
+  } catch {
+    /* sin dirección que leer; seguimos. */
+  }
   try {
     const guardado = localStorage.getItem(CLAVE_PAIS)
     if (guardado && CODIGOS.has(guardado)) return guardado
@@ -153,6 +162,8 @@ export function recordarPais(codigo: string): void {
 // --- Caché simple en memoria: ~60 s por país (la función es STABLE). ---
 const TTL_MS = 60_000
 const cache = new Map<string, { datos: Precios; en: number }>()
+// Pedido en curso por país: si dos partes de la página piden a la vez, viaja uno solo.
+const enCurso = new Map<string, Promise<Precios>>()
 
 /**
  * Trae precios + catálogo del país. Cachea 60 s. Lanza si la red/base falla (el llamador
@@ -164,15 +175,22 @@ export async function traerPrecios(pais: string, opciones?: { forzar?: boolean }
   const hit = cache.get(clave)
   if (!opciones?.forzar && hit && ahora - hit.en < TTL_MS) return hit.datos
 
-  const { data, error } = await supabase
-    .schema("sop_publico")
-    .rpc("precios", { p_pais: clave })
-  if (error) throw error
-  if (!data || typeof data !== "object") throw new Error("precios_respuesta_invalida")
+  const pendiente = enCurso.get(clave)
+  if (pendiente) return pendiente
 
-  const datos = data as Precios
-  cache.set(clave, { datos, en: ahora })
-  return datos
+  const pedido = (async () => {
+    const { data, error } = await supabase
+      .schema("sop_publico")
+      .rpc("precios", { p_pais: clave })
+    if (error) throw error
+    if (!data || typeof data !== "object") throw new Error("precios_respuesta_invalida")
+
+    const datos = data as Precios
+    cache.set(clave, { datos, en: Date.now() })
+    return datos
+  })().finally(() => enCurso.delete(clave))
+  enCurso.set(clave, pedido)
+  return pedido
 }
 
 /** Limpia la caché (ej. tras cambiar de país o para forzar un refresco). */

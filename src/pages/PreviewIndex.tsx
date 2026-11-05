@@ -14,6 +14,9 @@ const SECCIONES: Seccion[] = [
   { t: "App AriTool", src: "/preview-app", h: 2200, nota: "Créditos / licencia / Security Plugin" },
   { t: "Novedades", src: "/preview-novedades", h: 1100, nota: "Changelog por versión (placeholder hasta el RPC de Ari-Cliente)" },
   { t: "Descargar", src: "/preview-descargar", h: 900, nota: "Última versión en vivo" },
+  { t: "Buscador — con resultados", src: "/preview-home?q=unlo", h: 900, nota: "Busca en el catálogo en vivo: nombre y palabras clave del panel" },
+  { t: "Buscador — sin resultados", src: "/preview-home?q=iphone%20icloud", h: 900, nota: "Ofrece WhatsApp" },
+  { t: "Página que no existe", src: "/preview-404", h: 700, nota: "Con buscador e Ir al inicio" },
   { t: "Cuenta — todas las pantallas", src: "/preview-cuenta", h: 2300, nota: "Ingresar (5) + Crear cuenta/Código (4). Falta Recuperar y celular." },
 ]
 

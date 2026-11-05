@@ -19,7 +19,7 @@ function fmtFecha(iso: string): string {
 }
 
 function Badge() {
-  return <span className="rounded-[5px] px-[7px] py-0.5" style={{ background: "#0f1a2e", color: C.link, fontWeight: 600, fontSize: 11 }}>actual</span>
+  return <span className="rounded-[5px] px-[7px] py-0.5" style={{ background: "#0f1a2e", color: C.link, fontWeight: 600, fontSize: 11, lineHeight: "13px" }}>actual</span>
 }
 
 function ContenidoDesktop() {
@@ -30,12 +30,12 @@ function ContenidoDesktop() {
       <div className="mx-auto max-w-[1280px]">
         <div className="flex items-end gap-4">
           <div className="flex-1">
-            <h1 style={{ color: C.title, fontWeight: 700, fontSize: 34 }}>Novedades</h1>
-            <p className="mt-1.5" style={{ color: C.muted, fontSize: 16 }}>Lo nuevo de AriTool, versión por versión. La app se actualiza sola.</p>
+            <h1 style={{ color: C.title, fontWeight: 700, fontSize: 34, lineHeight: "41px" }}>Novedades</h1>
+            <p className="mt-1.5" style={{ color: C.muted, fontSize: 16, lineHeight: "19px" }}>Lo nuevo de AriTool, versión por versión. La app se actualiza sola.</p>
           </div>
           <a href={r.downloadUrl} className="inline-flex shrink-0 items-center gap-2" style={{ border: `1px solid ${C.borderAlt}`, borderRadius: 9, padding: "11px 16px" }}>
             <Download className="size-4" style={{ color: C.text }} />
-            <span style={{ color: C.text, fontWeight: 600, fontSize: 14 }}>Descargar la {r.version}</span>
+            <span style={{ color: C.text, fontWeight: 600, fontSize: 14, lineHeight: "17px" }}>Descargar la {r.version}</span>
           </a>
         </div>
 
@@ -44,16 +44,16 @@ function ContenidoDesktop() {
             <div key={e.version} className="flex gap-8 p-6" style={i > 0 ? { borderTop: `1px solid ${C.border}` } : undefined}>
               <div className="w-40 shrink-0">
                 <div className="flex items-center gap-2">
-                  <span style={{ color: C.title, fontWeight: 700, fontSize: 17 }}>{e.version}</span>
+                  <span style={{ color: C.title, fontWeight: 700, fontSize: 17, lineHeight: "21px" }}>{e.version}</span>
                   {e.version === r.version ? <Badge /> : null}
                 </div>
-                <div className="mt-1" style={{ color: C.muted, fontSize: 13 }}>{fmtFecha(e.fecha)}</div>
+                <div className="mt-1" style={{ color: C.muted, fontSize: 13, lineHeight: "16px" }}>{fmtFecha(e.fecha)}</div>
               </div>
               <div className="flex flex-1 flex-col gap-2.5">
                 {e.notas.map((n, j) => (
                   <div key={j} className="flex gap-3">
-                    <span className="w-16 shrink-0" style={{ color: C.muted, fontWeight: 600, fontSize: 13 }}>{n.area ?? ""}</span>
-                    <span className="flex-1" style={{ color: "#d1d5db", fontSize: 14, lineHeight: 1.45 }}>{n.texto}</span>
+                    <span className="w-16 shrink-0" style={{ color: C.muted, fontWeight: 600, fontSize: 13, lineHeight: "16px" }}>{n.area ?? ""}</span>
+                    <span className="flex-1" style={{ color: "#d1d5db", fontSize: 14, lineHeight: "20px" }}>{n.texto}</span>
                   </div>
                 ))}
               </div>
@@ -61,7 +61,7 @@ function ContenidoDesktop() {
           ))}
         </div>
 
-        <a href="#" className="mt-6 inline-block" style={{ color: C.link, fontWeight: 500, fontSize: 13 }}>Ver versiones anteriores</a>
+        <a href="#" className="mt-6 block w-fit" style={{ color: C.link, fontWeight: 500, fontSize: 13, lineHeight: "16px" }}>Ver versiones anteriores</a>
       </div>
     </main>
   )
@@ -73,29 +73,29 @@ function ContenidoMobile() {
   return (
     <main>
       <section className="px-5 pb-6 pt-7">
-        <h1 style={{ color: C.title, fontWeight: 700, fontSize: 28 }}>Novedades</h1>
-        <p className="mt-2" style={{ color: C.muted, fontSize: 14 }}>Lo nuevo de AriTool, versión por versión. La app se actualiza sola.</p>
+        <h1 style={{ color: C.title, fontWeight: 700, fontSize: 28, lineHeight: "34px" }}>Novedades</h1>
+        <p className="mt-1.5" style={{ color: C.muted, fontSize: 14, lineHeight: "20px" }}>Lo nuevo de AriTool, versión por versión. La app se actualiza sola.</p>
       </section>
       <div className="mx-5 overflow-hidden rounded-[14px]" style={{ background: C.card, border: `1px solid ${C.border}` }}>
         {lista.map((e, i) => (
           <div key={e.version} className="flex flex-col gap-2.5 p-4" style={i > 0 ? { borderTop: `1px solid ${C.border}` } : undefined}>
             <div className="flex items-center gap-2">
-              <span style={{ color: C.title, fontWeight: 700, fontSize: 16 }}>{e.version}</span>
+              <span style={{ color: C.title, fontWeight: 700, fontSize: 16, lineHeight: "19px" }}>{e.version}</span>
               {e.version === r.version ? <Badge /> : null}
               <span className="flex-1" />
-              <span style={{ color: C.muted, fontSize: 12 }}>{fmtFecha(e.fecha)}</span>
+              <span style={{ color: C.muted, fontSize: 12, lineHeight: "15px" }}>{fmtFecha(e.fecha)}</span>
             </div>
             {e.notas.map((n, j) => (
               <div key={j} className="flex flex-col gap-0.5">
-                {n.area ? <span style={{ color: C.muted, fontWeight: 600, fontSize: 12 }}>{n.area}</span> : null}
-                <span style={{ color: "#d1d5db", fontSize: 14 }}>{n.texto}</span>
+                {n.area ? <span style={{ color: C.muted, fontWeight: 600, fontSize: 12, lineHeight: "15px" }}>{n.area}</span> : null}
+                <span style={{ color: "#d1d5db", fontSize: 14, lineHeight: "20px" }}>{n.texto}</span>
               </div>
             ))}
           </div>
         ))}
       </div>
-      <div className="px-5 pb-6 pt-3.5">
-        <a href="#" style={{ color: C.link, fontWeight: 500, fontSize: 13 }}>Ver versiones anteriores</a>
+      <div className="px-5 pb-6 pt-[38px]">
+        <a href="#" className="block w-fit" style={{ color: C.link, fontWeight: 500, fontSize: 13, lineHeight: "16px" }}>Ver versiones anteriores</a>
       </div>
     </main>
   )
@@ -116,7 +116,7 @@ export function NovedadesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   return (
-    <div className="min-h-screen overflow-x-hidden" style={{ background: C.page, color: C.text, fontFamily: "Inter, system-ui, sans-serif", lineHeight: 1.2 }}>
+    <div className="min-h-screen overflow-x-hidden" style={{ background: C.page, color: C.text, fontFamily: "Inter, system-ui, sans-serif", lineHeight: "normal" }}>
       <div className="hidden lg:block">
         <HeaderDesktop datos={datos} active="Novedades" />
         <ContenidoDesktop />
