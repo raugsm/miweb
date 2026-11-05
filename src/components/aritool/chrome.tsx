@@ -25,6 +25,7 @@ export const RUTAS = {
   descargar: "/descargas",
   cuenta: "/cuenta",
   miCuenta: "/mi-cuenta",
+  historial: "/mi-cuenta/historial",
   alquiler: "/#alquiler",
   servicios: "/#servicios",
   // Recargar (W14) y Licencia (W15) todavía no están hechas: mientras tanto van al panel de la web

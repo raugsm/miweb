@@ -126,7 +126,11 @@ function Cuenta({ whatsapp }: { whatsapp: string }) {
     setCodigoMal(false)
     setVista(v)
   }
-  const irAMiCuenta = () => nav(RUTAS.miCuenta)
+  // Al entrar va a Mi cuenta, o a la página de la cuenta desde la que lo mandaron (sesión vencida).
+  const irAMiCuenta = () => {
+    const volver = new URLSearchParams(window.location.search).get("volver")
+    nav(volver && volver.startsWith(RUTAS.miCuenta) ? volver : RUTAS.miCuenta)
+  }
 
   /** Corre una acción con el botón en espera; si se cae la red, muestra "Sin conexión". */
   async function accion(f: () => Promise<void>) {

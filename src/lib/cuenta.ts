@@ -9,7 +9,7 @@ export type ResumenCliente = {
   licencia?: { estado: string; fecha_inicio: string; fecha_fin: string; pcs: number } | null
   totales: { procesos: number; consumidos: number; recargados: number }
   /** `con_licencia` (v19): el proceso corrió con la licencia y no gastó saldo. */
-  trabajos: { folio: string; estado: string; fecha: string; modelo: string; con_licencia?: boolean }[]
+  trabajos: { folio: string; estado: string; fecha: string; modelo: string; con_licencia?: boolean; /** Solo en `cliente_historial`: saldo en ese momento. */ saldo_centavos?: number }[]
   movimientos: {
     tipo: string
     cantidad: number
@@ -75,6 +75,20 @@ export function entrarWeb(correo: string, clave: string) {
 /** Resumen del cliente para el dashboard (saldo, licencia, trabajos, movimientos). */
 export function resumenCliente(jwt: string) {
   return edge<ResumenCliente>("cliente_resumen", {}, jwt)
+}
+
+export type PaginaHistorial = Pick<ResumenCliente, "movimientos" | "trabajos"> & {
+  hay_mas: boolean
+  /** Cursor para pedir la página que sigue (va en `antes`); null si no hay más. */
+  siguiente: string | null
+}
+
+/**
+ * Historial completo, de a 20, del más nuevo al más viejo. `trabajos` trae solo los procesos hechos
+ * con licencia. PENDIENTE: la función `cliente_historial` espera OK de Peter para desplegarse.
+ */
+export function historialCliente(jwt: string, pedido: { filtro: "todo" | "recargas" | "usos" | "devoluciones"; dias: number | null; antes?: string | null }) {
+  return edge<PaginaHistorial>("cliente_historial", pedido, jwt)
 }
 
 /**

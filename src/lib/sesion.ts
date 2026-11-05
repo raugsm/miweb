@@ -4,6 +4,7 @@
  * Es la misma sesión de Supabase que deja la pantalla de Ingresar. `nombre` es el del taller (sale de
  * `cliente_resumen`) y se guarda mientras dure la pestaña, así la barra de arriba no lo pide en cada página.
  */
+import { isAuthApiError } from "@supabase/supabase-js"
 import { useEffect, useState } from "react"
 
 import { resumenCliente } from "@/lib/cuenta"
@@ -38,6 +39,25 @@ export function recordarNombre(id: string, nombre: string): void {
     /* sin sessionStorage: vale igual para esta página. */
   }
   window.dispatchEvent(new CustomEvent(AVISO, { detail: { id, nombre } }))
+}
+
+/**
+ * Qué pasó cuando el servidor rechaza al cliente (401 o 403):
+ *  - "vencida": la sesión guardada ya no vale (W13 S8). Se cierra en este navegador.
+ *  - "perfil":  la sesión vale pero la cuenta no tiene su perfil armado.
+ *  - null:      no es un rechazo de sesión (otro error).
+ */
+export async function motivoRechazo(status: number): Promise<"vencida" | "perfil" | null> {
+  if (status !== 401 && status !== 403) return null
+  const { data, error } = await supabase.auth.getUser()
+  // Si no se pudo preguntar (sin internet), no se cierra la sesión por las dudas.
+  const vencida = error ? (isAuthApiError(error) ? error.status === 401 || error.status === 403 : error.name === "AuthSessionMissingError") : !data.user
+  if (vencida) {
+    // Solo este navegador: cerrar en todos lados le cerraría la sesión de la app.
+    await supabase.auth.signOut({ scope: "local" })
+    return "vencida"
+  }
+  return status === 403 ? "perfil" : null
 }
 
 export function useSesion(): Sesion {

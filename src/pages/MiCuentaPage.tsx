@@ -6,32 +6,32 @@
  * PENDIENTE (espera OK de Peter): la v19 de `cliente_resumen` (supabase/functions/cliente_resumen_v19),
  * que agrega la licencia, el detalle del alquiler y los procesos hechos con licencia. Con la versión de
  * hoy la tarjeta de licencia no puede decir el estado y manda a mirarlo en la app.
- * PENDIENTE: Recargar (W14), Licencia (W15) y el historial completo (W12b) todavía no existen; sus
- * botones van al panel de la web actual, que usa la misma sesión.
+ * PENDIENTE: Recargar (W14) y Licencia (W15) todavía no existen; sus botones van al panel de la web
+ * anterior, que usa la misma sesión.
  *
  * Estados (W13 · 1100:271): sin licencia (S1), licencia por vencer (S2), saldo que no alcanza (S3),
  * pago esperando (S4), historial vacío (S5), cargando (S6), no se pudo cargar (S7) y sesión vencida
  * (S8, se muestra en Ingresar).
  */
-import { ArrowRight, Key, List, LogOut, Timer, Wallet } from "lucide-react"
+import { ArrowRight, Key, LogOut, Timer, Wallet } from "lucide-react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 
 import { Banner } from "@/components/aritool/auth"
+import { Barra, CabeceraHistorial, FilaCelular, FilaCompu, FilasCargandoCelular, FilasCargandoCompu, HistorialVacio, NoSePudo } from "@/components/aritool/historial"
 import { C, Cont, FranjaSoporte, HeaderDesktop, HeaderMobile, IconoWA, MenuMobile, PieDesktop, PieMobile, RUTAS, WA } from "@/components/aritool/chrome"
 import { usePrecios } from "@/hooks/use-precios"
 import { NOMBRE_WEB } from "@/lib/buscador"
 import { cobroActivo, resumenCliente, type CobroActivo, type ResumenCliente } from "@/lib/cuenta"
-import { fechaCorta, filasHistorial, montoTexto, type FilaHistorial } from "@/lib/historial"
+import { filasHistorial, type FilaHistorial } from "@/lib/historial"
 import { type Precios } from "@/lib/precios"
-import { recordarNombre } from "@/lib/sesion"
+import { motivoRechazo, recordarNombre } from "@/lib/sesion"
 import { useSeo } from "@/lib/seo"
 import { supabase } from "@/lib/supabase"
 
 type Carga = { estado: "cargando" } | { estado: "error" } | { estado: "listo"; datos: ResumenCliente; correo: string; pago: CobroActivo | null }
 
 const usd = (n: number) => `US$ ${n.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-const saldoTexto = (n: number) => n.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 /** "2027-09-12" → "12/09/2027" (la fecha es un día, no una hora: no se pasa por zona horaria). */
 const dia = (f: string) => f.slice(0, 10).split("-").reverse().join("/")
 
@@ -158,46 +158,12 @@ function TarjetaLicencia({ lic, precio }: { lic: Licencia | null; precio: number
   </>)
 }
 
-function HistorialVacio() {
-  // W13 S5
-  return (
-    <div className="flex w-full flex-col items-center gap-2 py-[18px]">
-      <List className="size-7" style={{ color: C.faint }} />
-      <p style={{ color: C.muted2, fontWeight: 600, fontSize: 15, lineHeight: "18px" }}>Todavía no hay movimientos.</p>
-      <p style={{ color: C.muted, fontSize: 13, lineHeight: "16px" }}>Cuando recargues o uses algo, aparece acá.</p>
-    </div>
-  )
-}
-
-function Monto({ f, chico }: { f: FilaHistorial; chico?: boolean }) {
-  if (f.monto == null) return <span style={{ color: C.muted, fontSize: chico ? 12 : 14 }}>con licencia</span>
-  return <span style={{ color: f.monto >= 0 ? C.green : C.text, fontWeight: 600, fontSize: chico ? 15 : 14 }}>{montoTexto(f.monto)}</span>
-}
-
-function Barra({ w, h }: { w: number; h: number }) {
-  return <span className="block animate-pulse rounded" style={{ width: w, height: h, background: C.border }} />
-}
-
-function NoSePudo({ onReintentar }: { onReintentar: () => void }) {
-  // W13 S7
-  return (
-    <div className="flex w-full max-w-[420px] flex-col items-start gap-4 rounded-2xl p-7" style={{ border: `1px solid ${C.borderSoft}`, background: C.card }}>
-      <p style={{ color: C.title, fontWeight: 700, fontSize: 20, lineHeight: "24px" }}>No pudimos cargar tu cuenta</p>
-      <p style={{ color: C.muted, fontSize: 14, lineHeight: "20px" }}>Revisá tu internet y probá de nuevo.</p>
-      <button type="button" onClick={onReintentar} className="flex w-full items-center justify-center text-white" style={{ background: C.blue, borderRadius: 10, padding: "13px 18px", fontWeight: 600, fontSize: 15, lineHeight: "18px" }}>Reintentar</button>
-    </div>
-  )
-}
-
 type CuerpoProps = { carga: Carga; filas: FilaHistorial[]; whatsapp: string; minimo: number | null; precioLicencia: number | null | undefined; salir: () => void; reintentar: () => void }
 
 // ======================= COMPUTADORA =======================
-const COL = ["w-[150px] shrink-0", "min-w-0 flex-1", "w-[200px] shrink-0", "w-[140px] shrink-0 text-right", "w-[140px] shrink-0 text-right"]
-
 function CuerpoCompu({ carga, filas, whatsapp, minimo, precioLicencia, salir, reintentar }: CuerpoProps) {
-  const [todo, setTodo] = useState(false)
   const { listo, lic, saldo, pago, aviso } = useSaldo(carga, minimo)
-  const visibles = todo ? filas : filas.slice(0, 6)
+  const visibles = filas.slice(0, 6)
   return (
     <main>
       <Cont className="flex flex-col gap-6 pb-14 pt-10">
@@ -244,26 +210,14 @@ function CuerpoCompu({ carga, filas, whatsapp, minimo, precioLicencia, salir, re
             </div>
 
             <div className="flex flex-col rounded-[14px]" style={{ background: C.card, border: `1px solid ${C.border}` }}>
-              <div className="flex items-center px-6 py-3" style={{ color: C.faint, fontWeight: 500, fontSize: 12, lineHeight: "15px" }}>
-                {["Fecha", "Qué fue", "Pedido", "Monto", "Saldo"].map((t, i) => <span key={t} className={COL[i]}>{t}</span>)}
-              </div>
-              {!listo ? [0, 1, 2].map((i) => (
-                <div key={i} className="flex items-center px-6 py-[17px]" style={{ borderTop: `1px solid ${C.border}` }}><Barra w={420} h={11} /></div>
-              )) : filas.length === 0 ? (
+              <CabeceraHistorial />
+              {!listo ? <FilasCargandoCompu /> : filas.length === 0 ? (
                 <div style={{ borderTop: `1px solid ${C.border}` }}><HistorialVacio /></div>
-              ) : visibles.map((f, i) => (
-                <div key={`${f.fecha}-${i}`} className="flex items-center px-6 py-[14px]" style={{ borderTop: `1px solid ${C.border}`, fontSize: 14, lineHeight: "17px" }}>
-                  <span className={COL[0]} style={{ color: "#d1d5db" }}>{fechaCorta(f.fecha)}</span>
-                  <span className={`${COL[1]} truncate`} style={{ color: "#d1d5db" }}>{f.que}</span>
-                  <span className={COL[2]} style={{ color: C.muted }}>{f.pedido ?? "—"}</span>
-                  <span className={COL[3]}><Monto f={f} /></span>
-                  <span className={COL[4]} style={{ color: C.muted }}>{f.saldo != null ? saldoTexto(f.saldo) : "—"}</span>
-                </div>
-              ))}
-              {listo && filas.length > 6 && !todo ? (
-                <button type="button" onClick={() => setTodo(true)} className="flex items-center gap-1.5 pb-4 pl-6 pt-[14px]" style={{ borderTop: `1px solid ${C.border}`, color: C.link, fontWeight: 500, fontSize: 14, lineHeight: "17px" }}>
+              ) : visibles.map((f, i) => <FilaCompu key={`${f.fecha}-${i}`} f={f} />)}
+              {listo && filas.length > 6 ? (
+                <Link to={RUTAS.historial} className="flex items-center gap-1.5 pb-4 pl-6 pt-[14px]" style={{ borderTop: `1px solid ${C.border}`, color: C.link, fontWeight: 500, fontSize: 14, lineHeight: "17px" }}>
                   Ver todo el historial<ArrowRight className="size-[14px]" />
-                </button>
+                </Link>
               ) : null}
             </div>
           </>
@@ -281,9 +235,8 @@ function CuerpoCompu({ carga, filas, whatsapp, minimo, precioLicencia, salir, re
 
 // ======================= CELULAR =======================
 function CuerpoCelular({ carga, filas, whatsapp, minimo, salir, reintentar }: CuerpoProps) {
-  const [todo, setTodo] = useState(false)
   const { listo, lic, saldo, pago, aviso } = useSaldo(carga, minimo)
-  const visibles = todo ? filas : filas.slice(0, 5)
+  const visibles = filas.slice(0, 5)
   return (
     <main>
       <section className="flex flex-col gap-1 px-5 py-6">
@@ -335,24 +288,12 @@ function CuerpoCelular({ carga, filas, whatsapp, minimo, salir, reintentar }: Cu
           <section className="flex flex-col items-start gap-2.5 px-5 pb-6 pt-2">
             <h2 style={{ color: C.muted, fontWeight: 700, fontSize: 11, lineHeight: "13px", letterSpacing: "1.1px" }}>TU HISTORIAL</h2>
             <div className="flex w-full flex-col rounded-[14px]" style={{ background: C.card, border: `1px solid ${C.border}` }}>
-              {!listo ? [0, 1, 2].map((i) => (
-                <div key={i} className="p-[14px]" style={i ? { borderTop: `1px solid ${C.border}` } : undefined}><Barra w={200} h={35} /></div>
-              )) : filas.length === 0 ? (
-                <HistorialVacio />
-              ) : visibles.map((f, i) => (
-                <div key={`${f.fecha}-${i}`} className="flex items-center gap-2.5 p-[14px]" style={i ? { borderTop: `1px solid ${C.border}` } : undefined}>
-                  <div className="flex min-w-0 flex-1 flex-col gap-[3px]">
-                    <span className="truncate" style={{ color: C.text, fontWeight: 500, fontSize: 14, lineHeight: "17px" }}>{f.que}</span>
-                    <span className="truncate" style={{ color: C.muted, fontSize: 12, lineHeight: "15px" }}>{[fechaCorta(f.fecha), f.pedido].filter(Boolean).join(" · ")}</span>
-                  </div>
-                  <span className="shrink-0" style={{ lineHeight: "18px" }}><Monto f={f} chico /></span>
-                </div>
-              ))}
+              {!listo ? <FilasCargandoCelular /> : filas.length === 0 ? <HistorialVacio /> : visibles.map((f, i) => <FilaCelular key={`${f.fecha}-${i}`} f={f} primera={i === 0} />)}
             </div>
-            {listo && filas.length > 5 && !todo ? (
-              <button type="button" onClick={() => setTodo(true)} className="flex items-center gap-1.5" style={{ color: C.link, fontWeight: 500, fontSize: 13, lineHeight: "16px" }}>
+            {listo && filas.length > 5 ? (
+              <Link to={RUTAS.historial} className="flex items-center gap-1.5" style={{ color: C.link, fontWeight: 500, fontSize: 13, lineHeight: "16px" }}>
                 Ver todo el historial<ArrowRight className="size-[13px]" />
-              </button>
+              </Link>
             ) : null}
             <div className="flex items-center gap-2 pt-1" style={{ fontSize: 13, lineHeight: "16px" }}>
               <IconoWA className="size-[17px]" style={{ color: C.waGreen }} />
@@ -386,13 +327,11 @@ export function MiCuentaPage() {
         const p = await cobroActivo(ses.access_token).catch(() => null)
         return setCarga({ estado: "listo", datos: r.data, correo: ses.user.email ?? "", pago: p?.ok ? p.data?.activo ?? null : null })
       }
-      // 401 = la sesión venció (W13 S8): se cierra acá y vuelve a entrar.
-      if (r.status === 401) {
-        await supabase.auth.signOut({ scope: "local" })
-        return nav(`${RUTAS.cuenta}?vencida=1`, { replace: true })
-      }
-      // 403 = la cuenta todavía no tiene su perfil armado: eso se completa en el panel de la web actual.
-      if (r.status === 403) return nav(RUTAS.panelViejo, { replace: true })
+      const motivo = await motivoRechazo(r.status)
+      // La sesión venció (W13 S8): vuelve a entrar y regresa acá.
+      if (motivo === "vencida") return nav(`${RUTAS.cuenta}?vencida=1`, { replace: true })
+      // La cuenta todavía no tiene su perfil armado: eso se completa en el panel de la web anterior.
+      if (motivo === "perfil") return nav(RUTAS.panelViejo, { replace: true })
       setCarga({ estado: "error" })
     } catch {
       setCarga({ estado: "error" })

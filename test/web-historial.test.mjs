@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { fechaCorta, filasHistorial, iniciales, montoTexto } from "../src/lib/historial.ts";
+import { fechaCorta, filasHistorial, filtrarHistorial, iniciales, montoTexto } from "../src/lib/historial.ts";
 
 const CATALOGO = { xiaomi_frp: "Xiaomi Reset + FRP", cuenta_mi: "Cuenta MI" };
 
@@ -17,7 +17,7 @@ test("recargas: Yape, Binance y la del panel (el texto libre del operador no se 
     mov({ tipo: "recarga", cantidad_usd: 5, motivo: "Gracias por tu recarga", fecha_registro: "2026-11-01T10:00:00Z" }),
   ]), CATALOGO);
   assert.deepEqual(f.map((x) => x.que), ["Recarga · Binance", "Recarga · Yape", "Recarga"]);
-  assert.deepEqual(f[0], { fecha: "2026-11-03T18:05:00Z", que: "Recarga · Binance", pedido: null, monto: 20, saldo: 32.4 });
+  assert.deepEqual(f[0], { fecha: "2026-11-03T18:05:00Z", que: "Recarga · Binance", clase: "recarga", pedido: null, monto: 20, saldo: 32.4 });
 });
 
 test("consumos: el nombre sale del catálogo y el pedido del motivo o de la referencia", () => {
@@ -54,7 +54,39 @@ test("procesos con licencia: entran por fecha, sin monto y con el saldo de ese m
     [{ folio: "88213", estado: "exitoso", fecha: "2026-10-30T10:15:00Z", modelo: "Infinix Hot 50 Pro", con_licencia: true }, { folio: "88100", estado: "exitoso", fecha: "2026-10-28T10:15:00Z", modelo: "Tecno Spark", con_licencia: false }, { folio: "88000", estado: "exitoso", fecha: "2026-10-27T10:15:00Z", modelo: "itel A70" }],
   ), CATALOGO);
   assert.deepEqual(f.map((x) => x.que), ["Recarga · Yape", "Security Plugin · Infinix Hot 50 Pro", "Xiaomi Reset + FRP"]);
-  assert.deepEqual(f[1], { fecha: "2026-10-30T10:15:00Z", que: "Security Plugin · Infinix Hot 50 Pro", pedido: "folio 88213", monto: null, saldo: 17.3 });
+  assert.deepEqual(f[1], { fecha: "2026-10-30T10:15:00Z", que: "Security Plugin · Infinix Hot 50 Pro", clase: "uso", pedido: "folio 88213", monto: null, saldo: 17.3 });
+});
+
+test("ajustes del panel: dicen 'Ajuste', no el nombre de un servicio", () => {
+  const f = filasHistorial(resumen([
+    mov({ tipo: "ajuste", cantidad_usd: -1, saldo_despues_centavos: 0, motivo: "Reverso Binance Pay", referencia: "VQQMJ3DE" }),
+  ]), CATALOGO);
+  assert.deepEqual([f[0].que, f[0].clase, f[0].pedido, f[0].monto], ["Ajuste", "otro", null, -1]);
+});
+
+test("historial completo: el saldo de un proceso con licencia viene del servidor y se respeta", () => {
+  const f = filasHistorial(resumen([], [{ folio: "1", estado: "exitoso", fecha: "2026-10-30T10:00:00Z", modelo: "itel A70", con_licencia: true, saldo_centavos: 1730 }]));
+  assert.equal(f[0].saldo, 17.3);
+});
+
+test("filtros del historial: por clase y por período", () => {
+  const f = filasHistorial(resumen(
+    [
+      mov({ tipo: "recarga", cantidad_usd: 20, motivo: "Yape", fecha_registro: "2026-11-03T18:05:00Z" }),
+      mov({ servicio: "frp", cantidad_usd: -2, fecha_registro: "2026-11-02T10:00:00Z" }),
+      mov({ tipo: "devolucion", servicio: "frp", cantidad_usd: 2, fecha_registro: "2026-11-02T11:00:00Z" }),
+      mov({ tipo: "ajuste", cantidad_usd: 1, fecha_registro: "2026-09-01T10:00:00Z" }),
+    ],
+    [{ folio: "1", estado: "exitoso", fecha: "2026-10-30T10:00:00Z", modelo: "itel A70", con_licencia: true }],
+  ), CATALOGO);
+  const hoy = new Date("2026-11-05T12:00:00Z");
+  assert.equal(filtrarHistorial(f, "todo", null, hoy).length, 5);
+  assert.deepEqual(filtrarHistorial(f, "recargas", null, hoy).map((x) => x.que), ["Recarga · Yape"]);
+  assert.deepEqual(filtrarHistorial(f, "usos", null, hoy).map((x) => x.que), ["Xiaomi Reset + FRP", "Security Plugin · itel A70"]);
+  assert.deepEqual(filtrarHistorial(f, "devoluciones", null, hoy).map((x) => x.que), ["Devolución · Xiaomi Reset + FRP"]);
+  assert.equal(filtrarHistorial(f, "todo", 30, hoy).length, 4); // el ajuste de septiembre queda afuera
+  assert.equal(filtrarHistorial(f, "todo", 7, hoy).length, 4);
+  assert.deepEqual(filtrarHistorial(f, "todo", 3, hoy).map((x) => x.que), ["Recarga · Yape"]); // desde el mediodía del 2: los de esa mañana quedan afuera
 });
 
 test("saldo de un proceso con licencia: el del movimiento anterior; si no hay, el de antes del siguiente; si no hay ninguno, el de hoy", () => {

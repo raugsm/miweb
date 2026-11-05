@@ -10,12 +10,17 @@
  *   consumo    · servicio "frp" (motivo "FRP AT-…") | "cuenta_mi" (referencia "AT-…") |
  *                "alquiler" (motivo "Alquiler AT-…") | null (proceso de la app)
  *   devolucion · servicio como el consumo; el AT viene en el motivo o en la referencia
+ *   ajuste     · corrección hecha desde el panel (motivo = texto del operador, no se muestra)
  */
 import type { ResumenCliente } from "@/lib/cuenta"
+
+export type FiltroHistorial = "todo" | "recargas" | "usos" | "devoluciones"
 
 export type FilaHistorial = {
   /** Fecha ISO del movimiento. */
   fecha: string
+  /** Para los filtros: recarga, uso (consumo o proceso con licencia), devolución u otro (ajuste del panel). */
+  clase: "recarga" | "uso" | "devolucion" | "otro"
   /** "Recarga · Binance", "Alquiler · Unlock Tool · 6 h", "Devolución · Cuenta MI"… */
   que: string
   /** "AT-261103-112", "folio 88213" o null (se muestra "—"). */
@@ -43,15 +48,17 @@ function queFue(m: ResumenCliente["movimientos"][number], catalogo: Record<strin
     if (motivo.startsWith("binance")) return "Recarga · Binance"
     return "Recarga"
   }
+  if (m.tipo === "ajuste") return "Ajuste"
   const nombre = nombreServicio(m.servicio, catalogo)
   const conDetalle = m.detalle ? `${nombre} · ${m.detalle}` : nombre
   return m.tipo === "devolucion" ? `Devolución · ${nombre}` : conDetalle
 }
 
 /** Filas del historial, de la más nueva a la más vieja. */
-export function filasHistorial(resumen: ResumenCliente, catalogo: Record<string, string> = {}): FilaHistorial[] {
+export function filasHistorial(resumen: Pick<ResumenCliente, "movimientos" | "trabajos" | "saldo" | "saldo_usd">, catalogo: Record<string, string> = {}): FilaHistorial[] {
   const filas: FilaHistorial[] = resumen.movimientos.map((m) => ({
     fecha: m.fecha_registro,
+    clase: m.tipo === "recarga" ? "recarga" : m.tipo === "consumo" ? "uso" : m.tipo === "devolucion" ? "devolucion" : "otro",
     que: queFue(m, catalogo),
     pedido: m.pedido ?? (m.referencia ?? "").match(PEDIDO)?.[0] ?? (m.motivo ?? "").match(PEDIDO)?.[0] ?? null,
     monto: m.cantidad_usd ?? m.cantidad,
@@ -60,15 +67,16 @@ export function filasHistorial(resumen: ResumenCliente, catalogo: Record<string,
   // Procesos hechos con la licencia: no mueven el saldo, así que no están entre los movimientos.
   for (const t of resumen.trabajos) {
     if (!t.con_licencia) continue
-    filas.push({ fecha: t.fecha, que: t.modelo ? `Security Plugin · ${t.modelo}` : "Security Plugin", pedido: t.folio ? `folio ${t.folio}` : null, monto: null, saldo: null })
+    filas.push({ fecha: t.fecha, clase: "uso", que: t.modelo ? `Security Plugin · ${t.modelo}` : "Security Plugin", pedido: t.folio ? `folio ${t.folio}` : null, monto: null, saldo: t.saldo_centavos != null ? t.saldo_centavos / 100 : null })
   }
   filas.sort((a, b) => (a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : 0))
 
-  // Saldo de las filas "con licencia": el que había en ese momento. Es el del movimiento anterior;
-  // si no hay uno anterior, el de antes del movimiento que sigue; sin ningún movimiento, el de hoy.
+  // Saldo de las filas "con licencia": el que había en ese momento. Si el servidor no lo mandó, es
+  // el del movimiento anterior; si no hay uno anterior, el de antes del movimiento que sigue; sin
+  // ningún movimiento, el de hoy.
   const centavos = (n: number) => Math.round(n * 100) / 100
   for (let i = filas.length - 1; i >= 0; i--) {
-    if (filas[i].monto != null) continue
+    if (filas[i].monto != null || filas[i].saldo != null) continue
     const anterior = filas[i + 1]?.saldo
     if (anterior != null) {
       filas[i].saldo = anterior
@@ -79,6 +87,14 @@ export function filasHistorial(resumen: ResumenCliente, catalogo: Record<string,
     else if (!resumen.movimientos.length) filas[i].saldo = resumen.saldo_usd ?? resumen.saldo
   }
   return filas
+}
+
+const CLASE: Record<Exclude<FiltroHistorial, "todo">, FilaHistorial["clase"]> = { recargas: "recarga", usos: "uso", devoluciones: "devolucion" }
+
+/** Filas que pasan el filtro y caen dentro de los últimos `dias` (null = sin límite). */
+export function filtrarHistorial(filas: FilaHistorial[], filtro: FiltroHistorial, dias: number | null, ahora = new Date()): FilaHistorial[] {
+  const desde = dias != null ? ahora.getTime() - dias * 86_400_000 : null
+  return filas.filter((f) => (filtro === "todo" || f.clase === CLASE[filtro]) && (desde == null || new Date(f.fecha).getTime() >= desde))
 }
 
 /** "+20.00" / "−2.40" (con el signo menos tipográfico del diseño). */

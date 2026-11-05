@@ -22,6 +22,9 @@ const CuentaPage = lazy(() =>
 const MiCuentaPage = lazy(() =>
   import("@/pages/MiCuentaPage").then((m) => ({ default: m.MiCuentaPage }))
 )
+const HistorialPage = lazy(() =>
+  import("@/pages/HistorialPage").then((m) => ({ default: m.HistorialPage }))
+)
 const NoExistePage = lazy(() =>
   import("@/pages/NoExistePage").then((m) => ({ default: m.NoExistePage }))
 )
@@ -74,6 +77,7 @@ export default function App() {
             <Route path="descargas" element={pagina(<DescargarAriToolPage />)} />
             <Route path="cuenta" element={pagina(<CuentaPage />)} />
             <Route path="mi-cuenta" element={pagina(<MiCuentaPage />)} />
+            <Route path="mi-cuenta/historial" element={pagina(<HistorialPage />)} />
             {/* Dirección vieja: la landing GSM ahora es el Inicio (regla W8 #13). */}
             <Route path="gsm" element={<Navigate to="/" replace />} />
             {VISTA_PREVIA.map(([vieja, nueva]) => <Route key={vieja} path={vieja} element={<Navigate to={nueva} replace />} />)}
