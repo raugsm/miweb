@@ -8,9 +8,11 @@ import { lazy, Suspense, useEffect, useState } from "react"
 import { Link, useLocation } from "react-router-dom"
 
 import { Flag } from "@/components/Flag"
+import { iniciales } from "@/lib/historial"
 import { usePais } from "@/lib/pais"
 import { nombreMoneda, paisesDisponibles, simboloMoneda, type Precios } from "@/lib/precios"
 import { useRelease } from "@/lib/release"
+import { useSesion } from "@/lib/sesion"
 
 export const WA = "https://wa.me/51935186037"
 
@@ -22,8 +24,12 @@ export const RUTAS = {
   novedades: "/preview-novedades",
   descargar: "/preview-descargar",
   cuenta: "/preview-cuenta",
-  // Mi cuenta (W12) todavía no está hecha: mientras tanto es el panel de la web actual, que usa la misma sesión.
-  miCuenta: "/panel",
+  miCuenta: "/preview-mi-cuenta",
+  // Recargar (W14) y Licencia (W15) todavía no están hechas: mientras tanto van al panel de la web
+  // actual, que usa la misma sesión. En el cambio final apuntan a sus páginas nuevas.
+  recargar: "/panel",
+  licencia: "/panel",
+  panelViejo: "/panel",
   alquiler: "/preview-home#alquiler",
   servicios: "/preview-home#servicios",
 }
@@ -162,10 +168,38 @@ function PaisSelector({ datos }: { datos: Precios | null }) {
   )
 }
 
+/**
+ * Lo que va a la derecha de la barra: "Ingresar" o, con la sesión iniciada, el nombre del cliente
+ * (en celular, sus iniciales). Al tocarlo va directo a Mi cuenta (regla W8 #11; W12 1099:27 / 1104:84).
+ */
+function CuentaBarra({ movil }: { movil?: boolean }) {
+  const s = useSesion()
+  if (s.estado === "cargando") return null
+  if (s.estado === "sin") {
+    return movil ? (
+      <Link to={RUTAS.cuenta} className="flex h-[35px] items-center gap-1.5 rounded-lg" style={{ background: C.cardAlt, boxShadow: ANILLO, padding: "0 13.5px" }}><LogIn className="size-[15px]" style={{ color: C.link }} /><span style={{ color: C.text, fontWeight: 600, fontSize: 13, lineHeight: "16px" }}>Ingresar</span></Link>
+    ) : (
+      <Link to={RUTAS.cuenta} className="flex items-center gap-2 whitespace-nowrap" style={{ background: C.cardAlt, boxShadow: ANILLO, borderRadius: 8, padding: "11.5px 19.5px 11.5px 17.5px" }}>
+        <LogIn className="size-[16px]" style={{ color: C.link }} />
+        <span style={{ color: C.text, fontWeight: 600, fontSize: 14, lineHeight: "17px" }}>Ingresar</span>
+      </Link>
+    )
+  }
+  const letras = iniciales(s.nombre || s.correo.split("@")[0])
+  const avatar = (lado: number) => <span className="flex shrink-0 items-center justify-center rounded-full" style={{ width: lado, height: lado, background: "#1e3a8a", color: "#dbeafe", fontWeight: 700, fontSize: 12, lineHeight: "15px" }}>{letras}</span>
+  if (movil) return <Link to={RUTAS.miCuenta} aria-label="Mi cuenta">{avatar(34)}</Link>
+  return (
+    <Link to={RUTAS.miCuenta} className="flex items-center gap-2.5 whitespace-nowrap rounded-full" style={{ background: C.cardAlt, border: `1px solid ${C.borderAlt}`, padding: "6px 14px 6px 6px" }}>
+      {avatar(30)}
+      {s.nombre ? <span style={{ color: C.text, fontWeight: 600, fontSize: 14, lineHeight: "17px" }}>{s.nombre}</span> : <span className="h-3 w-20 animate-pulse rounded" style={{ background: C.border }} />}
+    </Link>
+  )
+}
+
 export function HeaderDesktop({ datos, active }: { datos: Precios | null; active?: string }) {
   return (
     <header className="sticky top-0 z-40 backdrop-blur" style={{ borderBottom: `1px solid ${C.border}`, background: `${C.page}f2` }}>
-      <Cont className="flex h-[78px] items-center">
+      <Cont className="flex items-center py-[18px]">
         <Link to={RUTAS.inicio} className="flex shrink-0 items-center gap-2.5">
           <img src="/aritool-logo.png" alt="AriTool" className="size-[38px] rounded-lg" />
           <span style={{ color: C.title, fontWeight: 700, fontSize: 19 }}>AriTool</span>
@@ -185,10 +219,7 @@ export function HeaderDesktop({ datos, active }: { datos: Precios | null; active
             </span>
           </a>
           <PaisSelector datos={datos} />
-          <Link to={RUTAS.cuenta} className="flex items-center gap-2 whitespace-nowrap" style={{ background: C.cardAlt, boxShadow: ANILLO, borderRadius: 8, padding: "11.5px 19.5px 11.5px 17.5px" }}>
-            <LogIn className="size-[16px]" style={{ color: C.link }} />
-            <span style={{ color: C.text, fontWeight: 600, fontSize: 14, lineHeight: "17px" }}>Ingresar</span>
-          </Link>
+          <CuentaBarra />
         </div>
       </Cont>
     </header>
@@ -211,16 +242,14 @@ export function PieDesktop() {
   )
 }
 
-export function HeaderMobile({ onMenu, mostrarIngresar = true, alto = 64 }: { onMenu: () => void; mostrarIngresar?: boolean; alto?: number }) {
+export function HeaderMobile({ onMenu, mostrarIngresar = true }: { onMenu: () => void; mostrarIngresar?: boolean }) {
   const [buscando, setBuscando] = useState(false)
   return (
     <header className="sticky top-0 z-40" style={{ borderBottom: `1px solid ${C.border}`, background: `${C.page}f2` }}>
-      <div className="flex items-center px-5" style={{ height: alto - 1 }}>
+      <div className="flex items-center px-5 py-[14px]">
         <Link to={RUTAS.inicio} className="flex items-center gap-2.5"><img src="/aritool-logo.png" alt="AriTool" className="size-7 rounded-lg" /><span style={{ color: C.title, fontWeight: 700, fontSize: 17 }}>AriTool</span></Link>
         <div className="flex-1" />
-        {mostrarIngresar ? (
-          <Link to={RUTAS.cuenta} className="flex h-[35px] items-center gap-1.5 rounded-lg" style={{ background: C.cardAlt, boxShadow: ANILLO, padding: "0 13.5px" }}><LogIn className="size-[15px]" style={{ color: C.link }} /><span style={{ color: C.text, fontWeight: 600, fontSize: 13, lineHeight: "16px" }}>Ingresar</span></Link>
-        ) : null}
+        {mostrarIngresar ? <CuentaBarra movil /> : null}
         <button type="button" aria-label="Buscar" onClick={() => setBuscando(true)} className="-my-1 -mr-1 ml-[22px] p-1"><Search className="size-[22px]" style={{ color: C.muted2 }} /></button>
         <button type="button" aria-label="Menú" onClick={onMenu} className="-my-1 -mr-1 ml-[24px] p-1"><Menu className="size-[22px]" style={{ color: C.text }} /></button>
       </div>

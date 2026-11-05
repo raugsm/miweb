@@ -5,8 +5,11 @@ export type ResumenCliente = {
   saldo: number
   saldo_centavos?: number
   saldo_usd?: number
+  /** Licencia anual más nueva. Llega desde la v19 de cliente_resumen; antes undefined. null = nunca tuvo. */
+  licencia?: { estado: string; fecha_inicio: string; fecha_fin: string; pcs: number } | null
   totales: { procesos: number; consumidos: number; recargados: number }
-  trabajos: { folio: string; estado: string; fecha: string; modelo: string }[]
+  /** `con_licencia` (v19): el proceso corrió con la licencia y no gastó saldo. */
+  trabajos: { folio: string; estado: string; fecha: string; modelo: string; con_licencia?: boolean }[]
   movimientos: {
     tipo: string
     cantidad: number
@@ -16,8 +19,12 @@ export type ResumenCliente = {
     saldo_despues_centavos?: number
     motivo: string
     referencia: string
-    servicio?: string
+    servicio?: string | null
     fecha_registro: string
+    /** v19: número AT-… del pedido, si el movimiento es de uno. */
+    pedido?: string | null
+    /** v19: en alquiler, "Unlock Tool · 6 h". */
+    detalle?: string | null
   }[]
   parametros: Record<string, string>
 }

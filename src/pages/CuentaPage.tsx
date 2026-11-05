@@ -445,7 +445,7 @@ export function CuentaPage() {
   if (compu) return <AuthShell><Cuenta whatsapp={whatsapp} /></AuthShell>
   return (
     <div className="min-h-screen overflow-x-hidden" style={{ background: C.page, color: C.text, fontFamily: "Inter, system-ui, sans-serif", lineHeight: "normal" }}>
-      <HeaderMobile onMenu={() => setMenu(true)} mostrarIngresar={false} alto={57} />
+      <HeaderMobile onMenu={() => setMenu(true)} mostrarIngresar={false} />
       <FranjaSoporte datos={datos} />
       <main className="px-5 pb-7 pt-6"><Cuenta whatsapp={whatsapp} /></main>
       <PieMobile />

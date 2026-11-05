@@ -273,7 +273,7 @@ export function CuentaEstadosPreview() {
       </div>
       {/* Celular (1104:2): la Cuenta va dentro del chrome del sitio (header + franja soporte + pie). */}
       <div className="min-h-screen overflow-x-hidden lg:hidden" style={{ background: C.page, color: C.text, fontFamily: "Inter, system-ui, sans-serif", lineHeight: "normal" }}>
-        <HeaderMobile onMenu={() => setMenu(true)} mostrarIngresar={false} alto={57} />
+        <HeaderMobile onMenu={() => setMenu(true)} mostrarIngresar={false} />
         <FranjaSoporte datos={datos} />
         <main className="px-5 pb-7 pt-6"><Vista /></main>
         <PieMobile />
