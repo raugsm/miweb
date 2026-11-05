@@ -48,13 +48,31 @@ test("devoluciones: 'Devolución · servicio' y su pedido", () => {
   assert.deepEqual(f.map((x) => [x.que, x.pedido, x.monto]), [["Devolución · Cuenta MI", "AT-261101-044", 4.5], ["Devolución · Xiaomi Reset + FRP", "AT-261104-007", 2]]);
 });
 
-test("procesos con licencia: entran por fecha, sin monto ni saldo; los cobrados no se duplican", () => {
+test("procesos con licencia: entran por fecha, sin monto y con el saldo de ese momento; los cobrados no se duplican", () => {
   const f = filasHistorial(resumen(
-    [mov({ tipo: "recarga", cantidad_usd: 20, motivo: "Yape", fecha_registro: "2026-11-03T18:05:00Z" }), mov({ servicio: "frp", cantidad_usd: -2, motivo: "FRP AT-261029-001", fecha_registro: "2026-10-29T10:00:00Z" })],
+    [mov({ tipo: "recarga", cantidad_usd: 20, motivo: "Yape", fecha_registro: "2026-11-03T18:05:00Z" }), mov({ servicio: "frp", cantidad_usd: -2, saldo_despues_centavos: 1730, motivo: "FRP AT-261029-001", fecha_registro: "2026-10-29T10:00:00Z" })],
     [{ folio: "88213", estado: "exitoso", fecha: "2026-10-30T10:15:00Z", modelo: "Infinix Hot 50 Pro", con_licencia: true }, { folio: "88100", estado: "exitoso", fecha: "2026-10-28T10:15:00Z", modelo: "Tecno Spark", con_licencia: false }, { folio: "88000", estado: "exitoso", fecha: "2026-10-27T10:15:00Z", modelo: "itel A70" }],
   ), CATALOGO);
   assert.deepEqual(f.map((x) => x.que), ["Recarga · Yape", "Security Plugin · Infinix Hot 50 Pro", "Xiaomi Reset + FRP"]);
-  assert.deepEqual(f[1], { fecha: "2026-10-30T10:15:00Z", que: "Security Plugin · Infinix Hot 50 Pro", pedido: "folio 88213", monto: null, saldo: null });
+  assert.deepEqual(f[1], { fecha: "2026-10-30T10:15:00Z", que: "Security Plugin · Infinix Hot 50 Pro", pedido: "folio 88213", monto: null, saldo: 17.3 });
+});
+
+test("saldo de un proceso con licencia: el del movimiento anterior; si no hay, el de antes del siguiente; si no hay ninguno, el de hoy", () => {
+  const lic = (fecha, folio) => ({ folio, estado: "exitoso", fecha, modelo: "itel A70", con_licencia: true });
+  // Dos seguidos: los dos quedan con el saldo del movimiento anterior.
+  const seguidos = filasHistorial(resumen(
+    [mov({ servicio: "frp", cantidad_usd: -2, saldo_despues_centavos: 1730, fecha_registro: "2026-10-29T10:00:00Z" })],
+    [lic("2026-10-30T10:00:00Z", "1"), lic("2026-10-31T10:00:00Z", "2")],
+  ));
+  assert.deepEqual(seguidos.map((x) => x.saldo), [17.3, 17.3, 17.3]);
+  // Sin movimiento anterior: lo que había antes del movimiento que sigue (32.40 − 20.00).
+  const primero = filasHistorial(resumen(
+    [mov({ tipo: "recarga", cantidad_usd: 20, saldo_despues_centavos: 3240, motivo: "Yape", fecha_registro: "2026-11-03T18:05:00Z" })],
+    [lic("2026-10-30T10:00:00Z", "1")],
+  ));
+  assert.deepEqual(primero.map((x) => x.saldo), [32.4, 12.4]);
+  // Sin ningún movimiento: el saldo no se movió, es el de hoy.
+  assert.deepEqual(filasHistorial(resumen([], [lic("2026-10-30T10:00:00Z", "1")])).map((x) => x.saldo), [32.4]);
 });
 
 test("sin movimientos no hay filas", () => {

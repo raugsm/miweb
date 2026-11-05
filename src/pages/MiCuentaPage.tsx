@@ -13,7 +13,7 @@
  * pago esperando (S4), historial vacío (S5), cargando (S6), no se pudo cargar (S7) y sesión vencida
  * (S8, se muestra en Ingresar).
  */
-import { ArrowRight, KeyRound, List, LogOut, Timer, Wallet } from "lucide-react"
+import { ArrowRight, Key, List, LogOut, Timer, Wallet } from "lucide-react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 
@@ -120,7 +120,7 @@ function TarjetaLicencia({ lic, precio }: { lic: Licencia | null; precio: number
       <p style={{ color: C.title, fontWeight: 700, fontSize: 20, lineHeight: "24px" }}>No tenés licencia</p>
       <p className="w-full" style={{ color: C.muted, fontSize: 13, lineHeight: "19px" }}>Con la licencia, Tecno, Infinix e itel no te gastan saldo durante 1 año, en 1 PC.</p>
       <Link to={RUTAS.licencia} className="flex w-full items-center justify-center gap-2" style={{ border: `1px solid ${C.borderAlt}`, borderRadius: 10, padding: "13px 18px", color: C.text, fontWeight: 600, fontSize: 15, lineHeight: "18px" }}>
-        <KeyRound className="size-4" />{precio != null ? `Comprar licencia · US$ ${precio}` : "Comprar licencia"}
+        <Key className="size-4" />{precio != null ? `Comprar licencia · US$ ${precio}` : "Comprar licencia"}
       </Link>
     </>)
   }
@@ -133,7 +133,7 @@ function TarjetaLicencia({ lic, precio }: { lic: Licencia | null; precio: number
       </div>
       <p style={{ color: C.muted2, fontSize: 14, lineHeight: "17px" }}>El {lic.fecha} · en {lic.pcs} PC</p>
       <Link to={RUTAS.licencia} className="flex w-full items-center justify-center gap-2 text-white" style={{ background: C.blue, borderRadius: 10, padding: "13px 18px", fontWeight: 600, fontSize: 15, lineHeight: "18px" }}>
-        <KeyRound className="size-4" />Renovar un año más
+        <Key className="size-4" />Renovar un año más
       </Link>
     </>)
   }

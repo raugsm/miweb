@@ -22,7 +22,7 @@ export type FilaHistorial = {
   pedido: string | null
   /** Monto en USD con signo; null = proceso cubierto por la licencia ("con licencia"). */
   monto: number | null
-  /** Saldo en USD después del movimiento; null si no se sabe. */
+  /** Saldo en USD después del movimiento (en "con licencia", el de ese momento); null si no se sabe. */
   saldo: number | null
 }
 
@@ -62,7 +62,23 @@ export function filasHistorial(resumen: ResumenCliente, catalogo: Record<string,
     if (!t.con_licencia) continue
     filas.push({ fecha: t.fecha, que: t.modelo ? `Security Plugin · ${t.modelo}` : "Security Plugin", pedido: t.folio ? `folio ${t.folio}` : null, monto: null, saldo: null })
   }
-  return filas.sort((a, b) => (a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : 0))
+  filas.sort((a, b) => (a.fecha < b.fecha ? 1 : a.fecha > b.fecha ? -1 : 0))
+
+  // Saldo de las filas "con licencia": el que había en ese momento. Es el del movimiento anterior;
+  // si no hay uno anterior, el de antes del movimiento que sigue; sin ningún movimiento, el de hoy.
+  const centavos = (n: number) => Math.round(n * 100) / 100
+  for (let i = filas.length - 1; i >= 0; i--) {
+    if (filas[i].monto != null) continue
+    const anterior = filas[i + 1]?.saldo
+    if (anterior != null) {
+      filas[i].saldo = anterior
+      continue
+    }
+    const sigue = filas.slice(0, i).reverse().find((f) => f.monto != null)
+    if (sigue) filas[i].saldo = sigue.saldo != null && sigue.monto != null ? centavos(sigue.saldo - sigue.monto) : null
+    else if (!resumen.movimientos.length) filas[i].saldo = resumen.saldo_usd ?? resumen.saldo
+  }
+  return filas
 }
 
 /** "+20.00" / "−2.40" (con el signo menos tipográfico del diseño). */
