@@ -21,7 +21,9 @@ export const RUTAS = {
   app: "/preview-app",
   novedades: "/preview-novedades",
   descargar: "/preview-descargar",
-  cuenta: "/preview-cuenta?estado=c1",
+  cuenta: "/preview-cuenta",
+  // Mi cuenta (W12) todavía no está hecha: mientras tanto es el panel de la web actual, que usa la misma sesión.
+  miCuenta: "/panel",
   alquiler: "/preview-home#alquiler",
   servicios: "/preview-home#servicios",
 }

@@ -55,6 +55,10 @@ const CuentaPage = lazy(() =>
 const NoExistePage = lazy(() =>
   import("@/pages/NoExistePage").then((m) => ({ default: m.NoExistePage }))
 )
+// TEMPORAL: galería de estados de la Cuenta (solo presentación) para comparar con el Figma.
+const CuentaEstadosPreview = lazy(() =>
+  import("@/pages/CuentaEstadosPreview").then((m) => ({ default: m.CuentaEstadosPreview }))
+)
 // TEMPORAL: índice único que embebe TODAS las pantallas de preview en un solo link.
 const PreviewIndex = lazy(() =>
   import("@/pages/PreviewIndex").then((m) => ({ default: m.PreviewIndex }))
@@ -120,6 +124,14 @@ export default function App() {
               element={
                 <Suspense fallback={null}>
                   <NoExistePage />
+                </Suspense>
+              }
+            />
+            <Route
+              path="preview-cuenta-estados"
+              element={
+                <Suspense fallback={null}>
+                  <CuentaEstadosPreview />
                 </Suspense>
               }
             />

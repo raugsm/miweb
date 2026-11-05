@@ -17,7 +17,8 @@ const SECCIONES: Seccion[] = [
   { t: "Buscador — con resultados", src: "/preview-home?q=unlo", h: 900, nota: "Busca en el catálogo en vivo: nombre y palabras clave del panel" },
   { t: "Buscador — sin resultados", src: "/preview-home?q=iphone%20icloud", h: 900, nota: "Ofrece WhatsApp" },
   { t: "Página que no existe", src: "/preview-404", h: 700, nota: "Con buscador e Ir al inicio" },
-  { t: "Cuenta — todas las pantallas", src: "/preview-cuenta", h: 2300, nota: "Ingresar (5) + Crear cuenta/Código (4). Falta Recuperar y celular." },
+  { t: "Cuenta — pantalla real", src: "/preview-cuenta", h: 760, nota: "Ingresar / crear / código / recuperar contra la cuenta real" },
+  { t: "Cuenta — galería de estados", src: "/preview-cuenta-estados", h: 2300, nota: "Solo presentación, con datos de muestra, para comparar con el Figma" },
 ]
 
 export function PreviewIndex() {

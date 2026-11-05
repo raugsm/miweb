@@ -1,9 +1,10 @@
 /**
  * Componentes de las pantallas de cuenta (W11): tarjeta centrada, cabeza, campos, botones, banners y divisor.
  * Medidas y colores EXACTOS del Figma (grupo Ingresar 1097:2..135, aprobado por Peter 4-nov). Dark-only, Inter.
- * La lógica de auth (Supabase) se cablea aparte; acá sólo la presentación + estados.
+ * Cada pieza sirve para las dos cosas: sin `onChange`/`onClick` es solo presentación (galería de
+ * estados para revisar contra el Figma); con ellos es el campo o el botón de verdad (pages/CuentaPage).
  */
-import { AlertCircle, Check, ChevronDown, type LucideIcon, X } from "lucide-react"
+import { AlertCircle, Check, ChevronDown, Eye, EyeOff, type LucideIcon, X } from "lucide-react"
 import { useState } from "react"
 import { Link } from "react-router-dom"
 
@@ -56,40 +57,69 @@ export function Banner({ tipo, icono: Icono, children }: { tipo: "rojo" | "ambar
   )
 }
 
-/** Campo de texto. `valor` lo muestra lleno (#e5e7eb); si no, muestra `placeholder` (#5b6475). */
-export function Campo({ label, placeholder, valor, error }: { label: string; placeholder?: string; valor?: string; error?: string }) {
+// Letra de los campos: 15 px como el Figma; en iPhone 16 px para que Safari no haga zoom al escribir.
+const ENTRADA = "min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-[#5b6475] supports-[-webkit-touch-callout:none]:text-[16px]"
+
+function ErrorCampo({ texto }: { texto: string }) {
   return (
-    <div className="flex w-full flex-col items-start gap-1.5">
-      <label style={{ color: C.muted2, fontWeight: 500, fontSize: 13 }}>{label}</label>
-      <div className="flex h-12 w-full items-center gap-2.5" style={{ background: C.cardAlt, border: `${error ? 1.5 : 1}px solid ${error ? ERR_BORDE : C.borderAlt}`, borderRadius: 10, padding: "0 14px" }}>
-        <span className="truncate" style={{ color: valor ? C.text : C.faint, fontSize: 15 }}>{valor || placeholder}</span>
-      </div>
-      {error ? (
-        <div className="flex items-center gap-1.5">
-          <AlertCircle className="size-[14px] shrink-0" style={{ color: ERR_BORDE }} />
-          <span style={{ color: ERR_TXT, fontSize: 13 }}>{error}</span>
-        </div>
-      ) : null}
+    <div className="flex items-center gap-1.5" role="alert">
+      <AlertCircle className="size-[14px] shrink-0" style={{ color: ERR_BORDE }} />
+      <span style={{ color: ERR_TXT, fontSize: 13 }}>{texto}</span>
     </div>
   )
 }
 
-export function CampoPassword({ label, valor, error, enfoque, check, debajo }: { label: string; valor?: string; error?: string; enfoque?: boolean; check?: boolean; debajo?: React.ReactNode }) {
-  const borde = error ? `1.5px solid ${ERR_BORDE}` : enfoque ? `1.5px solid ${AZUL_ENFOQUE}` : `1px solid ${C.borderAlt}`
+type EntradaProps = {
+  id?: string
+  autoComplete?: string
+  autoFocus?: boolean
+  /** Con `onChange` el campo es un <input> real; sin él, solo muestra `valor`. */
+  onChange?: (valor: string) => void
+  onEnter?: () => void
+}
+
+/** Campo de texto. `valor` lo muestra lleno (#e5e7eb); si no, muestra `placeholder` (#5b6475). */
+export function Campo({ label, placeholder, valor, error, tipo = "text", id, autoComplete, autoFocus, onChange, onEnter }: { label: string; placeholder?: string; valor?: string; error?: string; tipo?: string } & EntradaProps) {
+  const [foco, setFoco] = useState(false)
+  const borde = error ? `1.5px solid ${ERR_BORDE}` : foco ? `1.5px solid ${AZUL_ENFOQUE}` : `1px solid ${C.borderAlt}`
   return (
     <div className="flex w-full flex-col items-start gap-1.5">
-      <label style={{ color: C.muted2, fontWeight: 500, fontSize: 13 }}>{label}</label>
+      <label htmlFor={id} style={{ color: C.muted2, fontWeight: 500, fontSize: 13 }}>{label}</label>
       <div className="flex h-12 w-full items-center gap-2.5" style={{ background: C.cardAlt, border: borde, borderRadius: 10, padding: "0 14px" }}>
-        <span className="flex-1 truncate" style={{ color: valor ? C.text : C.faint, fontSize: 15, letterSpacing: valor ? "0.1em" : undefined }}>{valor || "Tu contraseña"}</span>
-        <OjoIcono />
+        {onChange ? (
+          <input id={id} type={tipo} value={valor ?? ""} placeholder={placeholder} autoComplete={autoComplete} autoFocus={autoFocus} autoCapitalize="none" spellCheck={false}
+            onChange={(e) => onChange(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") onEnter?.() }} onFocus={() => setFoco(true)} onBlur={() => setFoco(false)}
+            aria-invalid={Boolean(error)} className={ENTRADA} style={{ color: C.text }} />
+        ) : (
+          <span className="truncate" style={{ color: valor ? C.text : C.faint, fontSize: 15 }}>{valor || placeholder}</span>
+        )}
+      </div>
+      {error ? <ErrorCampo texto={error} /> : null}
+    </div>
+  )
+}
+
+export function CampoPassword({ label, valor, error, enfoque, check, debajo, id, autoComplete, autoFocus, onChange, onEnter }: { label: string; valor?: string; error?: string; enfoque?: boolean; check?: boolean; debajo?: React.ReactNode } & EntradaProps) {
+  const [foco, setFoco] = useState(false)
+  const [ver, setVer] = useState(false)
+  const borde = error ? `1.5px solid ${ERR_BORDE}` : enfoque || foco ? `1.5px solid ${AZUL_ENFOQUE}` : `1px solid ${C.borderAlt}`
+  return (
+    <div className="flex w-full flex-col items-start gap-1.5">
+      <label htmlFor={id} style={{ color: C.muted2, fontWeight: 500, fontSize: 13 }}>{label}</label>
+      <div className="flex h-12 w-full items-center gap-2.5" style={{ background: C.cardAlt, border: borde, borderRadius: 10, padding: "0 14px" }}>
+        {onChange ? (
+          <input id={id} type={ver ? "text" : "password"} value={valor ?? ""} placeholder="Tu contraseña" autoComplete={autoComplete} autoFocus={autoFocus} autoCapitalize="none" spellCheck={false}
+            onChange={(e) => onChange(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") onEnter?.() }} onFocus={() => setFoco(true)} onBlur={() => setFoco(false)}
+            aria-invalid={Boolean(error)} className={ENTRADA} style={{ color: C.text, letterSpacing: valor && !ver ? "0.1em" : undefined }} />
+        ) : (
+          <span className="flex-1 truncate" style={{ color: valor ? C.text : C.faint, fontSize: 15, letterSpacing: valor ? "0.1em" : undefined }}>{valor || "Tu contraseña"}</span>
+        )}
+        <button type="button" onClick={() => setVer((v) => !v)} aria-label={ver ? "Ocultar contraseña" : "Ver contraseña"} aria-pressed={ver} className="shrink-0">
+          {ver ? <EyeOff className="size-[18px]" style={{ color: C.muted }} /> : <Eye className="size-[18px]" style={{ color: C.muted }} />}
+        </button>
         {check ? <Check className="size-[18px] shrink-0" style={{ color: C.green }} /> : null}
       </div>
-      {error ? (
-        <div className="flex items-center gap-1.5">
-          <AlertCircle className="size-[14px] shrink-0" style={{ color: ERR_BORDE }} />
-          <span style={{ color: ERR_TXT, fontSize: 13 }}>{error}</span>
-        </div>
-      ) : null}
+      {error ? <ErrorCampo texto={error} /> : null}
       {debajo}
     </div>
   )
@@ -109,63 +139,66 @@ export function ReglasPassword({ reglas }: { reglas: { texto: string; ok: boolea
   )
 }
 
-/** Selector tipo País: bandera + nombre + chevron (presentación; el dropdown real se cablea aparte). */
-export function CampoSelect({ label, bandera, texto }: { label: string; bandera?: string; texto: string }) {
+/** Selector tipo País: bandera + nombre + chevron. Con `opciones` y `onChange` abre la lista del sistema. */
+export function CampoSelect({ label, bandera, texto, id, valor, opciones, onChange }: { label: string; bandera?: string; texto: string; id?: string; valor?: string; opciones?: { valor: string; texto: string }[]; onChange?: (valor: string) => void }) {
   return (
     <div className="flex w-full flex-col items-start gap-1.5">
-      <label style={{ color: C.muted2, fontWeight: 500, fontSize: 13 }}>{label}</label>
-      <div className="flex h-12 w-full items-center gap-2.5" style={{ background: C.cardAlt, border: `1px solid ${C.borderAlt}`, borderRadius: 10, padding: "0 14px" }}>
+      <label htmlFor={id} style={{ color: C.muted2, fontWeight: 500, fontSize: 13 }}>{label}</label>
+      <div className="relative flex h-12 w-full items-center gap-2.5" style={{ background: C.cardAlt, border: `1px solid ${C.borderAlt}`, borderRadius: 10, padding: "0 14px" }}>
         {bandera ? <Flag code={bandera} style={{ width: 20, height: 14 }} /> : null}
         <span className="flex-1 truncate" style={{ color: C.text, fontSize: 15 }}>{texto}</span>
         <ChevronDown className="size-[18px] shrink-0" style={{ color: C.muted }} />
+        {opciones && onChange ? (
+          <select id={id} value={valor} onChange={(e) => onChange(e.target.value)} className="absolute inset-0 size-full cursor-pointer opacity-0">
+            {opciones.map((o) => <option key={o.valor} value={o.valor}>{o.texto}</option>)}
+          </select>
+        ) : null}
       </div>
     </div>
   )
 }
 
 /** 6 casillas de código. `valor` las llena de izq. a der.; `activa` marca la casilla en foco (azul);
- *  `error` pinta de rojo todas las llenas. */
-export function CodigoCorreo({ valor = "", activa, error }: { valor?: string; activa?: number; error?: boolean }) {
+ *  `error` pinta de rojo todas las llenas. Con `onChange` se escribe de verdad (un solo campo
+ *  invisible encima: acepta pegar el código y el autocompletado del celular). */
+export function CodigoCorreo({ valor = "", activa, error, id, autoFocus, onChange }: { valor?: string; activa?: number; error?: boolean; id?: string; autoFocus?: boolean; onChange?: (valor: string) => void }) {
+  const [foco, setFoco] = useState(false)
+  const enFoco = activa ?? (foco ? Math.min(valor.length, 5) : undefined)
   return (
-    <div className="flex w-full items-center gap-2.5">
+    <div className="relative flex w-full items-center gap-2.5">
       {Array.from({ length: 6 }).map((_, i) => {
         const ch = valor[i]
-        const foco = i === activa
-        const borde = error ? `1.5px solid ${ERR_BORDE}` : foco ? `1.5px solid ${AZUL_ENFOQUE}` : `1px solid ${C.borderAlt}`
+        const borde = error ? `1.5px solid ${ERR_BORDE}` : i === enFoco ? `1.5px solid ${AZUL_ENFOQUE}` : `1px solid ${C.borderAlt}`
         return (
-          <div key={i} className="flex h-[60px] w-[54px] items-center justify-center" style={{ background: C.cardAlt, border: borde, borderRadius: 10 }}>
+          <div key={i} className="flex h-[60px] w-[54px] min-w-0 shrink items-center justify-center" style={{ background: C.cardAlt, border: borde, borderRadius: 10 }}>
             {ch ? <span style={{ color: C.title, fontWeight: 700, fontSize: 24 }}>{ch}</span> : null}
           </div>
         )
       })}
+      {onChange ? (
+        <input id={id} aria-label="Código de 6 números" type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={6} autoFocus={autoFocus} value={valor}
+          onChange={(e) => onChange(e.target.value.replace(/\D/g, "").slice(0, 6))} onFocus={() => setFoco(true)} onBlur={() => setFoco(false)}
+          className="absolute inset-0 size-full cursor-text text-[16px] opacity-0" />
+      ) : null}
     </div>
   )
 }
 
-function OjoIcono() {
-  const [ver, setVer] = useState(false)
-  return (
-    <button type="button" onClick={() => setVer((v) => !v)} aria-label={ver ? "Ocultar" : "Ver"} className="shrink-0">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
-        <circle cx="12" cy="12" r="3" />
-      </svg>
-    </button>
-  )
-}
+type BotonProps = { children: React.ReactNode; icono?: LucideIcon; to?: string; onClick?: () => void; ocupado?: boolean }
+const apagado = (ocupado?: boolean) => (ocupado ? { opacity: 0.6, cursor: "default" } : undefined)
 
-export function BotonPrimario({ children, icono: Icono, to }: { children: React.ReactNode; icono?: LucideIcon; to?: string }) {
+export function BotonPrimario({ children, icono: Icono, to, onClick, ocupado }: BotonProps) {
   const cls = "flex w-full items-center justify-center gap-2 text-white"
   const sty = { background: C.blue, borderRadius: 10, padding: "13px 18px", fontWeight: 600, fontSize: 15, lineHeight: "18px" } as const
   const inner = <>{Icono ? <Icono className="size-4" /> : null}{children}</>
-  return to ? <Link to={to} className={cls} style={sty}>{inner}</Link> : <button type="button" className={cls} style={sty}>{inner}</button>
+  return to ? <Link to={to} className={cls} style={sty}>{inner}</Link> : <button type="button" onClick={onClick} disabled={ocupado} className={cls} style={{ ...sty, ...apagado(ocupado) }}>{inner}</button>
 }
 
-export function BotonSecundario({ children, icono: Icono, to }: { children: React.ReactNode; icono?: LucideIcon; to?: string }) {
+export function BotonSecundario({ children, icono: Icono, to, onClick, ocupado }: BotonProps) {
   const cls = "flex w-full items-center justify-center gap-2"
   const sty = { border: `1px solid ${C.borderAlt}`, color: C.text, borderRadius: 10, padding: "13px 18px", fontWeight: 600, fontSize: 15, lineHeight: "18px" } as const
   const inner = <>{Icono ? <Icono className="size-4" style={{ color: C.text }} /> : null}{children}</>
-  return to ? <Link to={to} className={cls} style={sty}>{inner}</Link> : <button type="button" className={cls} style={sty}>{inner}</button>
+  return to ? <Link to={to} className={cls} style={sty}>{inner}</Link> : <button type="button" onClick={onClick} disabled={ocupado} className={cls} style={{ ...sty, ...apagado(ocupado) }}>{inner}</button>
 }
 
 export function BotonPausa({ children, icono: Icono }: { children: React.ReactNode; icono: LucideIcon }) {
@@ -188,11 +221,11 @@ export function Divisor({ texto }: { texto: string }) {
   )
 }
 
-export function EnlaceCentro({ children, to }: { children: React.ReactNode; to?: string }) {
+export function EnlaceCentro({ children, to, onClick }: { children: React.ReactNode; to?: string; onClick?: () => void }) {
   const sty = { color: C.link, fontWeight: 500, fontSize: 14 } as const
   return (
     <div className="flex w-full items-center justify-center">
-      {to ? <Link to={to} style={sty}>{children}</Link> : <a href="#" style={sty}>{children}</a>}
+      {to ? <Link to={to} style={sty}>{children}</Link> : onClick ? <button type="button" onClick={onClick} style={sty}>{children}</button> : <a href="#" style={sty}>{children}</a>}
     </div>
   )
 }
