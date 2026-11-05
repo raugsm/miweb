@@ -14,6 +14,7 @@ import { usePrecios } from "@/hooks/use-precios"
 import { usePais } from "@/lib/pais"
 import { type Precios } from "@/lib/precios"
 import { useRelease } from "@/lib/release"
+import { useSeo } from "@/lib/seo"
 
 const LEYENDA = [
   { n: "1", t: "Marcas y servicios", s: "A la izquierda elegís la marca: Xiaomi, Infinix, Tecno, itel. Arriba, el servicio." },
@@ -241,6 +242,7 @@ function ContenidoMobile({ datos }: { datos: Precios | null }) {
 }
 
 export function AppAriToolPage() {
+  useSeo({ titulo: "App AriTool | AriTool", descripcion: "Así se ve AriTool por dentro. Una sola ventana: elegís, pagás y trabajás sin salir de la app.", ruta: "/app" })
   const { datos } = usePrecios()
   const { setPais } = usePais()
   const [menu, setMenu] = useState(false)

@@ -11,6 +11,7 @@ import { novedades } from "@/data/novedades"
 import { usePrecios } from "@/hooks/use-precios"
 import { usePais } from "@/lib/pais"
 import { useRelease } from "@/lib/release"
+import { useSeo } from "@/lib/seo"
 
 function fmtFecha(iso: string): string {
   const d = /^\d{4}-\d{2}-\d{2}$/.test(iso) ? new Date(`${iso}T00:00:00`) : new Date(iso)
@@ -102,6 +103,7 @@ function ContenidoMobile() {
 }
 
 export function NovedadesPage() {
+  useSeo({ titulo: "Novedades | AriTool", descripcion: "Lo nuevo de AriTool, versión por versión. La app se actualiza sola.", ruta: "/novedades" })
   const { datos } = usePrecios()
   const { setPais } = usePais()
   const [menu, setMenu] = useState(false)

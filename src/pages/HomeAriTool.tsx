@@ -20,6 +20,7 @@ import { NOMBRE_WEB } from "@/lib/buscador"
 import { usePais } from "@/lib/pais"
 import { formatearPrecio, nombreMoneda, paisesDisponibles, type HerramientaPrecio, type Precios, type ServicioPrecio } from "@/lib/precios"
 import { useRelease } from "@/lib/release"
+import { useSeo } from "@/lib/seo"
 
 function nombreServicio(s: ServicioPrecio | null, clave: string, fallback: string): string {
   return NOMBRE_WEB[clave] ?? s?.nombre ?? fallback
@@ -440,6 +441,7 @@ function EnTuPC({ datos }: { datos: Precios | null }) {
 }
 
 export function HomeAriTool() {
+  useSeo({ titulo: "AriTool · Todo tu taller en una sola app", descripcion: "Alquilá herramientas por horas, liberá Xiaomi y gestioná Cuentas MI. Pagás con Yape o Binance y empezás al instante.", ruta: "/" })
   const { cargando, error, datos, refrescar } = usePrecios()
   const { setPais } = usePais()
   const [menuAbierto, setMenuAbierto] = useState(false)

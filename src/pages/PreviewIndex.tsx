@@ -10,14 +10,14 @@ import { C } from "@/components/aritool/chrome"
 type Seccion = { t: string; src: string; h: number; nota?: string }
 
 const SECCIONES: Seccion[] = [
-  { t: "Inicio", src: "/preview-home", h: 2600, nota: "Portada: alquiler + servicios + cómo funciona + descarga" },
-  { t: "App AriTool", src: "/preview-app", h: 2200, nota: "Créditos / licencia / Security Plugin" },
-  { t: "Novedades", src: "/preview-novedades", h: 1100, nota: "Changelog por versión (placeholder hasta el RPC de Ari-Cliente)" },
-  { t: "Descargar", src: "/preview-descargar", h: 900, nota: "Última versión en vivo" },
-  { t: "Buscador — con resultados", src: "/preview-home?q=unlo", h: 900, nota: "Busca en el catálogo en vivo: nombre y palabras clave del panel" },
-  { t: "Buscador — sin resultados", src: "/preview-home?q=iphone%20icloud", h: 900, nota: "Ofrece WhatsApp" },
-  { t: "Página que no existe", src: "/preview-404", h: 700, nota: "Con buscador e Ir al inicio" },
-  { t: "Cuenta — pantalla real", src: "/preview-cuenta", h: 760, nota: "Ingresar / crear / código / recuperar contra la cuenta real" },
+  { t: "Inicio", src: "/", h: 2600, nota: "Portada: alquiler + servicios + cómo funciona + descarga" },
+  { t: "App AriTool", src: "/app", h: 2200, nota: "Créditos / licencia / Security Plugin" },
+  { t: "Novedades", src: "/novedades", h: 1100, nota: "Changelog por versión (placeholder hasta el RPC de Ari-Cliente)" },
+  { t: "Descargar", src: "/descargas", h: 900, nota: "Última versión en vivo" },
+  { t: "Buscador — con resultados", src: "/?q=unlo", h: 900, nota: "Busca en el catálogo en vivo: nombre y palabras clave del panel" },
+  { t: "Buscador — sin resultados", src: "/?q=iphone%20icloud", h: 900, nota: "Ofrece WhatsApp" },
+  { t: "Página que no existe", src: "/una-direccion-que-no-existe", h: 700, nota: "Con buscador e Ir al inicio" },
+  { t: "Cuenta — pantalla real", src: "/cuenta", h: 760, nota: "Ingresar / crear / código / recuperar contra la cuenta real" },
   { t: "Cuenta — galería de estados", src: "/preview-cuenta-estados", h: 2300, nota: "Solo presentación, con datos de muestra, para comparar con el Figma" },
 ]
 

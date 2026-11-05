@@ -16,22 +16,23 @@ import { useSesion } from "@/lib/sesion"
 
 export const WA = "https://wa.me/51935186037"
 
-// Destinos de navegación. Hoy apuntan a las rutas de vista previa (preview-*); cuando la web
-// nueva pise a la vieja, se cambian acá en un solo lugar (→ "/", "/app", "/novedades", ...).
+// Direcciones de la web. Todo enlace interno sale de acá.
 export const RUTAS = {
-  inicio: "/preview-home",
-  app: "/preview-app",
-  novedades: "/preview-novedades",
-  descargar: "/preview-descargar",
-  cuenta: "/preview-cuenta",
-  miCuenta: "/preview-mi-cuenta",
+  inicio: "/",
+  app: "/app",
+  novedades: "/novedades",
+  // "/descargar" es del servidor (entrega el programa); la página es "/descargas".
+  descargar: "/descargas",
+  cuenta: "/cuenta",
+  miCuenta: "/mi-cuenta",
+  alquiler: "/#alquiler",
+  servicios: "/#servicios",
   // Recargar (W14) y Licencia (W15) todavía no están hechas: mientras tanto van al panel de la web
-  // actual, que usa la misma sesión. En el cambio final apuntan a sus páginas nuevas.
+  // anterior, que usa la misma sesión. Cuando existan, apuntan a sus páginas nuevas y /panel pasa a
+  // llevar a Mi cuenta (regla W8 #13).
   recargar: "/panel",
   licencia: "/panel",
   panelViejo: "/panel",
-  alquiler: "/preview-home#alquiler",
-  servicios: "/preview-home#servicios",
 }
 
 export const C = {

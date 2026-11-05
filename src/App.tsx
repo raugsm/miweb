@@ -1,44 +1,12 @@
 import { lazy, Suspense } from "react"
-import { BrowserRouter, Route, Routes } from "react-router-dom"
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom"
 
 import { MarcoAriTool } from "@/components/aritool/Marco"
 import { RootLayout } from "@/components/layout/RootLayout"
 import { ReleaseProvider } from "@/lib/release"
-import { HomePage } from "@/pages/HomePage"
+import { HomeAriTool } from "@/pages/HomeAriTool"
 
 // Páginas secundarias en fragmentos separados: la portada carga solo lo que necesita.
-const AccountPage = lazy(() =>
-  import("@/pages/AccountPage").then((m) => ({ default: m.AccountPage }))
-)
-const GsmLandingPage = lazy(() =>
-  import("@/pages/gsm/GsmLandingPage").then((m) => ({ default: m.GsmLandingPage }))
-)
-const DashboardPage = lazy(() =>
-  import("@/pages/DashboardPage").then((m) => ({ default: m.DashboardPage }))
-)
-// Portal cliente FRP migrado a React (reemplaza a public/portal.html).
-const PortalPage = lazy(() =>
-  import("@/pages/gsm/portal/PortalPage").then((m) => ({ default: m.PortalPage }))
-)
-const NotFoundPage = lazy(() =>
-  import("@/pages/NotFoundPage").then((m) => ({ default: m.NotFoundPage }))
-)
-// Políticas y términos (una sola página con secciones ancladas).
-const LegalPage = lazy(() =>
-  import("@/pages/LegalPage").then((m) => ({ default: m.LegalPage }))
-)
-// Descarga: última versión (en vivo) + changelog.
-const DownloadPage = lazy(() =>
-  import("@/pages/DownloadPage").then((m) => ({ default: m.DownloadPage }))
-)
-// TEMPORAL: vista previa de la grilla de alquiler (se quita al integrar el Inicio nuevo).
-const PreviewAlquiler = lazy(() =>
-  import("@/pages/PreviewAlquiler").then((m) => ({ default: m.PreviewAlquiler }))
-)
-// TEMPORAL: portada AriTool (W1) completa para revisar/capturar antes de reemplazar el Inicio.
-const HomeAriTool = lazy(() =>
-  import("@/pages/HomeAriTool").then((m) => ({ default: m.HomeAriTool }))
-)
 const AppAriToolPage = lazy(() =>
   import("@/pages/AppAriToolPage").then((m) => ({ default: m.AppAriToolPage }))
 )
@@ -51,119 +19,72 @@ const DescargarAriToolPage = lazy(() =>
 const CuentaPage = lazy(() =>
   import("@/pages/CuentaPage").then((m) => ({ default: m.CuentaPage }))
 )
-// W16: en el cambio a la web nueva pasa a ser la ruta "*" (hoy la tiene la web vieja).
-const NoExistePage = lazy(() =>
-  import("@/pages/NoExistePage").then((m) => ({ default: m.NoExistePage }))
-)
 const MiCuentaPage = lazy(() =>
   import("@/pages/MiCuentaPage").then((m) => ({ default: m.MiCuentaPage }))
 )
-// TEMPORAL: galería de estados de la Cuenta (solo presentación) para comparar con el Figma.
+const NoExistePage = lazy(() =>
+  import("@/pages/NoExistePage").then((m) => ({ default: m.NoExistePage }))
+)
+
+// Web anterior: solo lo que la web nueva todavía no reemplazó.
+// Panel: Recargar (W14) y Licencia (W15) siguen acá hasta que existan sus páginas nuevas.
+const DashboardPage = lazy(() =>
+  import("@/pages/DashboardPage").then((m) => ({ default: m.DashboardPage }))
+)
+// Portal cliente FRP (pendiente: Peter decidió retirarlo, 4-nov).
+const PortalPage = lazy(() =>
+  import("@/pages/gsm/portal/PortalPage").then((m) => ({ default: m.PortalPage }))
+)
+// Políticas y términos (una sola página con secciones ancladas).
+const LegalPage = lazy(() =>
+  import("@/pages/LegalPage").then((m) => ({ default: m.LegalPage }))
+)
+
+// TEMPORAL, solo para revisar contra el Figma: galería de estados de la Cuenta (presentación) e índice.
 const CuentaEstadosPreview = lazy(() =>
   import("@/pages/CuentaEstadosPreview").then((m) => ({ default: m.CuentaEstadosPreview }))
 )
-// TEMPORAL: índice único que embebe TODAS las pantallas de preview en un solo link.
 const PreviewIndex = lazy(() =>
   import("@/pages/PreviewIndex").then((m) => ({ default: m.PreviewIndex }))
 )
+
+const pagina = (el: React.ReactNode) => <Suspense fallback={null}>{el}</Suspense>
+
+// Direcciones de la etapa de vista previa: llevan a la definitiva (por si alguien guardó el enlace).
+const VISTA_PREVIA: [string, string][] = [
+  ["preview-home", "/"],
+  ["preview-app", "/app"],
+  ["preview-novedades", "/novedades"],
+  ["preview-descargar", "/descargas"],
+  ["preview-cuenta", "/cuenta"],
+  ["preview-mi-cuenta", "/mi-cuenta"],
+]
 
 export default function App() {
   return (
     <ReleaseProvider>
       <BrowserRouter>
         <Routes>
-          {/* Páginas AriTool (hoy en vista previa), fuera del layout viejo. */}
+          {/* Web AriTool. Las direcciones salen del mapa RUTAS (components/aritool/chrome). */}
           <Route element={<MarcoAriTool />}>
-            <Route
-              path="preview-alquiler"
-              element={
-                <Suspense fallback={null}>
-                  <PreviewAlquiler />
-                </Suspense>
-              }
-            />
-            <Route
-              path="preview-home"
-              element={
-                <Suspense fallback={null}>
-                  <HomeAriTool />
-                </Suspense>
-              }
-            />
-            <Route
-              path="preview-app"
-              element={
-                <Suspense fallback={null}>
-                  <AppAriToolPage />
-                </Suspense>
-              }
-            />
-            <Route
-              path="preview-novedades"
-              element={
-                <Suspense fallback={null}>
-                  <NovedadesPage />
-                </Suspense>
-              }
-            />
-            <Route
-              path="preview-descargar"
-              element={
-                <Suspense fallback={null}>
-                  <DescargarAriToolPage />
-                </Suspense>
-              }
-            />
-            <Route
-              path="preview-cuenta"
-              element={
-                <Suspense fallback={null}>
-                  <CuentaPage />
-                </Suspense>
-              }
-            />
-            <Route
-              path="preview-404"
-              element={
-                <Suspense fallback={null}>
-                  <NoExistePage />
-                </Suspense>
-              }
-            />
-            <Route
-              path="preview-mi-cuenta"
-              element={
-                <Suspense fallback={null}>
-                  <MiCuentaPage />
-                </Suspense>
-              }
-            />
-            <Route
-              path="preview-cuenta-estados"
-              element={
-                <Suspense fallback={null}>
-                  <CuentaEstadosPreview />
-                </Suspense>
-              }
-            />
-            <Route
-              path="preview"
-              element={
-                <Suspense fallback={null}>
-                  <PreviewIndex />
-                </Suspense>
-              }
-            />
+            <Route index element={<HomeAriTool />} />
+            <Route path="app" element={pagina(<AppAriToolPage />)} />
+            <Route path="novedades" element={pagina(<NovedadesPage />)} />
+            {/* "/descargar" es del servidor: entrega el programa. La página es "/descargas". */}
+            <Route path="descargas" element={pagina(<DescargarAriToolPage />)} />
+            <Route path="cuenta" element={pagina(<CuentaPage />)} />
+            <Route path="mi-cuenta" element={pagina(<MiCuentaPage />)} />
+            {/* Dirección vieja: la landing GSM ahora es el Inicio (regla W8 #13). */}
+            <Route path="gsm" element={<Navigate to="/" replace />} />
+            {VISTA_PREVIA.map(([vieja, nueva]) => <Route key={vieja} path={vieja} element={<Navigate to={nueva} replace />} />)}
+            <Route path="preview-cuenta-estados" element={pagina(<CuentaEstadosPreview />)} />
+            <Route path="preview" element={pagina(<PreviewIndex />)} />
+            <Route path="*" element={pagina(<NoExistePage />)} />
           </Route>
           <Route element={<RootLayout />}>
-            <Route index element={<HomePage />} />
-            <Route path="cuenta" element={<AccountPage />} />
-            <Route path="gsm" element={<GsmLandingPage />} />
-            <Route path="cliente" element={<PortalPage />} />
             <Route path="panel" element={<DashboardPage />} />
-            <Route path="descargas" element={<DownloadPage />} />
+            <Route path="cliente" element={<PortalPage />} />
             <Route path="legal" element={<LegalPage />} />
-            <Route path="*" element={<NotFoundPage />} />
           </Route>
         </Routes>
       </BrowserRouter>

@@ -12,6 +12,7 @@ import { C, FranjaSoporte, HeaderDesktop, HeaderMobile, IconoWA, LogoAriCaja, Me
 import { usePrecios } from "@/hooks/use-precios"
 import { usePais } from "@/lib/pais"
 import { useRelease } from "@/lib/release"
+import { useSeo } from "@/lib/seo"
 
 const AYUDA = [
   { icon: Shield, t: "Windows la frena", s: 'Tocá "Más información" y después "Ejecutar de todas formas".' },
@@ -123,6 +124,7 @@ function ContenidoMobile({ datos }: { datos: { soporte: { whatsapp: string | nul
 }
 
 export function DescargarAriToolPage() {
+  useSeo({ titulo: "Descargar AriTool", descripcion: "AriTool para Windows 10 u 11 de 64 bits. Es portable, no se instala y se actualiza sola.", ruta: "/descargas" })
   const { datos } = usePrecios()
   const { setPais } = usePais()
   const [menu, setMenu] = useState(false)
