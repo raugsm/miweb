@@ -13,6 +13,15 @@ export type ChangelogEntry = {
 
 export const changelog: ChangelogEntry[] = [
   {
+    version: "1.1.19",
+    date: "2026-10-24",
+    tag: "arreglo",
+    notes: [
+      "Colombia: vuelve el QR de pago por transferencia (Bre-B).",
+      "Si subís un comprobante que ya se usó, la app te lo dice claro en vez de un error genérico.",
+    ],
+  },
+  {
     version: "1.1.18",
     date: "2026-10-23",
     tag: "nuevo",
