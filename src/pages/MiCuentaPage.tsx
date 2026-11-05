@@ -8,34 +8,165 @@
  * hoy la tarjeta de licencia no puede decir el estado y manda a mirarlo en la app.
  * PENDIENTE: Recargar (W14), Licencia (W15) y el historial completo (W12b) todavía no existen; sus
  * botones van al panel de la web actual, que usa la misma sesión.
+ *
+ * Estados (W13 · 1100:271): sin licencia (S1), licencia por vencer (S2), saldo que no alcanza (S3),
+ * pago esperando (S4), historial vacío (S5), cargando (S6), no se pudo cargar (S7) y sesión vencida
+ * (S8, se muestra en Ingresar).
  */
-import { ArrowRight, LogOut, Wallet } from "lucide-react"
+import { ArrowRight, KeyRound, List, LogOut, Timer, Wallet } from "lucide-react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 
+import { Banner } from "@/components/aritool/auth"
 import { C, Cont, FranjaSoporte, HeaderDesktop, HeaderMobile, IconoWA, MenuMobile, PieDesktop, PieMobile, RUTAS, WA } from "@/components/aritool/chrome"
 import { usePrecios } from "@/hooks/use-precios"
 import { NOMBRE_WEB } from "@/lib/buscador"
-import { resumenCliente, type ResumenCliente } from "@/lib/cuenta"
+import { cobroActivo, resumenCliente, type CobroActivo, type ResumenCliente } from "@/lib/cuenta"
 import { fechaCorta, filasHistorial, montoTexto, type FilaHistorial } from "@/lib/historial"
+import { type Precios } from "@/lib/precios"
 import { recordarNombre } from "@/lib/sesion"
 import { useSeo } from "@/lib/seo"
 import { supabase } from "@/lib/supabase"
 
-type Carga = { estado: "cargando" } | { estado: "error" } | { estado: "listo"; datos: ResumenCliente; correo: string }
+type Carga = { estado: "cargando" } | { estado: "error" } | { estado: "listo"; datos: ResumenCliente; correo: string; pago: CobroActivo | null }
 
 const usd = (n: number) => `US$ ${n.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const saldoTexto = (n: number) => n.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 /** "2027-09-12" → "12/09/2027" (la fecha es un día, no una hora: no se pasa por zona horaria). */
 const dia = (f: string) => f.slice(0, 10).split("-").reverse().join("/")
 
-type LicenciaVista = { titulo: string | null; punto: string; linea: string; nota: string; enlace: string }
-function vistaLicencia(l: ResumenCliente["licencia"]): LicenciaVista {
+const AMBAR = "#fbbf24"
+/** Desde cuántos días antes la licencia pasa a "por vencer" (W13 S2 dibuja "Vence en 9 días"). */
+const AVISO_VENCE_DIAS = 30
+
+type Licencia =
+  | { tipo: "desconocida" } // el servidor todavía no la entrega (antes de la v19)
+  | { tipo: "sin" } // S1: no tiene una vigente
+  | { tipo: "porVencer"; dias: number; fecha: string; pcs: number } // S2
+  | { tipo: "activa"; fecha: string; pcs: number } // W12
+
+function leerLicencia(l: ResumenCliente["licencia"]): Licencia {
+  if (l === undefined) return { tipo: "desconocida" }
+  if (l === null || l.estado !== "vigente") return { tipo: "sin" }
+  const [a, m, d] = l.fecha_fin.slice(0, 10).split("-").map(Number)
+  const hoy = new Date()
+  const dias = Math.round((new Date(a, m - 1, d).getTime() - new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate()).getTime()) / 86_400_000)
+  if (dias < 0) return { tipo: "sin" }
+  return dias <= AVISO_VENCE_DIAS ? { tipo: "porVencer", dias, fecha: dia(l.fecha_fin), pcs: l.pcs } : { tipo: "activa", fecha: dia(l.fecha_fin), pcs: l.pcs }
+}
+const venceEn = (dias: number) => (dias === 0 ? "Vence hoy" : `Vence en ${dias} ${dias === 1 ? "día" : "días"}`)
+
+/** Lo más barato que se puede pagar con saldo hoy (catálogo en vivo). null = no se sabe. */
+function minimoParaUsar(datos: Precios | null | undefined): number | null {
+  if (!datos) return null
+  const precios = [
+    ...datos.servicios.filter((x) => x.disponible).map((x) => x.precio_usd),
+    ...datos.herramientas.filter((h) => h.disponible).map((h) => h.precio_usdt),
+    datos.app?.credito_usd,
+  ].filter((n): n is number => typeof n === "number" && n > 0)
+  return precios.length ? Math.min(...precios) : null
+}
+
+function minSeg(total: number): string {
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`
+}
+/** Segundos que le quedan al pago en curso; se actualiza cada segundo. */
+function useFalta(vence: string | undefined): number {
+  const [ahora, setAhora] = useState(() => Date.now())
+  useEffect(() => {
+    if (!vence) return
+    const id = window.setInterval(() => setAhora(Date.now()), 1000)
+    return () => window.clearInterval(id)
+  }, [vence])
+  return vence ? Math.max(0, Math.round((new Date(vence).getTime() - ahora) / 1000)) : 0
+}
+
+/** Aviso bajo el saldo: pago esperando (S4) o saldo que no alcanza (S3). null = ninguno. */
+function avisoSaldo(pago: CobroActivo | null, falta: number, bajo: boolean) {
+  if (pago) return <Banner tipo="azul" icono={Timer}>Tenés un pago esperando: {pago.metodo === "yape" ? `S/ ${pago.monto} por Yape` : `${pago.monto} USDT por Binance`}. Vence en {minSeg(falta)}.</Banner>
+  if (bajo) return <Banner tipo="ambar" icono={Wallet}>Con esto no te alcanza para usar nada. Recargá para seguir.</Banner>
+  return null
+}
+
+/** Lo que cambia en la tarjeta del saldo según el estado de la cuenta. */
+function useSaldo(carga: Carga, minimo: number | null) {
+  const listo = carga.estado === "listo" ? carga : null
+  const falta = useFalta(listo?.pago?.vence_en)
+  const pago = listo?.pago && falta > 0 ? listo.pago : null
+  const lic = listo ? leerLicencia(listo.datos.licencia) : null
+  const saldo = listo ? listo.datos.saldo_usd ?? listo.datos.saldo : 0
+  // Con la licencia vigente sí puede trabajar sin saldo: ahí el aviso sería falso.
+  const bajo = minimo != null && saldo < minimo && lic?.tipo !== "activa" && lic?.tipo !== "porVencer"
+  return { listo, lic, saldo, pago, aviso: listo ? avisoSaldo(pago, falta, bajo) : null }
+}
+
+function Barras() {
+  // W13 S6 · Cargando
+  return (
+    <div className="flex w-full flex-col items-start gap-4">
+      {[[90, 12], [200, 34], [320, 12], [260, 12]].map(([w, h]) => <span key={w} className="block max-w-full animate-pulse rounded-md" style={{ width: w, height: h, background: C.border }} />)}
+    </div>
+  )
+}
+
+function TarjetaLicencia({ lic, precio }: { lic: Licencia | null; precio: number | null | undefined }) {
+  const etiqueta = <p style={{ color: C.muted, fontWeight: 700, fontSize: 12, lineHeight: "15px", letterSpacing: "1.3px" }}>LICENCIA ANUAL</p>
   const nota = "Tecno, Infinix e itel no te gastan saldo mientras esté activa."
-  if (l === undefined) return { titulo: null, punto: C.faint, linea: "Mirá el estado de tu licencia en la app AriTool.", nota, enlace: "Ver la licencia anual" }
-  if (l === null) return { titulo: "Sin licencia", punto: C.faint, linea: "Todavía no tenés la licencia anual.", nota: "Con la licencia, Tecno, Infinix e itel no te gastan saldo.", enlace: "Ver la licencia anual" }
-  if (l.estado === "vigente") return { titulo: "Activa", punto: C.green, linea: `Hasta el ${dia(l.fecha_fin)} · en ${l.pcs} PC`, nota, enlace: "Renovar un año más" }
-  return { titulo: "Vencida", punto: C.faint, linea: `Venció el ${dia(l.fecha_fin)}`, nota: "Mientras no esté activa, Tecno, Infinix e itel gastan saldo.", enlace: "Renovar un año más" }
+  const caja = (hueco: number, hijos: React.ReactNode) => <div className="flex w-[440px] shrink-0 flex-col items-start rounded-2xl p-7" style={{ background: C.card, border: `1px solid ${C.border}`, gap: hueco }}>{hijos}</div>
+  if (!lic) return caja(16, <Barras />)
+  if (lic.tipo === "sin") {
+    return caja(16, <>
+      {etiqueta}
+      <p style={{ color: C.title, fontWeight: 700, fontSize: 20, lineHeight: "24px" }}>No tenés licencia</p>
+      <p className="w-full" style={{ color: C.muted, fontSize: 13, lineHeight: "19px" }}>Con la licencia, Tecno, Infinix e itel no te gastan saldo durante 1 año, en 1 PC.</p>
+      <Link to={RUTAS.licencia} className="flex w-full items-center justify-center gap-2" style={{ border: `1px solid ${C.borderAlt}`, borderRadius: 10, padding: "13px 18px", color: C.text, fontWeight: 600, fontSize: 15, lineHeight: "18px" }}>
+        <KeyRound className="size-4" />{precio != null ? `Comprar licencia · US$ ${precio}` : "Comprar licencia"}
+      </Link>
+    </>)
+  }
+  if (lic.tipo === "porVencer") {
+    return caja(16, <>
+      {etiqueta}
+      <div className="flex items-center gap-2">
+        <span className="size-2.5 rounded-full" style={{ background: AMBAR }} />
+        <span style={{ color: C.title, fontWeight: 700, fontSize: 20, lineHeight: "24px" }}>{venceEn(lic.dias)}</span>
+      </div>
+      <p style={{ color: C.muted2, fontSize: 14, lineHeight: "17px" }}>El {lic.fecha} · en {lic.pcs} PC</p>
+      <Link to={RUTAS.licencia} className="flex w-full items-center justify-center gap-2 text-white" style={{ background: C.blue, borderRadius: 10, padding: "13px 18px", fontWeight: 600, fontSize: 15, lineHeight: "18px" }}>
+        <KeyRound className="size-4" />Renovar un año más
+      </Link>
+    </>)
+  }
+  if (lic.tipo === "desconocida") {
+    return caja(10, <>
+      {etiqueta}
+      <p style={{ color: C.muted2, fontSize: 14, lineHeight: "17px" }}>Mirá el estado de tu licencia en la app AriTool.</p>
+      <p className="w-full" style={{ color: C.muted, fontSize: 13, lineHeight: "19px" }}>{nota}</p>
+    </>)
+  }
+  return caja(10, <>
+    {etiqueta}
+    <div className="flex items-center gap-2">
+      <span className="size-2.5 rounded-full" style={{ background: C.green }} />
+      <span style={{ color: C.title, fontWeight: 700, fontSize: 22, lineHeight: "27px" }}>Activa</span>
+    </div>
+    <p style={{ color: C.muted2, fontSize: 14, lineHeight: "17px" }}>Hasta el {lic.fecha} · en {lic.pcs} PC</p>
+    <p className="w-full" style={{ color: C.muted, fontSize: 13, lineHeight: "19px" }}>{nota}</p>
+    <Link to={RUTAS.licencia} className="flex items-center gap-1.5 pt-1.5" style={{ color: C.link, fontWeight: 500, fontSize: 14, lineHeight: "17px" }}>
+      Renovar un año más<ArrowRight className="size-[14px]" />
+    </Link>
+  </>)
+}
+
+function HistorialVacio() {
+  // W13 S5
+  return (
+    <div className="flex w-full flex-col items-center gap-2 py-[18px]">
+      <List className="size-7" style={{ color: C.faint }} />
+      <p style={{ color: C.muted2, fontWeight: 600, fontSize: 15, lineHeight: "18px" }}>Todavía no hay movimientos.</p>
+      <p style={{ color: C.muted, fontSize: 13, lineHeight: "16px" }}>Cuando recargues o uses algo, aparece acá.</p>
+    </div>
+  )
 }
 
 function Monto({ f, chico }: { f: FilaHistorial; chico?: boolean }) {
@@ -48,21 +179,24 @@ function Barra({ w, h }: { w: number; h: number }) {
 }
 
 function NoSePudo({ onReintentar }: { onReintentar: () => void }) {
+  // W13 S7
   return (
-    <div className="rounded-xl p-6 text-center" style={{ border: `1px solid ${C.border}`, background: C.card }}>
-      <p style={{ color: C.muted, fontSize: 14 }}>No pudimos cargar tu cuenta ahora mismo.</p>
-      <button type="button" onClick={onReintentar} className="mt-3 inline-flex h-9 items-center rounded-lg px-4 text-white" style={{ background: C.blue, fontSize: 14, fontWeight: 600 }}>Reintentar</button>
+    <div className="flex w-full max-w-[420px] flex-col items-start gap-4 rounded-2xl p-7" style={{ border: `1px solid ${C.borderSoft}`, background: C.card }}>
+      <p style={{ color: C.title, fontWeight: 700, fontSize: 20, lineHeight: "24px" }}>No pudimos cargar tu cuenta</p>
+      <p style={{ color: C.muted, fontSize: 14, lineHeight: "20px" }}>Revisá tu internet y probá de nuevo.</p>
+      <button type="button" onClick={onReintentar} className="flex w-full items-center justify-center text-white" style={{ background: C.blue, borderRadius: 10, padding: "13px 18px", fontWeight: 600, fontSize: 15, lineHeight: "18px" }}>Reintentar</button>
     </div>
   )
 }
 
+type CuerpoProps = { carga: Carga; filas: FilaHistorial[]; whatsapp: string; minimo: number | null; precioLicencia: number | null | undefined; salir: () => void; reintentar: () => void }
+
 // ======================= COMPUTADORA =======================
 const COL = ["w-[150px] shrink-0", "min-w-0 flex-1", "w-[200px] shrink-0", "w-[140px] shrink-0 text-right", "w-[140px] shrink-0 text-right"]
 
-function CuerpoCompu({ carga, filas, whatsapp, salir, reintentar }: { carga: Carga; filas: FilaHistorial[]; whatsapp: string; salir: () => void; reintentar: () => void }) {
+function CuerpoCompu({ carga, filas, whatsapp, minimo, precioLicencia, salir, reintentar }: CuerpoProps) {
   const [todo, setTodo] = useState(false)
-  const listo = carga.estado === "listo" ? carga : null
-  const lic = listo ? vistaLicencia(listo.datos.licencia) : null
+  const { listo, lic, saldo, pago, aviso } = useSaldo(carga, minimo)
   const visibles = todo ? filas : filas.slice(0, 6)
   return (
     <main>
@@ -83,33 +217,24 @@ function CuerpoCompu({ carga, filas, whatsapp, salir, reintentar }: { carga: Car
           <>
             <div className="flex items-stretch gap-5">
               <div className="flex min-w-0 flex-1 flex-col items-start gap-2.5 rounded-2xl p-7" style={{ background: "linear-gradient(90deg, #0f1c38, #0a0f1c)", border: `1px solid ${C.pcBorder}` }}>
-                <p style={{ color: C.link, fontWeight: 700, fontSize: 12, lineHeight: "15px", letterSpacing: "1.3px" }}>TU SALDO</p>
-                {listo ? <p style={{ color: "#fff", fontWeight: 700, fontSize: 52, lineHeight: "63px" }}>{usd(listo.datos.saldo_usd ?? listo.datos.saldo)}</p> : <span className="py-[11px]"><Barra w={260} h={41} /></span>}
-                <p style={{ color: C.muted2, fontSize: 14, lineHeight: "17px" }}>Sirve para alquiler, Xiaomi FRP, Cuenta MI y Security Plugin.</p>
-                <div className="flex items-center gap-3.5 pt-2">
-                  <Link to={RUTAS.recargar} className="flex items-center gap-2 text-white" style={{ background: C.blue, borderRadius: 10, padding: "13px 20px" }}>
-                    <Wallet className="size-[17px]" />
-                    <span style={{ fontWeight: 600, fontSize: 15, lineHeight: "18px" }}>Recargar saldo</span>
-                  </Link>
-                  <span style={{ color: C.muted, fontSize: 13, lineHeight: "16px" }}>Con Yape o Binance · se carga solo</span>
-                </div>
+                {!listo ? <Barras /> : (
+                  <>
+                    <p style={{ color: C.link, fontWeight: 700, fontSize: 12, lineHeight: "15px", letterSpacing: "1.3px" }}>TU SALDO</p>
+                    <p style={{ color: "#fff", fontWeight: 700, fontSize: 52, lineHeight: "63px" }}>{usd(saldo)}</p>
+                    {aviso ?? <p style={{ color: C.muted2, fontSize: 14, lineHeight: "17px" }}>Sirve para alquiler, Xiaomi FRP, Cuenta MI y Security Plugin.</p>}
+                    <div className="flex items-center gap-3.5 pt-2">
+                      <Link to={RUTAS.recargar} className="flex shrink-0 items-center gap-2 text-white" style={{ background: C.blue, borderRadius: 10, padding: "13px 20px" }}>
+                        {pago ? null : <Wallet className="size-[17px]" />}
+                        <span style={{ fontWeight: 600, fontSize: 15, lineHeight: "18px" }}>{pago ? "Ver mi pago" : "Recargar saldo"}</span>
+                      </Link>
+                      {pago
+                        ? <span style={{ color: C.faint, fontSize: 12, lineHeight: "15px" }}>Solo un pago a la vez. Si lo cancelás, podés generar otro.</span>
+                        : <span style={{ color: C.muted, fontSize: 13, lineHeight: "16px" }}>Con Yape o Binance · se carga solo</span>}
+                    </div>
+                  </>
+                )}
               </div>
-              <div className="flex w-[440px] shrink-0 flex-col items-start gap-2.5 rounded-2xl p-7" style={{ background: C.card, border: `1px solid ${C.border}` }}>
-                <p style={{ color: C.muted, fontWeight: 700, fontSize: 12, lineHeight: "15px", letterSpacing: "1.3px" }}>LICENCIA ANUAL</p>
-                {!lic ? <span className="py-[5px]"><Barra w={120} h={17} /></span> : lic.titulo ? (
-                  <div className="flex items-center gap-2">
-                    <span className="size-2.5 rounded-full" style={{ background: lic.punto }} />
-                    <span style={{ color: C.title, fontWeight: 700, fontSize: 22, lineHeight: "27px" }}>{lic.titulo}</span>
-                  </div>
-                ) : null}
-                {lic ? <p style={{ color: C.muted2, fontSize: 14, lineHeight: "17px" }}>{lic.linea}</p> : <span className="py-[3px]"><Barra w={190} h={11} /></span>}
-                <p className="w-full" style={{ color: C.muted, fontSize: 13, lineHeight: "19px" }}>{lic ? lic.nota : "Tecno, Infinix e itel no te gastan saldo mientras esté activa."}</p>
-                {lic ? (
-                  <Link to={RUTAS.licencia} className="flex items-center gap-1.5 pt-1.5" style={{ color: C.link, fontWeight: 500, fontSize: 14, lineHeight: "17px" }}>
-                    {lic.enlace}<ArrowRight className="size-[14px]" />
-                  </Link>
-                ) : null}
-              </div>
+              <TarjetaLicencia lic={lic} precio={precioLicencia} />
             </div>
 
             <div className="flex items-center pt-3">
@@ -125,7 +250,7 @@ function CuerpoCompu({ carga, filas, whatsapp, salir, reintentar }: { carga: Car
               {!listo ? [0, 1, 2].map((i) => (
                 <div key={i} className="flex items-center px-6 py-[17px]" style={{ borderTop: `1px solid ${C.border}` }}><Barra w={420} h={11} /></div>
               )) : filas.length === 0 ? (
-                <p className="px-6 py-[14px]" style={{ borderTop: `1px solid ${C.border}`, color: C.muted, fontSize: 14, lineHeight: "17px" }}>Todavía no hay movimientos. Cuando recargues o uses un servicio, aparece acá.</p>
+                <div style={{ borderTop: `1px solid ${C.border}` }}><HistorialVacio /></div>
               ) : visibles.map((f, i) => (
                 <div key={`${f.fecha}-${i}`} className="flex items-center px-6 py-[14px]" style={{ borderTop: `1px solid ${C.border}`, fontSize: 14, lineHeight: "17px" }}>
                   <span className={COL[0]} style={{ color: "#d1d5db" }}>{fechaCorta(f.fecha)}</span>
@@ -155,10 +280,9 @@ function CuerpoCompu({ carga, filas, whatsapp, salir, reintentar }: { carga: Car
 }
 
 // ======================= CELULAR =======================
-function CuerpoCelular({ carga, filas, whatsapp, salir, reintentar }: { carga: Carga; filas: FilaHistorial[]; whatsapp: string; salir: () => void; reintentar: () => void }) {
+function CuerpoCelular({ carga, filas, whatsapp, minimo, salir, reintentar }: CuerpoProps) {
   const [todo, setTodo] = useState(false)
-  const listo = carga.estado === "listo" ? carga : null
-  const lic = listo ? vistaLicencia(listo.datos.licencia) : null
+  const { listo, lic, saldo, pago, aviso } = useSaldo(carga, minimo)
   const visibles = todo ? filas : filas.slice(0, 5)
   return (
     <main>
@@ -178,28 +302,33 @@ function CuerpoCelular({ carga, filas, whatsapp, salir, reintentar }: { carga: C
         <>
           <section className="flex flex-col gap-3 px-5 pb-6 pt-3">
             <div className="flex flex-col items-start gap-2 rounded-2xl p-5" style={{ background: "linear-gradient(90deg, #0f1c38, #0a0f1c)", border: `1px solid ${C.pcBorder}` }}>
-              <p style={{ color: C.link, fontWeight: 700, fontSize: 11, lineHeight: "13px", letterSpacing: "1.2px" }}>TU SALDO</p>
-              {listo ? <p style={{ color: "#fff", fontWeight: 700, fontSize: 40, lineHeight: "48px" }}>{usd(listo.datos.saldo_usd ?? listo.datos.saldo)}</p> : <span className="py-2"><Barra w={200} h={32} /></span>}
-              <p className="w-full" style={{ color: C.muted2, fontSize: 13, lineHeight: "18px" }}>Sirve para alquiler, Xiaomi FRP, Cuenta MI y Security Plugin.</p>
-              <Link to={RUTAS.recargar} className="flex w-full items-center justify-center gap-2 text-white" style={{ background: C.blue, borderRadius: 10, padding: "13px 0" }}>
-                <Wallet className="size-[17px]" />
-                <span style={{ fontWeight: 600, fontSize: 15, lineHeight: "18px" }}>Recargar saldo</span>
-              </Link>
+              {!listo ? <Barras /> : (
+                <>
+                  <p style={{ color: C.link, fontWeight: 700, fontSize: 11, lineHeight: "13px", letterSpacing: "1.2px" }}>TU SALDO</p>
+                  <p style={{ color: "#fff", fontWeight: 700, fontSize: 40, lineHeight: "48px" }}>{usd(saldo)}</p>
+                  {aviso ?? <p className="w-full" style={{ color: C.muted2, fontSize: 13, lineHeight: "18px" }}>Sirve para alquiler, Xiaomi FRP, Cuenta MI y Security Plugin.</p>}
+                  <Link to={RUTAS.recargar} className="flex w-full items-center justify-center gap-2 text-white" style={{ background: C.blue, borderRadius: 10, padding: "13px 0" }}>
+                    {pago ? null : <Wallet className="size-[17px]" />}
+                    <span style={{ fontWeight: 600, fontSize: 15, lineHeight: "18px" }}>{pago ? "Ver mi pago" : "Recargar saldo"}</span>
+                  </Link>
+                  {pago ? <p style={{ color: C.faint, fontSize: 12, lineHeight: "15px" }}>Solo un pago a la vez. Si lo cancelás, podés generar otro.</p> : null}
+                </>
+              )}
             </div>
             <div className="flex items-center gap-2.5 rounded-[14px] p-4" style={{ background: C.card, border: `1px solid ${C.border}` }}>
               <div className="flex min-w-0 flex-col gap-[3px]">
                 <p style={{ color: C.muted, fontWeight: 700, fontSize: 11, lineHeight: "13px", letterSpacing: "1.1px" }}>LICENCIA ANUAL</p>
                 {lic ? (
                   <div className="flex items-center gap-1.5">
-                    {lic.titulo ? <span className="size-2 shrink-0 rounded-full" style={{ background: lic.punto }} /> : null}
+                    {lic.tipo === "activa" || lic.tipo === "porVencer" ? <span className="size-2 shrink-0 rounded-full" style={{ background: lic.tipo === "activa" ? C.green : AMBAR }} /> : null}
                     <span className="truncate" style={{ color: C.text, fontWeight: 600, fontSize: 14, lineHeight: "17px" }}>
-                      {listo?.datos.licencia?.estado === "vigente" ? `Activa hasta ${dia(listo.datos.licencia.fecha_fin)}` : lic.titulo ?? "Mirala en la app AriTool"}
+                      {lic.tipo === "activa" ? `Activa hasta ${lic.fecha}` : lic.tipo === "porVencer" ? venceEn(lic.dias) : lic.tipo === "sin" ? "No tenés licencia" : "Mirala en la app AriTool"}
                     </span>
                   </div>
                 ) : <span className="py-[3px]"><Barra w={150} h={11} /></span>}
               </div>
               <div className="flex-1" />
-              {lic ? <Link to={RUTAS.licencia} className="shrink-0" style={{ color: C.link, fontWeight: 500, fontSize: 13, lineHeight: "16px" }}>{lic.titulo === "Sin licencia" || !lic.titulo ? "Ver" : "Renovar"}</Link> : null}
+              {lic && lic.tipo !== "desconocida" ? <Link to={RUTAS.licencia} className="shrink-0" style={{ color: C.link, fontWeight: 500, fontSize: 13, lineHeight: "16px" }}>{lic.tipo === "sin" ? "Comprar" : "Renovar"}</Link> : null}
             </div>
           </section>
 
@@ -209,7 +338,7 @@ function CuerpoCelular({ carga, filas, whatsapp, salir, reintentar }: { carga: C
               {!listo ? [0, 1, 2].map((i) => (
                 <div key={i} className="p-[14px]" style={i ? { borderTop: `1px solid ${C.border}` } : undefined}><Barra w={200} h={35} /></div>
               )) : filas.length === 0 ? (
-                <p className="p-[14px]" style={{ color: C.muted, fontSize: 13, lineHeight: "18px" }}>Todavía no hay movimientos. Cuando recargues o uses un servicio, aparece acá.</p>
+                <HistorialVacio />
               ) : visibles.map((f, i) => (
                 <div key={`${f.fecha}-${i}`} className="flex items-center gap-2.5 p-[14px]" style={i ? { borderTop: `1px solid ${C.border}` } : undefined}>
                   <div className="flex min-w-0 flex-1 flex-col gap-[3px]">
@@ -253,7 +382,14 @@ export function MiCuentaPage() {
       const r = await resumenCliente(ses.access_token)
       if (r.ok && r.data) {
         recordarNombre(ses.user.id, r.data.nombre)
-        return setCarga({ estado: "listo", datos: r.data, correo: ses.user.email ?? "" })
+        // Pago en curso (uno solo a la vez). Si esta consulta falla, la cuenta se muestra igual, sin el aviso.
+        const p = await cobroActivo(ses.access_token).catch(() => null)
+        return setCarga({ estado: "listo", datos: r.data, correo: ses.user.email ?? "", pago: p?.ok ? p.data?.activo ?? null : null })
+      }
+      // 401 = la sesión venció (W13 S8): se cierra acá y vuelve a entrar.
+      if (r.status === 401) {
+        await supabase.auth.signOut({ scope: "local" })
+        return nav(`${RUTAS.cuenta}?vencida=1`, { replace: true })
       }
       // 403 = la cuenta todavía no tiene su perfil armado: eso se completa en el panel de la web actual.
       if (r.status === 403) return nav(RUTAS.panelViejo, { replace: true })
@@ -280,7 +416,7 @@ export function MiCuentaPage() {
   const catalogo = useMemo(() => ({ ...Object.fromEntries((datos?.servicios ?? []).map((s) => [s.clave, s.nombre])), ...NOMBRE_WEB }), [datos])
   const filas = useMemo(() => (carga.estado === "listo" ? filasHistorial(carga.datos, catalogo) : []), [carga, catalogo])
   const whatsapp = datos?.soporte.whatsapp ?? WA
-  const props = { carga, filas, whatsapp, salir, reintentar: () => void cargar() }
+  const props: CuerpoProps = { carga, filas, whatsapp, minimo: minimoParaUsar(datos), precioLicencia: datos?.app?.licencia_anual_usd, salir, reintentar: () => void cargar() }
 
   return (
     <div className="min-h-screen overflow-x-hidden" style={{ background: C.page, color: C.text, fontFamily: "Inter, system-ui, sans-serif", lineHeight: "normal" }}>

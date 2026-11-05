@@ -9,7 +9,7 @@
  * En compu es una tarjeta centrada sin barra; en celular va dentro del sitio (barra + soporte + pie).
  * La galería de estados para comparar con el Figma está en pages/CuentaEstadosPreview.tsx.
  */
-import { AlertCircle, Clock, Lock, type LucideIcon, Mail, User, WifiOff } from "lucide-react"
+import { AlertCircle, Clock, Info, Lock, type LucideIcon, Mail, User, WifiOff } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 
@@ -94,13 +94,16 @@ function Cuenta({ whatsapp }: { whatsapp: string }) {
 
   // Al entrar: si ya hay sesión en este navegador, se avisa (e4) en vez de pedir la contraseña.
   useEffect(() => {
-    const pedida = new URLSearchParams(window.location.search).get("v")
+    const params = new URLSearchParams(window.location.search)
+    const pedida = params.get("v")
     void supabase.auth.getSession().then(({ data }) => {
       const c = data.session?.user?.email
       if (c) {
         setSesionCorreo(c)
         setVista("ya")
       } else {
+        // W13 S8: Mi cuenta lo mandó acá porque la sesión venció. Al entrar vuelve a Mi cuenta.
+        if (params.get("vencida")) setAviso({ tipo: "azul", icono: Info, texto: "Por seguridad tu sesión se cerró. Ingresá de nuevo y volvés a donde estabas." })
         setVista(pedida === "crear" ? "crear" : pedida === "recuperar" ? "rec1" : "ingresar")
       }
     }).catch(() => setVista("ingresar"))

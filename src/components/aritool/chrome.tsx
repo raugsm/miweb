@@ -3,7 +3,7 @@
  * franja de soporte, menú del celular (W3) y pie. Lo usan todas las pantallas salvo que necesiten
  * algo propio. Fuente Inter, dark-only, datos en vivo por props (usePrecios se llama en la página).
  */
-import { ChevronDown, ChevronRight, LogIn, Menu, Search, X } from "lucide-react"
+import { ChevronDown, ChevronRight, LogIn, Menu, Search, UserRound, X } from "lucide-react"
 import { lazy, Suspense, useEffect, useState } from "react"
 import { Link, useLocation } from "react-router-dom"
 
@@ -287,6 +287,7 @@ export function PieMobile() {
 export function MenuMobile({ datos, onClose }: { datos: Precios | null; onClose: () => void }) {
   const { pais, setPais } = usePais()
   const r = useRelease()
+  const sesion = useSesion()
   const [paisOpen, setPaisOpen] = useState(false)
   const nDisp = datos ? datos.herramientas.filter((h) => h.disponible).length : 0
   const paisTxt = datos ? `${datos.pais.nombre} · precios en ${nombreMoneda(datos.pais.moneda)}` : "País"
@@ -331,8 +332,9 @@ export function MenuMobile({ datos, onClose }: { datos: Precios | null; onClose:
             </div>
           ) : null}
         </div>
-        <Link to={RUTAS.cuenta} onClick={onClose} className="flex h-11 items-center justify-center gap-2" style={{ background: C.cardAlt, boxShadow: ANILLO, borderRadius: 10 }}>
-          <LogIn className="size-[16px]" style={{ color: C.link }} /><span style={{ color: C.text, fontWeight: 600, fontSize: 14 }}>Ingresar</span>
+        <Link to={sesion.estado === "con" ? RUTAS.miCuenta : RUTAS.cuenta} onClick={onClose} className="flex h-11 items-center justify-center gap-2" style={{ background: C.cardAlt, boxShadow: ANILLO, borderRadius: 10 }}>
+          {sesion.estado === "con" ? <UserRound className="size-[16px]" style={{ color: C.link }} /> : <LogIn className="size-[16px]" style={{ color: C.link }} />}
+          <span style={{ color: C.text, fontWeight: 600, fontSize: 14 }}>{sesion.estado === "con" ? "Mi cuenta" : "Ingresar"}</span>
         </Link>
         <a href={datos?.soporte.whatsapp ?? WA} target="_blank" rel="noreferrer" className="flex items-center gap-3" style={{ background: C.waBg, border: `1px solid ${C.waBorder}`, borderRadius: 12, padding: 12 }}>
           <span className="flex size-9 items-center justify-center rounded-full" style={{ background: C.waGreen }}><IconoWA className="size-[21px]" style={{ color: "#fff" }} /></span>
