@@ -162,8 +162,8 @@ const propias = [
   `@media not (min-width:${CORTE}px){.pre-compu{display:none}}`,
   ".pre-espera .pre-emblema{opacity:0}", // esperando la entrada animada (ver el script de abajo)
   ".pre-cargando{opacity:.6;pointer-events:none}",
-  // Pegado abajo de la ventana pero ocupando su lugar al final de la página: al bajar del todo no tapa nada.
-  ".pre-sinjs{position:sticky;z-index:99;bottom:0;padding:12px 16px;background:#1f1a0e;border-top:1px solid #5c4a1a;color:#fcd34d;font:14px/1.45 Inter,system-ui,sans-serif;text-align:center}",
+  // Quieto al final de la página, ocupando su lugar: nunca queda encima del contenido.
+  ".pre-sinjs{padding:12px 16px;background:#1f1a0e;border-top:1px solid #5c4a1a;color:#fcd34d;font:14px/1.45 Inter,system-ui,sans-serif;text-align:center}",
   ".pre-sinjs a{color:#86efac;font-weight:600;white-space:nowrap}",
   ...[...reglasEstilo].map(([declaraciones, clase]) => `.${clase}{${declaraciones}}`),
 ].join("")
