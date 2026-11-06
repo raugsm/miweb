@@ -4,6 +4,7 @@ import { promises as fs } from "node:fs";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { computeOrderHash, renderOrderComprobantePdf, renderOrderVerifyHtml } from "./server/comprobante/pdf.js";
+import { archivoPrerender, cargarPrerender, cspConHuellas } from "./server/web/prerender.js";
 import { fileURLToPath } from "node:url";
 import crypto from "node:crypto";
 import readline from "node:readline";
@@ -179,6 +180,9 @@ const publicDir = path.join(__dirname, "public");
 // admin, verificacion, manual) con sus HTML actuales hasta migrarlas.
 const webDistDir = path.join(__dirname, "dist");
 const webDistAvailable = existsSync(path.join(webDistDir, "index.html"));
+// Pantallas que el build deja ya dibujadas (hoy, Ingresar) para que se vean antes
+// de que cargue React. Sin build o sin ellas, queda vacio y todo sigue como antes.
+const webPrerender = cargarPrerender(webDistDir);
 const dataDir = process.env.ARIAD_DATA_DIR || path.join(__dirname, "data");
 const cloudSyncAuditFile = path.join(dataDir, "cloud-sync-audit.jsonl");
 const cloudSyncLedgerFile = path.join(dataDir, "cloud-sync-batches.json");
@@ -268,7 +272,9 @@ const publicCampaignEventTypes = new Set([
 const cloudflareTurnstileOrigin = "https://challenges.cloudflare.com";
 const turnstileEnabled = Boolean(turnstileSiteKey && turnstileSecret);
 const isProduction = process.env.NODE_ENV === "production";
-const baseCsp = [
+// No se permiten estilos ni scripts en linea, salvo los dos bloques exactos de
+// las pantallas ya dibujadas, autorizados por su huella (server/web/prerender.js).
+const baseCsp = cspConHuellas([
   "default-src 'self'",
   `script-src 'self'${turnstileEnabled ? ` ${cloudflareTurnstileOrigin}` : ""}`,
   "style-src 'self'",
@@ -284,7 +290,7 @@ const baseCsp = [
   "base-uri 'self'",
   "form-action 'self'",
   "object-src 'none'",
-].join("; ");
+].join("; "), webPrerender);
 const allowedApiHosts = new Set([
   "ariadgsm.com",
   "www.ariadgsm.com",
@@ -6354,7 +6360,9 @@ function applyWebPageMeta(html, pathname) {
 }
 
 async function sendWebIndex(res, pathname = "/") {
-  const index = await fs.readFile(path.join(webDistDir, "index.html"), "utf8");
+  // Si esta direccion tiene su pantalla ya dibujada, va ese HTML en vez del vacio.
+  const dibujada = archivoPrerender(webPrerender, pathname);
+  const index = await fs.readFile(path.join(webDistDir, dibujada ? path.join("prerender", dibujada) : "index.html"), "utf8");
   const html = applyWebPageMeta(index, pathname);
   res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
   res.end(html);

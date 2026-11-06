@@ -10,7 +10,7 @@
  * La galería de estados para comparar con el Figma está en pages/CuentaEstadosPreview.tsx.
  */
 import { AlertCircle, Clock, Info, Lock, type LucideIcon, Mail, User, WifiOff } from "lucide-react"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 
 import { AuthCard, AuthShell, AyudaWhatsApp, Banner, BotonPausa, BotonPrimario, BotonSecundario, CabezaAuth, Campo, CampoPassword, CampoSelect, CodigoCorreo, Divisor, EnlaceCentro, ReglasPassword } from "@/components/aritool/auth"
@@ -20,6 +20,7 @@ import { usePrecios } from "@/hooks/use-precios"
 import { confirmar, entrarWeb, solicitarAcceso, verificado } from "@/lib/cuenta"
 import { usePais } from "@/lib/pais"
 import { useSeo } from "@/lib/seo"
+import { entregarPrevio, pendientePrevio, valorPrevio } from "@/lib/previo"
 import { supabase } from "@/lib/supabase"
 
 type Vista = "cargando" | "ya" | "ingresar" | "crear" | "yaExiste" | "codigo" | "rec1" | "rec2" | "rec3" | "reclisto"
@@ -66,18 +67,41 @@ function ErrorLinea({ texto }: { texto: string }) {
   )
 }
 
+/** Donde Supabase guarda la sesión en este navegador. Si no está, seguro no hay sesión. */
+const CLAVE_SESION = "sb-sdarsjdwnuimjruthjwz-auth-token"
+
+/**
+ * Con qué pantalla arranca. Sin rastro de sesión se muestra el formulario de una, sin esperar a
+ * preguntarle nada a nadie (así el primer dibujo de React es igual al HTML que mandó el servidor).
+ */
+function vistaInicial(): Vista {
+  if (typeof window === "undefined") return "ingresar" // HTML inicial (scripts/prerender-web.mjs)
+  try {
+    if (localStorage.getItem(CLAVE_SESION)) return "cargando"
+  } catch {
+    return "cargando"
+  }
+  const pedida = new URLSearchParams(window.location.search).get("v")
+  return pedida === "crear" ? "crear" : pedida === "recuperar" ? "rec1" : "ingresar"
+}
+
+// W13 S8: Mi cuenta lo mandó acá porque la sesión venció. Al entrar vuelve a donde estaba.
+const AVISO_VENCIDA: Aviso = { tipo: "azul", icono: Info, texto: "Por seguridad tu sesión se cerró. Ingresá de nuevo y volvés a donde estabas." }
+const vinoPorVencida = () => typeof window !== "undefined" && new URLSearchParams(window.location.search).has("vencida")
+
 /** El flujo real de la cuenta. `alEntrar` (opcional) corre justo antes de pasar a Mi cuenta. */
 export function Cuenta({ whatsapp, alEntrar }: { whatsapp: string; alEntrar?: () => Promise<void> | void }) {
   const nav = useNavigate()
   const { pais: paisSitio } = usePais()
-  const [vista, setVista] = useState<Vista>("cargando")
+  const [vista, setVista] = useState<Vista>(vistaInicial)
   const [ocupado, setOcupado] = useState(false)
-  const [aviso, setAviso] = useState<Aviso>(null)
+  const [aviso, setAviso] = useState<Aviso>(() => (vinoPorVencida() ? AVISO_VENCIDA : null))
   const [errores, setErrores] = useState<Record<string, string>>({})
   const [sesionCorreo, setSesionCorreo] = useState("")
 
-  const [correo, setCorreo] = useState("")
-  const [clave, setClave] = useState("")
+  // Si el servidor mandó la pantalla ya dibujada y el cliente escribió antes de que cargara esto, se sigue desde ahí.
+  const [correo, setCorreo] = useState(() => valorPrevio("correo"))
+  const [clave, setClave] = useState(() => valorPrevio("clave"))
   const [ofrecerCodigo, setOfrecerCodigo] = useState(false)
   const [pausa, setPausa] = useState(0) // segundos que faltan de la pausa por muchos intentos
   const [minutosPausa, setMinutosPausa] = useState(15)
@@ -93,21 +117,18 @@ export function Cuenta({ whatsapp, alEntrar }: { whatsapp: string; alEntrar?: ()
   const [reenvio, setReenvio] = useState(0) // segundos para poder pedir otro código
   const verificando = useRef(false)
 
-  // Al entrar: si ya hay sesión en este navegador, se avisa (e4) en vez de pedir la contraseña.
+  // Al entrar con rastro de sesión: si sigue viva, se avisa (e4) en vez de pedir la contraseña.
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const pedida = params.get("v")
+    if (vistaInicial() !== "cargando") return
+    const pedida = new URLSearchParams(window.location.search).get("v")
+    const formulario = () => setVista(pedida === "crear" ? "crear" : pedida === "recuperar" ? "rec1" : "ingresar")
     void supabase.auth.getSession().then(({ data }) => {
       const c = data.session?.user?.email
-      if (c) {
-        setSesionCorreo(c)
-        setVista("ya")
-      } else {
-        // W13 S8: Mi cuenta lo mandó acá porque la sesión venció. Al entrar vuelve a Mi cuenta.
-        if (params.get("vencida")) setAviso({ tipo: "azul", icono: Info, texto: "Por seguridad tu sesión se cerró. Ingresá de nuevo y volvés a donde estabas." })
-        setVista(pedida === "crear" ? "crear" : pedida === "recuperar" ? "rec1" : "ingresar")
-      }
-    }).catch(() => setVista("ingresar"))
+      if (!c) return formulario()
+      setAviso(null)
+      setSesionCorreo(c)
+      setVista("ya")
+    }).catch(formulario)
   }, [])
 
   // Relojes: pausa por intentos y espera para reenviar el código.
@@ -296,6 +317,23 @@ export function Cuenta({ whatsapp, alEntrar }: { whatsapp: string; alEntrar?: ()
     ir("reclisto")
   })
 
+  // Pase desde la pantalla que mandó el servidor (lib/previo): se retira recién ahora, con esta ya armada,
+  // y sigue sola lo que el cliente tocó antes de tiempo.
+  const pendiente = useRef<ReturnType<typeof pendientePrevio>>(null)
+  useLayoutEffect(() => {
+    pendiente.current = pendientePrevio()
+    entregarPrevio()
+  }, [])
+  useEffect(() => {
+    const p = pendiente.current
+    pendiente.current = null
+    if (p === "ingresar") void ingresar()
+    else if (p === "crear") ir("crear")
+    else if (p === "recuperar") ir("rec1")
+    // Solo al montar: `ingresar` e `ir` se rearman en cada dibujo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const reglas = useMemo(() => reglasClave(claveN), [claveN])
   const repetidaOk = claveN2.length > 0 && claveN === claveN2
   const nombrePais = PAISES.find((p) => p.iso === pais)?.nombre ?? pais
@@ -433,9 +471,23 @@ export function Cuenta({ whatsapp, alEntrar }: { whatsapp: string; alEntrar?: ()
   )
 }
 
-export function CuentaPage() {
+/** La pantalla de celular (W11m): barra del sitio, franja de soporte, la tarjeta y el pie. */
+export function CuentaCelular() {
   const { datos } = usePrecios()
   const [menu, setMenu] = useState(false)
+  return (
+    <div className="min-h-screen overflow-x-hidden" style={{ background: C.page, color: C.text, fontFamily: "Inter, system-ui, sans-serif", lineHeight: "normal" }}>
+      <HeaderMobile onMenu={() => setMenu(true)} mostrarIngresar={false} />
+      <FranjaSoporte datos={datos} />
+      <main className="px-5 pb-7 pt-6"><Cuenta whatsapp={datos?.soporte.whatsapp ?? WA} /></main>
+      <PieMobile />
+      {menu ? <MenuMobile datos={datos} onClose={() => setMenu(false)} /> : null}
+    </div>
+  )
+}
+
+export function CuentaPage() {
+  const { datos } = usePrecios()
   const whatsapp = datos?.soporte.whatsapp ?? WA
   useSeo({ titulo: "Ingresar | AriTool", descripcion: "Entrá a tu cuenta de AriTool: es la misma que usás en la app.", ruta: "/cuenta", indexar: false })
   useEffect(() => {
@@ -452,13 +504,5 @@ export function CuentaPage() {
     return () => mq.removeEventListener("change", cambio)
   }, [])
   if (compu) return <AuthShell><Cuenta whatsapp={whatsapp} /></AuthShell>
-  return (
-    <div className="min-h-screen overflow-x-hidden" style={{ background: C.page, color: C.text, fontFamily: "Inter, system-ui, sans-serif", lineHeight: "normal" }}>
-      <HeaderMobile onMenu={() => setMenu(true)} mostrarIngresar={false} />
-      <FranjaSoporte datos={datos} />
-      <main className="px-5 pb-7 pt-6"><Cuenta whatsapp={whatsapp} /></main>
-      <PieMobile />
-      {menu ? <MenuMobile datos={datos} onClose={() => setMenu(false)} /> : null}
-    </div>
-  )
+  return <CuentaCelular />
 }

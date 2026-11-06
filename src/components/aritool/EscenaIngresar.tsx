@@ -8,12 +8,15 @@
  * La escena NO se carga con: ahorro de datos, conexión 2g o 3g, "reducir movimiento", sin WebGL,
  * pantallas de menos de 1024 px o equipo lento (menos de 24 cuadros por segundo en el arranque).
  * Se pausa con la pestaña oculta y a los 60 s sin actividad.
+ *
+ * Vive dentro del lienzo de PanelEmblema, donde 1em = 1 píxel del Figma (se achica con el panel).
  */
 import { useEffect, useImperativeHandle, useRef, useState } from "react"
 
 import { EmblemaSvg, RedFondo } from "@/components/aritool/EmblemaSvg"
 import { ANILLO_PUNTOS, LOGO, LOGOS, punto } from "@/components/hero/emblema"
 import type { IngresarScene } from "@/components/hero/ingresar-scene"
+import { emblemaPrevioQuieto } from "@/lib/previo"
 
 export type EscenaRef = {
   /** El cliente entró bien: pulso corto hacia el emblema. Se resuelve cuando termina (0.4 s), o enseguida si no hay escena. */
@@ -46,6 +49,7 @@ function entradaYaVista(): boolean {
 
 /** ¿Vale la pena bajar la escena en este equipo y con esta conexión? */
 function convieneEscena(): boolean {
+  if (typeof window === "undefined") return false // HTML inicial: va el dibujo quieto
   const red = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }).connection
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return false
   if (red?.saveData || ["slow-2g", "2g", "3g"].includes(red?.effectiveType ?? "")) return false
@@ -59,7 +63,8 @@ export function EscenaIngresar({ ref }: { ref?: React.Ref<EscenaRef> }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const escena = useRef<IngresarScene | null>(null)
   const reanudar = useRef(0)
-  const [modo, setModo] = useState<Modo>(() => (convieneEscena() && !entradaYaVista() ? "espera" : "quieto"))
+  // Si el servidor ya mandó el emblema dibujado (lib/previo), no se lo borra para hacer la entrada.
+  const [modo, setModo] = useState<Modo>(() => (convieneEscena() && !entradaYaVista() && !emblemaPrevioQuieto() ? "espera" : "quieto"))
   const modoRef = useRef(modo)
   const [logos, setLogos] = useState<boolean[]>(() => LOGOS.map(() => false)) // los que ya aparecieron en la entrada
   const pasar = (m: Modo) => {
@@ -156,14 +161,15 @@ export function EscenaIngresar({ ref }: { ref?: React.Ref<EscenaRef> }) {
   return (
     <div ref={hostRef} className="absolute inset-0">
       <RedFondo className="absolute inset-0 size-full" />
-      <EmblemaSvg className="absolute inset-0 size-full" style={{ opacity: modo === "quieto" ? 1 : 0, transition: SUAVE }} />
+      {/* "pre-emblema": en el HTML inicial, lo que se oculta mientras se espera la entrada animada. */}
+      <EmblemaSvg className="pre-emblema absolute inset-0 size-full" style={{ opacity: modo === "quieto" ? 1 : 0, transition: SUAVE }} />
       <canvas ref={canvasRef} aria-hidden="true" className="absolute inset-0 size-full" style={{ opacity: conEscena ? 1 : 0, transition: SUAVE }} />
       {LOGOS.map(({ archivo, angulo }, i) => {
         const [x, y] = punto(ANILLO_PUNTOS, angulo)
         const visible = modo === "quieto" || modo === "viva" || (modo === "entrada" && logos[i])
         return (
-          <img key={archivo} src={`/tools/${archivo}`} alt="" width={LOGO} height={LOGO} draggable={false} className="absolute"
-            style={{ left: x - LOGO / 2, top: y - LOGO / 2, width: LOGO, height: LOGO, opacity: visible ? 1 : 0, transform: visible ? "none" : "scale(.82)", transition: "opacity .3s, transform .3s" }} />
+          <img key={archivo} src={`/tools/${archivo}`} alt="" width={LOGO} height={LOGO} draggable={false} className="pre-emblema absolute"
+            style={{ left: `${x - LOGO / 2}em`, top: `${y - LOGO / 2}em`, width: `${LOGO}em`, height: `${LOGO}em`, opacity: visible ? 1 : 0, transform: visible ? "none" : "scale(.82)", transition: "opacity .3s, transform .3s" }} />
         )
       })}
     </div>

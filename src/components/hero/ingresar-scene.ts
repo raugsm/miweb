@@ -227,7 +227,7 @@ export function createIngresarScene(o: IngresarSceneOptions): IngresarScene | nu
   lienzo.add(new THREE.Points(luzGeo, luzMat))
   const LUZ_DESDE = ANILLO_PUNTOS - LOGO / 2 // sale del borde del logo
 
-  // ---------- 3) tamaño: el lienzo se dibuja 1 a 1 con los píxeles del Figma ----------
+  // ---------- 3) tamaño: el lienzo mide 860 × 900 del Figma y se achica con el panel ----------
   function layout() {
     const w = o.host.clientWidth
     const h = o.host.clientHeight
@@ -235,9 +235,10 @@ export function createIngresarScene(o: IngresarSceneOptions): IngresarScene | nu
     renderer.setSize(w, h, false)
     camera.aspect = w / h
     camera.updateProjectionMatrix()
-    const upp = (2 * CAMZ * Math.tan((FOV * Math.PI) / 360)) / h // unidades de mundo por píxel
+    // unidades de mundo por píxel del Figma (el lienzo en pantalla puede medir menos que 860 × 900)
+    const upp = (2 * CAMZ * Math.tan((FOV * Math.PI) / 360)) / LIENZO.h
     lienzo.scale.setScalar(upp)
-    lienzo.position.set((LIENZO.cx - w / 2) * upp, (h / 2 - LIENZO.cy) * upp, 0)
+    lienzo.position.set((LIENZO.cx - LIENZO.w / 2) * upp, (LIENZO.h / 2 - LIENZO.cy) * upp, 0)
     pMat.size = 5 * upp
     luzMat.size = 18 * upp
   }
