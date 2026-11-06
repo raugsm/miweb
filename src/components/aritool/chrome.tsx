@@ -27,7 +27,7 @@ export const RUTAS = {
   miCuenta: "/mi-cuenta",
   historial: "/mi-cuenta/historial",
   alquiler: "/#alquiler",
-  servicios: "/#servicios",
+  servicios: "/servicios",
   recargar: "/mi-cuenta/recargar",
   // Licencia (W15) todavía no está hecha: mientras tanto va al panel de la web anterior, que usa la
   // misma sesión. Cuando exista, apunta a su página nueva y /panel pasa a llevar a Mi cuenta (regla W8 #13).
@@ -138,7 +138,6 @@ export function useAncla() {
 }
 
 const MENU = [
-  { t: "Alquiler", to: RUTAS.alquiler },
   { t: "Servicios", to: RUTAS.servicios },
   { t: "App AriTool", to: RUTAS.app },
   { t: "Novedades", to: RUTAS.novedades },
@@ -291,11 +290,9 @@ export function MenuMobile({ datos, onClose }: { datos: Precios | null; onClose:
   const r = useRelease()
   const sesion = useSesion()
   const [paisOpen, setPaisOpen] = useState(false)
-  const nDisp = datos ? datos.herramientas.filter((h) => h.disponible).length : 0
   const paisTxt = datos ? `${datos.pais.nombre} · precios en ${nombreMoneda(datos.pais.moneda)}` : "País"
   const opciones = [
-    { t: "Alquiler de herramientas", s: datos ? `${nDisp} herramientas` : "", to: RUTAS.alquiler },
-    { t: "Servicios", s: "Xiaomi FRP · Cuenta MI", to: RUTAS.servicios },
+    { t: "Servicios", s: "Alquiler de herramientas, Xiaomi FRP y Cuenta MI", to: RUTAS.servicios },
     { t: "App AriTool", s: "Security Plugin y AntiCrack", to: RUTAS.app },
     { t: "Novedades", s: `versión ${r.version}`, to: RUTAS.novedades },
   ]

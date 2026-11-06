@@ -29,7 +29,7 @@ export default defineConfig({
       "^/admin": "http://127.0.0.1:4173",
       "^/v/": "http://127.0.0.1:4173",
       "^/manual": "http://127.0.0.1:4173",
-      "^/servicios": "http://127.0.0.1:4173",
+      "^/servicios/motorola-f4": "http://127.0.0.1:4173",
       "^/owner-recovery": "http://127.0.0.1:4173",
       "^/descargar": "http://127.0.0.1:4173",
       "^/instrucciones": "http://127.0.0.1:4173",

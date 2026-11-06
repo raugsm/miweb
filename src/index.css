@@ -225,3 +225,19 @@
     @apply font-sans;
     }
 }
+/* Servicios v3 (W17): aparición suave de las tarjetas y hover de 2 px. */
+@keyframes serv-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.serv-card {
+  animation: serv-in .2s ease-out both;
+  transition: transform .2s ease, border-color .2s ease, background-color .2s ease;
+}
+@media (hover: hover) {
+  .serv-card:hover { transform: translateY(-2px); border-color: #3b82f6 !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .serv-card { animation: none; transition: none; }
+  .serv-card:hover { transform: none; }
+}

@@ -6313,6 +6313,10 @@ const webPageMeta = {
     title: "Entrar a mi cuenta de Ari-Tool | AriadGSM",
     description: "Acceso de tecnicos a Ari-Tool: entra a tu cuenta, mira tus creditos y el historial de tus trabajos.",
   },
+  "/servicios": {
+    title: "Servicios y alquiler de herramientas | AriTool",
+    description: "Alquila herramientas por horas o pide un servicio remoto: Xiaomi Reset + FRP, Cuenta MI y AriTool. Precios en vivo y soporte por WhatsApp.",
+  },
   "/legal": {
     title: "Politicas y terminos | AriadGSM",
     description: "Terminos, privacidad, reembolsos y politica de uso aceptable de AriadGSM y Ari-Tool. Herramienta para uso profesional autorizado.",

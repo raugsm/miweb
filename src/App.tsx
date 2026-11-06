@@ -10,6 +10,9 @@ import { HomeAriTool } from "@/pages/HomeAriTool"
 const AppAriToolPage = lazy(() =>
   import("@/pages/AppAriToolPage").then((m) => ({ default: m.AppAriToolPage }))
 )
+const ServiciosPage = lazy(() =>
+  import("@/pages/ServiciosPage").then((m) => ({ default: m.ServiciosPage }))
+)
 const NovedadesPage = lazy(() =>
   import("@/pages/NovedadesPage").then((m) => ({ default: m.NovedadesPage }))
 )
@@ -78,6 +81,7 @@ export default function App() {
           {/* Web AriTool. Las direcciones salen del mapa RUTAS (components/aritool/chrome). */}
           <Route element={<MarcoAriTool />}>
             <Route index element={<HomeAriTool />} />
+            <Route path="servicios" element={pagina(<ServiciosPage />)} />
             <Route path="app" element={pagina(<AppAriToolPage />)} />
             <Route path="novedades" element={pagina(<NovedadesPage />)} />
             {/* "/descargar" es del servidor: entrega el programa. La página es "/descargas". */}

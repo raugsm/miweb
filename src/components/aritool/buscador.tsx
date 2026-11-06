@@ -23,10 +23,11 @@ const MAX_TEXTO = 60
 const SUGERENCIAS = ["FRP Xiaomi", "Cuenta MI", "DFT Pro", "Security Plugin"]
 const ICONO_SERVICIO: Record<string, string> = { xiaomi_frp: "/brand/xiaomi.png", cuenta_mi: "/brand/xiaomi.png" }
 
-// Sección del Inicio + tarjeta: "/…#alquiler/unlock_tool" (lo resuelve useAncla).
+// Sección + tarjeta: "/#alquiler/unlock_tool" o "/servicios#servicios/xiaomi_frp" (lo resuelve useAncla).
 function destino(r: Resultado): string {
   if (r.tipo === "app") return RUTAS.app
-  return `${r.tipo === "herramienta" ? RUTAS.alquiler : RUTAS.servicios}/${r.clave}`
+  if (r.tipo === "herramienta") return `${RUTAS.alquiler}/${r.clave}`
+  return `${RUTAS.servicios}#servicios/${r.clave}`
 }
 
 function IconoResultado({ r, size }: { r: Resultado; size: number }) {
