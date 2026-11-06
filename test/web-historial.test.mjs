@@ -114,7 +114,7 @@ test("sin movimientos no hay filas", () => {
 test("textos: monto con signo, fecha corta e iniciales", () => {
   assert.equal(montoTexto(20), "+20.00");
   assert.equal(montoTexto(-2.4), "−2.40");
-  assert.equal(montoTexto(0), "+0.00");
+  assert.equal(montoTexto(0), "0.00");
   assert.match(fechaCorta("2026-11-03T18:05:00"), /^03\/11 18:05$/);
   assert.equal(fechaCorta("no es fecha"), "");
   assert.equal(iniciales("Taller Rivera"), "TR");

@@ -11,7 +11,7 @@ const saldoTexto = (n: number) => n.toLocaleString("es-PE", { minimumFractionDig
 
 function Monto({ f, chico }: { f: FilaHistorial; chico?: boolean }) {
   if (f.monto == null) return <span style={{ color: C.muted, fontSize: chico ? 12 : 14 }}>con licencia</span>
-  return <span style={{ color: f.monto >= 0 ? C.green : C.text, fontWeight: 600, fontSize: chico ? 15 : 14 }}>{montoTexto(f.monto)}</span>
+  return <span style={{ color: f.monto > 0 ? C.green : C.text, fontWeight: 600, fontSize: chico ? 15 : 14 }}>{montoTexto(f.monto)}</span>
 }
 
 export function Barra({ w, h }: { w: number; h: number }) {

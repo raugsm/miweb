@@ -38,9 +38,10 @@ function PanelEmblema({ escena }: { escena: React.Ref<EscenaRef> }) {
         {/* brillo de fondo (1172:302) */}
         <div className="absolute" style={{ left: LIENZO.cx - 510, top: LIENZO.cy - 480, width: 1020, height: 960, background: "radial-gradient(closest-side, rgba(29,78,216,0.3), rgba(29,78,216,0.12) 55%, rgba(29,78,216,0))" }} />
         <EscenaIngresar ref={escena} />
-        <div className="absolute inset-x-0 flex flex-col items-center text-center" style={{ top: 626 }}>
-          <p style={{ color: "#f9fafb", fontWeight: 700, fontSize: 38, lineHeight: "46px" }}>Todo tu taller,<br />en una sola cuenta.</p>
-          <p style={{ color: "#aab3c2", fontSize: 16, lineHeight: "19px", marginTop: 12 }}>Saldo, pedidos y licencia en un solo lugar.</p>
+        {/* El lienzo se achica entero, pero el texto no baja de 26 y 14 px en pantalla: se agranda acá lo que la escala le quita. */}
+        <div className="absolute inset-x-0 flex flex-col items-center whitespace-nowrap text-center" style={{ top: 626 }}>
+          <p style={{ color: "#f9fafb", fontWeight: 700, fontSize: Math.max(38, 26 / escala), lineHeight: 1.21 }}>Todo tu taller,<br />en una sola cuenta.</p>
+          <p style={{ color: "#aab3c2", fontSize: Math.max(16, 14 / escala), lineHeight: 1.19, marginTop: 12 }}>Saldo, pedidos y licencia en un solo lugar.</p>
         </div>
       </div>
     </div>

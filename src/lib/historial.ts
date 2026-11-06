@@ -97,10 +97,10 @@ export function filtrarHistorial(filas: FilaHistorial[], filtro: FiltroHistorial
   return filas.filter((f) => (filtro === "todo" || f.clase === CLASE[filtro]) && (desde == null || new Date(f.fecha).getTime() >= desde))
 }
 
-/** "+20.00" / "−2.40" (con el signo menos tipográfico del diseño). */
+/** "+20.00" / "−2.40" (con el signo menos tipográfico del diseño) / "0.00" sin signo. */
 export function montoTexto(monto: number): string {
   const n = Math.abs(monto).toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-  return `${monto < 0 ? "−" : "+"}${n}`
+  return `${monto < 0 ? "−" : monto > 0 ? "+" : ""}${n}`
 }
 
 /** "03/11 18:05" en la hora del navegador. */

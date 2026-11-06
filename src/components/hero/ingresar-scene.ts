@@ -2,7 +2,8 @@
  * Escena animada del panel de Ingresar (Three.js) — Figma W11-E 1172:301.
  *
  * Suma movimiento al dibujo SVG, que ya es el estado final: las partículas arman el isotipo AR, se
- * dibuja el anillo y los rayos salen uno por uno hacia los logos (2 s como mucho). Después queda casi
+ * dibuja el anillo y los rayos salen uno por uno hacia los logos (2 s como mucho). Las partículas son
+ * solo para la entrada: al terminar, el isotipo queda liso, con su degradado y su brillo. Después queda casi
  * quieta: el anillo de puntos gira muy lento y cada 4–6 s una luz viaja de un logo al emblema.
  * Los logos y la red de fondo NO están acá: son imágenes y SVG de la página, quietos.
  *
@@ -285,8 +286,10 @@ export function createIngresarScene(o: IngresarSceneOptions): IngresarScene | nu
 
   function draw(dt: number) {
     const T = t
-    // partículas: vuelan a su lugar y después respiran apenas
-    if (T < DUR + 0.5) {
+    // partículas: vuelan a su lugar y, cuando el isotipo ya está nítido, desaparecen (queda liso)
+    const sv = ease(clamp01((T - T_SOLIDO) / 0.5))
+    logoPts.visible = sv < 1
+    if (logoPts.visible) {
       for (let i = 0; i < N; i++) {
         const ix = i * 3
         const p = ease(clamp01((T - delay[i]) / DUR))
@@ -296,21 +299,12 @@ export function createIngresarScene(o: IngresarSceneOptions): IngresarScene | nu
         pos[ix + 1] = start[ix + 1] + (home[ix + 1] - start[ix + 1]) * p + Math.sin(a) * sw * (1 - p)
         pos[ix + 2] = start[ix + 2] + (home[ix + 2] - start[ix + 2]) * p
       }
-    } else {
-      for (let i = 0; i < N; i++) {
-        const ix = i * 3
-        const b = phase[i] + T * 1.2
-        pos[ix] = home[ix] + Math.cos(b) * 0.006
-        pos[ix + 1] = home[ix + 1] + Math.sin(b * 1.13) * 0.006
-        pos[ix + 2] = home[ix + 2] + Math.sin(b * 0.7) * 0.03
-      }
+      geo.attributes.position.needsUpdate = true
     }
-    geo.attributes.position.needsUpdate = true
 
     const ex = exito >= 0 ? Math.sin(Math.PI * Math.min(1, exito)) : 0
-    const sv = ease(clamp01((T - T_SOLIDO) / 0.5))
-    logoMat.opacity = 0.97 * sv
-    pMat.opacity = 1 - 0.7 * sv
+    logoMat.opacity = sv
+    pMat.opacity = 1 - sv
     glowMat.opacity = Math.min(1, 0.8 * sv + 0.2 * ex)
     glow.scale.setScalar(1 + 0.25 * ex)
 
