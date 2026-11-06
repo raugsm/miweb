@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { enGrupos, limpiarMonto, metodosDe, minSeg, montoDeDireccion, montoElegido, montoValido, pagoDeActivo, pagoTexto, restan } from "../src/lib/recarga.ts";
+import { diaMesAnio, enGrupos, hoyLocal, licenciaActivada, licenciaVigente, limpiarMonto, metodosDe, minSeg, montoDeDireccion, montoElegido, montoValido, pagoDeActivo, pagoTexto, restan } from "../src/lib/recarga.ts";
 
 test("otro monto: solo dígitos, sin ceros adelante, sin cero suelto, 4 cifras como mucho", () => {
   assert.equal(limpiarMonto(""), "");
@@ -76,4 +76,43 @@ test("cuánto le queda al pago: nunca negativo, y una fecha rota cuenta como ven
   assert.equal(restan({ venceEn: "2026-11-05T12:14:32Z" }, ahora), 872);
   assert.equal(restan({ venceEn: "2026-11-05T11:00:00Z" }, ahora), 0);
   assert.equal(restan({ venceEn: "no es fecha" }, ahora), 0);
+});
+
+// ---------- Licencia anual (W15) ----------
+const lic = (fecha_fin, estado = "vigente") => ({ estado, fecha_inicio: "2026-01-01", fecha_fin, pcs: 1 });
+
+test("licencia vigente: estado vigente y sin vencer (el día que vence todavía vale)", () => {
+  const hoy = "2026-11-06";
+  assert.equal(licenciaVigente(undefined, hoy), false); // el servidor todavía no la entrega
+  assert.equal(licenciaVigente(null, hoy), false); // nunca tuvo
+  assert.equal(licenciaVigente(lic("2027-03-01"), hoy), true);
+  assert.equal(licenciaVigente(lic("2026-11-06T23:59:59Z"), hoy), true);
+  assert.equal(licenciaVigente(lic("2026-11-05"), hoy), false);
+  assert.equal(licenciaVigente(lic("2027-03-01", "vencida"), hoy), false);
+  assert.equal(licenciaVigente(lic("2027-03-01", "anulada"), hoy), false);
+});
+
+test("licencia recién pagada: solo cuenta si vence más tarde que la que tenía", () => {
+  const hoy = "2026-11-06";
+  // primera compra
+  assert.equal(licenciaActivada(null, lic("2027-11-06"), hoy), true);
+  assert.equal(licenciaActivada(undefined, lic("2027-11-06"), hoy), true);
+  assert.equal(licenciaActivada(null, null, hoy), false); // pagó y todavía no figura
+  assert.equal(licenciaActivada(null, undefined, hoy), false);
+  // renovar: la misma fecha de antes = todavía no se sumó el año
+  assert.equal(licenciaActivada(lic("2027-03-01"), lic("2027-03-01"), hoy), false);
+  assert.equal(licenciaActivada(lic("2027-03-01"), lic("2028-03-01"), hoy), true);
+  // tenía una vencida y compra de nuevo
+  assert.equal(licenciaActivada(lic("2026-05-01", "vencida"), lic("2026-05-01", "vencida"), hoy), false);
+  assert.equal(licenciaActivada(lic("2026-05-01", "vencida"), lic("2027-11-06"), hoy), true);
+  // nunca una licencia que no está vigente
+  assert.equal(licenciaActivada(null, lic("2027-11-06", "pendiente"), hoy), false);
+  assert.equal(licenciaActivada(lic("2027-03-01"), lic("2026-01-01"), hoy), false);
+});
+
+test("fechas de la licencia", () => {
+  assert.equal(diaMesAnio("2027-11-04"), "04/11/2027");
+  assert.equal(diaMesAnio("2027-11-04T05:00:00.000Z"), "04/11/2027");
+  assert.equal(hoyLocal(new Date(2026, 0, 5, 23, 59)), "2026-01-05");
+  assert.equal(hoyLocal(new Date(2026, 10, 6)), "2026-11-06");
 });

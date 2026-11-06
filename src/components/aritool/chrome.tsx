@@ -31,7 +31,7 @@ export const RUTAS = {
   recargar: "/mi-cuenta/recargar",
   // Licencia (W15) todavía no está hecha: mientras tanto va al panel de la web anterior, que usa la
   // misma sesión. Cuando exista, apunta a su página nueva y /panel pasa a llevar a Mi cuenta (regla W8 #13).
-  licencia: "/panel",
+  licencia: "/mi-cuenta/licencia",
   panelViejo: "/panel",
 }
 

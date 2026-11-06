@@ -10,6 +10,9 @@
  *
  * E9 a E12 (fila nueva de W14-E, 1187:114) los dibujó Ari-Diseño el 5-nov y ESPERAN EL OK DE PETER:
  * no se pudo preparar el pago, Yape apagado, sin conexión y "ese pago se canceló".
+ *
+ * W15 · Comprar licencia anual (1132:2 y 1132:118) es esta misma página con `producto="licencia"`: cambian el
+ * paso 1 (la tarjeta de la licencia) y el 4; los pasos 2 y 3 son los de W14. El precio lo pone el servidor.
  */
 import { ArrowRight, Check, CircleAlert, CircleCheck, Clock, Info, LoaderCircle, Lock, Pencil, Timer, Wallet, WifiOff } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
@@ -18,21 +21,30 @@ import { useNavigate, useSearchParams } from "react-router-dom"
 import { C, RUTAS } from "@/components/aritool/chrome"
 import { Aviso, Ayuda, BotonAviso, BotonGrande, BotonWhatsApp, FilaCopiar, Instruccion, PaginaPasos, Pasos, TituloPaso, useCompu, Volver } from "@/components/aritool/pasos"
 import { usePrecios } from "@/hooks/use-precios"
-import { cobroActivo, cobroCancelar, pagoCobroCrear, pagoCobroEstado, resumenCliente, yapeConfirmar, yapeCrear, yapeEstado } from "@/lib/cuenta"
+import { cobroActivo, cobroCancelar, pagoCobroCrear, pagoCobroEstado, resumenCliente, yapeConfirmar, yapeCrear, yapeEstado, type ResumenCliente } from "@/lib/cuenta"
 import { formatearPrecio, PAISES, type Precios } from "@/lib/precios"
-import { dosDecimales, enGrupos, limpiarMonto, metodosDe, minSeg, MONTO_INICIAL, MONTO_MAX, MONTO_MIN, MONTOS, montoDeDireccion, montoElegido, montoValido, pagoDeActivo, pagoTexto, restan, type Metodo, type Pago } from "@/lib/recarga"
+import { diaMesAnio, dosDecimales, enGrupos, hoyLocal, licenciaActivada, licenciaVigente, limpiarMonto, metodosDe, minSeg, MONTO_INICIAL, MONTO_MAX, MONTO_MIN, MONTOS, montoDeDireccion, montoElegido, montoValido, pagoDeActivo, pagoTexto, restan, type Metodo, type Pago } from "@/lib/recarga"
 import { motivoRechazo } from "@/lib/sesion"
 import { useSeo } from "@/lib/seo"
 import { supabase } from "@/lib/supabase"
 
-const NOMBRES = ["Cuánto", "Cómo pagás", "Pagá", "Listo"]
+type Producto = Pago["producto"]
+const NOMBRES: Record<Producto, string[]> = { credito: ["Cuánto", "Cómo pagás", "Pagá", "Listo"], licencia: ["Licencia", "Cómo pagás", "Pagá", "Listo"] }
+const RUTA: Record<Producto, string> = { credito: RUTAS.recargar, licencia: RUTAS.licencia }
+/** Lo que trae la licencia (W15-1). */
+const LICENCIA_TRAE = [
+  "Procesos sin límite de Tecno, Infinix e itel (Security Plugin y AntiCrack).",
+  "Vale en 1 PC: la que abras con AriTool cuando la actives.",
+  "Si ya tenés una, se te suma un año más.",
+  "Xiaomi, FRP, Cuenta MI y Alquiler se siguen pagando con saldo.",
+]
 const SONDEO_MS = 5000
 const DEMORA_MS = 120_000 // con el código de Yape mandado y sin cargarse: "tarda más de lo normal"
 
 /** Lo que salió mal al tocar un botón: sin internet (E11), no se pudo preparar el pago (E9) o Yape apagado (E10). */
 type Fallo = "red" | "generar" | "yape"
 
-type Listo = { cargado: number; saldo: number | null }
+type Listo = { cargado: number; saldo: number | null; /** Licencia: hasta cuándo quedó activa ("04/11/2027"); null = el servidor todavía no lo dice. */ hasta?: string | null }
 /** Qué pasa con el código de Yape que mandó el cliente. */
 type Codigo = { tipo: "nada" } | { tipo: "mal"; quedan: number | null } | { tipo: "confirmando" } | { tipo: "pausa"; minutos: number }
 
@@ -78,18 +90,28 @@ function Tiempo({ falta, cancelar, ocupado, m }: { falta: number; cancelar?: () 
   )
 }
 
-export function RecargarPage() {
+export const RecargarPage = () => <PasoAPaso producto="credito" />
+export const LicenciaPage = () => <PasoAPaso producto="licencia" />
+
+function PasoAPaso({ producto }: { producto: Producto }) {
+  const lic = producto === "licencia"
+  const nombres = NOMBRES[producto]
   const nav = useNavigate()
   const m = !useCompu()
   const { datos, pais } = usePrecios()
   const [params, setParams] = useSearchParams()
   const paso = params.get("paso") === "3" ? 3 : params.get("paso") === "2" ? 2 : 1
-  useSeo({ titulo: "Recargar saldo | AriTool", descripcion: "Recargá tu saldo de AriTool con Yape o Binance Pay.", ruta: RUTAS.recargar, indexar: false })
+  useSeo(lic
+    ? { titulo: "Licencia anual | AriTool", descripcion: "Comprá o renová la licencia anual de AriTool con Yape o Binance Pay.", ruta: RUTAS.licencia, indexar: false }
+    : { titulo: "Recargar saldo | AriTool", descripcion: "Recargá tu saldo de AriTool con Yape o Binance Pay.", ruta: RUTAS.recargar, indexar: false })
 
   // ----- lo que se sabe del servidor -----
   const [carga, setCarga] = useState<"cargando" | "error" | "lista">("cargando")
   const [pago, setPago] = useState<Pago | null>(null) // el pago en curso, si hay
   const [listo, setListo] = useState<Listo | null>(null)
+  // ----- licencia: la que tenía al entrar (undefined = el servidor todavía no la entrega) y el pago que se confirmó sin activarla -----
+  const [licAntes, setLicAntes] = useState<ResumenCliente["licencia"]>(undefined)
+  const [sinActivar, setSinActivar] = useState<Pago | null>(null)
   // ----- lo que va eligiendo -----
   // Si viene un monto en la dirección (refrescó en el paso 2), se sigue con ese.
   const [tarjeta, setTarjeta] = useState<number | null>(() => {
@@ -122,8 +144,8 @@ export function RecargarPage() {
   const elegido: Metodo = metodo && disponibles.includes(metodo) ? metodo : disponibles[0] // si cambia de país, Yape deja de estar
   const irA = useCallback((p: 1 | 2 | 3, conMonto?: number) => {
     setFallo(null)
-    setParams(p === 1 ? {} : p === 2 ? { paso: "2", monto: String(conMonto) } : { paso: "3" })
-  }, [setParams])
+    setParams(p === 1 ? {} : p === 3 ? { paso: "3" } : lic ? { paso: "2" } : { paso: "2", monto: String(conMonto) })
+  }, [lic, setParams])
 
   /** A Ingresar, una sola vez; al volver retoma en el paso donde estaba. */
   const saliendo = useRef(false)
@@ -161,9 +183,13 @@ export function RecargarPage() {
       setCodigo(a.codigoDeclarado)
       setEstadoCodigo({ tipo: "confirmando" })
     }
+    if (lic) { // ¿ya tiene una? Entonces es renovar. Si no se puede saber, se sigue igual.
+      const res = await resumenCliente(jwt).catch(() => null)
+      if (res?.ok && res.data) setLicAntes(res.data.licencia)
+    }
     setCarga("lista")
     return true
-  }, [sesion, sesionVencida])
+  }, [lic, sesion, sesionVencida])
 
   useEffect(() => {
     traerPago().catch(() => setCarga("error"))
@@ -173,15 +199,19 @@ export function RecargarPage() {
   // dirección: si no sirve, al paso 1; si es otro que el elegido (Atrás/Adelante del navegador), se toma ese.
   const montoUrl = montoDeDireccion(params.get("monto"))
   useEffect(() => {
-    if (carga !== "lista" || listo || pago) return
+    if (carga !== "lista" || listo || sinActivar) return
+    if (pago) { // el pago en curso es de lo otro (recarga / licencia): su paso 3 está en la otra página
+      if (paso === 3 && pago.producto !== producto) void nav(`${RUTA[pago.producto]}?paso=3`, { replace: true })
+      return
+    }
     if (paso === 3) return irA(1)
-    if (paso !== 2) return
+    if (paso !== 2 || lic) return
     if (!montoValido(montoUrl)) return irA(1)
     if (montoUrl !== monto) {
       setTarjeta(MONTOS.includes(montoUrl) ? montoUrl : null)
       setOtro(MONTOS.includes(montoUrl) ? "" : String(montoUrl))
     }
-  }, [carga, listo, paso, pago, monto, montoUrl, irA])
+  }, [carga, listo, sinActivar, paso, pago, producto, lic, monto, montoUrl, irA, nav])
 
   /** Corre una acción de un botón: una sola a la vez, y si se cae la red lo dice. */
   const accion = useCallback(async (f: (jwt: string) => Promise<void>) => {
@@ -211,9 +241,10 @@ export function RecargarPage() {
 
   // ---------- paso 2 → 3: generar el pago ----------
   const generar = (con: Metodo = elegido) => accion(async (jwt) => {
-    if (!montoValido(monto)) return irA(1)
+    if (!lic && !montoValido(monto)) return irA(1)
+    const cuanto = lic ? 0 : monto ?? 0 // la licencia no lleva monto: el precio lo pone el servidor
     setCanceladoAfuera(false)
-    const r = con === "yape" ? await yapeCrear(jwt, monto, "credito") : await pagoCobroCrear(jwt, monto, "credito")
+    const r = con === "yape" ? await yapeCrear(jwt, cuanto, producto) : await pagoCobroCrear(jwt, cuanto, producto)
     // Ya había uno (otra pestaña, o un doble envío): se muestra ESE, no se crea otro.
     if (r.status === 409 || r.data?.error === "cobro_en_curso") return void (await traerPago())
     if (r.status === 503 && con === "yape") {
@@ -226,7 +257,7 @@ export function RecargarPage() {
     }
     const d = r.data
     limpiarPaso3()
-    setPago({ id: d.cobro_id, metodo: con, producto: "credito", creditos: monto, monto: d.monto, codigo: d.codigo, destino: d.destino ?? "", pagoUrl: ("pago_url" in d ? d.pago_url : "") ?? "", venceEn: d.vence_en, codigoDeclarado: null })
+    setPago({ id: d.cobro_id, metodo: con, producto, creditos: cuanto, monto: d.monto, codigo: d.codigo, destino: d.destino ?? "", pagoUrl: ("pago_url" in d ? d.pago_url : "") ?? "", venceEn: d.vence_en, codigoDeclarado: null })
     irA(3)
   })
 
@@ -244,19 +275,33 @@ export function RecargarPage() {
     if (!(await sesionVencida(r.status))) setFallo("red")
   })
 
-  // ---------- se cargó: paso 4 ----------
+  // ---------- llegó el pago: paso 4 ----------
   const terminar = useCallback(async (p: Pago) => {
-    let saldo: number | null = null
+    let res: ResumenCliente | null = null
     try {
       const { data } = await supabase.auth.getSession()
       const r = data.session ? await resumenCliente(data.session.access_token) : null
-      if (r?.ok && r.data) saldo = r.data.saldo_usd ?? r.data.saldo
+      if (r?.ok && r.data) res = r.data
     } catch {
-      /* sin el saldo nuevo: se muestra lo que se cargó y nada más */
+      /* sin el resumen: en la recarga se muestra lo que se cargó y nada más; en la licencia se vuelve a preguntar */
     }
-    setListo({ cargado: p.creditos, saldo })
     setPago(null)
-  }, [])
+    if (p.producto === "licencia") {
+      // El pago está confirmado, pero "activa" se dice solo si el servidor lo dice. Antes de la v19 de
+      // cliente_resumen la licencia no viene (undefined): ahí se confía en el pago y no se muestra fecha.
+      if (!res || (res.licencia !== undefined && !licenciaActivada(licAntes, res.licencia, hoyLocal()))) return setSinActivar(p)
+      setSinActivar(null)
+      return setListo({ cargado: 0, saldo: null, hasta: res.licencia ? diaMesAnio(res.licencia.fecha_fin) : null })
+    }
+    setListo({ cargado: p.creditos, saldo: res ? res.saldo_usd ?? res.saldo : null })
+  }, [licAntes])
+
+  // Licencia pagada que todavía no figura activa: se vuelve a preguntar hasta que aparezca.
+  useEffect(() => {
+    if (!sinActivar) return
+    const id = window.setInterval(() => void terminar(sinActivar), SONDEO_MS)
+    return () => window.clearInterval(id)
+  }, [sinActivar, terminar])
 
   // ---------- Yape: mandar el código de seguridad ----------
   const confirmar = () => accion(async (jwt) => {
@@ -339,28 +384,41 @@ export function RecargarPage() {
   const sinConexion = fallo === "red" ? <Aviso tono="ambar" icono={WifiOff} titulo="Sin conexión" m={m}>Revisá tu internet y probá de nuevo.</Aviso> : null
   const confirmando = <Aviso tono="azul" icono={LoaderCircle} gira titulo="Estamos confirmando tu pago" m={m}>Se carga solo apenas llegue. Puede tardar un par de minutos. Podés cerrar esta página.</Aviso>
   const marco = (hijos: React.ReactNode) => <PaginaPasos datos={datos} m={m}>{hijos}</PaginaPasos>
+  const titulo1 = !lic ? "¿Cuánto querés cargar?" : licenciaVigente(licAntes, hoyLocal()) ? "Renovar licencia anual" : "Licencia anual"
 
   // ---------- paso 4 · Listo ----------
   if (listo) {
     return marco(<>
-      <Pasos nombres={NOMBRES} actual={4} todos m={m} />
-      <TituloPaso paso={4} de={4} titulo="Listo, ya tenés tu saldo" m={m} />
+      <Pasos nombres={nombres} actual={4} todos m={m} />
+      <TituloPaso paso={4} de={4} titulo={lic ? "Listo, tu licencia está activa" : "Listo, ya tenés tu saldo"} m={m} />
       <div className="flex w-full flex-col items-start" style={{ gap: m ? 10 : 14, padding: m ? 20 : 32, background: "#0c1f19", border: "1px solid #14532d", borderRadius: 16 }}>
         <div className="flex items-center" style={{ gap: m ? 10 : 14 }}>
-          <CircleCheck className={m ? "size-[30px]" : "size-10"} style={{ color: "#4ade80" }} />
-          <p style={{ color: "#fff", fontWeight: 700, fontSize: m ? 22 : 28, lineHeight: m ? "27px" : "34px" }}>Cargamos {usd(listo.cargado)}</p>
+          <CircleCheck className={`shrink-0 ${m ? "size-[30px]" : "size-10"}`} style={{ color: "#4ade80" }} />
+          <p style={{ color: "#fff", fontWeight: 700, fontSize: m ? 22 : 28, lineHeight: m ? "27px" : "34px" }}>{lic ? (listo.hasta ? `Licencia activa hasta el ${listo.hasta}` : "Licencia activa") : `Cargamos ${usd(listo.cargado)}`}</p>
         </div>
-        {listo.saldo != null ? <p style={{ color: "#86efac", fontWeight: 600, fontSize: m ? 17 : 20, lineHeight: m ? "21px" : "24px" }}>Tu saldo ahora: {usd(listo.saldo)}</p> : null}
-        <p style={{ color: C.muted2, fontSize: m ? 14 : 15, lineHeight: m ? "17px" : "18px" }}>Ya lo podés usar en la app AriTool.</p>
+        {lic ? <p style={{ color: "#86efac", fontWeight: 600, fontSize: m ? 17 : 20, lineHeight: m ? "21px" : "24px" }}>Vale en 1 PC</p>
+          : listo.saldo != null ? <p style={{ color: "#86efac", fontWeight: 600, fontSize: m ? 17 : 20, lineHeight: m ? "21px" : "24px" }}>Tu saldo ahora: {usd(listo.saldo)}</p> : null}
+        <p style={{ color: C.muted2, fontSize: m ? 14 : 15, lineHeight: m ? "17px" : "18px" }}>{lic ? "Abrí AriTool en la PC donde trabajás y se activa sola en esa PC." : "Ya lo podés usar en la app AriTool."}</p>
       </div>
       <BotonGrande onClick={() => nav(RUTAS.miCuenta)} m={m}>Volver a Mi cuenta</BotonGrande>
+    </>)
+  }
+
+  // Licencia: el pago llegó pero todavía no figura activa. No se dice "activa" hasta que el servidor lo diga.
+  if (sinActivar) {
+    return marco(<>
+      <Pasos nombres={nombres} actual={3} m={m} />
+      <TituloPaso paso={3} de={4} titulo={sinActivar.metodo === "yape" ? "Pagá con Yape" : "Pagá con Binance Pay"} m={m} />
+      {confirmando}
+      <BotonWhatsApp datos={datos} />
+      {m ? null : <Ayuda datos={datos} />}
     </>)
   }
 
   if (carga !== "lista") {
     return marco(<>
       <Volver texto="Volver a Mi cuenta" onClick={() => nav(RUTAS.miCuenta)} m={m} />
-      <Pasos nombres={NOMBRES} actual={paso} m={m} />
+      <Pasos nombres={nombres} actual={paso} m={m} />
       {carga === "error" ? (
         <div className="flex w-full max-w-[420px] flex-col items-start gap-4 rounded-2xl p-7" style={{ border: `1px solid ${C.borderSoft}`, background: C.card }}>
           <p style={{ color: C.title, fontWeight: 700, fontSize: 20, lineHeight: "24px" }}>No pudimos cargar tu cuenta</p>
@@ -375,16 +433,44 @@ export function RecargarPage() {
   if (pago && paso !== 3) {
     return marco(<>
       <Volver texto="Volver a Mi cuenta" onClick={() => nav(RUTAS.miCuenta)} m={m} />
-      <Pasos nombres={NOMBRES} actual={paso} m={m} />
-      <TituloPaso paso={paso} de={4} titulo={paso === 1 ? "¿Cuánto querés cargar?" : "¿Cómo vas a pagar?"} m={m} />
+      <Pasos nombres={nombres} actual={paso} m={m} />
+      <TituloPaso paso={paso} de={4} titulo={paso === 1 ? titulo1 : "¿Cómo vas a pagar?"} m={m} />
       {enRevision ? confirmando : (
-        <Aviso tono="azul" icono={Info} titulo="Tenés un pago esperando" m={m}>{pagoTexto(pago.metodo, pago.monto)} por {pago.metodo === "yape" ? "Yape" : "Binance"}. Vence en {minSeg(falta || restan(pago))}. Solo se puede tener un pago a la vez.</Aviso>
+        <Aviso tono="azul" icono={Info} titulo={`Tenés un pago esperando: ${pago.producto === "licencia" ? "licencia anual" : `recarga de ${usd(pago.creditos)}`}`} m={m}>{pagoTexto(pago.metodo, pago.monto)} por {pago.metodo === "yape" ? "Yape" : "Binance"}. Vence en {minSeg(falta || restan(pago))}. Solo se puede tener un pago a la vez.</Aviso>
       )}
       {sinConexion}
       <div className="flex w-full flex-col gap-3.5">
-        <BotonAviso onClick={() => irA(3)}>Seguir con ese pago</BotonAviso>
+        <BotonAviso onClick={() => (pago.producto === producto ? irA(3) : void nav(`${RUTA[pago.producto]}?paso=3`))}>Seguir con ese pago</BotonAviso>
         {enRevision ? null : <BotonAviso secundario onClick={cancelar} ocupado={ocupado}>Cancelarlo y empezar otro</BotonAviso>}
       </div>
+      {m ? null : <Ayuda datos={datos} />}
+    </>)
+  }
+
+  // ---------- paso 1 · Licencia (W15-1; en celular, adaptada con las medidas de W14) ----------
+  if (paso === 1 && lic) {
+    const app = datos?.app
+    const local = datos && app?.licencia_anual_local != null && datos.pais.moneda !== "usd" && datos.pais.moneda !== "usdt" ? ` · ≈ ${formatearPrecio(app.licencia_anual_local, datos.pais.moneda)}` : ""
+    return marco(<>
+      <Volver texto="Volver a Mi cuenta" onClick={() => nav(RUTAS.miCuenta)} m={m} />
+      <Pasos nombres={nombres} actual={1} m={m} />
+      <TituloPaso paso={1} de={4} titulo={titulo1} texto="Para Tecno, Infinix e itel. Con la licencia, esos procesos no te gastan saldo." m={m} />
+      {canceladoAfuera ? <Aviso tono="azul" icono={Info} titulo="Ese pago se canceló" m={m}>Lo cancelaste en otra pestaña o ventana. Podés empezar otro acá.</Aviso> : null}
+      <div className="flex w-full flex-col items-start" style={{ gap: m ? 12 : 16, padding: m ? 18 : 28, background: "#0f1a2e", border: "2px solid #3b82f6", borderRadius: 16 }}>
+        {!datos ? <span className="block animate-pulse rounded-md" style={{ width: 150, height: m ? 41 : 53, background: C.border }} /> : app?.licencia_anual_usd != null ? (
+          <div className="flex flex-wrap items-end whitespace-nowrap" style={{ columnGap: m ? 8 : 10 }}>
+            <span style={{ color: "#fff", fontWeight: 700, fontSize: m ? 34 : 44, lineHeight: m ? "41px" : "53px" }}>US$ {app.licencia_anual_usd}</span>
+            <span style={{ color: C.muted, fontSize: m ? 14 : 16, lineHeight: m ? "17px" : "19px" }}>por 1 año{local}</span>
+          </div>
+        ) : null}
+        {LICENCIA_TRAE.map((t) => (
+          <div key={t} className="flex w-full items-start gap-2.5">
+            <Check className="size-[18px] shrink-0" style={{ color: "#4ade80" }} />
+            <p className="min-w-0 flex-1" style={{ color: "#d1d5db", fontSize: m ? 14 : 15, lineHeight: m ? "20px" : "22px" }}>{t}</p>
+          </div>
+        ))}
+      </div>
+      <BotonGrande onClick={() => irA(2)} m={m}>Seguir con la licencia</BotonGrande>
       {m ? null : <Ayuda datos={datos} />}
     </>)
   }
@@ -406,7 +492,7 @@ export function RecargarPage() {
     }
     return marco(<>
       <Volver texto="Volver a Mi cuenta" onClick={() => nav(RUTAS.miCuenta)} m={m} />
-      <Pasos nombres={NOMBRES} actual={1} m={m} />
+      <Pasos nombres={nombres} actual={1} m={m} />
       <TituloPaso paso={1} de={4} titulo="¿Cuánto querés cargar?" texto={m ? undefined : "Elegí un monto. El saldo sirve para alquiler, Xiaomi FRP, Cuenta MI y Security Plugin."} m={m} />
       {canceladoAfuera ? <Aviso tono="azul" icono={Info} titulo="Ese pago se canceló" m={m}>Lo cancelaste en otra pestaña o ventana. Podés empezar otro acá.</Aviso> : null}
       {m ? (
@@ -433,18 +519,23 @@ export function RecargarPage() {
   }
 
   // ---------- paso 2 · Cómo pagás ----------
-  if (paso === 2 && montoValido(monto) && monto === montoUrl) {
+  if (paso === 2 && (lic || (montoValido(monto) && monto === montoUrl))) {
     const nombrePais = PAISES.find((p) => p.codigo === pais)?.nombre.replace(/ \(.*\)$/, "") ?? ""
-    const paga = (met: Metodo) => precioDe(datos, met, monto)
+    const paga = (met: Metodo) => precioDe(datos, met, lic ? null : monto)
+    const precioLic = datos?.app?.licencia_anual_usd
     return marco(<>
       <Volver texto={m ? "Volver" : "Volver al paso anterior"} onClick={() => irA(1)} m={m} />
-      <Pasos nombres={NOMBRES} actual={2} m={m} />
+      <Pasos nombres={nombres} actual={2} m={m} />
       <TituloPaso paso={2} de={4} titulo="¿Cómo vas a pagar?" texto={m || !metodos.includes("yape") ? undefined : `Tocá el que usás. Te mostramos solo los que funcionan en ${nombrePais}.`} m={m} />
       <div className="flex w-full items-center" style={{ gap: m ? 8 : 10, padding: m ? "12px 13px" : "12px 16px", background: C.cardAlt, border: `1px solid ${C.borderSoft}`, borderRadius: 10 }}>
         <Wallet className={m ? "size-[15px]" : "size-4"} style={{ color: C.muted2 }} />
-        <span style={{ color: C.muted2, fontSize: m ? 14 : 15, lineHeight: m ? "17px" : "18px" }}>Vas a cargar <b style={{ color: C.title, fontWeight: 700 }}>{usd(monto)}</b></span>
-        <div className="flex-1" />
-        <button type="button" onClick={() => irA(1)} style={{ color: C.link, fontWeight: 500, fontSize: m ? 13 : 14, lineHeight: m ? "16px" : "17px" }}>Cambiar</button>
+        {lic ? (
+          <span style={{ color: C.muted2, fontSize: m ? 14 : 15, lineHeight: m ? "17px" : "18px" }}>Vas a comprar la licencia anual{precioLic != null ? <> · <b style={{ color: C.title, fontWeight: 700 }}>{usd(precioLic)}</b></> : null}</span>
+        ) : <>
+          <span style={{ color: C.muted2, fontSize: m ? 14 : 15, lineHeight: m ? "17px" : "18px" }}>Vas a cargar <b style={{ color: C.title, fontWeight: 700 }}>{usd(monto ?? 0)}</b></span>
+          <div className="flex-1" />
+          <button type="button" onClick={() => irA(1)} style={{ color: C.link, fontWeight: 500, fontSize: m ? 13 : 14, lineHeight: m ? "16px" : "17px" }}>Cambiar</button>
+        </>}
       </div>
       {metodos.includes("yape") ? null : <Aviso tono="azul" icono={Info} titulo="En tu país, por ahora, con Binance" m={m}>Yape es solo para Perú. Si estás en Perú, cambiá el país arriba.</Aviso>}
       <div role="radiogroup" aria-label="Forma de pago" className="flex w-full flex-col" style={{ gap: m ? 18 : 14 }}>
@@ -493,13 +584,13 @@ export function RecargarPage() {
   }
 
   // ---------- paso 3 · Pagá ----------
-  if (!pago) return marco(null) // el efecto de arriba ya lo está acomodando
+  if (!pago || pago.producto !== producto) return marco(null) // el efecto de arriba ya lo está acomodando
   const yape = pago.metodo === "yape"
   const cabeza = <>
     <Volver texto={m ? "Volver" : "Volver al paso anterior"} onClick={() => irA(2, pago.creditos)} m={m} />
-    <Pasos nombres={NOMBRES} actual={3} m={m} />
+    <Pasos nombres={nombres} actual={3} m={m} />
   </>
-  const linea = `${pagoTexto(pago.metodo, pago.monto)} → se cargan ${usd(pago.creditos)}`
+  const linea = `${pagoTexto(pago.metodo, pago.monto)} → ${lic ? "licencia anual" : `se cargan ${usd(pago.creditos)}`}`
   const metodoLinea = (
     <div className="flex items-center" style={{ gap: m ? 10 : 12 }}>
       <Logo metodo={pago.metodo} lado={m ? 34 : 40} radio={m ? 7 : 9} />
@@ -632,10 +723,18 @@ export function RecargarPage() {
   </>)
 }
 
-/** Lo que va a pagar con esa forma, según los precios en vivo: "S/ 70.00" / "20.00 USDT". null = todavía no se sabe. */
-function precioDe(datos: Precios | null, metodo: Metodo, monto: number): string | null {
+/**
+ * Lo que va a pagar con esa forma, según los precios en vivo: "S/ 70.00" / "20.00 USDT". `monto` null = la
+ * licencia anual. Devuelve null si todavía no se sabe. Es orientativo: el monto exacto lo da el servidor en el paso 3.
+ */
+function precioDe(datos: Precios | null, metodo: Metodo, monto: number | null): string | null {
   const app = datos?.app
   if (!app) return null
-  if (metodo === "yape") return datos.pais.moneda === "pen" && app.credito_local != null ? `S/ ${dosDecimales(monto * app.credito_local)}` : null
-  return app.credito_usd != null ? `${dosDecimales(monto * app.credito_usd)} USDT` : null
+  const de = (unidad: number | null, licencia: number | null) => (monto == null ? licencia : unidad != null ? monto * unidad : null)
+  if (metodo === "yape") {
+    const soles = de(app.credito_local, app.licencia_anual_local)
+    return datos.pais.moneda === "pen" && soles != null ? `S/ ${dosDecimales(soles)}` : null
+  }
+  const usdt = de(app.credito_usd, app.licencia_anual_usd)
+  return usdt != null ? `${dosDecimales(usdt)} USDT` : null
 }

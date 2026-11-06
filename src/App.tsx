@@ -25,6 +25,9 @@ const HistorialPage = lazy(() =>
 const RecargarPage = lazy(() =>
   import("@/pages/RecargarPage").then((m) => ({ default: m.RecargarPage }))
 )
+const LicenciaPage = lazy(() =>
+  import("@/pages/RecargarPage").then((m) => ({ default: m.LicenciaPage }))
+)
 const NoExistePage = lazy(() =>
   import("@/pages/NoExistePage").then((m) => ({ default: m.NoExistePage }))
 )
@@ -83,6 +86,7 @@ export default function App() {
             <Route path="mi-cuenta" element={pagina(<MiCuentaPage />)} />
             <Route path="mi-cuenta/historial" element={pagina(<HistorialPage />)} />
             <Route path="mi-cuenta/recargar" element={pagina(<RecargarPage />)} />
+            <Route path="mi-cuenta/licencia" element={pagina(<LicenciaPage />)} />
             {/* Dirección vieja: la landing GSM ahora es el Inicio (regla W8 #13). */}
             <Route path="gsm" element={<Navigate to="/" replace />} />
             {VISTA_PREVIA.map(([vieja, nueva]) => <Route key={vieja} path={vieja} element={<Navigate to={nueva} replace />} />)}

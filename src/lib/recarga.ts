@@ -4,7 +4,7 @@
  * Reglas (W8 1066:2 y W14-E 1133:103): mínimo US$ 10, máximo US$ 5000, montos enteros; el campo de
  * "Otro monto" vacío no muestra 0 ni admite ceros a la izquierda. Yape es solo para Perú.
  */
-import type { CobroActivo } from "@/lib/cuenta"
+import type { CobroActivo, ResumenCliente } from "@/lib/cuenta"
 
 export const MONTO_MIN = 10
 export const MONTO_MAX = 5000
@@ -100,4 +100,30 @@ export function pagoDeActivo(a: CobroActivo): Pago {
 export function restan(pago: Pick<Pago, "venceEn">, ahora = Date.now()): number {
   const fin = new Date(pago.venceEn).getTime()
   return Number.isFinite(fin) ? Math.max(0, Math.round((fin - ahora) / 1000)) : 0
+}
+
+// ---------- Licencia anual (W15) ----------
+
+type Licencia = ResumenCliente["licencia"]
+
+/** "2027-11-04T05:00:00Z" → "04/11/2027". */
+export const diaMesAnio = (fecha: string) => fecha.slice(0, 10).split("-").reverse().join("/")
+
+/** Hoy en el reloj del cliente, "2026-11-06". */
+export function hoyLocal(ahora = new Date()): string {
+  return `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, "0")}-${String(ahora.getDate()).padStart(2, "0")}`
+}
+
+/** ¿Tiene una licencia vigente hoy? Entonces comprar es renovar. */
+export function licenciaVigente(l: Licencia, hoy: string): boolean {
+  return !!l && l.estado === "vigente" && l.fecha_fin.slice(0, 10) >= hoy
+}
+
+/**
+ * Después de pagar: ¿la licencia que devuelve el servidor ya es la nueva? Tiene que estar vigente y vencer
+ * más tarde que la que tenía al entrar: al renovar se suma un año, así que ver "vigente" solo no alcanza.
+ */
+export function licenciaActivada(antes: Licencia, ahora: Licencia, hoy: string): boolean {
+  if (!ahora || !licenciaVigente(ahora, hoy)) return false
+  return !antes || ahora.fecha_fin.slice(0, 10) > antes.fecha_fin.slice(0, 10)
 }
