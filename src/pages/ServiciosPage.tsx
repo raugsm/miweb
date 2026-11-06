@@ -279,10 +279,10 @@ export function ServiciosPage() {
   const cargandoSinDatos = cargando && !vista
 
   return (
-    <div className="min-h-screen overflow-x-hidden" style={{ background: C.page, color: C.text, fontFamily: "Inter, system-ui, sans-serif", lineHeight: "normal" }}>
-      <div className="hidden lg:block">
+    <div className="flex min-h-screen flex-col overflow-x-hidden" style={{ background: C.page, color: C.text, fontFamily: "Inter, system-ui, sans-serif", lineHeight: "normal" }}>
+      <div className="hidden flex-1 flex-col lg:flex">
         <HeaderDesktop datos={vista} active="Servicios" />
-        <main>
+        <main className="flex-1">
           <Cont className="pb-12 pt-11">
             <h1 style={{ color: C.title, fontWeight: 700, fontSize: 41, lineHeight: 1 }}>Servicios</h1>
             <p className="mt-3" style={{ color: C.muted2, fontSize: 18, lineHeight: "22px" }}>Alquilá herramientas o pedí un servicio. Se paga y se usa en la app AriTool.</p>
@@ -317,10 +317,10 @@ export function ServiciosPage() {
         <PieDesktop />
       </div>
 
-      <div className="lg:hidden">
+      <div className="flex flex-1 flex-col lg:hidden">
         <HeaderMobile onMenu={() => setMenuAbierto(true)} />
         <FranjaSoporte datos={vista} />
-        <main>
+        <main className="flex-1">
           <section className="px-5 pb-6 pt-6">
             <h1 style={{ color: C.title, fontWeight: 700, fontSize: 26, lineHeight: "31px" }}>Servicios</h1>
             <div className="mt-4"><CampoBusqueda valor={consulta} onCambio={setConsulta} movil /></div>
