@@ -391,7 +391,7 @@ export function RecargaPanel({
         setBloqueado(true)
         setValidandoTipo("bloqueado")
         setAviso(
-          `Demasiados códigos incorrectos. Por seguridad pausamos los intentos ${min} min. Escribinos a soporte con tu comprobante y lo acreditamos a mano.`
+          `Demasiados códigos incorrectos. Por seguridad pausamos los intentos ${min} min. Escribinos a soporte con tu comprobante y ${esLicencia ? "Soporte la activa" : "lo acreditamos a mano"}.`
         )
         setFase("validando")
         return
@@ -832,7 +832,7 @@ export function RecargaPanel({
                 <h3 className="mt-4 text-lg font-semibold tracking-tight text-foreground">Intentos pausados</h3>
                 <p className="mt-2 text-sm leading-relaxed text-foreground/65">
                   Probaste con varios códigos. Por seguridad pausamos los intentos un rato. Si ya pagaste,
-                  escribinos a soporte y lo acreditamos a mano.
+                  escribinos a soporte y {esLicencia ? "Soporte la activa" : "lo acreditamos a mano"}.
                 </p>
               </>
             ) : (

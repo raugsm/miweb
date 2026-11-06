@@ -604,7 +604,7 @@ function PasoAPaso({ producto }: { producto: Producto }) {
     return marco(<>
       {cabeza}
       <TituloPaso paso={3} de={4} titulo={yape ? "Pagá con Yape" : "Pagá con Binance Pay"} m={m} />
-      <Aviso tono="ambar" icono={Timer} titulo="Se terminó el tiempo para pagar" m={m}>{lic ? "Si ya pagaste el monto exacto, igual se activa y la vas a ver en Mi cuenta." : "Si ya pagaste el monto exacto, igual se carga y lo vas a ver en tu historial."} Si no pagaste, empezá de nuevo.</Aviso>
+      <Aviso tono="ambar" icono={Timer} titulo="Se terminó el tiempo para pagar" m={m}>{lic ? "Si ya pagaste el monto exacto, se va a activar igual y la vas a ver en Mi cuenta." : "Si ya pagaste el monto exacto, igual se carga y lo vas a ver en tu historial."} Si no pagaste, empezá de nuevo.</Aviso>
       <div className="flex w-full flex-col gap-3.5">
         <BotonAviso onClick={() => { setPago(null); limpiarPaso3(); irA(1) }}>Empezar de nuevo</BotonAviso>
         <BotonAviso secundario onClick={() => nav(lic ? RUTAS.miCuenta : RUTAS.historial)}>{lic ? "Volver a Mi cuenta" : "Ver mi historial"}</BotonAviso>
@@ -635,7 +635,7 @@ function PasoAPaso({ producto }: { producto: Producto }) {
         <BotonWhatsApp datos={datos} />
       </> : null}
       {pausa ? <>
-        <Aviso tono="rojo" icono={Lock} titulo="Pausamos los intentos un rato" m={m}>Por seguridad, después de 3 códigos que no coinciden esperamos {estadoCodigo.minutos} minutos. Si ya pagaste, escribinos y {lic ? "la activamos" : "lo cargamos"} a mano.</Aviso>
+        <Aviso tono="rojo" icono={Lock} titulo="Pausamos los intentos un rato" m={m}>Por seguridad, después de 3 códigos que no coinciden esperamos {estadoCodigo.minutos} minutos. Si ya pagaste, escribinos y {lic ? "Soporte la activa" : "lo cargamos a mano"}.</Aviso>
         <BotonWhatsApp datos={datos} />
       </> : null}
     </>
