@@ -152,10 +152,11 @@ export function BotonAviso({ children, onClick, ocupado, secundario }: { childre
   )
 }
 
-/** "WhatsApp +51 935 186 037" (W14-E, demora y pausa). */
-export function BotonWhatsApp({ datos }: { datos: Precios | null }) {
-  const href = datos?.soporte.whatsapp ?? WA
-  const numero = href.replace(/\D/g, "").replace(/^(\d{2})(\d{3})(\d{3})(\d{3})$/, "+$1 $2 $3 $4")
+/** "WhatsApp +51 935 186 037" (W14-E, demora y pausa). `mensaje`: lo que ya va escrito al abrir el chat. */
+export function BotonWhatsApp({ datos, mensaje }: { datos: Precios | null; mensaje?: string }) {
+  const base = datos?.soporte.whatsapp ?? WA
+  const numero = base.split("?")[0].replace(/\D/g, "").replace(/^(\d{2})(\d{3})(\d{3})(\d{3})$/, "+$1 $2 $3 $4")
+  const href = mensaje ? `${base.split("?")[0]}?text=${encodeURIComponent(mensaje)}` : base
   return (
     <a href={href} target="_blank" rel="noreferrer" className="flex w-full items-center justify-center gap-2" style={{ background: "#0b1a14", border: "1px solid #1f5b3a", borderRadius: 11, padding: "14px 0", color: C.text, fontWeight: 600, fontSize: 15, lineHeight: "18px" }}>
       <IconoWA className="size-[18px]" style={{ color: C.waGreen }} />WhatsApp {numero}

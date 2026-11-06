@@ -382,7 +382,7 @@ function PasoAPaso({ producto }: { producto: Producto }) {
 
   // =============================== dibujo ===============================
   const sinConexion = fallo === "red" ? <Aviso tono="ambar" icono={WifiOff} titulo="Sin conexión" m={m}>Revisá tu internet y probá de nuevo.</Aviso> : null
-  const confirmando = <Aviso tono="azul" icono={LoaderCircle} gira titulo="Estamos confirmando tu pago" m={m}>Se carga solo apenas llegue. Puede tardar un par de minutos. Podés cerrar esta página.</Aviso>
+  const confirmando = <Aviso tono="azul" icono={LoaderCircle} gira titulo="Estamos confirmando tu pago" m={m}>{lic ? "Se activa sola apenas llegue tu pago." : "Se carga solo apenas llegue."} Puede tardar un par de minutos. Podés cerrar esta página.</Aviso>
   const marco = (hijos: React.ReactNode) => <PaginaPasos datos={datos} m={m}>{hijos}</PaginaPasos>
   const titulo1 = !lic ? "¿Cuánto querés cargar?" : licenciaVigente(licAntes, hoyLocal()) ? "Renovar licencia anual" : "Licencia anual"
 
@@ -410,7 +410,8 @@ function PasoAPaso({ producto }: { producto: Producto }) {
       <Pasos nombres={nombres} actual={3} m={m} />
       <TituloPaso paso={3} de={4} titulo={sinActivar.metodo === "yape" ? "Pagá con Yape" : "Pagá con Binance Pay"} m={m} />
       {confirmando}
-      <BotonWhatsApp datos={datos} />
+      {sinActivar.metodo === "binance" && sinActivar.codigo ? <p style={{ color: C.muted2, fontSize: m ? 14 : 15, lineHeight: m ? "17px" : "18px" }}>Código de tu pago: <b style={{ color: C.title, fontWeight: 700 }}>{sinActivar.codigo}</b></p> : null}
+      <BotonWhatsApp datos={datos} mensaje={`Hola, necesito ayuda con mi pago de la licencia anual.${sinActivar.codigo ? ` Código: ${sinActivar.codigo}` : ""}`} />
       {m ? null : <Ayuda datos={datos} />}
     </>)
   }
@@ -603,10 +604,10 @@ function PasoAPaso({ producto }: { producto: Producto }) {
     return marco(<>
       {cabeza}
       <TituloPaso paso={3} de={4} titulo={yape ? "Pagá con Yape" : "Pagá con Binance Pay"} m={m} />
-      <Aviso tono="ambar" icono={Timer} titulo="Se terminó el tiempo para pagar" m={m}>Si ya pagaste el monto exacto, igual se carga y lo vas a ver en tu historial. Si no pagaste, empezá de nuevo.</Aviso>
+      <Aviso tono="ambar" icono={Timer} titulo="Se terminó el tiempo para pagar" m={m}>{lic ? "Si ya pagaste el monto exacto, igual se activa y la vas a ver en Mi cuenta." : "Si ya pagaste el monto exacto, igual se carga y lo vas a ver en tu historial."} Si no pagaste, empezá de nuevo.</Aviso>
       <div className="flex w-full flex-col gap-3.5">
         <BotonAviso onClick={() => { setPago(null); limpiarPaso3(); irA(1) }}>Empezar de nuevo</BotonAviso>
-        <BotonAviso secundario onClick={() => nav(RUTAS.historial)}>Ver mi historial</BotonAviso>
+        <BotonAviso secundario onClick={() => nav(lic ? RUTAS.miCuenta : RUTAS.historial)}>{lic ? "Volver a Mi cuenta" : "Ver mi historial"}</BotonAviso>
       </div>
       {m ? null : <Ayuda datos={datos} />}
     </>)
@@ -630,11 +631,11 @@ function PasoAPaso({ producto }: { producto: Producto }) {
       {estadoCodigo.tipo === "mal" ? <Aviso tono="rojo" icono={CircleAlert} titulo="Ese código no coincide" m={m}>Fijate el código de seguridad en tu comprobante de Yape.{estadoCodigo.quedan != null ? ` Te ${estadoCodigo.quedan === 1 ? "queda 1 intento" : `quedan ${estadoCodigo.quedan} intentos`}.` : ""}</Aviso> : null}
       {estadoCodigo.tipo === "confirmando" && !demora ? confirmando : null}
       {estadoCodigo.tipo === "confirmando" && demora ? <>
-        <Aviso tono="ambar" icono={Clock} titulo="Está tardando más de lo normal" m={m}>Si ya pagaste el monto exacto, se va a cargar igual. Si pasan 10 minutos y no aparece, escribinos.</Aviso>
+        <Aviso tono="ambar" icono={Clock} titulo="Está tardando más de lo normal" m={m}>Si ya pagaste el monto exacto, {lic ? "se va a activar" : "se va a cargar"} igual. Si pasan 10 minutos y no aparece, escribinos.</Aviso>
         <BotonWhatsApp datos={datos} />
       </> : null}
       {pausa ? <>
-        <Aviso tono="rojo" icono={Lock} titulo="Pausamos los intentos un rato" m={m}>Por seguridad, después de 3 códigos que no coinciden esperamos {estadoCodigo.minutos} minutos. Si ya pagaste, escribinos y lo cargamos a mano.</Aviso>
+        <Aviso tono="rojo" icono={Lock} titulo="Pausamos los intentos un rato" m={m}>Por seguridad, después de 3 códigos que no coinciden esperamos {estadoCodigo.minutos} minutos. Si ya pagaste, escribinos y {lic ? "la activamos" : "lo cargamos"} a mano.</Aviso>
         <BotonWhatsApp datos={datos} />
       </> : null}
     </>
@@ -661,7 +662,7 @@ function PasoAPaso({ producto }: { producto: Producto }) {
       )}
       <Instruccion n={2} titulo={m ? "Yapeá este monto exacto" : "Poné este monto exacto"} m={m}>
         <FilaCopiar etiqueta="Monto exacto" valor={`S/ ${pago.monto}`} copia={pago.monto} fuerte grande={m ? 26 : 28} m={m} />
-        {nota(m ? "Sin cambiar los centavos." : "Sin cambiar los centavos. Si ponés otro monto, no se carga solo.")}
+        {nota(m ? "Sin cambiar los centavos." : `Sin cambiar los centavos. Si ponés otro monto, ${lic ? "no se activa sola" : "no se carga solo"}.`)}
       </Instruccion>
       <Instruccion n={3} titulo={m ? "Volvé acá y poné el código" : "Escribí el código de seguridad de tu Yape"} m={m}>
         {nota(m ? "Son los 3 números de seguridad que te da Yape al pagar." : "Son 3 números. Te aparecen en Yape después de pagar.")}
@@ -681,7 +682,7 @@ function PasoAPaso({ producto }: { producto: Producto }) {
   // Binance Pay
   return marco(<>
     {cabeza}
-    <TituloPaso paso={3} de={4} titulo="Pagá con Binance Pay" texto={m ? undefined : "Hacé estos 3 pasos en Binance. Se carga solo apenas llegue."} m={m} />
+    <TituloPaso paso={3} de={4} titulo="Pagá con Binance Pay" texto={m ? undefined : `Hacé estos 3 pasos en Binance. ${lic ? "Se activa sola apenas llegue tu pago." : "Se carga solo apenas llegue."}`} m={m} />
     {metodoLinea}
     {m ? (
       <Instruccion n={1} titulo="En Binance: Pay → Enviar" m>
@@ -709,10 +710,10 @@ function PasoAPaso({ producto }: { producto: Producto }) {
     {enRevision ? confirmando : (
       <div role="status" className="flex w-full items-center gap-3" style={{ background: "#0f1a2e", border: "1px solid #1e3a5f", borderRadius: 12, padding: m ? 14 : 18 }}>
         <LoaderCircle className={`animate-spin ${m ? "size-[18px]" : "size-[22px]"}`} style={{ color: "#60a5fa" }} />
-        {m ? <span style={{ color: C.text, fontWeight: 600, fontSize: 14, lineHeight: "17px" }}>Esperando tu pago… se carga solo</span> : (
+        {m ? <span style={{ color: C.text, fontWeight: 600, fontSize: 14, lineHeight: "17px" }}>Esperando tu pago… {lic ? "se activa sola" : "se carga solo"}</span> : (
           <div className="flex flex-col gap-0.5">
             <span style={{ color: C.text, fontWeight: 700, fontSize: 16, lineHeight: "19px" }}>Esperando tu pago…</span>
-            <span style={{ color: C.muted2, fontSize: 13, lineHeight: "16px" }}>No hace falta tocar nada más: se carga solo.</span>
+            <span style={{ color: C.muted2, fontSize: 13, lineHeight: "16px" }}>No hace falta tocar nada más: {lic ? "se activa sola" : "se carga solo"}.</span>
           </div>
         )}
       </div>
