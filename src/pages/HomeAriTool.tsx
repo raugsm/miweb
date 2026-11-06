@@ -44,7 +44,7 @@ function VentanaApp({ u, arriba, trazo }: { u: string; arriba: string; trazo: nu
   return (
     <div className="absolute left-0 flex flex-col overflow-hidden" style={{ top: arriba, width: px(686), background: C.cardAlt, border: `${px(1)} solid ${C.borderAlt}`, borderRadius: px(12), boxShadow: `0 0 ${px(80)} rgba(59,130,246,0.18), 0 ${px(24)} ${px(60)} rgba(0,0,0,0.55)` }}>
       <div className="flex items-center" style={{ gap: px(8), padding: `${px(8)} ${px(12)}` }}>
-        <img src="/aritool-logo.png" alt="" style={{ width: px(16), height: px(16), borderRadius: px(4) }} />
+        <img src="/aritool-logo-192.webp" alt="" style={{ width: px(16), height: px(16), borderRadius: px(4) }} />
         <span style={{ color: C.muted2, fontWeight: 500, fontSize: px(12), lineHeight: px(15) }}>AriTool</span>
         <span className="flex-1" />
         <Minus strokeWidth={trazo} style={{ ...control, width: px(13), height: px(13) }} />
@@ -57,7 +57,7 @@ function VentanaApp({ u, arriba, trazo }: { u: string; arriba: string; trazo: nu
 }
 
 function Burbuja({ clave, izq, arriba, lado, sombra }: { clave: string; izq: string; arriba: string; lado: string; sombra: string }) {
-  return <img src={`/tools/${clave}.svg`} alt="" className="absolute rounded-full" style={{ left: izq, top: arriba, width: lado, height: lado, filter: `drop-shadow(${sombra})` }} draggable={false} />
+  return <img src={`/tools/${clave}.webp`} alt="" className="absolute rounded-full" style={{ left: izq, top: arriba, width: lado, height: lado, filter: `drop-shadow(${sombra})` }} draggable={false} />
 }
 
 function AppCompu() {

@@ -75,7 +75,7 @@ function VentanaW9() {
     <div className="relative mx-auto aspect-[1080/780] w-[1080px] max-w-full" style={{ containerType: "inline-size" }}>
       <div className="absolute left-0 top-0 overflow-hidden" style={{ width: px(1082), background: C.cardAlt, border: `${px(1)} solid ${C.borderAlt}`, borderRadius: px(12), boxShadow: `0 0 ${px(60)} rgba(0,0,0,0.55), 0 0 ${px(80)} rgba(59,130,246,0.18)` }}>
         <div className="flex items-center" style={{ gap: px(8), padding: `${px(9)} ${px(12)}` }}>
-          <img src="/aritool-logo.png" alt="" style={{ width: px(16), height: px(16), borderRadius: px(4) }} />
+          <img src="/aritool-logo-192.webp" alt="" style={{ width: px(16), height: px(16), borderRadius: px(4) }} />
           <span style={{ color: C.muted2, fontWeight: 500, fontSize: px(12), lineHeight: px(15) }}>AriTool</span>
           <div className="flex-1" />
           <Minus style={{ color: C.muted, width: px(13), height: px(13) }} />

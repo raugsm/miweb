@@ -47,6 +47,10 @@ const LegalPage = lazy(() =>
 const CuentaEstadosPreview = lazy(() =>
   import("@/pages/CuentaEstadosPreview").then((m) => ({ default: m.CuentaEstadosPreview }))
 )
+// PROTOTIPO (sin aprobar): Ingresar en compu con el emblema animado, para que Peter lo vea y decida.
+const IngresarPrototipoPage = lazy(() =>
+  import("@/pages/IngresarPrototipoPage").then((m) => ({ default: m.IngresarPrototipoPage }))
+)
 const PreviewIndex = lazy(() =>
   import("@/pages/PreviewIndex").then((m) => ({ default: m.PreviewIndex }))
 )
@@ -82,6 +86,7 @@ export default function App() {
             <Route path="gsm" element={<Navigate to="/" replace />} />
             {VISTA_PREVIA.map(([vieja, nueva]) => <Route key={vieja} path={vieja} element={<Navigate to={nueva} replace />} />)}
             <Route path="preview-cuenta-estados" element={pagina(<CuentaEstadosPreview />)} />
+            <Route path="preview-ingresar" element={pagina(<IngresarPrototipoPage />)} />
             <Route path="preview" element={pagina(<PreviewIndex />)} />
             <Route path="*" element={pagina(<NoExistePage />)} />
           </Route>

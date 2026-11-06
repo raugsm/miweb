@@ -28,7 +28,7 @@ export function PreviewIndex() {
     <div className="min-h-screen" style={{ background: C.page, color: C.text, fontFamily: "Inter, system-ui, sans-serif" }}>
       <header className="sticky top-0 z-10 flex flex-wrap items-center gap-3 border-b px-5 py-4 md:px-10" style={{ background: C.card, borderColor: C.border }}>
         <div className="flex items-center gap-2.5">
-          <img src="/aritool-logo.png" alt="" className="size-7" />
+          <img src="/aritool-logo-192.webp" alt="" className="size-7" />
           <span style={{ color: C.title, fontWeight: 700, fontSize: 18 }}>AriTool · vista previa (todo junto)</span>
         </div>
         <div className="flex-1" />

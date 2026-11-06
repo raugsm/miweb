@@ -12,6 +12,8 @@
  */
 import * as THREE from "three"
 
+import { GLYPH_CUT, GLYPH_FILLS, GLYPH_STROKES } from "@/components/hero/emblema"
+
 export type HeroSceneOptions = {
   canvas: HTMLCanvasElement
   /** La sección del hero: define el tamaño del lienzo. */
@@ -34,25 +36,14 @@ export type HeroScene = {
   destroy: () => void
 }
 
-// Trazos del isotipo AR (mismo dibujo que public/brand/favicon.svg).
-const GLYPH_FILLS = [
-  "M92 790L362 202H505L790 790H610L552 660H338L281 790Z",
-  "M508 202H790C887 202 933 274 896 363L854 463C832 516 790 544 728 548L897 790H699L548 562H473L531 428H712C742 428 765 414 776 388L790 354C805 319 785 292 744 292H467Z",
-]
-const GLYPH_CUT = "M414 368L365 520H498L447 368Z"
-const GLYPH_STROKES: [string, number][] = [
-  ["M506 202L366 520", 34],
-  ["M338 660H552", 38],
-  ["M548 562L699 790", 32],
-]
-
-const S = 512 // lienzo de muestreo
-const SPAN = 4.6 // 512 px del lienzo = SPAN unidades de mundo
-const FOV = 45
-const CAMZ = 8
+// Las piezas exportadas las usa también la escena de Ingresar (ingresar-scene.ts).
+export const S = 512 // lienzo de muestreo
+export const SPAN = 4.6 // 512 px del lienzo = SPAN unidades de mundo
+export const FOV = 45
+export const CAMZ = 8
 const TRACE_LEN = 2.0
 
-function drawGlyph(ctx: CanvasRenderingContext2D, k: number, fill: string | CanvasGradient) {
+export function drawGlyph(ctx: CanvasRenderingContext2D, k: number, fill: string | CanvasGradient) {
   ctx.setTransform(0.39 * k, 0, 0, 0.39 * k, 58 * k, 78 * k)
   ctx.fillStyle = fill
   for (const d of GLYPH_FILLS) ctx.fill(new Path2D(d))
@@ -67,7 +58,7 @@ function drawGlyph(ctx: CanvasRenderingContext2D, k: number, fill: string | Canv
   ctx.globalCompositeOperation = "source-over"
 }
 
-function canvas2d(size: number): [HTMLCanvasElement, CanvasRenderingContext2D] {
+export function canvas2d(size: number): [HTMLCanvasElement, CanvasRenderingContext2D] {
   const c = document.createElement("canvas")
   c.width = c.height = size
   const ctx = c.getContext("2d")
@@ -75,14 +66,14 @@ function canvas2d(size: number): [HTMLCanvasElement, CanvasRenderingContext2D] {
   return [c, ctx]
 }
 
-function srgbTexture(source: HTMLCanvasElement): THREE.CanvasTexture {
+export function srgbTexture(source: HTMLCanvasElement): THREE.CanvasTexture {
   const t = new THREE.CanvasTexture(source)
   t.colorSpace = THREE.SRGBColorSpace
   t.minFilter = THREE.LinearFilter
   return t
 }
 
-function spriteTexture(): THREE.CanvasTexture {
+export function spriteTexture(): THREE.CanvasTexture {
   const [c, x] = canvas2d(64)
   const r = x.createRadialGradient(32, 32, 0, 32, 32, 32)
   r.addColorStop(0, "rgba(255,255,255,1)")
@@ -95,11 +86,11 @@ function spriteTexture(): THREE.CanvasTexture {
 }
 
 /** Color sRGB (0..1) a lineal, para los vertex colors (Three trabaja en lineal). */
-const lin = (v: number) => Math.pow(v, 2.2)
-const ease = (x: number) => 1 - Math.pow(1 - x, 3)
-const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x)
+export const lin = (v: number) => Math.pow(v, 2.2)
+export const ease = (x: number) => 1 - Math.pow(1 - x, 3)
+export const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x)
 
-function hasWebGL(): boolean {
+export function hasWebGL(): boolean {
   try {
     const c = document.createElement("canvas")
     return !!(c.getContext("webgl2") || c.getContext("webgl"))

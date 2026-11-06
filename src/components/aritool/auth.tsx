@@ -5,7 +5,7 @@
  * estados para revisar contra el Figma); con ellos es el campo o el botón de verdad (pages/CuentaPage).
  */
 import { AlertCircle, Check, ChevronDown, Eye, EyeOff, type LucideIcon, X } from "lucide-react"
-import { useState } from "react"
+import { createContext, useContext, useState } from "react"
 import { Link } from "react-router-dom"
 
 import { Flag } from "@/components/Flag"
@@ -26,7 +26,21 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
   )
 }
 
-export function AuthCard({ children }: { children: React.ReactNode }) {
+/**
+ * Armado de la tarjeta. "clasico" es W11, la tarjeta centrada. "paneles" es W11-E (1172:424), la de la
+ * pantalla de dos paneles (pages/IngresarPrototipoPage): 480 de ancho, radio 20, sin logo y título de 30.
+ */
+export const EstiloAuth = createContext<"clasico" | "paneles">("clasico")
+
+/** `compacta`: en "paneles", la tarjeta larga de Crear cuenta (1178:6647) va más apretada para entrar en 900 de alto. */
+export function AuthCard({ children, compacta }: { children: React.ReactNode; compacta?: boolean }) {
+  if (useContext(EstiloAuth) === "paneles") {
+    return (
+      <div className={`flex w-[480px] max-w-full flex-col items-start px-10 ${compacta ? "gap-[14px] py-7" : "gap-[18px] py-9"}`} style={{ background: "rgba(10,17,32,0.92)", border: "1px solid #26345a", borderRadius: 20, boxShadow: "0px 18px 30px rgba(13,51,153,0.45)" }}>
+        {children}
+      </div>
+    )
+  }
   return (
     <div
       className="flex w-full max-w-[440px] flex-col items-start gap-[18px] px-5 py-6 lg:p-8"
@@ -38,9 +52,17 @@ export function AuthCard({ children }: { children: React.ReactNode }) {
 }
 
 export function CabezaAuth({ titulo, texto }: { titulo: string; texto?: string }) {
+  if (useContext(EstiloAuth) === "paneles") {
+    return (
+      <div className="flex w-full flex-col items-start gap-2">
+        <div style={{ color: C.title, fontWeight: 700, fontSize: 30, lineHeight: "36px" }}>{titulo}</div>
+        {texto ? <div className="w-full" style={{ color: C.muted, fontSize: 14, lineHeight: "20px" }}>{texto}</div> : null}
+      </div>
+    )
+  }
   return (
     <div className="flex w-full flex-col items-start gap-2">
-      <img src="/aritool-logo.png" alt="AriTool" className="size-11 object-contain" />
+      <img src="/aritool-logo-192.webp" alt="AriTool" className="size-11 object-contain" />
       <div style={{ color: C.title, fontWeight: 700, fontSize: 24 }}>{titulo}</div>
       {texto ? <div className="w-full" style={{ color: C.muted, fontSize: 14, lineHeight: "20px" }}>{texto}</div> : null}
     </div>

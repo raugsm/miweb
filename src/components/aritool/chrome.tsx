@@ -81,16 +81,18 @@ export function IconoWA({ className, style }: { className?: string; style?: Reac
 export function LogoAriCaja({ lado, radio }: { lado: number; radio: number }) {
   return (
     <span className="relative block shrink-0 overflow-hidden" style={{ width: lado, height: lado, borderRadius: radio, background: C.iconBg, border: `1px solid ${C.borderAlt}` }}>
-      <img src="/aritool-logo.png" alt="" className="absolute left-1/2 top-1/2 max-w-none -translate-x-1/2 -translate-y-1/2 object-contain" style={{ width: lado, height: lado }} />
+      <img src="/aritool-logo-192.webp" alt="" className="absolute left-1/2 top-1/2 max-w-none -translate-x-1/2 -translate-y-1/2 object-contain" style={{ width: lado, height: lado }} />
     </span>
   )
 }
 
+// Logos de herramientas: WebP de 144 × 144 (5 a 10 KB cada uno). Salen de los SVG de fuentes/tools, que
+// pesan hasta 2.2 MB y por eso no se publican; se regeneran con fuentes/tools/logos_webp.py.
 const ICONOS_OK = new Set(["android_multi_tool", "dft_pro", "tsm_tool_pro", "unlock_tool", "ts_tool", "tr_tools_pro"])
 
 export function LogoTool({ clave, size = 52, apagado = false }: { clave: string; size?: number; apagado?: boolean }) {
   if (ICONOS_OK.has(clave)) {
-    return <img src={`/tools/${clave}.svg`} alt="" className={`shrink-0 rounded-full object-cover ${apagado ? "opacity-45" : ""}`} style={{ width: size, height: size }} />
+    return <img src={`/tools/${clave}.webp`} alt="" className={`shrink-0 rounded-full object-cover ${apagado ? "opacity-45" : ""}`} style={{ width: size, height: size }} />
   }
   return <div aria-hidden="true" className="shrink-0 rounded-full" style={{ width: size, height: size, background: C.border, opacity: apagado ? 0.6 : 1 }} />
 }
@@ -203,7 +205,7 @@ export function HeaderDesktop({ datos, active }: { datos: Precios | null; active
     <header className="sticky top-0 z-40 backdrop-blur" style={{ borderBottom: `1px solid ${C.border}`, background: `${C.page}f2` }}>
       <Cont className="flex items-center py-[18px]">
         <Link to={RUTAS.inicio} className="flex shrink-0 items-center gap-2.5">
-          <img src="/aritool-logo.png" alt="AriTool" className="size-[38px] rounded-lg" />
+          <img src="/aritool-logo-192.webp" alt="AriTool" className="size-[38px] rounded-lg" />
           <span style={{ color: C.title, fontWeight: 700, fontSize: 19 }}>AriTool</span>
         </Link>
         <nav className="ml-5 flex items-center gap-4 xl:ml-9 xl:gap-7">
@@ -233,7 +235,7 @@ export function PieDesktop() {
     <footer style={{ borderTop: `1px solid ${C.border}` }}>
       <Cont className="flex items-center gap-7 py-7">
         <div className="flex items-center gap-2.5">
-          <img src="/aritool-logo.png" alt="" className="size-6 rounded-md" />
+          <img src="/aritool-logo-192.webp" alt="" className="size-6 rounded-md" />
           <span style={{ color: C.text, fontWeight: 700, fontSize: 15 }}>AriTool</span>
           <span style={{ color: C.faint, fontSize: 13 }}>© 2026</span>
         </div>
@@ -249,7 +251,7 @@ export function HeaderMobile({ onMenu, mostrarIngresar = true }: { onMenu: () =>
   return (
     <header className="sticky top-0 z-40" style={{ borderBottom: `1px solid ${C.border}`, background: `${C.page}f2` }}>
       <div className="flex items-center px-5 py-[14px]">
-        <Link to={RUTAS.inicio} className="flex items-center gap-2.5"><img src="/aritool-logo.png" alt="AriTool" className="size-7 rounded-lg" /><span style={{ color: C.title, fontWeight: 700, fontSize: 17 }}>AriTool</span></Link>
+        <Link to={RUTAS.inicio} className="flex items-center gap-2.5"><img src="/aritool-logo-192.webp" alt="AriTool" className="size-7 rounded-lg" /><span style={{ color: C.title, fontWeight: 700, fontSize: 17 }}>AriTool</span></Link>
         <div className="flex-1" />
         {mostrarIngresar ? <CuentaBarra movil /> : null}
         <button type="button" aria-label="Buscar" onClick={() => setBuscando(true)} className="-my-1 -mr-1 ml-[22px] p-1"><Search className="size-[22px]" style={{ color: C.muted2 }} /></button>
@@ -275,7 +277,7 @@ export function PieMobile() {
     <footer style={{ borderTop: `1px solid ${C.border}` }}>
       <div className="p-5">
         <div className="flex items-center gap-2">
-          <img src="/aritool-logo.png" alt="" className="size-[22px] rounded-md" />
+          <img src="/aritool-logo-192.webp" alt="" className="size-[22px] rounded-md" />
           <span style={{ color: C.text, fontWeight: 700, fontSize: 14 }}>AriTool</span>
           <span style={{ color: C.faint, fontSize: 12 }}>© 2026</span>
         </div>
@@ -301,7 +303,7 @@ export function MenuMobile({ datos, onClose }: { datos: Precios | null; onClose:
   return (
     <div className="fixed inset-0 z-50 flex flex-col lg:hidden" style={{ background: C.page }}>
       <div className="flex h-[57px] items-center justify-between px-5" style={{ borderBottom: `1px solid ${C.border}` }}>
-        <div className="flex items-center gap-2.5"><img src="/aritool-logo.png" alt="" className="size-7 rounded-lg" /><span style={{ color: C.title, fontWeight: 700, fontSize: 17 }}>AriTool</span></div>
+        <div className="flex items-center gap-2.5"><img src="/aritool-logo-192.webp" alt="" className="size-7 rounded-lg" /><span style={{ color: C.title, fontWeight: 700, fontSize: 17 }}>AriTool</span></div>
         <button type="button" aria-label="Cerrar" onClick={onClose} className="p-1"><X className="size-[22px]" style={{ color: C.text }} /></button>
       </div>
       <nav className="flex flex-col px-5 pt-2">

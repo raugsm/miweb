@@ -66,7 +66,8 @@ function ErrorLinea({ texto }: { texto: string }) {
   )
 }
 
-function Cuenta({ whatsapp }: { whatsapp: string }) {
+/** El flujo real de la cuenta. `alEntrar` (opcional) corre justo antes de pasar a Mi cuenta. */
+export function Cuenta({ whatsapp, alEntrar }: { whatsapp: string; alEntrar?: () => Promise<void> | void }) {
   const nav = useNavigate()
   const { pais: paisSitio } = usePais()
   const [vista, setVista] = useState<Vista>("cargando")
@@ -127,7 +128,8 @@ function Cuenta({ whatsapp }: { whatsapp: string }) {
     setVista(v)
   }
   // Al entrar va a Mi cuenta, o a la página de la cuenta desde la que lo mandaron (sesión vencida).
-  const irAMiCuenta = () => {
+  const irAMiCuenta = async () => {
+    await alEntrar?.()
     const volver = new URLSearchParams(window.location.search).get("volver")
     nav(volver && volver.startsWith(RUTAS.miCuenta) ? volver : RUTAS.miCuenta)
   }
@@ -340,7 +342,7 @@ function Cuenta({ whatsapp }: { whatsapp: string }) {
 
   if (vista === "crear") {
     return (
-      <AuthCard>
+      <AuthCard compacta>
         <CabezaAuth titulo="Creá tu cuenta" texto="Te sirve para la web y para la app AriTool." />
         {banner}
         <Campo id="nombre" label="Nombre de usuario" autoComplete="nickname" autoFocus valor={nombre} error={errores.nombre} onChange={setNombre} />

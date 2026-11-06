@@ -4,14 +4,15 @@
     <meta charset="UTF-8" />
     <!-- Icono de pestaña: el logo AR de AriadGSM (ariad-logo.webp) para
          navegadores modernos, con el AR cuadrado sobre fondo oscuro como
-         respaldo (Safari y navegadores sin webp). -->
+         respaldo (Safari y navegadores sin webp). El respaldo va a 180 px:
+         el original de 1024 px pesa 510 KB y el navegador lo bajaba entero. -->
     <link rel="icon" type="image/webp" href="/ariad-logo.webp" />
-    <link rel="icon" type="image/png" href="/brand/profile-ar-dark.png" />
-    <link rel="apple-touch-icon" href="/brand/profile-ar-dark.png" />
+    <link rel="icon" type="image/png" href="/brand/profile-ar-dark-180.png" />
+    <link rel="apple-touch-icon" href="/brand/profile-ar-dark-180.png" />
     <link rel="manifest" href="/brand/site.webmanifest" />
     <meta name="color-scheme" content="dark light" />
-    <link rel="preload" href="/fonts/montserrat-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
-    <link rel="preload" href="/fonts/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <!-- Sin precarga de tipografías: la web AriTool usa Inter, y Montserrat y Geist
+         (del panel anterior) se bajan solas en las páginas que todavía las usan. -->
     <!-- El mapa de partículas del fondo es decorativo y lo carga su componente
          al montarse; precargarlo solo disparaba el aviso "preload sin usar". -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
