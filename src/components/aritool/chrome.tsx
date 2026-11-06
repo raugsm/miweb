@@ -28,10 +28,9 @@ export const RUTAS = {
   historial: "/mi-cuenta/historial",
   alquiler: "/#alquiler",
   servicios: "/#servicios",
-  // Recargar (W14) y Licencia (W15) todavía no están hechas: mientras tanto van al panel de la web
-  // anterior, que usa la misma sesión. Cuando existan, apuntan a sus páginas nuevas y /panel pasa a
-  // llevar a Mi cuenta (regla W8 #13).
-  recargar: "/panel",
+  recargar: "/mi-cuenta/recargar",
+  // Licencia (W15) todavía no está hecha: mientras tanto va al panel de la web anterior, que usa la
+  // misma sesión. Cuando exista, apunta a su página nueva y /panel pasa a llevar a Mi cuenta (regla W8 #13).
   licencia: "/panel",
   panelViejo: "/panel",
 }

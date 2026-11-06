@@ -189,7 +189,7 @@ function CuerpoCompu({ carga, filas, whatsapp, minimo, precioLicencia, salir, re
                     <p style={{ color: "#fff", fontWeight: 700, fontSize: 52, lineHeight: "63px" }}>{usd(saldo)}</p>
                     {aviso ?? <p style={{ color: C.muted2, fontSize: 14, lineHeight: "17px" }}>Sirve para alquiler, Xiaomi FRP, Cuenta MI y Security Plugin.</p>}
                     <div className="flex items-center gap-3.5 pt-2">
-                      <Link to={RUTAS.recargar} className="flex shrink-0 items-center gap-2 text-white" style={{ background: C.blue, borderRadius: 10, padding: "13px 20px" }}>
+                      <Link to={pago ? `${RUTAS.recargar}?paso=3` : RUTAS.recargar} className="flex shrink-0 items-center gap-2 text-white" style={{ background: C.blue, borderRadius: 10, padding: "13px 20px" }}>
                         {pago ? null : <Wallet className="size-[17px]" />}
                         <span style={{ fontWeight: 600, fontSize: 15, lineHeight: "18px" }}>{pago ? "Ver mi pago" : "Recargar saldo"}</span>
                       </Link>
@@ -260,7 +260,7 @@ function CuerpoCelular({ carga, filas, whatsapp, minimo, salir, reintentar }: Cu
                   <p style={{ color: C.link, fontWeight: 700, fontSize: 11, lineHeight: "13px", letterSpacing: "1.2px" }}>TU SALDO</p>
                   <p style={{ color: "#fff", fontWeight: 700, fontSize: 40, lineHeight: "48px" }}>{usd(saldo)}</p>
                   {aviso ?? <p className="w-full" style={{ color: C.muted2, fontSize: 13, lineHeight: "18px" }}>Sirve para alquiler, Xiaomi FRP, Cuenta MI y Security Plugin.</p>}
-                  <Link to={RUTAS.recargar} className="flex w-full items-center justify-center gap-2 text-white" style={{ background: C.blue, borderRadius: 10, padding: "13px 0" }}>
+                  <Link to={pago ? `${RUTAS.recargar}?paso=3` : RUTAS.recargar} className="flex w-full items-center justify-center gap-2 text-white" style={{ background: C.blue, borderRadius: 10, padding: "13px 0" }}>
                     {pago ? null : <Wallet className="size-[17px]" />}
                     <span style={{ fontWeight: 600, fontSize: 15, lineHeight: "18px" }}>{pago ? "Ver mi pago" : "Recargar saldo"}</span>
                   </Link>

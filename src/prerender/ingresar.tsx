@@ -16,8 +16,8 @@ import { ReleaseProvider } from "@/lib/release"
 import { CuentaCelular } from "@/pages/CuentaPage"
 import { IngresarCompu } from "@/pages/IngresarPrototipoPage"
 
-/** Dirección que recibe este HTML inicial. Cuando reemplace a /cuenta, se cambia acá. */
-export const RUTA = "/preview-ingresar"
+/** Dirección que recibe este HTML inicial. */
+export const RUTA = "/cuenta"
 
 function Marco({ children }: { children: React.ReactNode }) {
   return (

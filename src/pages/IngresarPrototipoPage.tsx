@@ -1,7 +1,6 @@
 /**
- * PROTOTIPO · Cuenta en compu con el emblema y las herramientas alrededor (Figma W11-E 1172:301, elegido
- * por Peter 5-nov; Crear cuenta 1178:2). Vive en /preview-ingresar para que Peter vea el movimiento;
- * todavía NO reemplaza a /cuenta. Sin la barra del sitio: arriba el logo y "Volver al inicio".
+ * Cuenta (/cuenta) en compu con el emblema y las herramientas alrededor (Figma W11-E 1172:301, elegido
+ * por Peter 5-nov; Crear cuenta 1178:2). Sin la barra del sitio: arriba el logo y "Volver al inicio".
  * La tarjeta de la derecha es el flujo real (el mismo de CuentaPage) en todos sus estados, y nunca
  * espera a la escena. Con menos de 1024 px de ancho no hay panel: se muestra la pantalla de celular (W11m).
  */
@@ -69,7 +68,7 @@ export function IngresarCompu({ whatsapp }: { whatsapp: string }) {
 
 export function IngresarPrototipoPage() {
   const { datos } = usePrecios()
-  useSeo({ titulo: "Ingresar (prototipo) | AriTool", descripcion: "Prototipo de la pantalla de Ingresar.", ruta: "/preview-ingresar", indexar: false })
+  useSeo({ titulo: "Ingresar | AriTool", descripcion: "Entrá a tu cuenta de AriTool: es la misma que usás en la app.", ruta: "/cuenta", indexar: false })
   const [compu, setCompu] = useState(() => window.matchMedia("(min-width: 1024px)").matches)
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 1024px)")

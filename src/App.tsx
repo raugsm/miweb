@@ -16,14 +16,14 @@ const NovedadesPage = lazy(() =>
 const DescargarAriToolPage = lazy(() =>
   import("@/pages/DescargarAriToolPage").then((m) => ({ default: m.DescargarAriToolPage }))
 )
-const CuentaPage = lazy(() =>
-  import("@/pages/CuentaPage").then((m) => ({ default: m.CuentaPage }))
-)
 const MiCuentaPage = lazy(() =>
   import("@/pages/MiCuentaPage").then((m) => ({ default: m.MiCuentaPage }))
 )
 const HistorialPage = lazy(() =>
   import("@/pages/HistorialPage").then((m) => ({ default: m.HistorialPage }))
+)
+const RecargarPage = lazy(() =>
+  import("@/pages/RecargarPage").then((m) => ({ default: m.RecargarPage }))
 )
 const NoExistePage = lazy(() =>
   import("@/pages/NoExistePage").then((m) => ({ default: m.NoExistePage }))
@@ -47,7 +47,7 @@ const LegalPage = lazy(() =>
 const CuentaEstadosPreview = lazy(() =>
   import("@/pages/CuentaEstadosPreview").then((m) => ({ default: m.CuentaEstadosPreview }))
 )
-// PROTOTIPO (sin aprobar): Ingresar en compu con el emblema animado, para que Peter lo vea y decida.
+// Cuenta: en compu, dos paneles con el emblema y las herramientas (W11-E, elegido por Peter 5-nov); en celular, W11m.
 const IngresarPrototipoPage = lazy(() =>
   import("@/pages/IngresarPrototipoPage").then((m) => ({ default: m.IngresarPrototipoPage }))
 )
@@ -79,14 +79,15 @@ export default function App() {
             <Route path="novedades" element={pagina(<NovedadesPage />)} />
             {/* "/descargar" es del servidor: entrega el programa. La página es "/descargas". */}
             <Route path="descargas" element={pagina(<DescargarAriToolPage />)} />
-            <Route path="cuenta" element={pagina(<CuentaPage />)} />
+            <Route path="cuenta" element={pagina(<IngresarPrototipoPage />)} />
             <Route path="mi-cuenta" element={pagina(<MiCuentaPage />)} />
             <Route path="mi-cuenta/historial" element={pagina(<HistorialPage />)} />
+            <Route path="mi-cuenta/recargar" element={pagina(<RecargarPage />)} />
             {/* Dirección vieja: la landing GSM ahora es el Inicio (regla W8 #13). */}
             <Route path="gsm" element={<Navigate to="/" replace />} />
             {VISTA_PREVIA.map(([vieja, nueva]) => <Route key={vieja} path={vieja} element={<Navigate to={nueva} replace />} />)}
             <Route path="preview-cuenta-estados" element={pagina(<CuentaEstadosPreview />)} />
-            <Route path="preview-ingresar" element={pagina(<IngresarPrototipoPage />)} />
+            <Route path="preview-ingresar" element={<Navigate to="/cuenta" replace />} />
             <Route path="preview" element={pagina(<PreviewIndex />)} />
             <Route path="*" element={pagina(<NoExistePage />)} />
           </Route>
