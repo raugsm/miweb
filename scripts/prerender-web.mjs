@@ -162,7 +162,8 @@ const propias = [
   `@media not (min-width:${CORTE}px){.pre-compu{display:none}}`,
   ".pre-espera .pre-emblema{opacity:0}", // esperando la entrada animada (ver el script de abajo)
   ".pre-cargando{opacity:.6;pointer-events:none}",
-  ".pre-sinjs{position:fixed;z-index:99;bottom:0;left:0;right:0;padding:12px 16px;background:#1f1a0e;border-top:1px solid #5c4a1a;color:#fcd34d;font:14px/1.45 Inter,system-ui,sans-serif;text-align:center}",
+  // Pegado abajo de la ventana pero ocupando su lugar al final de la página: al bajar del todo no tapa nada.
+  ".pre-sinjs{position:sticky;z-index:99;bottom:0;padding:12px 16px;background:#1f1a0e;border-top:1px solid #5c4a1a;color:#fcd34d;font:14px/1.45 Inter,system-ui,sans-serif;text-align:center}",
   ".pre-sinjs a{color:#86efac;font-weight:600;white-space:nowrap}",
   ...[...reglasEstilo].map(([declaraciones, clase]) => `.${clase}{${declaraciones}}`),
 ].join("")
@@ -203,7 +204,7 @@ hojas.forEach((h, i) => {
   html = html.replace(h[0], () => (i ? "" : `    ${enlaces('preload" as="style')}\n    <noscript>${enlaces("stylesheet")}</noscript>\n    <style>${estilo}</style>\n`))
 })
 html = html
-  .replace('<div id="root"></div>', () => `<div id="pre">${sinJs}${cuerpoPre}</div>\n    <script>${guion}</script>\n    <div id="root"></div>`)
+  .replace('<div id="root"></div>', () => `<div id="pre">${cuerpoPre}${sinJs}</div>\n    <script>${guion}</script>\n    <div id="root"></div>`)
 
 const huella = (texto) => `'sha256-${createHash("sha256").update(texto, "utf8").digest("base64")}'`
 const archivo = `${RUTA.replace(/^\//, "").replace(/[^a-z0-9-]/g, "-")}.html`
