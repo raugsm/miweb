@@ -7,16 +7,18 @@
  *
  * Pendiente: TFM sin ícono (círculo neutro).
  */
-import { ArrowRight, Copy, CreditCard, Download, Info, Minus, Monitor, Search, Square, X, Zap } from "lucide-react"
+import { ArrowRight, CreditCard, Download, Info, Minus, Monitor, Search, Square, X, Zap } from "lucide-react"
 import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
 
 import { Flag } from "@/components/Flag"
 import { BuscadorCelular, BuscadorCompu } from "@/components/aritool/buscador"
 import { C, Cont, FranjaSoporte, HeaderDesktop, HeaderMobile, IconoWA, LogoAriCaja, LogoTool, MenuMobile, PieDesktop, PieMobile, RUTAS, WA, useAncla } from "@/components/aritool/chrome"
+import { BotonCopiarEnlace } from "@/components/aritool/descarga"
 import { descargaDe } from "@/data/descargas"
 import { usePrecios } from "@/hooks/use-precios"
 import { NOMBRE_WEB } from "@/lib/buscador"
+import { enlaceDescarga, RUTA_DESCARGA } from "@/lib/descarga"
 import { usePais } from "@/lib/pais"
 import { formatearPrecio, herramientaVisible, nombreMoneda, paisesDisponibles, type HerramientaPrecio, type Precios, type ServicioPrecio } from "@/lib/precios"
 import { useRelease } from "@/lib/release"
@@ -89,7 +91,6 @@ function AppCelular() {
 }
 
 function HeroDesktop({ datos, busqueda }: { datos: Precios | null; busqueda: string }) {
-  const r = useRelease()
   return (
     <section className="relative z-10">
       <div className="pointer-events-none absolute inset-0" style={{ background: "radial-gradient(90.91% 45.45% at -21.82% 50%, rgba(59,130,246,0.22), rgba(59,130,246,0))" }} />
@@ -100,7 +101,7 @@ function HeroDesktop({ datos, busqueda }: { datos: Precios | null; busqueda: str
           <p className="mt-5" style={{ color: C.muted, fontSize: 18, lineHeight: "150%" }}>Alquilá herramientas por horas, liberá Xiaomi y gestioná Cuentas MI. Pagás con Yape o Binance y empezás al instante.</p>
           <BuscadorCompu className="mt-5" inicial={busqueda} />
           <div className="mt-5 flex flex-wrap items-center gap-4">
-            <a href={r.downloadUrl} className="flex h-[46px] items-center gap-2 text-white" style={{ background: C.blue, borderRadius: 10, padding: "0 22px" }}>
+            <a href={RUTA_DESCARGA} className="flex h-[46px] items-center gap-2 text-white" style={{ background: C.blue, borderRadius: 10, padding: "0 22px" }}>
               <Download className="size-[18px]" /><span style={{ fontWeight: 600, fontSize: 15 }}>Descargar AriTool</span>
             </a>
             <span style={{ color: C.muted, fontSize: 14 }}>Gratis · Windows 10 y 11</span>
@@ -288,7 +289,7 @@ function Descarga() {
           </div>
           <p className="mt-2.5" style={{ color: C.muted, fontSize: 13, lineHeight: "16px" }}>Windows 10 u 11 de 64 bits · es portable, no se instala · se actualiza sola</p>
           <div className="mt-2.5 flex flex-wrap items-center gap-4 pt-[6px]">
-            <a href={r.downloadUrl} className="flex items-center gap-2 text-white" style={{ background: C.blue, borderRadius: 8, padding: "10px 16px", fontWeight: 600, fontSize: 14, lineHeight: "17px" }}><Download className="size-[16px]" />Descargar</a>
+            <a href={RUTA_DESCARGA} className="flex items-center gap-2 text-white" style={{ background: C.blue, borderRadius: 8, padding: "10px 16px", fontWeight: 600, fontSize: 14, lineHeight: "17px" }}><Download className="size-[16px]" />Descargar</a>
             <Link to={RUTAS.novedades} className="inline-flex items-center gap-1.5" style={{ color: C.link, fontWeight: 500, fontSize: 13, lineHeight: "16px" }}>Qué cambió en la {r.version}<ArrowRight className="size-[13px]" /></Link>
           </div>
         </div>
@@ -421,6 +422,8 @@ function ServiciosMobile({ datos }: { datos: Precios | null }) {
 }
 
 function EnTuPC({ datos }: { datos: Precios | null }) {
+  const wa = datos?.soporte.whatsapp ?? WA
+  const waLink = `${wa}${wa.includes("?") ? "&" : "?"}text=${encodeURIComponent(`AriTool para Windows: ${enlaceDescarga()}`)}`
   return (
     <section className="px-5 pb-6">
       <div className="rounded-2xl p-4" style={{ background: C.cardAlt, border: `1px solid ${C.pcBorder}` }}>
@@ -429,12 +432,10 @@ function EnTuPC({ datos }: { datos: Precios | null }) {
           <span style={{ color: C.title, fontWeight: 700, fontSize: 16, lineHeight: "19px" }}>AriTool se usa en tu PC</span>
         </div>
         <p className="mt-2.5" style={{ color: C.muted2, fontSize: 13, lineHeight: "18px" }}>Mandate el enlace y abrilo en tu computadora con Windows.</p>
-        <a href={datos?.soporte.whatsapp ?? WA} target="_blank" rel="noreferrer" className="mt-2.5 flex h-[42px] items-center justify-center gap-2 rounded-lg text-white" style={{ background: C.blue }}>
+        <a href={waLink} target="_blank" rel="noreferrer" className="mt-2.5 flex h-[42px] items-center justify-center gap-2 rounded-lg text-white" style={{ background: C.blue }}>
           <IconoWA className="size-[18px]" style={{ color: "#fff" }} /><span style={{ fontWeight: 600, fontSize: 14 }}>Enviarme el enlace por WhatsApp</span>
         </a>
-        <button type="button" className="mt-2.5 flex h-[43px] w-full items-center justify-center gap-2 rounded-lg" style={{ border: `1px solid ${C.borderAlt}`, color: C.text }}>
-          <Copy className="size-4" /><span style={{ fontWeight: 600, fontSize: 14 }}>Copiar enlace</span>
-        </button>
+        <BotonCopiarEnlace movil />
       </div>
     </section>
   )

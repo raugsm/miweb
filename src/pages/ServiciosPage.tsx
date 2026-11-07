@@ -6,12 +6,14 @@
  * puede leer, la tarjeta dice "Precio en la app" y la página ofrece reintentar. El contador
  * "N disponibles" y los filtros se recalculan al instante.
  */
-import { ArrowRight, Copy, Download, Monitor, Search } from "lucide-react"
+import { ArrowRight, Download, Monitor, Search } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 
 import { C, Cont, FranjaSoporte, HeaderDesktop, HeaderMobile, IconoWA, LogoAriCaja, LogoTool, MenuMobile, PieDesktop, PieMobile, RUTAS, WA, useAncla } from "@/components/aritool/chrome"
+import { BotonCopiarEnlace } from "@/components/aritool/descarga"
 import { descargaDe } from "@/data/descargas"
+import { enlaceDescarga } from "@/lib/descarga"
 import { usePrecios } from "@/hooks/use-precios"
 import { APP_ARITOOL, NOMBRE_WEB, normalizar } from "@/lib/buscador"
 import { formatearPrecio, herramientaVisible, type HerramientaPrecio, type Moneda, type Precios, type ServicioPrecio } from "@/lib/precios"
@@ -195,14 +197,14 @@ function SinResultados({ consulta, onSugerencia }: { consulta: string; onSugeren
 }
 
 function EnTuPC({ whatsapp }: { whatsapp: string }) {
-  const [copiado, setCopiado] = useState(false)
+  const waLink = `${whatsapp}${whatsapp.includes("?") ? "&" : "?"}text=${encodeURIComponent(`AriTool para Windows: ${enlaceDescarga()}`)}`
   return (
     <section className="px-5 pb-6">
       <div className="rounded-2xl p-4" style={{ background: C.cardAlt, border: `1px solid ${C.pcBorder}` }}>
         <div className="flex items-center gap-2.5"><Monitor className="size-5" style={{ color: C.link }} /><span style={{ color: C.title, fontWeight: 700, fontSize: 16, lineHeight: "19px" }}>AriTool se usa en tu PC</span></div>
         <p className="mt-2.5" style={{ color: C.muted2, fontSize: 13, lineHeight: "18px" }}>Mandate el enlace y abrilo en tu computadora con Windows.</p>
-        <a href={whatsapp} target="_blank" rel="noreferrer" className="mt-2.5 flex h-[42px] items-center justify-center gap-2 rounded-lg text-white" style={{ background: C.blue }}><IconoWA className="size-[18px]" style={{ color: "#fff" }} /><span style={{ fontWeight: 600, fontSize: 14 }}>Enviarme el enlace por WhatsApp</span></a>
-        <button type="button" onClick={() => { void navigator.clipboard?.writeText(`${window.location.origin}${RUTAS.descargar}`).then(() => { setCopiado(true); window.setTimeout(() => setCopiado(false), 1500) }).catch(() => {}) }} className="mt-2.5 flex h-[43px] w-full items-center justify-center gap-2 rounded-lg" style={{ border: `1px solid ${C.borderAlt}`, color: C.text }}><Copy className="size-4" /><span style={{ fontWeight: 600, fontSize: 14 }}>{copiado ? "Enlace copiado" : "Copiar enlace"}</span></button>
+        <a href={waLink} target="_blank" rel="noreferrer" className="mt-2.5 flex h-[42px] items-center justify-center gap-2 rounded-lg text-white" style={{ background: C.blue }}><IconoWA className="size-[18px]" style={{ color: "#fff" }} /><span style={{ fontWeight: 600, fontSize: 14 }}>Enviarme el enlace por WhatsApp</span></a>
+        <BotonCopiarEnlace movil />
       </div>
     </section>
   )

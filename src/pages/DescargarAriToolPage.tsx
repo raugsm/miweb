@@ -4,13 +4,15 @@
  * Celular: caja "AriTool se usa en tu PC" con botones apilados ("Enviarme el enlace por WhatsApp" + "Copiar
  * enlace"), igual que Inicio/App (W8: el programa no corre en el teléfono).
  */
-import { ArrowRight, Copy, Download, Monitor, RefreshCw, Shield } from "lucide-react"
+import { ArrowRight, Download, Monitor, RefreshCw, Shield } from "lucide-react"
 import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
 
 import { C, FranjaSoporte, HeaderDesktop, HeaderMobile, IconoWA, LogoAriCaja, MenuMobile, PieDesktop, PieMobile, RUTAS, WA, useAncla } from "@/components/aritool/chrome"
+import { BotonCopiarEnlace } from "@/components/aritool/descarga"
 import { novedades } from "@/data/novedades"
 import { usePrecios } from "@/hooks/use-precios"
+import { enlaceDescarga, RUTA_DESCARGA } from "@/lib/descarga"
 import { usePais } from "@/lib/pais"
 import { useRelease } from "@/lib/release"
 import { useSeo } from "@/lib/seo"
@@ -75,12 +77,10 @@ function ContenidoDesktop() {
             </div>
             <p className="mt-3.5" style={{ color: C.muted, fontSize: 14, lineHeight: "17px" }}>Windows 10 u 11 de 64 bits · es portable, no se instala · se actualiza sola</p>
             <div className="mt-3.5 flex flex-wrap items-center gap-3 pt-1">
-              <a href={r.downloadUrl} className="flex items-center gap-2 text-white" style={{ background: C.blue, borderRadius: 9, padding: "11px 18px", fontWeight: 600, fontSize: 14, lineHeight: "17px" }}>
+              <a href={RUTA_DESCARGA} className="flex items-center gap-2 text-white" style={{ background: C.blue, borderRadius: 9, padding: "11px 18px", fontWeight: 600, fontSize: 14, lineHeight: "17px" }}>
                 <Download className="size-[16px]" />Descargar AriTool
               </a>
-              <button type="button" className="flex items-center gap-2" style={{ border: `1px solid ${C.borderAlt}`, color: C.text, borderRadius: 9, padding: "11px 18px", fontWeight: 600, fontSize: 14, lineHeight: "17px" }}>
-                <Copy className="size-[16px]" />Copiar enlace
-              </button>
+              <BotonCopiarEnlace movil={false} />
             </div>
           </div>
           <div className="rounded-[14px] p-7" style={{ background: C.card, border: `1px solid ${C.border}` }}>
@@ -110,6 +110,7 @@ function ContenidoDesktop() {
 function ContenidoMobile({ datos }: { datos: { soporte: { whatsapp: string | null } } | null }) {
   const r = useRelease()
   const wa = datos?.soporte.whatsapp ?? WA
+  const waLink = `${wa}${wa.includes("?") ? "&" : "?"}text=${encodeURIComponent(`AriTool para Windows: ${enlaceDescarga()}`)}`
   return (
     <main>
       <section className="px-5 pb-6 pt-7">
@@ -124,12 +125,10 @@ function ContenidoMobile({ datos }: { datos: { soporte: { whatsapp: string | nul
             <span style={{ color: C.title, fontWeight: 700, fontSize: 16, lineHeight: "19px" }}>AriTool se usa en tu PC</span>
           </div>
           <p className="mt-2.5" style={{ color: C.muted2, fontSize: 13, lineHeight: "18px" }}>Mandate el enlace y abrilo en tu computadora con Windows.</p>
-          <a href={wa} target="_blank" rel="noreferrer" className="mt-2.5 flex h-[42px] items-center justify-center gap-2 rounded-lg text-white" style={{ background: C.blue }}>
+          <a href={waLink} target="_blank" rel="noreferrer" className="mt-2.5 flex h-[42px] items-center justify-center gap-2 rounded-lg text-white" style={{ background: C.blue }}>
             <IconoWA className="size-[18px]" style={{ color: "#fff" }} /><span style={{ fontWeight: 600, fontSize: 14 }}>Enviarme el enlace por WhatsApp</span>
           </a>
-          <button type="button" className="mt-2.5 flex h-[43px] w-full items-center justify-center gap-2 rounded-lg" style={{ border: `1px solid ${C.borderAlt}`, color: C.text }}>
-            <Copy className="size-4" /><span style={{ fontWeight: 600, fontSize: 14 }}>Copiar enlace</span>
-          </button>
+          <BotonCopiarEnlace movil />
         </div>
       </section>
 

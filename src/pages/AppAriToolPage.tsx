@@ -3,14 +3,15 @@
  * Datos en vivo (versión por useRelease; precio de la app por datos.app, v1.2 de sop_publico).
  * El celular es una composición PROPIA (no la de compu achicada).
  *
- * PENDIENTE: datos.app llega con la v1.2 de sop_publico; hasta entonces los precios salen como skeleton
- * (nunca un número falso — W8). Peter decidió licencia $45; se refleja al actualizar negocio.parametro.
+ * Precios de la app en vivo (datos.app de sop_publico); si faltan, salen como skeleton (nunca un número falso — W8).
  */
-import { Copy, Download, HardDrive, Minus, Monitor, Square, Usb, Wifi, X } from "lucide-react"
+import { Download, HardDrive, Minus, Monitor, Square, Usb, Wifi, X } from "lucide-react"
 import { useEffect, useState } from "react"
 
 import { C, Cont, FranjaSoporte, HeaderDesktop, HeaderMobile, IconoWA, MenuMobile, PieDesktop, PieMobile, WA } from "@/components/aritool/chrome"
+import { BotonCopiarEnlace } from "@/components/aritool/descarga"
 import { usePrecios } from "@/hooks/use-precios"
+import { enlaceDescarga, RUTA_DESCARGA } from "@/lib/descarga"
 import { usePais } from "@/lib/pais"
 import { type Precios } from "@/lib/precios"
 import { useRelease } from "@/lib/release"
@@ -104,7 +105,7 @@ function ContenidoDesktop({ datos }: { datos: Precios | null }) {
             <p className="mt-2" style={{ color: C.muted, fontSize: 17, lineHeight: "21px" }}>Una sola ventana: elegís, pagás y trabajás sin salir de la app.</p>
           </div>
           <div className="flex shrink-0 flex-col items-end gap-1.5">
-            <a href={r.downloadUrl} className="flex items-center gap-2 text-white" style={{ background: C.blue, borderRadius: 10, padding: "13px 20px" }}>
+            <a href={RUTA_DESCARGA} className="flex items-center gap-2 text-white" style={{ background: C.blue, borderRadius: 10, padding: "13px 20px" }}>
               <Download className="size-[17px]" /><span style={{ fontWeight: 600, fontSize: 15, lineHeight: "18px" }}>Descargar AriTool</span>
             </a>
             <span style={{ color: C.faint, fontSize: 12, lineHeight: "15px" }}>Gratis · versión {r.version}</span>
@@ -178,6 +179,8 @@ function FilaPlanM({ nombre, nota, precio, unidad }: { nombre: string; nota: str
 
 function ContenidoMobile({ datos }: { datos: Precios | null }) {
   const p = preciosApp(datos)
+  const wa = datos?.soporte.whatsapp ?? WA
+  const waLink = `${wa}${wa.includes("?") ? "&" : "?"}text=${encodeURIComponent(`AriTool para Windows: ${enlaceDescarga()}`)}`
   return (
     <main>
       <section className="px-5 pb-6 pt-7">
@@ -208,12 +211,10 @@ function ContenidoMobile({ datos }: { datos: Precios | null }) {
             <span style={{ color: C.title, fontWeight: 700, fontSize: 16, lineHeight: "19px" }}>AriTool se usa en tu PC</span>
           </div>
           <p className="mt-2.5" style={{ color: C.muted2, fontSize: 13, lineHeight: "18px" }}>Mandate el enlace y abrilo en tu computadora con Windows.</p>
-          <a href={datos?.soporte.whatsapp ?? WA} target="_blank" rel="noreferrer" className="mt-2.5 flex h-[42px] items-center justify-center gap-2 rounded-lg text-white" style={{ background: C.blue }}>
+          <a href={waLink} target="_blank" rel="noreferrer" className="mt-2.5 flex h-[42px] items-center justify-center gap-2 rounded-lg text-white" style={{ background: C.blue }}>
             <IconoWA className="size-[18px]" style={{ color: "#fff" }} /><span style={{ fontWeight: 600, fontSize: 14 }}>Enviarme el enlace por WhatsApp</span>
           </a>
-          <button type="button" className="mt-2.5 flex h-[43px] w-full items-center justify-center gap-2 rounded-lg" style={{ border: `1px solid ${C.borderAlt}`, color: C.text }}>
-            <Copy className="size-4" /><span style={{ fontWeight: 600, fontSize: 14 }}>Copiar enlace</span>
-          </button>
+          <BotonCopiarEnlace movil />
         </div>
       </section>
 

@@ -10,6 +10,7 @@ import { Link } from "react-router-dom"
 import { C, FranjaSoporte, HeaderDesktop, HeaderMobile, MenuMobile, PieDesktop, PieMobile } from "@/components/aritool/chrome"
 import { novedades } from "@/data/novedades"
 import { usePrecios } from "@/hooks/use-precios"
+import { RUTA_DESCARGA } from "@/lib/descarga"
 import { usePais } from "@/lib/pais"
 import { useRelease } from "@/lib/release"
 import { useSeo } from "@/lib/seo"
@@ -35,7 +36,7 @@ function ContenidoDesktop() {
             <h1 style={{ color: C.title, fontWeight: 700, fontSize: 34, lineHeight: "41px" }}>Novedades</h1>
             <p className="mt-1.5" style={{ color: C.muted, fontSize: 16, lineHeight: "19px" }}>Lo nuevo de AriTool, versión por versión. La app se actualiza sola.</p>
           </div>
-          <a href={r.downloadUrl} className="inline-flex shrink-0 items-center gap-2" style={{ border: `1px solid ${C.borderAlt}`, borderRadius: 9, padding: "11px 16px" }}>
+          <a href={RUTA_DESCARGA} className="inline-flex shrink-0 items-center gap-2" style={{ border: `1px solid ${C.borderAlt}`, borderRadius: 9, padding: "11px 16px" }}>
             <Download className="size-4" style={{ color: C.text }} />
             <span style={{ color: C.text, fontWeight: 600, fontSize: 14, lineHeight: "17px" }}>Descargar la {r.version}</span>
           </a>
