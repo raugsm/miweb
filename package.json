@@ -16,7 +16,7 @@
     "preview": "vite preview",
     "start": "node server.js",
     "test": "node --import ./scripts/disable-env-file.mjs --test test/phase3a.contract.test.js test/phase4.smoke.test.js test/phase5.technician-swap.test.js test/postgres-storage-guard.test.js test/postgres-auth.test.js test/portal-granular-auth.test.js test/operator-granular-auth.test.js test/audit-events-granular.test.js test/frp-payment-review-postgres.test.js test/portal-customer-confirm-postgres.test.js test/payment-verification-shadow.test.js test/web-hardening-cloud-sync.test.js test/portal-guest.test.js test/pricing-v2.test.js test/public-frp-prices.test.js test/portal-guest-routes.test.js test/portal-guest-claim.test.js test/portal-guest-sse.test.js test/public-campaign-tracking.test.js",
-    "test:web": "node --test test/web-buscador.test.mjs test/web-historial.test.mjs test/web-prerender.test.mjs test/web-recarga.test.mjs",
+    "test:web": "node --test test/web-buscador.test.mjs test/web-clave.test.mjs test/web-historial.test.mjs test/web-prerender.test.mjs test/web-recarga.test.mjs",
     "test:smoke": "node --import ./scripts/disable-env-file.mjs --test test/phase4.smoke.test.js",
     "postgres:check": "node scripts/postgres/check-connection.mjs",
     "postgres:migrate": "node scripts/postgres/apply-migrations.mjs",

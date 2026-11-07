@@ -18,6 +18,7 @@ import { C, FranjaSoporte, HeaderMobile, MenuMobile, PieMobile, RUTAS, WA } from
 import { PAISES } from "@/data/paises"
 import { usePrecios } from "@/hooks/use-precios"
 import { confirmar, entrarWeb, solicitarAcceso, verificado } from "@/lib/cuenta"
+import { claveValida, mensajeClave, reglasClave } from "@/lib/clave"
 import { usePais } from "@/lib/pais"
 import { useSeo } from "@/lib/seo"
 import { entregarPrevio, pendientePrevio, valorPrevio } from "@/lib/previo"
@@ -33,27 +34,6 @@ const ESPERA_REENVIO = 60
 const OPCIONES_PAIS = PAISES.map((p) => ({ valor: p.iso, texto: p.nombre }))
 
 const esCorreo = (c: string) => c.length >= 5 && c.includes("@")
-
-/** Lo que Supabase exige para aceptar una contraseña (mismas reglas que la app). */
-function reglasClave(clave: string) {
-  return [
-    { texto: "8 caracteres o más", ok: clave.length >= 8 },
-    { texto: "Una mayúscula", ok: /[A-Z]/.test(clave) },
-    { texto: "Una minúscula", ok: /[a-z]/.test(clave) },
-    { texto: "Un número", ok: /[0-9]/.test(clave) },
-  ]
-}
-const claveValida = (clave: string) => reglasClave(clave).every((r) => r.ok)
-
-/** Traduce el rechazo de Supabase al guardar una contraseña (responde en inglés). */
-function mensajeClave(mensaje: string): string {
-  const m = mensaje.toLowerCase()
-  if (m.includes("easy to guess") || m.includes("pwned") || m.includes("leaked")) return "Esa contraseña ya apareció en filtraciones de otros sitios. Elegí una distinta."
-  if (m.includes("at least one character of each")) return "Te falta una minúscula, una mayúscula o un número."
-  if (m.includes("should be at least") || m.includes("length")) return "La contraseña necesita al menos 8 caracteres."
-  if (m.includes("same") || m.includes("different from the old")) return "Esa es la contraseña que ya tenías. Elegí una nueva."
-  return "No se pudo guardar la contraseña. Probá con otra."
-}
 
 function minSeg(total: number): string {
   const s = Math.max(0, total)
