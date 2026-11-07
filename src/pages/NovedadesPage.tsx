@@ -30,7 +30,7 @@ function ContenidoDesktop() {
   const r = useRelease()
   const lista = novedades.slice(0, 4)
   return (
-    <main className="px-20 pb-14 pt-12">
+    <main className="flex-1 px-20 pb-14 pt-12">
       <div className="mx-auto max-w-[1280px]">
         <div className="flex items-end gap-4">
           <div className="flex-1">
@@ -75,7 +75,7 @@ function ContenidoMobile() {
   const r = useRelease()
   const lista = novedades.slice(0, 3)
   return (
-    <main>
+    <main className="flex-1">
       <section className="px-5 pb-6 pt-7">
         <h1 style={{ color: C.title, fontWeight: 700, fontSize: 28, lineHeight: "34px" }}>Novedades</h1>
         <p className="mt-1.5" style={{ color: C.muted, fontSize: 14, lineHeight: "20px" }}>Lo nuevo de AriTool, versión por versión. La app se actualiza sola.</p>
@@ -122,12 +122,12 @@ export function NovedadesPage() {
   }, [])
   return (
     <div className="min-h-screen overflow-x-hidden" style={{ background: C.page, color: C.text, fontFamily: "Inter, system-ui, sans-serif", lineHeight: "normal" }}>
-      <div className="hidden lg:block">
+      <div className="hidden min-h-screen flex-col lg:flex">
         <HeaderDesktop datos={datos} active="Novedades" />
         <ContenidoDesktop />
         <PieDesktop />
       </div>
-      <div className="lg:hidden">
+      <div className="flex min-h-screen flex-col lg:hidden">
         <HeaderMobile onMenu={() => setMenu(true)} />
         <FranjaSoporte datos={datos} />
         <ContenidoMobile />

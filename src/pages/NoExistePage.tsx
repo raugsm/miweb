@@ -29,9 +29,9 @@ export function NoExistePage() {
   return (
     <div className="min-h-screen overflow-x-hidden" style={{ background: C.page, color: C.text, fontFamily: "Inter, system-ui, sans-serif", lineHeight: 1.2 }}>
       {/* COMPUTADORA */}
-      <div className="hidden lg:block">
+      <div className="hidden min-h-screen flex-col lg:flex">
         <HeaderDesktop datos={datos} />
-        <main className="flex flex-col items-center gap-[18px] px-10 pb-[140px] pt-[120px]">
+        <main className="flex flex-1 flex-col items-center gap-[18px] px-10 pb-[140px] pt-[120px]">
           <h1 style={{ color: C.title, fontWeight: 700, fontSize: 40, lineHeight: "48px" }}>{TITULO}</h1>
           <p style={{ color: C.muted, fontSize: 17, lineHeight: "21px" }}>{TEXTO}</p>
           <BuscadorCompu className="w-[560px] max-w-full" />
@@ -43,10 +43,10 @@ export function NoExistePage() {
         <PieDesktop />
       </div>
       {/* CELULAR */}
-      <div className="lg:hidden">
+      <div className="flex min-h-screen flex-col lg:hidden">
         <HeaderMobile onMenu={() => setMenu(true)} />
         <FranjaSoporte datos={datos} />
-        <main className="flex flex-col items-center px-5 pb-16 pt-14 text-center">
+        <main className="flex flex-1 flex-col items-center px-5 pb-16 pt-14 text-center">
           <h1 style={{ color: C.title, fontWeight: 700, fontSize: 28, lineHeight: "116%" }}>{TITULO}</h1>
           <p className="mt-2.5" style={{ color: C.muted, fontSize: 15, lineHeight: "145%" }}>{TEXTO}</p>
           <button type="button" onClick={() => setBuscando(true)} className="mt-5 flex h-12 w-full items-center gap-2.5 text-left" style={{ background: C.cardAlt, border: `1px solid ${C.borderAlt}`, borderRadius: 12, padding: "0 14px" }}>

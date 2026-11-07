@@ -166,7 +166,7 @@ function CuerpoCompu({ carga, filas, whatsapp, minimo, precioLicencia, salir, re
   const { listo, lic, saldo, pago, aviso } = useSaldo(carga, minimo)
   const visibles = filas.slice(0, 6)
   return (
-    <main>
+    <main className="flex-1">
       <Cont className="flex flex-col gap-6 pb-14 pt-10">
         <div className="flex items-end gap-4">
           <div className="flex flex-col gap-1">
@@ -239,7 +239,7 @@ function CuerpoCelular({ carga, filas, whatsapp, minimo, salir, reintentar }: Cu
   const { listo, lic, saldo, pago, aviso } = useSaldo(carga, minimo)
   const visibles = filas.slice(0, 5)
   return (
-    <main>
+    <main className="flex-1">
       <section className="flex flex-col gap-1 px-5 py-6">
         <div className="flex items-center gap-2.5">
           <h1 style={{ color: C.title, fontWeight: 700, fontSize: 26, lineHeight: "31px" }}>Mi cuenta</h1>

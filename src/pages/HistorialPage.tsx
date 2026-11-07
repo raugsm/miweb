@@ -112,7 +112,7 @@ const SIN_FILTRO = "No hay movimientos con ese filtro"
 function CuerpoCompu({ carga, filas, filtro, dias, cargandoMas, alFiltrar, alPeriodo, cargarMas, reintentar }: CuerpoProps) {
   const listo = carga.estado === "listo" ? carga.datos : null
   return (
-    <main>
+    <main className="flex-1">
       <Cont className="flex flex-col items-start gap-5 pb-14 pt-8">
         <Link to={RUTAS.miCuenta} className="flex items-center gap-1.5" style={{ color: C.link, fontWeight: 500, fontSize: 14, lineHeight: "17px" }}>
           <ArrowLeft className="size-4" />Volver a Mi cuenta
@@ -150,7 +150,7 @@ function CuerpoCompu({ carga, filas, filtro, dias, cargandoMas, alFiltrar, alPer
 function CuerpoCelular({ carga, filas, filtro, dias, cargandoMas, alFiltrar, alPeriodo, cargarMas, reintentar }: CuerpoProps) {
   const listo = carga.estado === "listo" ? carga.datos : null
   return (
-    <main>
+    <main className="flex-1">
       <section className="flex flex-col items-start gap-3 px-5 py-6">
         <Link to={RUTAS.miCuenta} className="flex items-center gap-1.5" style={{ color: C.link, fontWeight: 500, fontSize: 13, lineHeight: "16px" }}>
           <ArrowLeft className="size-[15px]" />Volver a Mi cuenta

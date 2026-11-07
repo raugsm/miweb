@@ -478,10 +478,10 @@ export function CuentaCelular() {
   const { datos } = usePrecios()
   const [menu, setMenu] = useState(false)
   return (
-    <div className="min-h-screen overflow-x-hidden" style={{ background: C.page, color: C.text, fontFamily: "Inter, system-ui, sans-serif", lineHeight: "normal" }}>
+    <div className="flex min-h-screen flex-col overflow-x-hidden" style={{ background: C.page, color: C.text, fontFamily: "Inter, system-ui, sans-serif", lineHeight: "normal" }}>
       <HeaderMobile onMenu={() => setMenu(true)} mostrarIngresar={false} />
       <FranjaSoporte datos={datos} />
-      <main className="px-5 pb-7 pt-6"><Cuenta whatsapp={datos?.soporte.whatsapp ?? WA} /></main>
+      <main className="flex-1 px-5 pb-7 pt-6"><Cuenta whatsapp={datos?.soporte.whatsapp ?? WA} /></main>
       <PieMobile />
       {menu ? <MenuMobile datos={datos} onClose={() => setMenu(false)} /> : null}
     </div>
