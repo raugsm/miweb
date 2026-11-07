@@ -62,15 +62,46 @@ function Filtros({ filtro, alFiltrar, chico }: { filtro: FiltroHistorial; alFilt
 }
 
 function Periodo({ dias, alPeriodo }: { dias: number | null; alPeriodo: (d: number | null) => void }) {
-  // El desplegable del sistema va encima, invisible: así se abre como en cada celular y con el teclado.
+  const [abierto, setAbierto] = useState(false)
+  const caja = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!abierto) return
+    const cerrarFuera = (e: MouseEvent) => {
+      if (caja.current && !caja.current.contains(e.target as Node)) setAbierto(false)
+    }
+    const cerrarTecla = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setAbierto(false)
+    }
+    document.addEventListener("mousedown", cerrarFuera)
+    document.addEventListener("keydown", cerrarTecla)
+    return () => {
+      document.removeEventListener("mousedown", cerrarFuera)
+      document.removeEventListener("keydown", cerrarTecla)
+    }
+  }, [abierto])
+
   return (
-    <label className="relative flex shrink-0 items-center gap-2" style={{ border: `1px solid ${C.borderAlt}`, borderRadius: 10, padding: "10px 12px 10px 14px" }}>
-      <span style={{ color: "#d1d5db", fontWeight: 500, fontSize: 14, lineHeight: "17px" }}>{PERIODOS.find((p) => p.dias === dias)?.texto}</span>
-      <ChevronDown className="size-4" style={{ color: C.muted }} />
-      <select aria-label="Período" value={dias ?? ""} onChange={(e) => alPeriodo(e.target.value ? Number(e.target.value) : null)} className="absolute inset-0 cursor-pointer opacity-0">
-        {PERIODOS.map((p) => <option key={p.texto} value={p.dias ?? ""}>{p.texto}</option>)}
-      </select>
-    </label>
+    <div ref={caja} className="relative shrink-0">
+      <button type="button" aria-haspopup="listbox" aria-expanded={abierto} onClick={() => setAbierto((v) => !v)}
+        className="flex items-center gap-2" style={{ border: `1px solid ${C.borderAlt}`, borderRadius: 10, padding: "10px 12px 10px 14px" }}>
+        <span style={{ color: "#d1d5db", fontWeight: 500, fontSize: 14, lineHeight: "17px" }}>{PERIODOS.find((p) => p.dias === dias)?.texto}</span>
+        <ChevronDown className="size-4" style={{ color: C.muted, transform: abierto ? "rotate(180deg)" : undefined }} />
+      </button>
+      {abierto ? (
+        <div role="listbox" aria-label="Período" className="absolute right-0 z-50 mt-1 w-48 overflow-hidden rounded-xl py-1" style={{ background: C.card, border: `1px solid ${C.borderAlt}`, boxShadow: "0 16px 40px rgba(0,0,0,.45)" }}>
+          {PERIODOS.map((p) => (
+            <button key={p.texto} type="button" role="option" aria-selected={p.dias === dias}
+              onClick={() => { alPeriodo(p.dias); setAbierto(false) }}
+              className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left hover:bg-white/5"
+              style={{ color: p.dias === dias ? C.title : C.muted2, fontSize: 14 }}>
+              {p.texto}
+              {p.dias === dias ? <span style={{ color: C.green }}>✓</span> : null}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
   )
 }
 

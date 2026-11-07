@@ -5,7 +5,7 @@
  * estados para revisar contra el Figma); con ellos es el campo o el botón de verdad (pages/CuentaPage).
  */
 import { AlertCircle, Check, ChevronDown, Eye, EyeOff, type LucideIcon, X } from "lucide-react"
-import { createContext, useContext, useState } from "react"
+import { createContext, useContext, useEffect, useRef, useState } from "react"
 import { Link } from "react-router-dom"
 
 import { Flag } from "@/components/Flag"
@@ -161,21 +161,74 @@ export function ReglasPassword({ reglas }: { reglas: { texto: string; ok: boolea
   )
 }
 
-/** Selector tipo País: bandera + nombre + chevron. Con `opciones` y `onChange` abre la lista del sistema. */
+/**
+ * Selector de país: bandera + nombre + chevron. Abre una lista oscura propia (no el `<select>`
+ * nativo, que en Windows sale blanco y muestra países que no atendemos). Con `opciones` y
+ * `onChange` es el campo real; sin ellos es solo presentación (galería de estados).
+ */
 export function CampoSelect({ label, bandera, texto, id, valor, opciones, onChange }: { label: string; bandera?: string; texto: string; id?: string; valor?: string; opciones?: { valor: string; texto: string }[]; onChange?: (valor: string) => void }) {
+  const [abierto, setAbierto] = useState(false)
+  const caja = useRef<HTMLDivElement>(null)
+  const interactivo = Boolean(opciones && onChange && valor != null)
+
+  useEffect(() => {
+    if (!abierto) return
+    const cerrarFuera = (e: MouseEvent) => {
+      if (caja.current && !caja.current.contains(e.target as Node)) setAbierto(false)
+    }
+    const cerrarTecla = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setAbierto(false)
+    }
+    document.addEventListener("mousedown", cerrarFuera)
+    document.addEventListener("keydown", cerrarTecla)
+    return () => {
+      document.removeEventListener("mousedown", cerrarFuera)
+      document.removeEventListener("keydown", cerrarTecla)
+    }
+  }, [abierto])
+
+  const elegir = (codigo: string) => {
+    onChange?.(codigo)
+    setAbierto(false)
+  }
+
   return (
-    <div className="flex w-full flex-col items-start gap-1.5">
+    <div ref={caja} className="relative flex w-full flex-col items-start gap-1.5">
       <label htmlFor={id} style={{ color: C.muted2, fontWeight: 500, fontSize: 13 }}>{label}</label>
-      <div className="relative flex h-12 w-full items-center gap-2.5" style={{ background: C.cardAlt, border: `1px solid ${C.borderAlt}`, borderRadius: 10, padding: "0 14px" }}>
+      <button
+        id={id}
+        type="button"
+        disabled={!interactivo}
+        aria-haspopup={interactivo ? "listbox" : undefined}
+        aria-expanded={interactivo ? abierto : undefined}
+        onClick={() => { if (interactivo) setAbierto((v) => !v) }}
+        className="flex h-12 w-full items-center gap-2.5 text-left disabled:cursor-default"
+        style={{ background: C.cardAlt, border: `1px solid ${abierto ? AZUL_ENFOQUE : C.borderAlt}`, borderRadius: 10, padding: "0 14px" }}
+      >
         {bandera ? <Flag code={bandera} style={{ width: 20, height: 14 }} /> : null}
         <span className="flex-1 truncate" style={{ color: C.text, fontSize: 15 }}>{texto}</span>
-        <ChevronDown className="size-[18px] shrink-0" style={{ color: C.muted }} />
-        {opciones && onChange ? (
-          <select id={id} value={valor} onChange={(e) => onChange(e.target.value)} className="absolute inset-0 size-full cursor-pointer opacity-0">
-            {opciones.map((o) => <option key={o.valor} value={o.valor}>{o.texto}</option>)}
-          </select>
-        ) : null}
-      </div>
+        <ChevronDown className="size-[18px] shrink-0" style={{ color: C.muted, transform: abierto ? "rotate(180deg)" : undefined }} />
+      </button>
+
+      {abierto && opciones ? (
+        <div role="listbox" aria-label={label} className="absolute left-0 right-0 top-full z-50 mt-1 max-h-64 overflow-y-auto rounded-xl py-1" style={{ background: C.card, border: `1px solid ${C.borderAlt}`, boxShadow: "0 16px 40px rgba(0,0,0,.45)" }}>
+          {opciones.map((o) => (
+            <button
+              key={o.valor}
+              type="button"
+              role="option"
+              aria-selected={o.valor === valor}
+              onClick={() => elegir(o.valor)}
+              className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left hover:bg-white/5"
+              style={{ color: o.valor === valor ? C.title : C.muted2, fontSize: 14 }}
+            >
+              <Flag code={o.valor.toLowerCase()} style={{ width: 20, height: 14 }} />
+              <span className="flex-1 truncate">{o.texto}</span>
+              {o.valor === valor ? <Check className="size-[15px] shrink-0" style={{ color: C.green }} /> : null}
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   )
 }
