@@ -6305,17 +6305,41 @@ async function serveStatic(req, res, pathname) {
 // Por eso el titulo se reemplaza aca, antes de mandar el HTML.
 const webPageMeta = {
   "/": null, // el del archivo ya es el de la portada
-  "/gsm": {
-    title: "AriadGSM — Desbloqueo FRP Xiaomi y servicios GSM",
-    description: "AriadGSM (Ariad): desbloqueo FRP de Xiaomi, Redmi y POCO, cuentas Mi y servicios GSM para tecnicos de toda Latinoamerica.",
-  },
   "/cuenta": {
-    title: "Entrar a mi cuenta de Ari-Tool | AriadGSM",
-    description: "Acceso de tecnicos a Ari-Tool: entra a tu cuenta, mira tus creditos y el historial de tus trabajos.",
+    title: "Ingresar | AriTool",
+    description: "Entra a tu cuenta de AriTool: es la misma que usas en la app.",
   },
   "/servicios": {
     title: "Servicios y alquiler de herramientas | AriTool",
     description: "Alquila herramientas por horas o pide un servicio remoto: Xiaomi Reset + FRP, Cuenta MI y AriTool. Precios en vivo y soporte por WhatsApp.",
+  },
+  "/app": {
+    title: "App AriTool | AriTool",
+    description: "Asi se ve AriTool por dentro. Una sola ventana: eliges, pagas y trabajas sin salir de la app.",
+  },
+  "/novedades": {
+    title: "Novedades | AriTool",
+    description: "Lo nuevo de AriTool, version por version. La app se actualiza sola.",
+  },
+  "/descargas": {
+    title: "Descargar AriTool",
+    description: "AriTool para Windows 10 u 11 de 64 bits. Es portable, no se instala y se actualiza sola.",
+  },
+  "/mi-cuenta": {
+    title: "Mi cuenta | AriTool",
+    description: "Tu saldo, tu licencia y tu historial en AriTool.",
+  },
+  "/mi-cuenta/historial": {
+    title: "Tu historial | AriTool",
+    description: "Cada recarga y cada uso de tu cuenta AriTool, con su numero de pedido.",
+  },
+  "/mi-cuenta/recargar": {
+    title: "Recargar saldo | AriTool",
+    description: "Recarga tu saldo de AriTool con Yape o Binance Pay.",
+  },
+  "/mi-cuenta/licencia": {
+    title: "Licencia anual | AriTool",
+    description: "Compra o renueva la licencia anual de AriTool con Yape o Binance Pay.",
   },
   "/legal": {
     title: "Politicas y terminos | AriadGSM",

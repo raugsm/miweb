@@ -29,8 +29,8 @@ export const RUTAS = {
   alquiler: "/#alquiler",
   servicios: "/servicios",
   recargar: "/mi-cuenta/recargar",
-  // Licencia (W15) todavía no está hecha: mientras tanto va al panel de la web anterior, que usa la
-  // misma sesión. Cuando exista, apunta a su página nueva y /panel pasa a llevar a Mi cuenta (regla W8 #13).
+  // Licencia (W15) ya tiene su página. /panel queda solo para completar el perfil de una cuenta que
+  // todavía no lo tiene (regla W8 #13 pendiente: cuando el diseño cubra ese caso, /panel va a Mi cuenta).
   licencia: "/mi-cuenta/licencia",
   panelViejo: "/panel",
 }
@@ -237,8 +237,8 @@ export function PieDesktop() {
           <span style={{ color: C.text, fontWeight: 700, fontSize: 15 }}>AriTool</span>
           <span style={{ color: C.faint, fontSize: 13 }}>© 2026</span>
         </div>
-        <a href="#" style={{ color: C.muted, fontSize: 13 }}>Términos</a>
-        <a href="#" style={{ color: C.muted, fontSize: 13 }}>Privacidad</a>
+        <Link to="/legal#terminos" style={{ color: C.muted, fontSize: 13 }}>Términos</Link>
+        <Link to="/legal#privacidad" style={{ color: C.muted, fontSize: 13 }}>Privacidad</Link>
       </Cont>
     </footer>
   )
@@ -279,7 +279,7 @@ export function PieMobile() {
           <span style={{ color: C.text, fontWeight: 700, fontSize: 14 }}>AriTool</span>
           <span style={{ color: C.faint, fontSize: 12 }}>© 2026</span>
         </div>
-        <div className="mt-3.5" style={{ color: C.muted, fontSize: 12, lineHeight: "15px" }}>Términos · Privacidad</div>
+        <div className="mt-3.5 flex gap-1" style={{ color: C.muted, fontSize: 12, lineHeight: "15px" }}><Link to="/legal#terminos">Términos</Link><span aria-hidden>·</span><Link to="/legal#privacidad">Privacidad</Link></div>
       </div>
     </footer>
   )

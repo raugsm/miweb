@@ -6,8 +6,8 @@
  * PENDIENTE (espera OK de Peter): la v19 de `cliente_resumen` (supabase/functions/cliente_resumen_v19),
  * que agrega la licencia, el detalle del alquiler y los procesos hechos con licencia. Con la versión de
  * hoy la tarjeta de licencia no puede decir el estado y manda a mirarlo en la app.
- * PENDIENTE: Recargar (W14) y Licencia (W15) todavía no existen; sus botones van al panel de la web
- * anterior, que usa la misma sesión.
+ * Recargar (W14) y Licencia (W15) ya son páginas propias (RUTAS.recargar y RUTAS.licencia).
+ * PENDIENTE: una cuenta sin perfil armado todavía va a /panel (web anterior) hasta que el diseño lo cubra.
  *
  * Estados (W13 · 1100:271): sin licencia (S1), licencia por vencer (S2), saldo que no alcanza (S3),
  * pago esperando (S4), historial vacío (S5), cargando (S6), no se pudo cargar (S7) y sesión vencida
