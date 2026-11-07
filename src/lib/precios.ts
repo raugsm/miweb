@@ -127,7 +127,57 @@ export function paisesDisponibles(
   return PAISES
 }
 
-/** ?pais= de la dirección (y se recuerda) > país recordado > región del navegador (es-PE → PE) > WW. Siempre uno de PAISES. */
+/**
+ * Zonas horarias de los países que manejamos: la señal más cercana a "desde dónde lo están viendo"
+ * sin pedir IP ni llamar a un servicio externo. Si la zona no está, se usa la región del navegador.
+ */
+const PAIS_POR_ZONA: Record<string, string> = {
+  "America/Lima": "PE",
+  "America/Mexico_City": "MX",
+  "America/Cancun": "MX",
+  "America/Merida": "MX",
+  "America/Monterrey": "MX",
+  "America/Matamoros": "MX",
+  "America/Chihuahua": "MX",
+  "America/Ciudad_Juarez": "MX",
+  "America/Hermosillo": "MX",
+  "America/Mazatlan": "MX",
+  "America/Tijuana": "MX",
+  "America/Bahia_Banderas": "MX",
+  "America/Bogota": "CO",
+  "America/Santiago": "CL",
+  "America/Punta_Arenas": "CL",
+  "Pacific/Easter": "CL",
+  "America/Argentina/Buenos_Aires": "AR",
+  "America/Argentina/Cordoba": "AR",
+  "America/Argentina/Mendoza": "AR",
+  "America/Argentina/Salta": "AR",
+  "America/Argentina/Tucuman": "AR",
+  "America/Argentina/Ushuaia": "AR",
+  "America/Argentina/Rio_Gallegos": "AR",
+  "America/Argentina/Catamarca": "AR",
+  "America/Argentina/Jujuy": "AR",
+  "America/Argentina/La_Rioja": "AR",
+  "America/Argentina/San_Juan": "AR",
+  "America/Argentina/San_Luis": "AR",
+  // Nombres viejos que algunos navegadores todavía devuelven para Argentina.
+  "America/Buenos_Aires": "AR",
+  "America/Cordoba": "AR",
+  "America/Mendoza": "AR",
+  "America/Salta": "AR",
+  "America/Tucuman": "AR",
+  "America/Ushuaia": "AR",
+  "America/Rio_Gallegos": "AR",
+  "America/Catamarca": "AR",
+  "America/Jujuy": "AR",
+  "America/La_Rioja": "AR",
+  "America/San_Juan": "AR",
+  "America/San_Luis": "AR",
+  "America/Guayaquil": "EC",
+  "Pacific/Galapagos": "EC",
+}
+
+/** ?pais= de la dirección (y se recuerda) > país recordado > zona horaria > región del navegador (es-PE → PE) > WW. Siempre uno de PAISES. */
 export function detectarPais(): string {
   try {
     const pedido = new URLSearchParams(window.location.search).get("pais")?.toUpperCase()
@@ -143,6 +193,13 @@ export function detectarPais(): string {
     if (guardado && CODIGOS.has(guardado)) return guardado
   } catch {
     /* localStorage puede fallar (modo privado); seguimos. */
+  }
+  try {
+    const zona = Intl.DateTimeFormat().resolvedOptions().timeZone
+    const porZona = PAIS_POR_ZONA[zona]
+    if (porZona) return porZona
+  } catch {
+    /* sin zona horaria; seguimos. */
   }
   try {
     const region = new Intl.Locale(navigator.language).region
