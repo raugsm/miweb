@@ -29,10 +29,8 @@ export const RUTAS = {
   alquiler: "/#alquiler",
   servicios: "/servicios",
   recargar: "/mi-cuenta/recargar",
-  // Licencia (W15) ya tiene su página. /panel queda solo para completar el perfil de una cuenta que
-  // todavía no lo tiene (regla W8 #13 pendiente: cuando el diseño cubra ese caso, /panel va a Mi cuenta).
+  // Licencia (W15) ya tiene su página. /panel viejo ya no se usa: la cuenta sin perfil se avisa en Mi cuenta.
   licencia: "/mi-cuenta/licencia",
-  panelViejo: "/panel",
 }
 
 export const C = {

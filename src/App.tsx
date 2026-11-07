@@ -35,11 +35,6 @@ const NoExistePage = lazy(() =>
   import("@/pages/NoExistePage").then((m) => ({ default: m.NoExistePage }))
 )
 
-// Web anterior: solo lo que la web nueva todavía no reemplazó.
-// Panel: Recargar (W14) y Licencia (W15) siguen acá hasta que existan sus páginas nuevas.
-const DashboardPage = lazy(() =>
-  import("@/pages/DashboardPage").then((m) => ({ default: m.DashboardPage }))
-)
 // Portal cliente FRP (pendiente: Peter decidió retirarlo, 4-nov).
 const PortalPage = lazy(() =>
   import("@/pages/gsm/portal/PortalPage").then((m) => ({ default: m.PortalPage }))
@@ -97,8 +92,9 @@ export default function App() {
             <Route path="legal" element={<Navigate to="/legal/terminos" replace />} />
             <Route path="legal/terminos" element={pagina(<LegalTerminosPage />)} />
             <Route path="legal/privacidad" element={pagina(<LegalPrivacidadPage />)} />
-            {/* Dirección vieja: la landing GSM ahora es el Inicio (regla W8 #13). */}
+            {/* Direcciones viejas (regla W8 #13): la landing GSM es el Inicio y el panel es Mi cuenta. */}
             <Route path="gsm" element={<Navigate to="/" replace />} />
+            <Route path="panel" element={<Navigate to="/mi-cuenta" replace />} />
             {VISTA_PREVIA.map(([vieja, nueva]) => <Route key={vieja} path={vieja} element={<Navigate to={nueva} replace />} />)}
             <Route path="preview-cuenta-estados" element={pagina(<CuentaEstadosPreview />)} />
             <Route path="preview-ingresar" element={<Navigate to="/cuenta" replace />} />
@@ -106,7 +102,6 @@ export default function App() {
             <Route path="*" element={pagina(<NoExistePage />)} />
           </Route>
           <Route element={<RootLayout />}>
-            <Route path="panel" element={<DashboardPage />} />
             <Route path="cliente" element={<PortalPage />} />
           </Route>
         </Routes>
