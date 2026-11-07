@@ -244,7 +244,7 @@ export function PieDesktop() {
   )
 }
 
-export function HeaderMobile({ onMenu, mostrarIngresar = true }: { onMenu: () => void; mostrarIngresar?: boolean }) {
+export function HeaderMobile({ onMenu, mostrarIngresar = true, mostrarBuscar = true }: { onMenu: () => void; mostrarIngresar?: boolean; mostrarBuscar?: boolean }) {
   const [buscando, setBuscando] = useState(false)
   return (
     <header className="sticky top-0 z-40" style={{ borderBottom: `1px solid ${C.border}`, background: `${C.page}f2` }}>
@@ -252,7 +252,7 @@ export function HeaderMobile({ onMenu, mostrarIngresar = true }: { onMenu: () =>
         <Link to={RUTAS.inicio} className="flex items-center gap-2.5"><img src="/aritool-logo-192.webp" alt="AriTool" className="size-7 rounded-lg" /><span style={{ color: C.title, fontWeight: 700, fontSize: 17 }}>AriTool</span></Link>
         <div className="flex-1" />
         {mostrarIngresar ? <CuentaBarra movil /> : null}
-        <button type="button" aria-label="Buscar" onClick={() => setBuscando(true)} className="-my-1 -mr-1 ml-[22px] p-1"><Search className="size-[22px]" style={{ color: C.muted2 }} /></button>
+        {mostrarBuscar ? <button type="button" aria-label="Buscar" onClick={() => setBuscando(true)} className="-my-1 -mr-1 ml-[22px] p-1"><Search className="size-[22px]" style={{ color: C.muted2 }} /></button> : null}
         <button type="button" aria-label="Menú" onClick={onMenu} className="-my-1 -mr-1 ml-[24px] p-1"><Menu className="size-[22px]" style={{ color: C.text }} /></button>
       </div>
       {buscando ? <Suspense fallback={null}><BuscadorCelular onClose={() => setBuscando(false)} /></Suspense> : null}

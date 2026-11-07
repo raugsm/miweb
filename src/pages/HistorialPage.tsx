@@ -220,15 +220,15 @@ export function HistorialPage() {
 
   return (
     <div className="min-h-screen overflow-x-hidden" style={{ background: C.page, color: C.text, fontFamily: "Inter, system-ui, sans-serif", lineHeight: "normal" }}>
-      <div className="hidden lg:block">
+      <div className="hidden min-h-screen flex-col lg:flex">
         <HeaderDesktop datos={datos} />
-        {carga.estado === "sinPerfil" ? <SinPerfil whatsapp={whatsapp} movil={false} titulo="Tu historial" onSalir={salir} /> : <CuerpoCompu {...props} />}
+        {carga.estado === "sinPerfil" ? <main className="flex-1"><SinPerfil whatsapp={whatsapp} movil={false} onSalir={salir} /></main> : <CuerpoCompu {...props} />}
         <PieDesktop />
       </div>
-      <div className="lg:hidden">
-        <HeaderMobile onMenu={() => setMenu(true)} />
+      <div className="flex min-h-screen flex-col lg:hidden">
+        <HeaderMobile onMenu={() => setMenu(true)} mostrarBuscar={carga.estado !== "sinPerfil"} />
         <FranjaSoporte datos={datos} />
-        {carga.estado === "sinPerfil" ? <SinPerfil whatsapp={whatsapp} movil titulo="Tu historial" onSalir={salir} /> : <CuerpoCelular {...props} />}
+        {carga.estado === "sinPerfil" ? <main className="flex-1"><SinPerfil whatsapp={whatsapp} movil onSalir={salir} /></main> : <CuerpoCelular {...props} />}
         <PieMobile />
         {menu ? <MenuMobile datos={datos} onClose={() => setMenu(false)} /> : null}
       </div>

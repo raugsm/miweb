@@ -32,7 +32,7 @@ export const legalSections: LegalSection[] = [
         p: "Créditos: el servicio funciona con créditos prepagos. 1 crédito equivale a 1 USD. Los créditos se usan para ejecutar procesos del software y no tienen valor ni uso fuera de la plataforma.",
       },
       {
-        p: "Uso permitido: el software se ofrece exclusivamente para uso profesional y legítimo, sobre equipos que el técnico está autorizado a intervenir. El uso indebido está prohibido y se detalla en la Política de Uso Aceptable.",
+        p: "Uso permitido: el software se ofrece exclusivamente para uso profesional y legítimo, sobre equipos que el técnico está autorizado a intervenir. El uso indebido está prohibido y se detalla más abajo, en Uso aceptable.",
       },
       {
         p: "Responsabilidad: cada proceso queda a cargo del técnico que lo ejecuta. AriTool no se responsabiliza por pérdida de datos, daños al equipo ni consecuencias derivadas de un uso incorrecto o no autorizado. El servicio se brinda “tal cual”, sin garantías implícitas.",
@@ -68,7 +68,7 @@ export const legalSections: LegalSection[] = [
   },
   {
     id: "reembolsos",
-    title: "Política de Reembolsos",
+    title: "Reembolsos",
     blocks: [
       {
         p: "Los créditos de Ari-Tool son prepagos. Una vez realizada la recarga, los créditos se acreditan de inmediato en tu cuenta y no son reembolsables.",
@@ -86,7 +86,7 @@ export const legalSections: LegalSection[] = [
   },
   {
     id: "uso-aceptable",
-    title: "Política de Uso Aceptable",
+    title: "Uso aceptable",
     blocks: [
       {
         p: "Ari-Tool es una herramienta profesional. Al usarla, el técnico declara y garantiza que:",

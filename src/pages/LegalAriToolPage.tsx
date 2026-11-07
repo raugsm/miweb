@@ -18,12 +18,12 @@ type LegalProps = { ids: string[]; titulo: string; descripcion: string; ruta: st
 function Bloque({ b }: { b: LegalBlock }) {
   if ("ul" in b) {
     return (
-      <ul className="flex list-disc flex-col gap-2 pl-5" style={{ color: C.muted2, fontSize: 15, lineHeight: "24px" }}>
+      <ul className="flex list-disc flex-col gap-2 pl-5" style={{ color: C.muted2, fontSize: 15, lineHeight: "22px" }}>
         {b.ul.map((t, i) => <li key={i}>{t}</li>)}
       </ul>
     )
   }
-  return <p style={{ color: C.muted2, fontSize: 15, lineHeight: "24px" }}>{b.p}</p>
+  return <p style={{ color: C.muted2, fontSize: 15, lineHeight: "22px" }}>{b.p}</p>
 }
 
 function Seccion({ s, primera }: { s: LegalSection; primera: boolean }) {
@@ -65,15 +65,15 @@ function LegalPagina({ ids, titulo, descripcion, ruta, otro }: LegalProps) {
   return (
     <div className="flex min-h-screen flex-col overflow-x-hidden" style={{ background: C.page, color: C.text, fontFamily: "Inter, system-ui, sans-serif", lineHeight: "normal" }}>
       <div className="hidden lg:block"><HeaderDesktop datos={datos} /></div>
-      <div className="lg:hidden"><HeaderMobile onMenu={() => setMenu(true)} /><FranjaSoporte datos={datos} /></div>
+      <div className="lg:hidden"><HeaderMobile onMenu={() => setMenu(true)} mostrarBuscar={false} /><FranjaSoporte datos={datos} /></div>
 
       <main className="flex-1">
         <Cont className="py-10 lg:py-14">
           <article className="mx-auto w-full max-w-[800px]">
-            <h1 style={{ color: C.title, fontWeight: 700, fontSize: 34, lineHeight: "41px" }}>{titulo}</h1>
+            <h1 className="text-[28px] leading-[34px] lg:text-[41px] lg:leading-[44px]" style={{ color: C.title, fontWeight: 700 }}>{titulo}</h1>
             <p className="mt-2" style={{ color: C.muted, fontSize: 13, lineHeight: "18px" }}>Última actualización: {legalUpdated}</p>
             {secciones.map((s, i) => <Seccion key={s.id} s={s} primera={i === 0} />)}
-            <p className="mt-7" style={{ color: C.muted2, fontSize: 15, lineHeight: "24px" }}>
+            <p className="mt-7" style={{ color: C.muted2, fontSize: 15, lineHeight: "22px" }}>
               Ante cualquier duda escribinos a{" "}
               <a href={`mailto:${legalContact}`} style={{ color: C.link }}>{legalContact}</a>.
             </p>
