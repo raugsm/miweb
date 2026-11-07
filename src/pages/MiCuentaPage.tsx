@@ -84,7 +84,7 @@ function useFalta(vence: string | undefined): number {
 
 /** Aviso bajo el saldo: pago esperando (S4) o saldo que no alcanza (S3). null = ninguno. */
 function avisoSaldo(pago: CobroActivo | null, falta: number, bajo: boolean) {
-  if (pago) return <Banner tipo="azul" icono={Timer}>Tenés un pago esperando: {pago.producto === "licencia" ? "licencia anual" : `recarga de US$ ${Number(pago.creditos).toFixed(2)}`}. {pago.metodo === "yape" ? `S/ ${pago.monto} por Yape` : `${pago.monto} USDT por Binance`}. Vence en {minSeg(falta)}.</Banner>
+  if (pago) return <Banner tipo="azul" icono={Timer}>Tenés un pago esperando: {pago.producto === "licencia" ? "licencia anual" : `recarga de ${usd(Number(pago.creditos))}`}. {pago.metodo === "yape" ? `S/ ${pago.monto} por Yape` : `${pago.monto} USDT por Binance`}. Vence en {minSeg(falta)}.</Banner>
   if (bajo) return <Banner tipo="ambar" icono={Wallet}>Con esto no te alcanza para usar nada. Recargá para seguir.</Banner>
   return null
 }
