@@ -219,6 +219,34 @@ export function recordarPais(codigo: string): void {
   }
 }
 
+/** true si el país vino de `?pais=` o de una elección guardada: el visitante ya eligió y la IP no manda. */
+export function paisElegido(): boolean {
+  try {
+    const pedido = new URLSearchParams(window.location.search).get("pais")?.toUpperCase()
+    if (pedido && CODIGOS.has(pedido)) return true
+  } catch {
+    /* sin dirección que leer; seguimos. */
+  }
+  try {
+    const guardado = localStorage.getItem(CLAVE_PAIS)
+    return Boolean(guardado && CODIGOS.has(guardado))
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Traduce el país que devuelve la IP (Cloudflare `CF-IPCountry`) al país de la web.
+ * - null: no se pudo saber (sin cabecera, Tor, desconocido) → se usa zona horaria/idioma.
+ * - "WW": está fuera de los países que manejamos → precios en USDT.
+ */
+export function paisDeIp(codigo: string | null | undefined): string | null {
+  if (!codigo) return null
+  const c = String(codigo).toUpperCase()
+  if (!/^[A-Z]{2}$/.test(c) || c === "XX" || c === "T1") return null
+  return CODIGOS.has(c) ? c : "WW"
+}
+
 // --- Caché simple en memoria: ~60 s por país (la función es STABLE). ---
 const TTL_MS = 60_000
 const cache = new Map<string, { datos: Precios; en: number }>()

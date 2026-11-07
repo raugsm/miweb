@@ -4434,6 +4434,17 @@ async function handleApi(req, res, pathname) {
     }
   }
 
+  /**
+   * Pais del visitante segun Cloudflare (`CF-IPCountry`). No se guarda ni se devuelve la IP.
+   * Sin cabecera (desarrollo o sin Cloudflare) devuelve null y la web usa zona horaria/idioma.
+   */
+  if (req.method === "GET" && pathname === "/api/pais") {
+    const cabecera = req.headers["cf-ipcountry"] || req.headers["x-vercel-ip-country"] || req.headers["x-country-code"] || "";
+    const codigo = String(cabecera).trim().toUpperCase();
+    const valido = /^[A-Z]{2}$/.test(codigo) && codigo !== "XX" && codigo !== "T1";
+    return sendJson(res, 200, { pais: valido ? codigo : null });
+  }
+
   const user = await getCurrentUser(req);
 
   if (req.method === "GET" && pathname === "/api/health") {
