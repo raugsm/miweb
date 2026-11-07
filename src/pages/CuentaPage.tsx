@@ -15,7 +15,7 @@ import { useNavigate } from "react-router-dom"
 
 import { AuthCard, AuthShell, AyudaWhatsApp, Banner, BotonPausa, BotonPrimario, BotonSecundario, CabezaAuth, Campo, CampoPassword, CampoSelect, CodigoCorreo, Divisor, EnlaceCentro, ReglasPassword } from "@/components/aritool/auth"
 import { C, FranjaSoporte, HeaderMobile, MenuMobile, PieMobile, RUTAS, WA } from "@/components/aritool/chrome"
-import { PAISES as PAISES_SERVICIO } from "@/lib/precios"
+import { PAISES } from "@/data/paises"
 import { usePrecios } from "@/hooks/use-precios"
 import { confirmar, entrarWeb, solicitarAcceso, verificado } from "@/lib/cuenta"
 import { usePais } from "@/lib/pais"
@@ -28,9 +28,9 @@ type Aviso = { tipo: "rojo" | "ambar" | "azul"; icono: LucideIcon; texto: string
 
 const SIN_CONEXION: Aviso = { tipo: "ambar", icono: WifiOff, texto: "Sin conexión. Revisá tu internet y probá de nuevo." }
 const ESPERA_REENVIO = 60
-// Solo los países donde operamos (el mismo listado del selector de precios, sin "Mundial").
-const PAISES_CUENTA = PAISES_SERVICIO.filter((p) => p.codigo !== "WW")
-const OPCIONES_PAIS = PAISES_CUENTA.map((p) => ({ valor: p.codigo, texto: p.nombre }))
+// Registro abierto a todos los países: si el país no tiene moneda local, el backend
+// muestra los precios en USDT (fallback WW), como Argentina o Ecuador.
+const OPCIONES_PAIS = PAISES.map((p) => ({ valor: p.iso, texto: p.nombre }))
 
 const esCorreo = (c: string) => c.length >= 5 && c.includes("@")
 
@@ -111,7 +111,7 @@ export function Cuenta({ whatsapp, alEntrar }: { whatsapp: string; alEntrar?: ()
   const [nombre, setNombre] = useState("")
   const [claveN, setClaveN] = useState("")
   const [claveN2, setClaveN2] = useState("")
-  const [pais, setPais] = useState(() => (PAISES_CUENTA.some((p) => p.codigo === paisSitio) ? paisSitio : "PE"))
+  const [pais, setPais] = useState(() => (PAISES.some((p) => p.iso === paisSitio) ? paisSitio : "PE"))
 
   const [codigo, setCodigo] = useState("")
   const [codigoMal, setCodigoMal] = useState(false)
@@ -338,7 +338,7 @@ export function Cuenta({ whatsapp, alEntrar }: { whatsapp: string; alEntrar?: ()
 
   const reglas = useMemo(() => reglasClave(claveN), [claveN])
   const repetidaOk = claveN2.length > 0 && claveN === claveN2
-  const nombrePais = PAISES_CUENTA.find((p) => p.codigo === pais)?.nombre ?? pais
+  const nombrePais = PAISES.find((p) => p.iso === pais)?.nombre ?? pais
   const banner = aviso ? <Banner tipo={aviso.tipo} icono={aviso.icono}>{aviso.texto}</Banner> : null
   const enPausa = pausa > 0
 

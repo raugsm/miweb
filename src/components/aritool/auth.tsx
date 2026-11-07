@@ -4,8 +4,8 @@
  * Cada pieza sirve para las dos cosas: sin `onChange`/`onClick` es solo presentación (galería de
  * estados para revisar contra el Figma); con ellos es el campo o el botón de verdad (pages/CuentaPage).
  */
-import { AlertCircle, Check, ChevronDown, Eye, EyeOff, type LucideIcon, X } from "lucide-react"
-import { createContext, useContext, useEffect, useRef, useState } from "react"
+import { AlertCircle, Check, ChevronDown, Eye, EyeOff, type LucideIcon, Search, X } from "lucide-react"
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react"
 import { Link } from "react-router-dom"
 
 import { Flag } from "@/components/Flag"
@@ -163,16 +163,31 @@ export function ReglasPassword({ reglas }: { reglas: { texto: string; ok: boolea
 
 /**
  * Selector de país: bandera + nombre + chevron. Abre una lista oscura propia (no el `<select>`
- * nativo, que en Windows sale blanco y muestra países que no atendemos). Con `opciones` y
- * `onChange` es el campo real; sin ellos es solo presentación (galería de estados).
+ * nativo, que en Windows sale blanco) con todos los países y buscador. Si el país no tiene
+ * moneda local, el backend muestra los precios en USDT (fallback WW).
  */
+function sinTildes(texto: string): string {
+  return texto.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+}
+
 export function CampoSelect({ label, bandera, texto, id, valor, opciones, onChange }: { label: string; bandera?: string; texto: string; id?: string; valor?: string; opciones?: { valor: string; texto: string }[]; onChange?: (valor: string) => void }) {
   const [abierto, setAbierto] = useState(false)
+  const [busqueda, setBusqueda] = useState("")
   const caja = useRef<HTMLDivElement>(null)
+  const buscador = useRef<HTMLInputElement>(null)
   const interactivo = Boolean(opciones && onChange && valor != null)
+  const conBuscador = (opciones?.length ?? 0) > 12
+
+  const filtradas = useMemo(() => {
+    const q = sinTildes(busqueda.trim())
+    if (!q) return opciones ?? []
+    return (opciones ?? []).filter((o) => sinTildes(o.texto).includes(q) || o.valor.toLowerCase().includes(q))
+  }, [opciones, busqueda])
 
   useEffect(() => {
     if (!abierto) return
+    setBusqueda("")
+    const foco = window.setTimeout(() => { if (conBuscador) buscador.current?.focus() }, 0)
     const cerrarFuera = (e: MouseEvent) => {
       if (caja.current && !caja.current.contains(e.target as Node)) setAbierto(false)
     }
@@ -182,10 +197,11 @@ export function CampoSelect({ label, bandera, texto, id, valor, opciones, onChan
     document.addEventListener("mousedown", cerrarFuera)
     document.addEventListener("keydown", cerrarTecla)
     return () => {
+      window.clearTimeout(foco)
       document.removeEventListener("mousedown", cerrarFuera)
       document.removeEventListener("keydown", cerrarTecla)
     }
-  }, [abierto])
+  }, [abierto, conBuscador])
 
   const elegir = (codigo: string) => {
     onChange?.(codigo)
@@ -211,22 +227,41 @@ export function CampoSelect({ label, bandera, texto, id, valor, opciones, onChan
       </button>
 
       {abierto && opciones ? (
-        <div role="listbox" aria-label={label} className="absolute left-0 right-0 top-full z-50 mt-1 max-h-64 overflow-y-auto rounded-xl py-1" style={{ background: C.card, border: `1px solid ${C.borderAlt}`, boxShadow: "0 16px 40px rgba(0,0,0,.45)" }}>
-          {opciones.map((o) => (
-            <button
-              key={o.valor}
-              type="button"
-              role="option"
-              aria-selected={o.valor === valor}
-              onClick={() => elegir(o.valor)}
-              className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left hover:bg-white/5"
-              style={{ color: o.valor === valor ? C.title : C.muted2, fontSize: 14 }}
-            >
-              <Flag code={o.valor.toLowerCase()} style={{ width: 20, height: 14 }} />
-              <span className="flex-1 truncate">{o.texto}</span>
-              {o.valor === valor ? <Check className="size-[15px] shrink-0" style={{ color: C.green }} /> : null}
-            </button>
-          ))}
+        <div className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden rounded-xl" style={{ background: C.card, border: `1px solid ${C.borderAlt}`, boxShadow: "0 16px 40px rgba(0,0,0,.45)" }}>
+          {conBuscador ? (
+            <div className="flex items-center gap-2 px-3 py-2" style={{ borderBottom: `1px solid ${C.border}` }}>
+              <Search className="size-4 shrink-0" style={{ color: C.muted }} />
+              <input
+                ref={buscador}
+                type="text"
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") e.preventDefault() }}
+                aria-label="Buscar país"
+                placeholder="Buscar país…"
+                className="w-full bg-transparent outline-none"
+                style={{ color: C.text, fontSize: 14, padding: "4px 0" }}
+              />
+            </div>
+          ) : null}
+          <div role="listbox" aria-label={label} className="max-h-64 overflow-y-auto py-1">
+            {filtradas.map((o) => (
+              <button
+                key={o.valor}
+                type="button"
+                role="option"
+                aria-selected={o.valor === valor}
+                onClick={() => elegir(o.valor)}
+                className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left hover:bg-white/5"
+                style={{ color: o.valor === valor ? C.title : C.muted2, fontSize: 14 }}
+              >
+                <Flag code={o.valor.toLowerCase()} style={{ width: 20, height: 14 }} />
+                <span className="flex-1 truncate">{o.texto}</span>
+                {o.valor === valor ? <Check className="size-[15px] shrink-0" style={{ color: C.green }} /> : null}
+              </button>
+            ))}
+            {filtradas.length === 0 ? <p className="px-3 py-3" style={{ color: C.muted, fontSize: 13 }}>Sin resultados.</p> : null}
+          </div>
         </div>
       ) : null}
     </div>
