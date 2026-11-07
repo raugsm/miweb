@@ -18,7 +18,7 @@ import { descargaDe } from "@/data/descargas"
 import { usePrecios } from "@/hooks/use-precios"
 import { NOMBRE_WEB } from "@/lib/buscador"
 import { usePais } from "@/lib/pais"
-import { formatearPrecio, nombreMoneda, paisesDisponibles, type HerramientaPrecio, type Precios, type ServicioPrecio } from "@/lib/precios"
+import { formatearPrecio, herramientaVisible, nombreMoneda, paisesDisponibles, type HerramientaPrecio, type Precios, type ServicioPrecio } from "@/lib/precios"
 import { useRelease } from "@/lib/release"
 import { useSeo } from "@/lib/seo"
 
@@ -176,7 +176,7 @@ function TarjetaSkeleton() {
 }
 
 function AlquilerDesktop({ cargando, error, datos, refrescar }: { cargando: boolean; error: boolean; datos: Precios | null; refrescar: () => void }) {
-  const herrs = datos ? datos.herramientas.slice().sort((a, b) => Number(b.disponible) - Number(a.disponible)) : []
+  const herrs = datos ? datos.herramientas.filter(herramientaVisible).slice().sort((a, b) => Number(b.disponible) - Number(a.disponible)) : []
   return (
     <section id="alquiler" data-ancla="alquiler" className="scroll-mt-24 pb-9">
       <Cont>
@@ -370,8 +370,8 @@ function TarjetaProximamenteMobile({ items }: { items: HerramientaPrecio[] }) {
 }
 
 function AlquilerMobile({ datos }: { datos: Precios | null }) {
-  const disp = datos ? datos.herramientas.filter((h) => h.disponible) : []
-  const apag = datos ? datos.herramientas.filter((h) => !h.disponible) : []
+  const disp = datos ? datos.herramientas.filter(herramientaVisible).filter((h) => h.disponible) : []
+  const apag = datos ? datos.herramientas.filter(herramientaVisible).filter((h) => !h.disponible) : []
   return (
     <section data-ancla="alquiler" className="scroll-mt-16 px-5 pb-6">
       <Titulo chico texto="Alquiler de herramientas" derecha="precio por uso" />

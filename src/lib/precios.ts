@@ -49,6 +49,9 @@ export type HerramientaPrecio = {
   disponible: boolean
 }
 
+// La lista vive aparte para que también la pueda leer el test del buscador con Node.
+export { HERRAMIENTAS_OCULTAS, herramientaVisible } from "./herramientas-ocultas.ts"
+
 /** Precios de la app (crédito/licencia) desde negocio.parametro. Llega desde v1.2 del backend; antes undefined. */
 export type AppPrecios = {
   credito_usd: number | null

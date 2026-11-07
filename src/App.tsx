@@ -44,9 +44,12 @@ const DashboardPage = lazy(() =>
 const PortalPage = lazy(() =>
   import("@/pages/gsm/portal/PortalPage").then((m) => ({ default: m.PortalPage }))
 )
-// Políticas y términos (una sola página con secciones ancladas).
-const LegalPage = lazy(() =>
-  import("@/pages/LegalPage").then((m) => ({ default: m.LegalPage }))
+// Legal con la cabecera y el pie de la web nueva (Ari-Diseño 7-nov): una dirección por sección.
+const LegalTerminosPage = lazy(() =>
+  import("@/pages/LegalAriToolPage").then((m) => ({ default: m.LegalTerminosPage }))
+)
+const LegalPrivacidadPage = lazy(() =>
+  import("@/pages/LegalAriToolPage").then((m) => ({ default: m.LegalPrivacidadPage }))
 )
 
 // TEMPORAL, solo para revisar contra el Figma: galería de estados de la Cuenta (presentación) e índice.
@@ -91,6 +94,9 @@ export default function App() {
             <Route path="mi-cuenta/historial" element={pagina(<HistorialPage />)} />
             <Route path="mi-cuenta/recargar" element={pagina(<RecargarPage />)} />
             <Route path="mi-cuenta/licencia" element={pagina(<LicenciaPage />)} />
+            <Route path="legal" element={<Navigate to="/legal/terminos" replace />} />
+            <Route path="legal/terminos" element={pagina(<LegalTerminosPage />)} />
+            <Route path="legal/privacidad" element={pagina(<LegalPrivacidadPage />)} />
             {/* Dirección vieja: la landing GSM ahora es el Inicio (regla W8 #13). */}
             <Route path="gsm" element={<Navigate to="/" replace />} />
             {VISTA_PREVIA.map(([vieja, nueva]) => <Route key={vieja} path={vieja} element={<Navigate to={nueva} replace />} />)}
@@ -102,7 +108,6 @@ export default function App() {
           <Route element={<RootLayout />}>
             <Route path="panel" element={<DashboardPage />} />
             <Route path="cliente" element={<PortalPage />} />
-            <Route path="legal" element={<LegalPage />} />
           </Route>
         </Routes>
       </BrowserRouter>

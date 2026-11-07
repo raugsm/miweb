@@ -14,7 +14,7 @@ import { C, Cont, FranjaSoporte, HeaderDesktop, HeaderMobile, IconoWA, LogoAriCa
 import { descargaDe } from "@/data/descargas"
 import { usePrecios } from "@/hooks/use-precios"
 import { APP_ARITOOL, NOMBRE_WEB, normalizar } from "@/lib/buscador"
-import { formatearPrecio, type HerramientaPrecio, type Moneda, type Precios, type ServicioPrecio } from "@/lib/precios"
+import { formatearPrecio, herramientaVisible, type HerramientaPrecio, type Moneda, type Precios, type ServicioPrecio } from "@/lib/precios"
 import { useSeo } from "@/lib/seo"
 
 type Filtro = "todo" | "alquiler" | "servicios"
@@ -259,7 +259,7 @@ export function ServiciosPage() {
   const herramientas = useMemo<HerramientaPrecio[]>(() => {
     if (!vista || errorPrecio) return []
     const orden = (h: HerramientaPrecio) => ORDEN_HERRAMIENTAS.get(h.clave) ?? 999
-    return [...vista.herramientas].sort((a, b) => orden(a) - orden(b) || Number(b.disponible) - Number(a.disponible))
+    return vista.herramientas.filter(herramientaVisible).sort((a, b) => orden(a) - orden(b) || Number(b.disponible) - Number(a.disponible))
   }, [vista, errorPrecio])
 
   const serviciosVisibles = useMemo(() => {

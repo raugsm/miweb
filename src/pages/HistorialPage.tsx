@@ -10,7 +10,8 @@ import { ArrowLeft, ArrowRight, ChevronDown } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 
-import { C, Cont, FranjaSoporte, HeaderDesktop, HeaderMobile, MenuMobile, PieDesktop, PieMobile, RUTAS } from "@/components/aritool/chrome"
+import { C, Cont, FranjaSoporte, HeaderDesktop, HeaderMobile, MenuMobile, PieDesktop, PieMobile, RUTAS, WA } from "@/components/aritool/chrome"
+import { SinPerfil } from "@/components/aritool/perfil"
 import { CabeceraHistorial, FilaCelular, FilaCompu, FilasCargandoCelular, FilasCargandoCompu, HistorialVacio, NoSePudo } from "@/components/aritool/historial"
 import { usePrecios } from "@/hooks/use-precios"
 import { NOMBRE_WEB } from "@/lib/buscador"
@@ -30,7 +31,7 @@ const PERIODOS: { dias: number | null; texto: string }[] = [
 ]
 
 type Datos = Pick<PaginaHistorial, "movimientos" | "trabajos"> & { siguiente: string | null; /** TEMPORAL: vino de `cliente_resumen`; se filtra acá. */ local: boolean }
-type Carga = { estado: "cargando" } | { estado: "error" } | { estado: "listo"; datos: Datos }
+type Carga = { estado: "cargando" } | { estado: "error" } | { estado: "sinPerfil" } | { estado: "listo"; datos: Datos }
 
 type CuerpoProps = {
   carga: Carga
@@ -182,7 +183,7 @@ export function HistorialPage() {
       const motivo = await motivoRechazo((rr ?? r)?.status ?? 0)
       // La sesión venció (W13 S8): vuelve a entrar y regresa acá.
       if (motivo === "vencida") return nav(`${RUTAS.cuenta}?vencida=1&volver=${encodeURIComponent(RUTAS.historial)}`, { replace: true })
-      if (motivo === "perfil") return nav(RUTAS.panelViejo, { replace: true })
+      if (motivo === "perfil") return setCarga({ estado: "sinPerfil" })
       setCarga({ estado: "error" })
     } catch {
       if (mio === turno.current) setCarga({ estado: "error" })
@@ -206,6 +207,7 @@ export function HistorialPage() {
     return carga.datos.local ? filtrarHistorial(todas, filtro, dias) : todas
   }, [carga, catalogo, filtro, dias])
   const listo = carga.estado === "listo" ? carga.datos : null
+  const whatsapp = datos?.soporte.whatsapp ?? WA
   const props: CuerpoProps = {
     carga, filas, filtro, dias, cargandoMas, alFiltrar: setFiltro, alPeriodo: setDias,
     cargarMas: () => { if (listo?.siguiente) void pedir(listo.siguiente, listo) },
@@ -216,13 +218,13 @@ export function HistorialPage() {
     <div className="min-h-screen overflow-x-hidden" style={{ background: C.page, color: C.text, fontFamily: "Inter, system-ui, sans-serif", lineHeight: "normal" }}>
       <div className="hidden lg:block">
         <HeaderDesktop datos={datos} />
-        <CuerpoCompu {...props} />
+        {carga.estado === "sinPerfil" ? <SinPerfil whatsapp={whatsapp} movil={false} titulo="Tu historial" /> : <CuerpoCompu {...props} />}
         <PieDesktop />
       </div>
       <div className="lg:hidden">
         <HeaderMobile onMenu={() => setMenu(true)} />
         <FranjaSoporte datos={datos} />
-        <CuerpoCelular {...props} />
+        {carga.estado === "sinPerfil" ? <SinPerfil whatsapp={whatsapp} movil titulo="Tu historial" /> : <CuerpoCelular {...props} />}
         <PieMobile />
         {menu ? <MenuMobile datos={datos} onClose={() => setMenu(false)} /> : null}
       </div>

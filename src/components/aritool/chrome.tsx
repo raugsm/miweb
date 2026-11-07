@@ -237,8 +237,8 @@ export function PieDesktop() {
           <span style={{ color: C.text, fontWeight: 700, fontSize: 15 }}>AriTool</span>
           <span style={{ color: C.faint, fontSize: 13 }}>© 2026</span>
         </div>
-        <Link to="/legal#terminos" style={{ color: C.muted, fontSize: 13 }}>Términos</Link>
-        <Link to="/legal#privacidad" style={{ color: C.muted, fontSize: 13 }}>Privacidad</Link>
+        <Link to="/legal/terminos" style={{ color: C.muted, fontSize: 13 }}>Términos</Link>
+        <Link to="/legal/privacidad" style={{ color: C.muted, fontSize: 13 }}>Privacidad</Link>
       </Cont>
     </footer>
   )
@@ -279,7 +279,7 @@ export function PieMobile() {
           <span style={{ color: C.text, fontWeight: 700, fontSize: 14 }}>AriTool</span>
           <span style={{ color: C.faint, fontSize: 12 }}>© 2026</span>
         </div>
-        <div className="mt-3.5 flex gap-1" style={{ color: C.muted, fontSize: 12, lineHeight: "15px" }}><Link to="/legal#terminos">Términos</Link><span aria-hidden>·</span><Link to="/legal#privacidad">Privacidad</Link></div>
+        <div className="mt-3.5 flex gap-1" style={{ color: C.muted, fontSize: 12, lineHeight: "15px" }}><Link to="/legal/terminos">Términos</Link><span aria-hidden>·</span><Link to="/legal/privacidad">Privacidad</Link></div>
       </div>
     </footer>
   )

@@ -20,16 +20,17 @@ import { Link, useNavigate } from "react-router-dom"
 import { Banner } from "@/components/aritool/auth"
 import { Barra, CabeceraHistorial, FilaCelular, FilaCompu, FilasCargandoCelular, FilasCargandoCompu, HistorialVacio, NoSePudo } from "@/components/aritool/historial"
 import { C, Cont, FranjaSoporte, HeaderDesktop, HeaderMobile, IconoWA, MenuMobile, PieDesktop, PieMobile, RUTAS, WA } from "@/components/aritool/chrome"
+import { SinPerfil } from "@/components/aritool/perfil"
 import { usePrecios } from "@/hooks/use-precios"
 import { NOMBRE_WEB } from "@/lib/buscador"
 import { cobroActivo, resumenCliente, type CobroActivo, type ResumenCliente } from "@/lib/cuenta"
 import { filasHistorial, type FilaHistorial } from "@/lib/historial"
-import { type Precios } from "@/lib/precios"
+import { herramientaVisible, type Precios } from "@/lib/precios"
 import { motivoRechazo, recordarNombre } from "@/lib/sesion"
 import { useSeo } from "@/lib/seo"
 import { supabase } from "@/lib/supabase"
 
-type Carga = { estado: "cargando" } | { estado: "error" } | { estado: "listo"; datos: ResumenCliente; correo: string; pago: CobroActivo | null }
+type Carga = { estado: "cargando" } | { estado: "error" } | { estado: "sinPerfil" } | { estado: "listo"; datos: ResumenCliente; correo: string; pago: CobroActivo | null }
 
 const usd = (n: number) => `US$ ${n.toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 /** "2027-09-12" → "12/09/2027" (la fecha es un día, no una hora: no se pasa por zona horaria). */
@@ -61,7 +62,7 @@ function minimoParaUsar(datos: Precios | null | undefined): number | null {
   if (!datos) return null
   const precios = [
     ...datos.servicios.filter((x) => x.disponible).map((x) => x.precio_usd),
-    ...datos.herramientas.filter((h) => h.disponible).map((h) => h.precio_usdt),
+    ...datos.herramientas.filter(herramientaVisible).filter((h) => h.disponible).map((h) => h.precio_usdt),
     datos.app?.credito_usd,
   ].filter((n): n is number => typeof n === "number" && n > 0)
   return precios.length ? Math.min(...precios) : null
@@ -330,8 +331,8 @@ export function MiCuentaPage() {
       const motivo = await motivoRechazo(r.status)
       // La sesión venció (W13 S8): vuelve a entrar y regresa acá.
       if (motivo === "vencida") return nav(`${RUTAS.cuenta}?vencida=1`, { replace: true })
-      // La cuenta todavía no tiene su perfil armado: eso se completa en el panel de la web anterior.
-      if (motivo === "perfil") return nav(RUTAS.panelViejo, { replace: true })
+      // La cuenta todavía no tiene su perfil de taller: se queda en la web nueva con un aviso.
+      if (motivo === "perfil") return setCarga({ estado: "sinPerfil" })
       setCarga({ estado: "error" })
     } catch {
       setCarga({ estado: "error" })
@@ -361,13 +362,13 @@ export function MiCuentaPage() {
     <div className="min-h-screen overflow-x-hidden" style={{ background: C.page, color: C.text, fontFamily: "Inter, system-ui, sans-serif", lineHeight: "normal" }}>
       <div className="hidden lg:block">
         <HeaderDesktop datos={datos} />
-        <CuerpoCompu {...props} />
+        {carga.estado === "sinPerfil" ? <SinPerfil whatsapp={whatsapp} movil={false} titulo="Mi cuenta" /> : <CuerpoCompu {...props} />}
         <PieDesktop />
       </div>
       <div className="lg:hidden">
         <HeaderMobile onMenu={() => setMenu(true)} />
         <FranjaSoporte datos={datos} />
-        <CuerpoCelular {...props} />
+        {carga.estado === "sinPerfil" ? <SinPerfil whatsapp={whatsapp} movil titulo="Mi cuenta" /> : <CuerpoCelular {...props} />}
         <PieMobile />
         {menu ? <MenuMobile datos={datos} onClose={() => setMenu(false)} /> : null}
       </div>

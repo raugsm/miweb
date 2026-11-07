@@ -8,7 +8,8 @@ import { ArrowRight, Copy, Download, Monitor, RefreshCw, Shield } from "lucide-r
 import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
 
-import { C, FranjaSoporte, HeaderDesktop, HeaderMobile, IconoWA, LogoAriCaja, MenuMobile, PieDesktop, PieMobile, RUTAS, WA } from "@/components/aritool/chrome"
+import { C, FranjaSoporte, HeaderDesktop, HeaderMobile, IconoWA, LogoAriCaja, MenuMobile, PieDesktop, PieMobile, RUTAS, WA, useAncla } from "@/components/aritool/chrome"
+import { novedades } from "@/data/novedades"
 import { usePrecios } from "@/hooks/use-precios"
 import { usePais } from "@/lib/pais"
 import { useRelease } from "@/lib/release"
@@ -22,6 +23,40 @@ const AYUDA_M = [
   { icon: Shield, t: "Windows la frena", s: 'Tocá "Más información" y después "Ejecutar de todas formas".' },
   { icon: RefreshCw, t: "Tenés una versión vieja", s: "Abrí AriTool: se actualiza sola. Si no, bajala de nuevo." },
 ]
+
+function fmtFecha(iso: string): string {
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(iso) ? new Date(`${iso}T00:00:00`) : new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  return d.toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric" })
+}
+
+/** Archivo de versiones (pedido de Ari-Diseño 7-nov): vive acá y Novedades salta a #versiones-anteriores. */
+function VersionesAnteriores({ movil }: { movil: boolean }) {
+  return (
+    <section data-ancla="versiones-anteriores" className={movil ? "px-5 pb-6 pt-2" : "mt-10"}>
+      <h2 style={{ color: C.title, fontWeight: 700, fontSize: movil ? 20 : 22, lineHeight: movil ? "25px" : "27px" }}>Versiones anteriores</h2>
+      <p className="mt-1" style={{ color: C.muted, fontSize: movil ? 13 : 14, lineHeight: movil ? "18px" : "19px" }}>El historial completo de AriTool, versión por versión.</p>
+      <div className={`mt-4 overflow-hidden ${movil ? "rounded-[14px]" : "rounded-[14px]"}`} style={{ background: C.card, border: `1px solid ${C.border}` }}>
+        {novedades.map((e, i) => (
+          <div key={e.version} className={movil ? "flex flex-col gap-2 p-4" : "flex gap-6 p-5"} style={i > 0 ? { borderTop: `1px solid ${C.border}` } : undefined}>
+            <div className={movil ? "flex items-center gap-2" : "w-32 shrink-0"}>
+              <span style={{ color: C.title, fontWeight: 700, fontSize: movil ? 15 : 16, lineHeight: "20px" }}>{e.version}</span>
+              {movil ? <><span className="flex-1" /><span style={{ color: C.muted, fontSize: 12 }}>{fmtFecha(e.fecha)}</span></> : <div className="mt-1" style={{ color: C.muted, fontSize: 12, lineHeight: "15px" }}>{fmtFecha(e.fecha)}</div>}
+            </div>
+            <div className={movil ? "flex flex-col gap-1.5" : "flex flex-1 flex-col gap-2"}>
+              {e.notas.map((n, j) => (
+                <div key={j} className={movil ? "flex flex-col gap-0.5" : "flex gap-3"}>
+                  {n.area ? <span className={movil ? "" : "w-16 shrink-0"} style={{ color: C.muted, fontWeight: 600, fontSize: 12, lineHeight: "16px" }}>{n.area}</span> : null}
+                  <span style={{ color: "#d1d5db", fontSize: movil ? 13 : 14, lineHeight: "20px" }}>{n.texto}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
 
 function ContenidoDesktop() {
   const r = useRelease()
@@ -66,6 +101,7 @@ function ContenidoDesktop() {
         <Link to={RUTAS.novedades} className="mt-7 flex w-fit items-center gap-1.5" style={{ color: C.link, fontWeight: 500, fontSize: 14, lineHeight: "17px" }}>
           ¿Qué cambió en esta versión? Ver novedades <ArrowRight className="size-[14px]" />
         </Link>
+        <VersionesAnteriores movil={false} />
       </div>
     </main>
   )
@@ -119,12 +155,15 @@ function ContenidoMobile({ datos }: { datos: { soporte: { whatsapp: string | nul
           ¿Qué cambió? Ver novedades <ArrowRight className="size-[13px]" />
         </Link>
       </section>
+
+      <VersionesAnteriores movil />
     </main>
   )
 }
 
 export function DescargarAriToolPage() {
   useSeo({ titulo: "Descargar AriTool", descripcion: "AriTool para Windows 10 u 11 de 64 bits. Es portable, no se instala y se actualiza sola.", ruta: "/descargas" })
+  useAncla()
   const { datos } = usePrecios()
   const { setPais } = usePais()
   const [menu, setMenu] = useState(false)

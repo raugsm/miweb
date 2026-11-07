@@ -8,6 +8,7 @@
  *
  * Máximo 6 resultados. Nunca inventa un precio: `precio` null = la fila dice "Precio en la app".
  */
+import { herramientaVisible } from "./herramientas-ocultas.ts"
 import type { Moneda, Precios } from "@/lib/precios"
 
 export const MAX_RESULTADOS = 6
@@ -66,7 +67,7 @@ function entradas(datos: Precios): Entrada[] {
       extra: [detalle, ...(s.palabras_clave ?? [])].map(normalizar),
     })
   }
-  for (const h of datos.herramientas) {
+  for (const h of datos.herramientas.filter(herramientaVisible)) {
     const detalle = h.disponible ? `Alquiler · ${h.horas} h` : "Alquiler"
     lista.push({
       tipo: "herramienta",

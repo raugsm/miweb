@@ -94,11 +94,15 @@ test("máximo 6 resultados", () => {
 
 test("las apagadas van al final, sin precio y sin horas", () => {
   const r = buscar(catalogo(), "pro");
-  assert.deepEqual(nombres(r), ["DFT Pro", "TSM Tool Pro", "TR Tools Pro", "TFM Tool Pro"]);
+  assert.deepEqual(nombres(r), ["DFT Pro", "TSM Tool Pro", "TR Tools Pro"]);
   const apagada = r.find((x) => x.clave === "tr_tools_pro");
   assert.equal(apagada.disponible, false);
   assert.equal(apagada.precio, null);
   assert.equal(apagada.detalle, "Alquiler");
+});
+
+test("TFM no aparece hasta tener logo (Ari-Diseño 7-nov)", () => {
+  assert.deepEqual(nombres(buscar(catalogo(), "tfm")), []);
 });
 
 test("una o dos letras solo cuentan como comienzo de palabra", () => {

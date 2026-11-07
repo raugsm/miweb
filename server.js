@@ -6341,9 +6341,13 @@ const webPageMeta = {
     title: "Licencia anual | AriTool",
     description: "Compra o renueva la licencia anual de AriTool con Yape o Binance Pay.",
   },
-  "/legal": {
-    title: "Politicas y terminos | AriadGSM",
-    description: "Terminos, privacidad, reembolsos y politica de uso aceptable de AriadGSM y Ari-Tool. Herramienta para uso profesional autorizado.",
+  "/legal/terminos": {
+    title: "Terminos y Condiciones | AriTool",
+    description: "Terminos y condiciones de uso de AriTool y de los servicios para tecnicos.",
+  },
+  "/legal/privacidad": {
+    title: "Politica de Privacidad | AriTool",
+    description: "Como AriTool trata los datos de tu cuenta y de tu taller.",
   },
 };
 

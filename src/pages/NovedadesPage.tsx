@@ -5,6 +5,7 @@
  */
 import { Download } from "lucide-react"
 import { useEffect, useState } from "react"
+import { Link } from "react-router-dom"
 
 import { C, FranjaSoporte, HeaderDesktop, HeaderMobile, MenuMobile, PieDesktop, PieMobile } from "@/components/aritool/chrome"
 import { novedades } from "@/data/novedades"
@@ -62,7 +63,7 @@ function ContenidoDesktop() {
           ))}
         </div>
 
-        <a href="#" className="mt-6 block w-fit" style={{ color: C.link, fontWeight: 500, fontSize: 13, lineHeight: "16px" }}>Ver versiones anteriores</a>
+        <Link to="/descargas#versiones-anteriores" className="mt-6 block w-fit" style={{ color: C.link, fontWeight: 500, fontSize: 13, lineHeight: "16px" }}>Ver versiones anteriores</Link>
       </div>
     </main>
   )
@@ -96,7 +97,7 @@ function ContenidoMobile() {
         ))}
       </div>
       <div className="px-5 pb-6 pt-[38px]">
-        <a href="#" className="block w-fit" style={{ color: C.link, fontWeight: 500, fontSize: 13, lineHeight: "16px" }}>Ver versiones anteriores</a>
+        <Link to="/descargas#versiones-anteriores" className="block w-fit" style={{ color: C.link, fontWeight: 500, fontSize: 13, lineHeight: "16px" }}>Ver versiones anteriores</Link>
       </div>
     </main>
   )
