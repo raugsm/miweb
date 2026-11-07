@@ -12,6 +12,7 @@ import { novedades } from "@/data/novedades"
 import { usePrecios } from "@/hooks/use-precios"
 import { RUTA_DESCARGA } from "@/lib/descarga"
 import { usePais } from "@/lib/pais"
+import { paisDeUrl } from "@/lib/precios"
 import { useRelease } from "@/lib/release"
 import { useSeo } from "@/lib/seo"
 
@@ -38,7 +39,7 @@ function ContenidoDesktop() {
           </div>
           <a href={RUTA_DESCARGA} className="inline-flex shrink-0 items-center gap-2" style={{ border: `1px solid ${C.borderAlt}`, borderRadius: 9, padding: "11px 16px" }}>
             <Download className="size-4" style={{ color: C.text }} />
-            <span style={{ color: C.text, fontWeight: 600, fontSize: 14, lineHeight: "17px" }}>Descargar la {r.version}</span>
+            <span style={{ color: C.text, fontWeight: 600, fontSize: 14, lineHeight: "17px" }}>{r.version ? `Descargar la ${r.version}` : "Descargar AriTool"}</span>
           </a>
         </div>
 
@@ -111,8 +112,8 @@ export function NovedadesPage() {
   const [menu, setMenu] = useState(false)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    const q = params.get("pais")
-    if (q) setPais(q.toUpperCase())
+    const q = paisDeUrl()
+    if (q) setPais(q)
     if (params.get("menu") === "1") setMenu(true)
     const prev = document.body.style.background
     document.body.style.background = C.page

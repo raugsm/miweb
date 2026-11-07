@@ -23,7 +23,8 @@ export function usePrecios(): EstadoPrecios & { pais: string; refrescar: () => v
 
   useEffect(() => {
     let vivo = true
-    setEstado((e) => ({ cargando: true, error: false, datos: e.datos }))
+    // Al cambiar de país no se arrastran los precios del país anterior (W8: nunca un precio viejo).
+    setEstado({ cargando: true, error: false, datos: null })
     traerPrecios(pais)
       .then((datos) => {
         if (vivo) setEstado({ cargando: false, error: false, datos })
@@ -36,5 +37,7 @@ export function usePrecios(): EstadoPrecios & { pais: string; refrescar: () => v
     }
   }, [pais, intento])
 
-  return { ...estado, pais, refrescar: () => setIntento((n) => n + 1) }
+  // Nunca entregar datos de otro país, ni siquiera en el frame en que cambia el selector.
+  const datos = estado.datos && (estado.datos.pais?.codigo ?? "").toUpperCase() === pais ? estado.datos : null
+  return { ...estado, datos, pais, refrescar: () => setIntento((n) => n + 1) }
 }

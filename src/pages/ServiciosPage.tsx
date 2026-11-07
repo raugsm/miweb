@@ -212,23 +212,25 @@ function EnTuPC({ whatsapp }: { whatsapp: string }) {
 
 export function ServiciosPage() {
   useSeo({ titulo: "Servicios | AriTool", descripcion: "Alquilá herramientas por horas o pedí un servicio remoto: Xiaomi Reset + FRP, Cuenta MI y AriTool. Precios en vivo y soporte por WhatsApp.", ruta: "/servicios" })
-  const { cargando, error, datos, refrescar } = usePrecios()
+  const { cargando, error, datos, refrescar, pais } = usePrecios()
   const [consulta, setConsulta] = useState(() => new URLSearchParams(window.location.search).get("q") ?? "")
   const [filtro, setFiltro] = useState<Filtro>("todo")
   const [menuAbierto, setMenuAbierto] = useState(false)
-  const [ultimo, setUltimo] = useState<Precios | null>(null)
+  // Último catálogo, pero solo sirve si es del MISMO país: al cambiar de país no se
+  // muestran precios viejos con la moneda nueva (W8).
+  const [ultimo, setUltimo] = useState<{ pais: string; datos: Precios } | null>(null)
   useAncla()
 
   useEffect(() => {
-    if (datos) setUltimo(datos)
-  }, [datos])
+    if (datos) setUltimo({ pais, datos })
+  }, [datos, pais])
   useEffect(() => {
     const prev = document.body.style.background
     document.body.style.background = C.page
     return () => { document.body.style.background = prev }
   }, [])
 
-  const vista = datos ?? ultimo
+  const vista = datos ?? (ultimo?.pais === pais ? ultimo.datos : null)
   const errorPrecio = error && !!vista
   const whatsapp = vista?.soporte.whatsapp ?? WA
   const moneda = vista?.pais.moneda

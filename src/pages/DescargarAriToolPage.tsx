@@ -14,6 +14,7 @@ import { novedades } from "@/data/novedades"
 import { usePrecios } from "@/hooks/use-precios"
 import { enlaceDescarga, RUTA_DESCARGA } from "@/lib/descarga"
 import { usePais } from "@/lib/pais"
+import { paisDeUrl } from "@/lib/precios"
 import { useRelease } from "@/lib/release"
 import { useSeo } from "@/lib/seo"
 
@@ -72,7 +73,7 @@ function ContenidoDesktop() {
               <LogoAriCaja lado={52} radio={13} />
               <div>
                 <div style={{ color: C.title, fontWeight: 700, fontSize: 22, lineHeight: "27px" }}>AriTool para Windows</div>
-                <div className="mt-[3px]" style={{ color: C.muted2, fontSize: 14, lineHeight: "17px" }}>Versión {r.version} · publicada el {r.buildDateLabel}</div>
+                <div className="mt-[3px]" style={{ color: C.muted2, fontSize: 14, lineHeight: "17px" }}>{r.version ? `Versión ${r.version} · publicada el ${r.buildDateLabel}` : "La última versión disponible"}</div>
               </div>
             </div>
             <p className="mt-3.5" style={{ color: C.muted, fontSize: 14, lineHeight: "17px" }}>Windows 10 u 11 de 64 bits · es portable, no se instala · se actualiza sola</p>
@@ -115,7 +116,7 @@ function ContenidoMobile({ datos }: { datos: { soporte: { whatsapp: string | nul
     <main>
       <section className="px-5 pb-6 pt-7">
         <h1 style={{ color: C.title, fontWeight: 700, fontSize: 28, lineHeight: "34px" }}>Descargar AriTool</h1>
-        <p className="mt-1.5" style={{ color: C.muted, fontSize: 14, lineHeight: "20px" }}>Versión {r.version} · Windows 10 u 11 · no se instala · se actualiza sola</p>
+        <p className="mt-1.5" style={{ color: C.muted, fontSize: 14, lineHeight: "20px" }}>{r.version ? `Versión ${r.version} · ` : "La última versión disponible · "}Windows 10 u 11 · no se instala · se actualiza sola</p>
       </section>
 
       <section className="px-5 pb-6">
@@ -168,8 +169,8 @@ export function DescargarAriToolPage() {
   const [menu, setMenu] = useState(false)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    const q = params.get("pais")
-    if (q) setPais(q.toUpperCase())
+    const q = paisDeUrl()
+    if (q) setPais(q)
     if (params.get("menu") === "1") setMenu(true)
     const prev = document.body.style.background
     document.body.style.background = C.page

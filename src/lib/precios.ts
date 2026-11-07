@@ -177,16 +177,22 @@ const PAIS_POR_ZONA: Record<string, string> = {
   "Pacific/Galapagos": "EC",
 }
 
-/** ?pais= de la dirección (y se recuerda) > país recordado > zona horaria > región del navegador (es-PE → PE) > WW. Siempre uno de PAISES. */
-export function detectarPais(): string {
+/** País válido de `?pais=` en la dirección, o null si falta o no es uno de los que manejamos. */
+export function paisDeUrl(): string | null {
   try {
     const pedido = new URLSearchParams(window.location.search).get("pais")?.toUpperCase()
-    if (pedido && CODIGOS.has(pedido)) {
-      recordarPais(pedido)
-      return pedido
-    }
+    return pedido && CODIGOS.has(pedido) ? pedido : null
   } catch {
-    /* sin dirección que leer; seguimos. */
+    return null
+  }
+}
+
+/** ?pais= de la dirección (y se recuerda) > país recordado > zona horaria > región del navegador (es-PE → PE) > WW. Siempre uno de PAISES. */
+export function detectarPais(): string {
+  const pedido = paisDeUrl()
+  if (pedido) {
+    recordarPais(pedido)
+    return pedido
   }
   try {
     const guardado = localStorage.getItem(CLAVE_PAIS)
@@ -274,6 +280,11 @@ export async function traerPrecios(pais: string, opciones?: { forzar?: boolean }
     if (!data || typeof data !== "object") throw new Error("precios_respuesta_invalida")
 
     const datos = data as Precios
+    // Una respuesta incompleta se trata como error: las páginas muestran "no se pudo leer",
+    // nunca una tarjeta rota ni un precio inventado.
+    if (!datos.pais || typeof datos.pais !== "object" || !Array.isArray(datos.servicios) || !Array.isArray(datos.herramientas)) {
+      throw new Error("precios_respuesta_incompleta")
+    }
     cache.set(clave, { datos, en: Date.now() })
     return datos
   })().finally(() => enCurso.delete(clave))

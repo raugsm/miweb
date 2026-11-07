@@ -13,7 +13,7 @@ import { BotonCopiarEnlace } from "@/components/aritool/descarga"
 import { usePrecios } from "@/hooks/use-precios"
 import { enlaceDescarga, RUTA_DESCARGA } from "@/lib/descarga"
 import { usePais } from "@/lib/pais"
-import { type Precios } from "@/lib/precios"
+import { paisDeUrl, type Precios } from "@/lib/precios"
 import { useRelease } from "@/lib/release"
 import { useSeo } from "@/lib/seo"
 
@@ -43,7 +43,7 @@ function preciosApp(datos: Precios | null) {
 }
 
 // ======================= COMPUTADORA =======================
-function Plan({ label, precio, unidad, nota }: { label: string; precio: string | null; unidad: string; nota: string }) {
+function Plan({ label, precio, unidad, nota, listo }: { label: string; precio: string | null; unidad: string; nota: string; listo: boolean }) {
   return (
     <div className="flex flex-col gap-1.5 rounded-[10px] p-4" style={{ background: C.cardAlt, border: `1px solid ${C.borderSoft}` }}>
       <p style={{ color: C.muted2, fontWeight: 500, fontSize: 13, lineHeight: "16px" }}>{label}</p>
@@ -53,6 +53,8 @@ function Plan({ label, precio, unidad, nota }: { label: string; precio: string |
             <span style={{ color: C.title, fontWeight: 700, fontSize: 26, lineHeight: "31px" }}>{precio}</span>
             <span style={{ color: C.muted, fontSize: 13, lineHeight: "16px" }}>{unidad}</span>
           </>
+        ) : listo ? (
+          <span style={{ color: C.muted, fontSize: 14, lineHeight: "18px" }}>Precio en la app</span>
         ) : (
           <span className="my-[5.5px] h-5 w-16 animate-pulse rounded" style={{ background: C.border }} />
         )}
@@ -92,7 +94,7 @@ function VentanaW9() {
   )
 }
 
-function ContenidoDesktop({ datos }: { datos: Precios | null }) {
+function ContenidoDesktop({ datos, listo }: { datos: Precios | null; listo: boolean }) {
   const r = useRelease()
   const p = preciosApp(datos)
   return (
@@ -108,7 +110,7 @@ function ContenidoDesktop({ datos }: { datos: Precios | null }) {
             <a href={RUTA_DESCARGA} className="flex items-center gap-2 text-white" style={{ background: C.blue, borderRadius: 10, padding: "13px 20px" }}>
               <Download className="size-[17px]" /><span style={{ fontWeight: 600, fontSize: 15, lineHeight: "18px" }}>Descargar AriTool</span>
             </a>
-            <span style={{ color: C.faint, fontSize: 12, lineHeight: "15px" }}>Gratis · versión {r.version}</span>
+            <span style={{ color: C.faint, fontSize: 12, lineHeight: "15px" }}>{r.version ? `Gratis · versión ${r.version}` : "Gratis · Windows 10 y 11"}</span>
           </div>
         </div>
       </section>
@@ -134,8 +136,8 @@ function ContenidoDesktop({ datos }: { datos: Precios | null }) {
             <p className="uppercase" style={{ color: C.muted, fontWeight: 700, fontSize: 12, lineHeight: "15px", letterSpacing: "1.2px" }}>Security Plugin y AntiCrack</p>
             <p className="mt-3.5" style={{ color: C.muted2, fontSize: 13, lineHeight: "16px" }}>Tecno · Infinix · itel · MediaTek · 424 modelos</p>
             <div className="mt-3.5 grid grid-cols-2 gap-3">
-              <Plan label="Créditos" precio={p.credito} unidad="por proceso" nota="Se cobra cuando termina bien." />
-              <Plan label="Licencia anual" precio={p.licencia} unidad="al año" nota="Sin límite en 1 PC." />
+              <Plan label="Créditos" precio={p.credito} unidad="por proceso" nota="Se cobra cuando termina bien." listo={listo} />
+              <Plan label="Licencia anual" precio={p.licencia} unidad="al año" nota="Sin límite en 1 PC." listo={listo} />
             </div>
           </div>
           <div className="rounded-2xl p-6" style={{ background: C.card, border: `1px solid ${C.border}` }}>
@@ -156,7 +158,7 @@ function ContenidoDesktop({ datos }: { datos: Precios | null }) {
 }
 
 // ======================= CELULAR =======================
-function FilaPlanM({ nombre, nota, precio, unidad }: { nombre: string; nota: string; precio: string | null; unidad: string }) {
+function FilaPlanM({ nombre, nota, precio, unidad, listo }: { nombre: string; nota: string; precio: string | null; unidad: string; listo: boolean }) {
   return (
     <div className="flex items-center justify-between rounded-[10px] p-3.5" style={{ background: C.card, border: `1px solid ${C.border}` }}>
       <div className="min-w-0">
@@ -169,6 +171,8 @@ function FilaPlanM({ nombre, nota, precio, unidad }: { nombre: string; nota: str
             <span style={{ color: C.title, fontWeight: 700, fontSize: 22, lineHeight: "27px" }}>{precio}</span>
             <span style={{ color: C.muted, fontSize: 12, lineHeight: "15px" }}>{unidad}</span>
           </>
+        ) : listo ? (
+          <span style={{ color: C.muted, fontSize: 12, lineHeight: "15px" }}>Precio en la app</span>
         ) : (
           <span className="mb-1 h-4 w-12 animate-pulse rounded" style={{ background: C.border }} />
         )}
@@ -177,7 +181,7 @@ function FilaPlanM({ nombre, nota, precio, unidad }: { nombre: string; nota: str
   )
 }
 
-function ContenidoMobile({ datos }: { datos: Precios | null }) {
+function ContenidoMobile({ datos, listo }: { datos: Precios | null; listo: boolean }) {
   const p = preciosApp(datos)
   const wa = datos?.soporte.whatsapp ?? WA
   const waLink = `${wa}${wa.includes("?") ? "&" : "?"}text=${encodeURIComponent(`AriTool para Windows: ${enlaceDescarga()}`)}`
@@ -222,8 +226,8 @@ function ContenidoMobile({ datos }: { datos: Precios | null }) {
         <p className="uppercase" style={{ color: C.muted, fontWeight: 700, fontSize: 11, lineHeight: "13px", letterSpacing: "1.1px" }}>Security Plugin y AntiCrack</p>
         <p className="mt-2.5" style={{ color: C.muted2, fontSize: 13, lineHeight: "16px" }}>Tecno · Infinix · itel · MediaTek · 424 modelos</p>
         <div className="mt-2.5 flex flex-col gap-2.5">
-          <FilaPlanM nombre="Créditos" nota="Se cobra cuando termina bien." precio={p.credito} unidad="por proceso" />
-          <FilaPlanM nombre="Licencia anual" nota="Sin límite en 1 PC." precio={p.licencia} unidad="al año" />
+          <FilaPlanM nombre="Créditos" nota="Se cobra cuando termina bien." precio={p.credito} unidad="por proceso" listo={listo} />
+          <FilaPlanM nombre="Licencia anual" nota="Sin límite en 1 PC." precio={p.licencia} unidad="al año" listo={listo} />
         </div>
       </section>
 
@@ -244,13 +248,13 @@ function ContenidoMobile({ datos }: { datos: Precios | null }) {
 
 export function AppAriToolPage() {
   useSeo({ titulo: "App AriTool | AriTool", descripcion: "Así se ve AriTool por dentro. Una sola ventana: elegís, pagás y trabajás sin salir de la app.", ruta: "/app" })
-  const { datos } = usePrecios()
+  const { datos, cargando } = usePrecios()
   const { setPais } = usePais()
   const [menu, setMenu] = useState(false)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    const q = params.get("pais")
-    if (q) setPais(q.toUpperCase())
+    const q = paisDeUrl()
+    if (q) setPais(q)
     if (params.get("menu") === "1") setMenu(true)
     const prev = document.body.style.background
     document.body.style.background = C.page
@@ -261,13 +265,13 @@ export function AppAriToolPage() {
     <div className="min-h-screen overflow-x-hidden" style={{ background: C.page, color: C.text, fontFamily: "Inter, system-ui, sans-serif", lineHeight: "normal" }}>
       <div className="hidden lg:block">
         <HeaderDesktop datos={datos} active="App AriTool" />
-        <ContenidoDesktop datos={datos} />
+        <ContenidoDesktop datos={datos} listo={!cargando} />
         <PieDesktop />
       </div>
       <div className="lg:hidden">
         <HeaderMobile onMenu={() => setMenu(true)} />
         <FranjaSoporte datos={datos} />
-        <ContenidoMobile datos={datos} />
+        <ContenidoMobile datos={datos} listo={!cargando} />
         <PieMobile />
         {menu ? <MenuMobile datos={datos} onClose={() => setMenu(false)} /> : null}
       </div>

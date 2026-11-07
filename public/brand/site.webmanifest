@@ -1,7 +1,7 @@
 {
-  "name": "Ari-Tool · AriadGSM",
-  "short_name": "Ari-Tool",
-  "description": "Ari-Tool de AriadGSM: quita el Security Plugin de equipos Tecno, Infinix e itel con MediaTek.",
+  "name": "AriTool",
+  "short_name": "AriTool",
+  "description": "AriTool: quita el Security Plugin de equipos Tecno, Infinix e itel con MediaTek.",
   "icons": [
     {
       "src": "android-chrome-192x192.png",
@@ -14,8 +14,8 @@
       "type": "image/png"
     }
   ],
-  "theme_color": "#2070FC",
-  "background_color": "#0B0B0C",
+  "theme_color": "#060a12",
+  "background_color": "#060a12",
   "display": "standalone",
   "start_url": "/",
   "lang": "es"

@@ -93,12 +93,14 @@ function resolveRelease(live: LiveRelease | null, soporte: string, resolved: boo
     }
   }
 
+  // Sin dato en vivo no se inventa una versión vieja: la web dice "la última disponible"
+  // y el botón igual baja por /descargar (que resuelve el instalador vigente).
   return {
-    version: product.version,
-    versionLabel: product.versionLabel,
-    buildDateLabel: product.buildDateLabel,
-    downloadUrl: product.downloadPath,
-    downloadAvailable: product.downloadAvailable,
+    version: "",
+    versionLabel: "",
+    buildDateLabel: "",
+    downloadUrl: "/descargar",
+    downloadAvailable: false,
     live: false,
     soporte: soporte || SOPORTE_FALLBACK,
     resolved,

@@ -6048,7 +6048,10 @@ function requestUsesRetiredRoute(pathname) {
     || pathname === "/gsm-legacy"
     || pathname === "/gsm-legacy/"
     || pathname.startsWith("/v/")
-    || pathname === "/owner-recovery";
+    || pathname === "/owner-recovery"
+    // Galerías internas de revisión: quedan en desarrollo, no en el dominio público.
+    || pathname === "/preview"
+    || pathname.startsWith("/preview-");
 }
 
 function normalizeLatestClientVersionInfo(record) {
@@ -6136,9 +6139,16 @@ async function sendPublicHtmlFile(res, fileName) {
 }
 
 async function serveStatic(req, res, pathname) {
+  // Direcciones viejas de la web nueva: 301 antes de servir la SPA (mejor para buscadores).
+  const redireccionesWeb = { "/panel": "/mi-cuenta", "/legal": "/legal/terminos", "/gsm": "/" };
+  if (requestUsesPublicSite(req) && Object.prototype.hasOwnProperty.call(redireccionesWeb, pathname)) {
+    res.writeHead(301, { Location: redireccionesWeb[pathname], "Cache-Control": "no-store" });
+    return res.end();
+  }
+
   // Puerta del dominio publico. Lo que quedo del portal Xiaomi se manda a la
   // portada con una redireccion permanente en vez de un 404: Google ya tenia
-  // indexadas /manual y /servicios/motorola-f4, y asi quien llegue por una de
+  // indexadas /manual y /servicios/motorola-f4, y asi quien llega por una de
   // esas termina en la web nueva en lugar de en un error.
   if (requestUsesPublicSite(req) && requestUsesRetiredRoute(pathname)) {
     res.writeHead(301, { Location: "/", "Cache-Control": "no-store" });
@@ -6297,8 +6307,17 @@ async function serveStatic(req, res, pathname) {
     res.writeHead(200, { "Content-Type": type, "Cache-Control": cacheHeader });
     res.end(file);
   } catch {
+    // Un archivo que no existe no se convierte en la SPA: el navegador recibiria HTML
+    // donde espera JS/CSS/imagen (y un 200 en vez de 404). Las rutas sin extension siguen con la SPA.
     if (useWebDist) {
-      return sendWebIndex(res, pathname);
+      const pareceArchivo = path.extname(pathname) !== ""
+        || pathname.startsWith("/assets/")
+        || pathname.split("/").some((parte) => parte.startsWith("."));
+      if (!pareceArchivo) {
+        return sendWebIndex(res, pathname);
+      }
+      res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" });
+      return res.end("Not found");
     }
     const fallbackFile = portalRequest ? "portal.html" : "index.html";
     const index = await fs.readFile(path.join(publicDir, fallbackFile));
@@ -6319,6 +6338,7 @@ const webPageMeta = {
   "/cuenta": {
     title: "Ingresar | AriTool",
     description: "Entra a tu cuenta de AriTool: es la misma que usas en la app.",
+    robots: "noindex, follow",
   },
   "/servicios": {
     title: "Servicios y alquiler de herramientas | AriTool",
@@ -6339,18 +6359,22 @@ const webPageMeta = {
   "/mi-cuenta": {
     title: "Mi cuenta | AriTool",
     description: "Tu saldo, tu licencia y tu historial en AriTool.",
+    robots: "noindex, follow",
   },
   "/mi-cuenta/historial": {
     title: "Tu historial | AriTool",
     description: "Cada recarga y cada uso de tu cuenta AriTool, con su numero de pedido.",
+    robots: "noindex, follow",
   },
   "/mi-cuenta/recargar": {
     title: "Recargar saldo | AriTool",
     description: "Recarga tu saldo de AriTool con Yape o Binance Pay.",
+    robots: "noindex, follow",
   },
   "/mi-cuenta/licencia": {
     title: "Licencia anual | AriTool",
     description: "Compra o renueva la licencia anual de AriTool con Yape o Binance Pay.",
+    robots: "noindex, follow",
   },
   "/legal/terminos": {
     title: "Terminos y Condiciones | AriTool",
@@ -6382,7 +6406,8 @@ function applyWebPageMeta(html, pathname) {
     `$1${escapeHtmlAttr(canonical)}$2`
   );
 
-  const meta = webPageMeta[ruta];
+  // Solo las claves propias: una ruta como /__proto__ no debe traer el prototipo como "meta".
+  const meta = Object.prototype.hasOwnProperty.call(webPageMeta, ruta) ? webPageMeta[ruta] : null;
   if (!meta) return salida;
 
   salida = salida
@@ -6399,6 +6424,12 @@ function applyWebPageMeta(html, pathname) {
       /(<meta\s+property="og:description"\s+content=")[\s\S]*?(")/,
       `$1${escapeHtmlAttr(meta.description)}$2`
     );
+  if (meta.robots) {
+    salida = salida.replace(
+      /(<meta\s+name="robots"\s+content=")[^"]*(")/,
+      `$1${escapeHtmlAttr(meta.robots)}$2`
+    );
+  }
   return salida;
 }
 

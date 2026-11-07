@@ -20,7 +20,7 @@ import { usePrecios } from "@/hooks/use-precios"
 import { NOMBRE_WEB } from "@/lib/buscador"
 import { enlaceDescarga, RUTA_DESCARGA } from "@/lib/descarga"
 import { usePais } from "@/lib/pais"
-import { formatearPrecio, herramientaVisible, nombreMoneda, paisesDisponibles, type HerramientaPrecio, type Precios, type ServicioPrecio } from "@/lib/precios"
+import { formatearPrecio, herramientaVisible, nombreMoneda, paisesDisponibles, paisDeUrl, type HerramientaPrecio, type Precios, type ServicioPrecio } from "@/lib/precios"
 import { useRelease } from "@/lib/release"
 import { useSeo } from "@/lib/seo"
 
@@ -284,13 +284,13 @@ function Descarga() {
             <LogoAriCaja lado={40} radio={10} />
             <div>
               <div style={{ color: C.title, fontWeight: 700, fontSize: 18, lineHeight: "22px" }}>AriTool para Windows</div>
-              <div className="mt-0.5" style={{ color: C.muted2, fontSize: 14, lineHeight: "17px" }}>Versión {r.version} · {r.buildDateLabel}</div>
+              <div className="mt-0.5" style={{ color: C.muted2, fontSize: 14, lineHeight: "17px" }}>{r.version ? `Versión ${r.version} · ${r.buildDateLabel}` : "La última versión disponible"}</div>
             </div>
           </div>
           <p className="mt-2.5" style={{ color: C.muted, fontSize: 13, lineHeight: "16px" }}>Windows 10 u 11 de 64 bits · es portable, no se instala · se actualiza sola</p>
           <div className="mt-2.5 flex flex-wrap items-center gap-4 pt-[6px]">
             <a href={RUTA_DESCARGA} className="flex items-center gap-2 text-white" style={{ background: C.blue, borderRadius: 8, padding: "10px 16px", fontWeight: 600, fontSize: 14, lineHeight: "17px" }}><Download className="size-[16px]" />Descargar</a>
-            <Link to={RUTAS.novedades} className="inline-flex items-center gap-1.5" style={{ color: C.link, fontWeight: 500, fontSize: 13, lineHeight: "16px" }}>Qué cambió en la {r.version}<ArrowRight className="size-[13px]" /></Link>
+            <Link to={RUTAS.novedades} className="inline-flex items-center gap-1.5" style={{ color: C.link, fontWeight: 500, fontSize: 13, lineHeight: "16px" }}>{r.version ? `Qué cambió en la ${r.version}` : "Ver novedades"}<ArrowRight className="size-[13px]" /></Link>
           </div>
         </div>
       </Cont>
@@ -452,8 +452,8 @@ export function HomeAriTool() {
   useAncla()
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    const q = params.get("pais")
-    if (q) setPais(q.toUpperCase())
+    const q = paisDeUrl()
+    if (q) setPais(q)
     if (params.get("menu") === "1") setMenuAbierto(true)
     if (busqueda && !window.matchMedia("(min-width: 1024px)").matches) setBuscando(true)
     const prev = document.body.style.background

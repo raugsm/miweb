@@ -12,6 +12,7 @@ import { AuthCard, AuthShell, AyudaWhatsApp, Banner, BotonPausa, BotonPrimario, 
 import { C, FranjaSoporte, HeaderMobile, MenuMobile, PieMobile, WA } from "@/components/aritool/chrome"
 import { usePrecios } from "@/hooks/use-precios"
 import { usePais } from "@/lib/pais"
+import { paisDeUrl } from "@/lib/precios"
 
 const CORREO_DEMO = "raul@taller.com"
 const DOTS = "••••••••••"
@@ -255,8 +256,8 @@ export function CuentaEstadosPreview() {
   const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "")
   const estado = (params.get("estado") || "").toLowerCase()
   useEffect(() => {
-    const q = params.get("pais")
-    if (q) setPais(q.toUpperCase())
+    const q = paisDeUrl()
+    if (q) setPais(q)
     const prev = document.body.style.background
     document.body.style.background = C.page
     return () => { document.body.style.background = prev }

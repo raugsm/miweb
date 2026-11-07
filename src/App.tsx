@@ -2,7 +2,7 @@ import { lazy, Suspense } from "react"
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom"
 
 import { MarcoAriTool } from "@/components/aritool/Marco"
-import { RootLayout } from "@/components/layout/RootLayout"
+
 import { ReleaseProvider } from "@/lib/release"
 import { HomeAriTool } from "@/pages/HomeAriTool"
 
@@ -35,10 +35,6 @@ const NoExistePage = lazy(() =>
   import("@/pages/NoExistePage").then((m) => ({ default: m.NoExistePage }))
 )
 
-// Portal cliente FRP (pendiente: Peter decidió retirarlo, 4-nov).
-const PortalPage = lazy(() =>
-  import("@/pages/gsm/portal/PortalPage").then((m) => ({ default: m.PortalPage }))
-)
 // Legal con la cabecera y el pie de la web nueva (Ari-Diseño 7-nov): una dirección por sección.
 const LegalTerminosPage = lazy(() =>
   import("@/pages/LegalAriToolPage").then((m) => ({ default: m.LegalTerminosPage }))
@@ -100,9 +96,6 @@ export default function App() {
             <Route path="preview-ingresar" element={<Navigate to="/cuenta" replace />} />
             <Route path="preview" element={pagina(<PreviewIndex />)} />
             <Route path="*" element={pagina(<NoExistePage />)} />
-          </Route>
-          <Route element={<RootLayout />}>
-            <Route path="cliente" element={<PortalPage />} />
           </Route>
         </Routes>
       </BrowserRouter>
