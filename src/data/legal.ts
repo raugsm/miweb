@@ -4,7 +4,7 @@
 // software y créditos para técnicos profesionales de reparación— con reglas
 // claras de uso, privacidad, pagos y, sobre todo, una política de uso aceptable
 // que prohíbe expresamente el uso en equipos robados o sin autorización.
-// Redactado para AriadGSM (marca, Perú). Contacto: raugsm.69@gmail.com.
+// Redactado para AriTool (marca, Perú). Contacto: raugsm.69@gmail.com.
 
 export type LegalBlock = { p: string } | { ul: string[] }
 
@@ -23,7 +23,7 @@ export const legalSections: LegalSection[] = [
     title: "Términos y Condiciones",
     blocks: [
       {
-        p: "Estos Términos y Condiciones regulan el uso de Ari-Tool y de los servicios de AriadGSM (“AriadGSM”, “nosotros”), una marca operada desde Perú. Al crear una cuenta o usar el servicio, aceptás estos términos.",
+        p: "Estos Términos y Condiciones regulan el uso de Ari-Tool y de los servicios de AriTool (“nosotros”), una marca operada desde Perú. Al crear una cuenta o usar el servicio, aceptás estos términos.",
       },
       {
         p: "Ari-Tool es un software de escritorio y un sistema de créditos destinado a técnicos profesionales de reparación y mantenimiento de equipos móviles. La cuenta es personal e intransferible y sos responsable de toda la actividad realizada con ella.",
@@ -35,7 +35,7 @@ export const legalSections: LegalSection[] = [
         p: "Uso permitido: el software se ofrece exclusivamente para uso profesional y legítimo, sobre equipos que el técnico está autorizado a intervenir. El uso indebido está prohibido y se detalla en la Política de Uso Aceptable.",
       },
       {
-        p: "Responsabilidad: cada proceso queda a cargo del técnico que lo ejecuta. AriadGSM no se responsabiliza por pérdida de datos, daños al equipo ni consecuencias derivadas de un uso incorrecto o no autorizado. El servicio se brinda “tal cual”, sin garantías implícitas.",
+        p: "Responsabilidad: cada proceso queda a cargo del técnico que lo ejecuta. AriTool no se responsabiliza por pérdida de datos, daños al equipo ni consecuencias derivadas de un uso incorrecto o no autorizado. El servicio se brinda “tal cual”, sin garantías implícitas.",
       },
       {
         p: "Cambios y suspensión: podemos actualizar estos términos y el servicio; los cambios se publican en esta página. Podemos suspender o cerrar cuentas que incumplan estos términos.",
@@ -50,13 +50,13 @@ export const legalSections: LegalSection[] = [
     title: "Política de Privacidad",
     blocks: [
       {
-        p: "En AriadGSM cuidamos tus datos. Esta política explica qué información recopilamos y cómo la usamos.",
+        p: "En AriTool cuidamos tus datos. Esta política explica qué información recopilamos y cómo la usamos.",
       },
       {
         p: "Datos que recopilamos: el correo electrónico y los datos de la cuenta que registrás; el historial de créditos y de procesos realizados; y datos técnicos mínimos necesarios para operar el servicio y protegerlo.",
       },
       {
-        p: "Pagos: las recargas de créditos se procesan a través de un proveedor de pagos externo (pasarela de pago). AriadGSM no almacena los datos de tu billetera ni tus claves privadas; solo registramos la confirmación del pago para acreditar tus créditos.",
+        p: "Pagos: las recargas de créditos se procesan a través de un proveedor de pagos externo (pasarela de pago). AriTool no almacena los datos de tu billetera ni tus claves privadas; solo registramos la confirmación del pago para acreditar tus créditos.",
       },
       {
         p: "Uso de los datos: usamos tu información para brindar el servicio, dar soporte, prevenir fraude y cumplir obligaciones legales. No vendemos tus datos a terceros.",
@@ -100,7 +100,7 @@ export const legalSections: LegalSection[] = [
         ],
       },
       {
-        p: "Está estrictamente prohibido usar el servicio para intervenir equipos robados, perdidos o reportados, o para eludir la legítima propiedad de un dispositivo. AriadGSM puede suspender de inmediato, y sin reembolso, cualquier cuenta que incumpla esta política, y colabora con las autoridades ante requerimientos legales.",
+        p: "Está estrictamente prohibido usar el servicio para intervenir equipos robados, perdidos o reportados, o para eludir la legítima propiedad de un dispositivo. AriTool puede suspender de inmediato, y sin reembolso, cualquier cuenta que incumpla esta política, y colabora con las autoridades ante requerimientos legales.",
       },
       {
         p: "La responsabilidad por el origen del equipo y por la legalidad de cada proceso recae por completo en el técnico que lo ejecuta.",

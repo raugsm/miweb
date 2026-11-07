@@ -8,7 +8,7 @@ import { Link } from "react-router-dom"
 
 import { C, IconoWA, RUTAS } from "@/components/aritool/chrome"
 
-export function SinPerfil({ whatsapp, movil, titulo }: { whatsapp: string; movil: boolean; titulo: string }) {
+export function SinPerfil({ whatsapp, movil, titulo, onSalir }: { whatsapp: string; movil: boolean; titulo: string; onSalir?: () => void }) {
   return (
     <section className={movil ? "px-5 pb-10 pt-6" : "mx-auto w-full max-w-[800px] px-5 pb-16 pt-10"}>
       <h1 style={{ color: C.title, fontWeight: 700, fontSize: movil ? 26 : 32, lineHeight: movil ? "31px" : "39px" }}>{titulo}</h1>
@@ -37,6 +37,11 @@ export function SinPerfil({ whatsapp, movil, titulo }: { whatsapp: string; movil
           <ArrowLeft className="size-4" />
           Volver a Inicio
         </Link>
+        {onSalir ? (
+          <button type="button" onClick={onSalir} className="flex h-11 items-center justify-center" style={{ color: C.muted, padding: "0 10px", fontWeight: 500, fontSize: movil ? 14 : 15 }}>
+            Salir
+          </button>
+        ) : null}
       </div>
     </section>
   )

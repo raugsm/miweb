@@ -1,17 +1,19 @@
 /**
  * Legal · Términos y Privacidad — pedido de Ari-Diseño (7-nov): misma cabecera y pie,
  * título + texto largo, sin tarjetas ni degradados, ancho 800. El texto sale de `src/data/legal.ts`.
- * Dos direcciones: /legal/terminos y /legal/privacidad (el pie lleva a cada una).
+ *
+ * Dos direcciones: /legal/terminos (Términos + Reembolsos + Uso aceptable, con ancla) y
+ * /legal/privacidad (solo Privacidad). El pie lleva a cada una.
  */
 import { useEffect, useState } from "react"
-import { Link } from "react-router-dom"
+import { Link, useLocation } from "react-router-dom"
 
 import { C, Cont, FranjaSoporte, HeaderDesktop, HeaderMobile, MenuMobile, PieDesktop, PieMobile } from "@/components/aritool/chrome"
-import { legalContact, legalSections, legalUpdated, type LegalBlock } from "@/data/legal"
+import { legalContact, legalSections, legalUpdated, type LegalBlock, type LegalSection } from "@/data/legal"
 import { usePrecios } from "@/hooks/use-precios"
 import { useSeo } from "@/lib/seo"
 
-type LegalProps = { id: "terminos" | "privacidad"; titulo: string; descripcion: string; ruta: string; otro: { ruta: string; texto: string } }
+type LegalProps = { ids: string[]; titulo: string; descripcion: string; ruta: string; otro: { ruta: string; texto: string } }
 
 function Bloque({ b }: { b: LegalBlock }) {
   if ("ul" in b) {
@@ -24,18 +26,41 @@ function Bloque({ b }: { b: LegalBlock }) {
   return <p style={{ color: C.muted2, fontSize: 15, lineHeight: "24px" }}>{b.p}</p>
 }
 
-function LegalPagina({ id, titulo, descripcion, ruta, otro }: LegalProps) {
+function Seccion({ s, primera }: { s: LegalSection; primera: boolean }) {
+  return (
+    <section id={s.id} style={{ scrollMarginTop: 90 }}>
+      {primera ? null : <h2 className="mt-10" style={{ color: C.title, fontWeight: 700, fontSize: 22, lineHeight: "28px" }}>{s.title}</h2>}
+      <div className={`${primera ? "mt-7" : "mt-4"} flex flex-col gap-4`}>
+        {s.blocks.map((b, i) => <Bloque key={i} b={b} />)}
+      </div>
+    </section>
+  )
+}
+
+function LegalPagina({ ids, titulo, descripcion, ruta, otro }: LegalProps) {
   useSeo({ titulo: `${titulo} | AriTool`, descripcion, ruta })
   const { datos } = usePrecios()
+  const { hash } = useLocation()
   const [menu, setMenu] = useState(false)
-  const seccion = legalSections.find((s) => s.id === id) ?? null
+  const secciones = ids
+    .map((id) => legalSections.find((s) => s.id === id))
+    .filter((s): s is LegalSection => Boolean(s))
 
   useEffect(() => {
     const prev = document.body.style.background
     document.body.style.background = C.page
-    window.scrollTo(0, 0)
     return () => { document.body.style.background = prev }
   }, [])
+
+  // Si llega con #reembolsos o #uso-aceptable, baja a esa sección; si no, empieza arriba.
+  useEffect(() => {
+    if (hash) {
+      const id = decodeURIComponent(hash.slice(1))
+      const t = window.setTimeout(() => document.getElementById(id)?.scrollIntoView({ block: "start" }), 60)
+      return () => window.clearTimeout(t)
+    }
+    window.scrollTo(0, 0)
+  }, [hash])
 
   return (
     <div className="flex min-h-screen flex-col overflow-x-hidden" style={{ background: C.page, color: C.text, fontFamily: "Inter, system-ui, sans-serif", lineHeight: "normal" }}>
@@ -47,9 +72,7 @@ function LegalPagina({ id, titulo, descripcion, ruta, otro }: LegalProps) {
           <article className="mx-auto w-full max-w-[800px]">
             <h1 style={{ color: C.title, fontWeight: 700, fontSize: 34, lineHeight: "41px" }}>{titulo}</h1>
             <p className="mt-2" style={{ color: C.muted, fontSize: 13, lineHeight: "18px" }}>Última actualización: {legalUpdated}</p>
-            <div className="mt-7 flex flex-col gap-4">
-              {seccion?.blocks.map((b, i) => <Bloque key={i} b={b} />)}
-            </div>
+            {secciones.map((s, i) => <Seccion key={s.id} s={s} primera={i === 0} />)}
             <p className="mt-7" style={{ color: C.muted2, fontSize: 15, lineHeight: "24px" }}>
               Ante cualquier duda escribinos a{" "}
               <a href={`mailto:${legalContact}`} style={{ color: C.link }}>{legalContact}</a>.
@@ -71,7 +94,7 @@ function LegalPagina({ id, titulo, descripcion, ruta, otro }: LegalProps) {
 export function LegalTerminosPage() {
   return (
     <LegalPagina
-      id="terminos"
+      ids={["terminos", "reembolsos", "uso-aceptable"]}
       titulo="Términos y Condiciones"
       descripcion="Términos y condiciones de uso de AriTool y de los servicios para técnicos."
       ruta="/legal/terminos"
@@ -83,7 +106,7 @@ export function LegalTerminosPage() {
 export function LegalPrivacidadPage() {
   return (
     <LegalPagina
-      id="privacidad"
+      ids={["privacidad"]}
       titulo="Política de Privacidad"
       descripcion="Cómo AriTool trata los datos de tu cuenta y de tu taller."
       ruta="/legal/privacidad"

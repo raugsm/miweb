@@ -208,6 +208,10 @@ export function HistorialPage() {
   }, [carga, catalogo, filtro, dias])
   const listo = carga.estado === "listo" ? carga.datos : null
   const whatsapp = datos?.soporte.whatsapp ?? WA
+  const salir = async () => {
+    await supabase.auth.signOut({ scope: "local" })
+    nav(RUTAS.cuenta)
+  }
   const props: CuerpoProps = {
     carga, filas, filtro, dias, cargandoMas, alFiltrar: setFiltro, alPeriodo: setDias,
     cargarMas: () => { if (listo?.siguiente) void pedir(listo.siguiente, listo) },
@@ -218,13 +222,13 @@ export function HistorialPage() {
     <div className="min-h-screen overflow-x-hidden" style={{ background: C.page, color: C.text, fontFamily: "Inter, system-ui, sans-serif", lineHeight: "normal" }}>
       <div className="hidden lg:block">
         <HeaderDesktop datos={datos} />
-        {carga.estado === "sinPerfil" ? <SinPerfil whatsapp={whatsapp} movil={false} titulo="Tu historial" /> : <CuerpoCompu {...props} />}
+        {carga.estado === "sinPerfil" ? <SinPerfil whatsapp={whatsapp} movil={false} titulo="Tu historial" onSalir={salir} /> : <CuerpoCompu {...props} />}
         <PieDesktop />
       </div>
       <div className="lg:hidden">
         <HeaderMobile onMenu={() => setMenu(true)} />
         <FranjaSoporte datos={datos} />
-        {carga.estado === "sinPerfil" ? <SinPerfil whatsapp={whatsapp} movil titulo="Tu historial" /> : <CuerpoCelular {...props} />}
+        {carga.estado === "sinPerfil" ? <SinPerfil whatsapp={whatsapp} movil titulo="Tu historial" onSalir={salir} /> : <CuerpoCelular {...props} />}
         <PieMobile />
         {menu ? <MenuMobile datos={datos} onClose={() => setMenu(false)} /> : null}
       </div>
