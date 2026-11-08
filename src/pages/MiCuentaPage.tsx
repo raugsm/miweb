@@ -23,7 +23,6 @@ import { C, Cont, FranjaSoporte, HeaderDesktop, HeaderMobile, IconoWA, MenuMobil
 import { SinPerfil } from "@/components/aritool/perfil"
 import { usePrecios } from "@/hooks/use-precios"
 import { NOMBRE_WEB } from "@/lib/buscador"
-import { mensajeClave, revisarCambio, type ErroresCambio } from "@/lib/clave"
 import { cobroActivo, resumenCliente, type CobroActivo, type ResumenCliente } from "@/lib/cuenta"
 import { filasHistorial, type FilaHistorial } from "@/lib/historial"
 import { herramientaVisible, type Precios } from "@/lib/precios"
@@ -222,8 +221,6 @@ function CuerpoCompu({ carga, filas, whatsapp, minimo, precioLicencia, salir, re
                 </Link>
               ) : null}
             </div>
-
-            <CambiarClave sufijo="c" />
           </>
         )}
 
@@ -299,7 +296,6 @@ function CuerpoCelular({ carga, filas, whatsapp, minimo, salir, reintentar }: Cu
                 Ver todo el historial<ArrowRight className="size-[13px]" />
               </Link>
             ) : null}
-            <div className="w-full pt-2"><CambiarClave sufijo="m" /></div>
             <div className="flex items-center gap-2 pt-1" style={{ fontSize: 13, lineHeight: "16px" }}>
               <IconoWA className="size-[17px]" style={{ color: C.waGreen }} />
               <span style={{ color: C.muted }}>¿Algo no cuadra?</span>
@@ -309,140 +305,6 @@ function CuerpoCelular({ carga, filas, whatsapp, minimo, salir, reintentar }: Cu
         </>
       )}
     </main>
-  )
-}
-
-// ======================= CAMBIAR CONTRASEÑA (W19 · 1223:2) =======================
-function CampoClave({ id, label, placeholder, valor, alCambiar, error, autoComplete }: {
-  id: string
-  label: string
-  placeholder: string
-  valor: string
-  alCambiar: (v: string) => void
-  error?: string
-  autoComplete: string
-}) {
-  return (
-    <div className="flex w-full flex-col gap-1.5">
-      <label htmlFor={id} style={{ color: C.muted2, fontWeight: 500, fontSize: 13, lineHeight: "16px" }}>{label}</label>
-      <input
-        id={id}
-        type="password"
-        value={valor}
-        onChange={(e) => alCambiar(e.target.value)}
-        placeholder={placeholder}
-        autoComplete={autoComplete}
-        className="w-full outline-none"
-        style={{ height: 44, background: C.cardAlt, border: `1px solid ${error ? "#f87171" : C.borderAlt}`, borderRadius: 10, padding: "0 14px", color: C.text, fontSize: 14 }}
-        onFocus={(e) => { e.currentTarget.style.borderColor = C.blue }}
-        onBlur={(e) => { e.currentTarget.style.borderColor = error ? "#f87171" : C.borderAlt }}
-      />
-      {error ? <p role="alert" style={{ color: "#f87171", fontSize: 12, lineHeight: "16px" }}>{error}</p> : null}
-    </div>
-  )
-}
-
-/** W19: sección de Mi cuenta para cambiar la clave. Verifica la actual antes de guardar y nunca muestra la clave. */
-function CambiarClave({ sufijo }: { sufijo: string }) {
-  const [vista, setVista] = useState<"cerrado" | "abierto" | "listo">("cerrado")
-  const [actual, setActual] = useState("")
-  const [nueva, setNueva] = useState("")
-  const [repetir, setRepetir] = useState("")
-  const [errores, setErrores] = useState<ErroresCambio>({})
-  const [errorActual, setErrorActual] = useState<string | null>(null)
-  const [red, setRed] = useState(false)
-  const [guardando, setGuardando] = useState(false)
-
-  const reiniciar = () => {
-    setActual("")
-    setNueva("")
-    setRepetir("")
-    setErrores({})
-    setErrorActual(null)
-    setRed(false)
-  }
-
-  const guardar = async () => {
-    if (guardando) return
-    const e = revisarCambio({ actual, nueva, repetir })
-    setErrores(e)
-    setErrorActual(null)
-    setRed(false)
-    if (Object.keys(e).length) return
-    setGuardando(true)
-    try {
-      const { data } = await supabase.auth.getSession()
-      const correo = data.session?.user.email
-      if (!correo) {
-        setRed(true)
-        return
-      }
-      // Confirmar la actual: con solo la sesión abierta no alcanza para cambiarla.
-      const { error: mala } = await supabase.auth.signInWithPassword({ email: correo, password: actual })
-      if (mala) {
-        if (mala.status === 400) setErrorActual("La contraseña actual no es correcta.")
-        else setRed(true)
-        return
-      }
-      const { error: noSePudo } = await supabase.auth.updateUser({ password: nueva })
-      if (noSePudo) {
-        setErrores({ nueva: mensajeClave(noSePudo.message) })
-        return
-      }
-      reiniciar()
-      setVista("listo")
-    } catch {
-      setRed(true)
-    } finally {
-      setGuardando(false)
-    }
-  }
-
-  const marco = "flex w-full max-w-[560px] flex-col items-start rounded-[14px] p-4"
-  const estiloMarco = { background: C.card, border: `1px solid ${C.border}` }
-
-  if (vista === "listo") {
-    return (
-      <div className={`${marco} gap-3`} style={estiloMarco}>
-        <div className="flex flex-col gap-1">
-          <h2 style={{ color: C.green, fontWeight: 600, fontSize: 15, lineHeight: "20px" }}>Contraseña actualizada</h2>
-          <p style={{ color: C.muted, fontSize: 13, lineHeight: "18px" }}>La próxima vez entrá con la nueva. No te la vamos a mostrar de nuevo.</p>
-        </div>
-        <button type="button" onClick={() => setVista("cerrado")} className="text-white" style={{ background: C.blue, borderRadius: 10, height: 42, padding: "0 18px", fontWeight: 600, fontSize: 14 }}>Listo</button>
-      </div>
-    )
-  }
-
-  if (vista === "cerrado") {
-    return (
-      <div className={`${marco} gap-2`} style={estiloMarco}>
-        <h2 style={{ color: C.title, fontWeight: 600, fontSize: 15, lineHeight: "20px" }}>Cambiar contraseña</h2>
-        <p style={{ color: C.muted, fontSize: 13, lineHeight: "18px" }}>Actualizá la clave con la que entrás a AriTool.</p>
-        <button type="button" onClick={() => setVista("abierto")} style={{ color: C.blue, fontWeight: 500, fontSize: 13, lineHeight: "18px" }}>Cambiar contraseña</button>
-      </div>
-    )
-  }
-
-  return (
-    <form onSubmit={(e) => { e.preventDefault(); void guardar() }} className={`${marco} gap-3`} style={estiloMarco}>
-      <h2 style={{ color: C.title, fontWeight: 600, fontSize: 15, lineHeight: "20px" }}>Cambiar contraseña</h2>
-      <CampoClave id={`clave-actual-${sufijo}`} label="Contraseña actual" placeholder="Tu contraseña actual" valor={actual} alCambiar={setActual} error={errorActual ?? errores.actual} autoComplete="current-password" />
-      <div className="flex w-full flex-col gap-1.5">
-        <CampoClave id={`clave-nueva-${sufijo}`} label="Nueva contraseña" placeholder="Mínimo 8 caracteres" valor={nueva} alCambiar={setNueva} error={errores.nueva} autoComplete="new-password" />
-        {errores.nueva ? null : <p style={{ color: C.muted, fontSize: 12, lineHeight: "16px" }}>Mínimo 8 caracteres.</p>}
-      </div>
-      <CampoClave id={`clave-repetir-${sufijo}`} label="Repetir la nueva" placeholder="Otra vez la nueva" valor={repetir} alCambiar={setRepetir} error={errores.repetir} autoComplete="new-password" />
-      {red ? (
-        <p role="alert" style={{ color: "#f87171", fontSize: 12, lineHeight: "16px" }}>
-          No pudimos guardar. Revisá tu conexión.{" "}
-          <button type="button" onClick={() => void guardar()} style={{ color: C.link, fontWeight: 600, textDecoration: "underline" }}>Reintentar</button>
-        </p>
-      ) : null}
-      <div className="flex items-center gap-2 pt-1">
-        <button type="submit" disabled={guardando} className="text-white disabled:opacity-60" style={{ background: C.blue, borderRadius: 10, height: 42, padding: "0 18px", fontWeight: 600, fontSize: 14 }}>{guardando ? "Guardando…" : "Guardar cambios"}</button>
-        <button type="button" onClick={() => { reiniciar(); setVista("cerrado") }} style={{ background: C.cardAlt, border: `1px solid ${C.borderAlt}`, borderRadius: 10, height: 42, padding: "0 16px", color: C.text, fontWeight: 500, fontSize: 14 }}>Cancelar</button>
-      </div>
-    </form>
   )
 }
 
