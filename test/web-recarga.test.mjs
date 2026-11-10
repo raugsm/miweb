@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { diaMesAnio, enGrupos, hoyLocal, licenciaActivada, licenciaVigente, limpiarMonto, metodosDe, minSeg, montoDeDireccion, montoElegido, montoValido, pagoDeActivo, pagoTexto, restan } from "../src/lib/recarga.ts";
+import { diaMesAnio, enGrupos, hoyLocal, horaLocal, licenciaActivada, licenciaVigente, limpiarMonto, metodosDe, minSeg, montoDeDireccion, montoElegido, montoValido, pagoDeActivo, pagoDeLaApp, pagoTexto, restan, textoPagoApp } from "../src/lib/recarga.ts";
 
 test("otro monto: solo dígitos, sin ceros adelante, sin cero suelto, 4 cifras como mucho", () => {
   assert.equal(limpiarMonto(""), "");
@@ -115,4 +115,40 @@ test("fechas de la licencia", () => {
   assert.equal(diaMesAnio("2027-11-04T05:00:00.000Z"), "04/11/2027");
   assert.equal(hoyLocal(new Date(2026, 0, 5, 23, 59)), "2026-01-05");
   assert.equal(hoyLocal(new Date(2026, 10, 6)), "2026-11-06");
+});
+
+// ---------- Pago abierto en la app (W14-E E13 1249:55 / E13b 1249:65) ----------
+const vence1542 = new Date(2026, 10, 10, 15, 42).toISOString(); // 15:42 en la hora de quien corre la prueba
+const activo = (extra) => ({
+  cobro_id: "c1", metodo: "yape", estado: "en_espera", vence_en: vence1542, producto: "credito", creditos: 0,
+  monto: "11.36", moneda: "PEN", codigo: "TK-FVY2", codigo_declarado: null, destino: "", pago_url: "", ...extra,
+});
+
+test("pago de la app: una recarga o una licencia no lo son", () => {
+  assert.equal(pagoDeLaApp(activo({ creditos: 20 })), null);
+  assert.equal(pagoDeLaApp(activo({ producto: "licencia", creditos: 0 })), null);
+  assert.equal(pagoDeLaApp(activo({ servicio: "creditos", creditos: 20 })), null);
+  assert.equal(pagoDeLaApp(activo({ servicio: "licencia", producto: "licencia" })), null);
+});
+
+test("pago de la app: sin `servicio` (la base todavía no lo da) una recarga de 0 es de la app → E13b", () => {
+  const p = pagoDeLaApp(activo({}));
+  assert.deepEqual(p, { servicio: null, metodo: "yape", monto: "11.36", ticket: "TK-FVY2", venceEn: vence1542 });
+  assert.equal(textoPagoApp(p, false), "S/ 11.36 por Yape · ticket TK-FVY2. Terminalo en la app AriTool o esperá a que venza a las 15:42. Después podés recargar acá.");
+});
+
+test("pago de la app: con `servicio` se nombra (E13), y en Licencia cambia el final", () => {
+  const p = pagoDeLaApp(activo({ servicio: "frp", ticket: "TK-FVY2", codigo: "otro" }));
+  assert.equal(textoPagoApp(p, false), "FRP · S/ 11.36 por Yape · ticket TK-FVY2. Terminalo en la app AriTool o esperá a que venza a las 15:42. Después podés recargar acá.");
+  assert.equal(textoPagoApp(p, true), "FRP · S/ 11.36 por Yape · ticket TK-FVY2. Terminalo en la app AriTool o esperá a que venza a las 15:42. Después podés comprar la licencia acá.");
+  assert.equal(pagoDeLaApp(activo({ servicio: "cuenta_mi" })).servicio, "Cuenta MI");
+  assert.equal(pagoDeLaApp(activo({ servicio: "alquiler" })).servicio, "Alquiler");
+  assert.equal(pagoDeLaApp(activo({ servicio: "algo_nuevo" })).servicio, null); // no se inventa un nombre
+});
+
+test("pago de la app: Binance en USDT, y una hora que no se entiende no se muestra", () => {
+  const p = pagoDeLaApp(activo({ metodo: "binance", monto: "3.20", servicio: "frp", vence_en: "nada" }));
+  assert.equal(textoPagoApp(p, false), "FRP · 3.20 USDT por Binance · ticket TK-FVY2. Terminalo en la app AriTool o esperá a que venza. Después podés recargar acá.");
+  assert.equal(horaLocal("nada"), "");
+  assert.equal(horaLocal(new Date(2026, 0, 1, 9, 5).toISOString()), "09:05");
 });

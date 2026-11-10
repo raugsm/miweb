@@ -260,6 +260,9 @@ export type CobroActivo = {
   codigo_declarado: string | null // Yape: último código de seguridad que declaró el cliente
   destino: string // número Yape / ID de Binance Pay
   pago_url: string // Binance: link para el QR
+  ticket?: string // "TK-…", el número que ve el cliente
+  /** frp | cuenta_mi | alquiler | creditos | licencia. Llega cuando se aplique «ok cobro activo servicio»; antes undefined. */
+  servicio?: string | null
 }
 
 /** Trae el cobro EN CURSO del técnico (cualquier método) para retomarlo, o `null`. */

@@ -11,6 +11,9 @@
  * E9 a E12 (fila nueva de W14-E, 1187:114) los dibujó Ari-Diseño el 5-nov y ESPERAN EL OK DE PETER:
  * no se pudo preparar el pago, Yape apagado, sin conexión y "ese pago se canceló".
  *
+ * E13 / E13b (1249:55 / 1249:65, OK de Peter al diseño 10-nov): el pago abierto es de FRP, Cuenta MI o alquiler
+ * (la base no deja recargar mientras siga abierto). Se avisa sin botones: ni seguir ni cancelar el pedido de la app.
+ *
  * W15 · Comprar licencia anual (1132:2 y 1132:118) es esta misma página con `producto="licencia"`: cambian el
  * paso 1 (la tarjeta de la licencia) y el 4; los pasos 2 y 3 son los de W14. El precio lo pone el servidor.
  */
@@ -23,7 +26,7 @@ import { Aviso, Ayuda, BotonAviso, BotonGrande, BotonWhatsApp, FilaCopiar, Instr
 import { usePrecios } from "@/hooks/use-precios"
 import { cobroActivo, cobroCancelar, pagoCobroCrear, pagoCobroEstado, resumenCliente, yapeConfirmar, yapeCrear, yapeEstado, type ResumenCliente } from "@/lib/cuenta"
 import { formatearPrecio, PAISES, type Precios } from "@/lib/precios"
-import { diaMesAnio, dosDecimales, enGrupos, hoyLocal, licenciaActivada, licenciaVigente, limpiarMonto, metodosDe, minSeg, MONTO_INICIAL, MONTO_MAX, MONTO_MIN, MONTOS, montoDeDireccion, montoElegido, montoValido, pagoDeActivo, pagoTexto, restan, type Metodo, type Pago } from "@/lib/recarga"
+import { diaMesAnio, dosDecimales, enGrupos, hoyLocal, licenciaActivada, licenciaVigente, limpiarMonto, metodosDe, minSeg, MONTO_INICIAL, MONTO_MAX, MONTO_MIN, MONTOS, montoDeDireccion, montoElegido, montoValido, pagoDeActivo, pagoDeLaApp, pagoTexto, restan, textoPagoApp, type Metodo, type Pago, type PagoApp } from "@/lib/recarga"
 import { motivoRechazo } from "@/lib/sesion"
 import { useSeo } from "@/lib/seo"
 import { supabase } from "@/lib/supabase"
@@ -108,6 +111,7 @@ function PasoAPaso({ producto }: { producto: Producto }) {
   // ----- lo que se sabe del servidor -----
   const [carga, setCarga] = useState<"cargando" | "error" | "lista">("cargando")
   const [pago, setPago] = useState<Pago | null>(null) // el pago en curso, si hay
+  const [deLaApp, setDeLaApp] = useState<PagoApp | null>(null) // W14-E E13: el pago abierto es de FRP, Cuenta MI o alquiler
   const [listo, setListo] = useState<Listo | null>(null)
   // ----- licencia: la que tenía al entrar (undefined = el servidor todavía no la entrega) y el pago que se confirmó sin activarla -----
   const [licAntes, setLicAntes] = useState<ResumenCliente["licencia"]>(undefined)
@@ -177,7 +181,10 @@ function PasoAPaso({ producto }: { producto: Producto }) {
       if (!(await sesionVencida(r.status))) setCarga("error")
       return false
     }
-    const a = r.data?.activo ? pagoDeActivo(r.data.activo) : null
+    const act = r.data?.activo ?? null
+    const app = act ? pagoDeLaApp(act) : null
+    setDeLaApp(app)
+    const a = act && !app ? pagoDeActivo(act) : null
     setPago(a)
     if (a?.metodo === "yape" && a.codigoDeclarado) {
       setCodigo(a.codigoDeclarado)
@@ -194,6 +201,14 @@ function PasoAPaso({ producto }: { producto: Producto }) {
   useEffect(() => {
     traerPago().catch(() => setCarga("error"))
   }, [traerPago])
+
+  // E13: cuando vence el pago de la app se vuelve a preguntar, así puede recargar sin refrescar.
+  useEffect(() => {
+    if (!deLaApp) return
+    const ms = new Date(deLaApp.venceEn).getTime() - Date.now() + 3000
+    const id = window.setTimeout(() => void traerPago().catch(() => setCarga("error")), Number.isFinite(ms) ? Math.max(ms, 30_000) : 30_000)
+    return () => window.clearTimeout(id)
+  }, [deLaApp, traerPago])
 
   // En el paso 3 sin pago (lo abrió a mano, o ya venció): al paso 1. En el 2 manda el monto de la
   // dirección: si no sirve, al paso 1; si es otro que el elegido (Atrás/Adelante del navegador), se toma ese.
@@ -427,6 +442,17 @@ function PasoAPaso({ producto }: { producto: Producto }) {
           <BotonAviso onClick={() => { setCarga("cargando"); traerPago().catch(() => setCarga("error")) }}>Reintentar</BotonAviso>
         </div>
       ) : <span className="block h-[34px] w-[260px] max-w-full animate-pulse rounded-md" style={{ background: C.border }} />}
+    </>)
+  }
+
+  // ---------- "Tenés un pago abierto en la app" (W14-E E13 / E13b): es de FRP, Cuenta MI o alquiler; acá no se sigue ni se cancela ----------
+  if (deLaApp) {
+    return marco(<>
+      <Volver texto="Volver a Mi cuenta" onClick={() => nav(RUTAS.miCuenta)} m={m} />
+      <Pasos nombres={nombres} actual={paso} m={m} />
+      <TituloPaso paso={paso} de={4} titulo={paso === 1 ? titulo1 : "¿Cómo vas a pagar?"} m={m} />
+      <Aviso tono="azul" icono={Info} titulo="Tenés un pago abierto en la app" m={m}>{textoPagoApp(deLaApp, lic)}</Aviso>
+      {m ? null : <Ayuda datos={datos} />}
     </>)
   }
 

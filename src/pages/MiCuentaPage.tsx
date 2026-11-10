@@ -24,6 +24,7 @@ import { SinPerfil } from "@/components/aritool/perfil"
 import { usePrecios } from "@/hooks/use-precios"
 import { NOMBRE_WEB } from "@/lib/buscador"
 import { cobroActivo, resumenCliente, type CobroActivo, type ResumenCliente } from "@/lib/cuenta"
+import { pagoDeLaApp } from "@/lib/recarga"
 import { filasHistorial, type FilaHistorial } from "@/lib/historial"
 import { herramientaVisible, type Precios } from "@/lib/precios"
 import { motivoRechazo, recordarNombre } from "@/lib/sesion"
@@ -82,9 +83,12 @@ function useFalta(vence: string | undefined): number {
   return vence ? Math.max(0, Math.round((new Date(vence).getTime() - ahora) / 1000)) : 0
 }
 
-/** Aviso bajo el saldo: pago esperando (S4) o saldo que no alcanza (S3). null = ninguno. */
+/**
+ * Aviso bajo el saldo: pago esperando (S4) o saldo que no alcanza (S3). null = ninguno.
+ * Un pago abierto de la app (FRP, Cuenta MI, alquiler) no es una recarga: S4 no lo muestra (no está dibujado acá).
+ */
 function avisoSaldo(pago: CobroActivo | null, falta: number, bajo: boolean) {
-  if (pago) return <Banner tipo="azul" icono={Timer}>Tenés un pago esperando: {pago.producto === "licencia" ? "licencia anual" : `recarga de ${usd(Number(pago.creditos))}`}. {pago.metodo === "yape" ? `S/ ${pago.monto} por Yape` : `${pago.monto} USDT por Binance`}. Vence en {minSeg(falta)}.</Banner>
+  if (pago && !pagoDeLaApp(pago)) return <Banner tipo="azul" icono={Timer}>Tenés un pago esperando: {pago.producto === "licencia" ? "licencia anual" : `recarga de ${usd(Number(pago.creditos))}`}. {pago.metodo === "yape" ? `S/ ${pago.monto} por Yape` : `${pago.monto} USDT por Binance`}. Vence en {minSeg(falta)}.</Banner>
   if (bajo) return <Banner tipo="ambar" icono={Wallet}>Con esto no te alcanza para usar nada. Recargá para seguir.</Banner>
   return null
 }

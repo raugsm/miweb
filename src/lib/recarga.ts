@@ -102,6 +102,38 @@ export function restan(pago: Pick<Pago, "venceEn">, ahora = Date.now()): number 
   return Number.isFinite(fin) ? Math.max(0, Math.round((fin - ahora) / 1000)) : 0
 }
 
+// ---------- Pago abierto en la app (W14-E E13 1249:55 / E13b 1249:65) ----------
+
+/** Nombre del servicio como lo escribe el aviso. Otro valor = no se nombra (E13b). */
+const SERVICIO_APP: Record<string, string> = { frp: "FRP", cuenta_mi: "Cuenta MI", alquiler: "Alquiler" }
+
+/** Un pago abierto de FRP, Cuenta MI o alquiler: acá no se sigue ni se cancela. */
+export type PagoApp = { servicio: string | null; metodo: Metodo; monto: string; ticket: string; venceEn: string }
+
+/**
+ * ¿El pago en curso es de la app y no una recarga ni una licencia? Con `servicio` (cuando la base lo
+ * devuelva) se sabe cuál es. Sin él, una "recarga" de 0 créditos no existe (el mínimo es 10): es de la app.
+ */
+export function pagoDeLaApp(a: CobroActivo): PagoApp | null {
+  const s = a.servicio ?? null
+  const deLaApp = s != null ? s !== "creditos" && s !== "licencia" : a.producto === "credito" && Number(a.creditos) === 0
+  if (!deLaApp) return null
+  return { servicio: s != null ? SERVICIO_APP[s] ?? null : null, metodo: a.metodo, monto: a.monto, ticket: a.ticket ?? a.codigo, venceEn: a.vence_en }
+}
+
+/** Hora del vencimiento en la hora del cliente: "15:42". "" si la fecha no se entiende. */
+export function horaLocal(iso: string): string {
+  const d = new Date(iso)
+  return Number.isFinite(d.getTime()) ? `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}` : ""
+}
+
+/** El texto del aviso: "FRP · S/ 11.36 por Yape · ticket TK-FVY2. Terminalo en la app AriTool o esperá…". */
+export function textoPagoApp(p: PagoApp, licencia: boolean): string {
+  const hora = horaLocal(p.venceEn)
+  return `${p.servicio ? `${p.servicio} · ` : ""}${pagoTexto(p.metodo, p.monto)} por ${p.metodo === "yape" ? "Yape" : "Binance"} · ticket ${p.ticket}. `
+    + `Terminalo en la app AriTool o esperá a que venza${hora ? ` a las ${hora}` : ""}. Después podés ${licencia ? "comprar la licencia" : "recargar"} acá.`
+}
+
 // ---------- Licencia anual (W15) ----------
 
 type Licencia = ResumenCliente["licencia"]
