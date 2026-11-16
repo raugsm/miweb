@@ -73,11 +73,10 @@ export type Precios = {
 }
 
 /**
- * Moneda corta para el selector de país: pen→"S/", pesos→su código (MXN/COP/CLP/ARS), usdt→"USDT".
- * Los tres pesos con código para no confundirlos (Ari-Diseño, 16-nov).
+ * Moneda corta para el selector de país: su código (PEN/MXN/COP/CLP/ARS), usdt→"USDT".
+ * Los pesos con código para no confundirlos (Ari-Diseño, 16-nov); Perú también con su código, PEN (Peter, 16-nov).
  */
 export function simboloMoneda(m: Moneda): string {
-  if (m === "pen") return "S/"
   if (m === "usdt" || m === "usd") return "USDT"
   return m.toUpperCase()
 }
@@ -302,8 +301,8 @@ export function limpiarCachePrecios(): void {
 
 /**
  * Formatea un monto en su moneda para mostrarlo al cliente. Presentación pura. Tabla de Ari-Diseño (buzón #2143):
- * pen → "S/ 1,234.50" · mxn → "$1,234.50 MXN" · cop → "$34.500 COP" · clp → "$11.500 CLP" (sin decimales)
- * · usd → "US$ 2.40" · usdt → "9.50 USDT".
+ * pen → "1,234.50 PEN" (Peter, 16-nov: PEN, no S/) · mxn → "$1,234.50 MXN" · cop → "$34.500 COP"
+ * · clp → "$11.500 CLP" (sin decimales) · usd → "US$ 2.40" · usdt → "9.50 USDT".
  * Cada moneda con los separadores de su país (en Colombia y Chile "54,450" se lee 54,45) y los pesos con su código.
  */
 export function formatearPrecio(monto: number, moneda: Moneda): string {
@@ -311,7 +310,7 @@ export function formatearPrecio(monto: number, moneda: Moneda): string {
     monto.toLocaleString(local, { minimumFractionDigits: dec, maximumFractionDigits: dec })
   switch (moneda) {
     case "pen":
-      return `S/ ${n(2)}`
+      return `${n(2)} PEN`
     case "mxn":
       return `$${n(2, "es-MX")} MXN`
     case "cop":
