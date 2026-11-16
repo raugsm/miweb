@@ -72,11 +72,14 @@ export type Precios = {
   actualizado_en: string
 }
 
-/** Símbolo corto de la moneda (para pills): pen→"S/", usdt→"USDT", resto→"$". */
+/**
+ * Moneda corta para el selector de país: pen→"S/", pesos→su código (MXN/COP/CLP/ARS), usdt→"USDT".
+ * Los tres pesos con código para no confundirlos (Ari-Diseño, 16-nov).
+ */
 export function simboloMoneda(m: Moneda): string {
   if (m === "pen") return "S/"
   if (m === "usdt" || m === "usd") return "USDT"
-  return "$"
+  return m.toUpperCase()
 }
 
 /** Nombre de la moneda (para "Precios en ___"): pen→"soles", usdt→"USDT", resto→"pesos". */
