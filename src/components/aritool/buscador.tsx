@@ -42,7 +42,7 @@ function IconoResultado({ r, size }: { r: Resultado; size: number }) {
 function Precio({ r }: { r: Resultado }) {
   if (!r.disponible) return <span className="shrink-0" style={{ color: C.faint, fontSize: 13 }}>Próximamente</span>
   if (r.precio == null) return <span className="shrink-0" style={{ color: C.muted, fontSize: 13 }}>Precio en la app</span>
-  const texto = r.tipo === "app" ? `$${r.precio} por proceso` : formatearPrecio(r.precio, r.moneda)
+  const texto = r.tipo === "app" ? `US$ ${r.precio} por proceso` : formatearPrecio(r.precio, r.moneda)
   return <span className="shrink-0" style={{ color: C.green, fontWeight: 700, fontSize: 14, lineHeight: "17px" }}>{texto}</span>
 }
 

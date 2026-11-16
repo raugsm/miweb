@@ -46,7 +46,7 @@ function precioDe(local: number | null | undefined, usd: number | null | undefin
 
 function precioApp(app: Precios["app"] | undefined, error: boolean) {
   if (error || app?.credito_usd == null) return "Precio en la app"
-  return `$${app.credito_usd} por proceso`
+  return `US$ ${app.credito_usd} por proceso`
 }
 
 function coincide(consulta: string, textos: Array<string | null | undefined>) {

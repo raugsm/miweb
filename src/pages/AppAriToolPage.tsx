@@ -37,8 +37,8 @@ const REQUISITOS = [
 function preciosApp(datos: Precios | null) {
   const app = datos?.app
   return {
-    credito: app?.credito_usd != null ? `$${app.credito_usd}` : null,
-    licencia: app?.licencia_anual_usd != null ? `$${app.licencia_anual_usd}` : null,
+    credito: app?.credito_usd != null ? `US$ ${app.credito_usd}` : null,
+    licencia: app?.licencia_anual_usd != null ? `US$ ${app.licencia_anual_usd}` : null,
   }
 }
 

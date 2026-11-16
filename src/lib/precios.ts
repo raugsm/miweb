@@ -299,22 +299,26 @@ export function limpiarCachePrecios(): void {
 
 /**
  * Formatea un monto en su moneda para mostrarlo al cliente. Presentación pura.
- * pen → "S/ 8.52" · mxn → "$ 46.73" · cop/clp → "$ 54.450" (sin decimales) · usdt → "2.40 USDT".
+ * pen → "S/ 8.52" · mxn → "$ 46.73" · cop/clp → "$ 54.450" (sin decimales) · usd → "US$ 2.40" · usdt → "2.40 USDT".
+ * Cada moneda con los separadores de su país: en Colombia y Chile "54,450" se lee 54,45.
  */
 export function formatearPrecio(monto: number, moneda: Moneda): string {
-  const n = (dec: number) =>
-    monto.toLocaleString("es-PE", { minimumFractionDigits: dec, maximumFractionDigits: dec })
+  const n = (dec: number, local = "es-PE") =>
+    monto.toLocaleString(local, { minimumFractionDigits: dec, maximumFractionDigits: dec })
   switch (moneda) {
     case "pen":
       return `S/ ${n(2)}`
     case "mxn":
-      return `$ ${n(2)}`
+      return `$ ${n(2, "es-MX")}`
     case "cop":
+      return `$ ${n(0, "es-CO")}`
     case "clp":
+      return `$ ${n(0, "es-CL")}`
     case "ars":
-      return `$ ${n(0)}`
+      return `$ ${n(0, "es-AR")}`
     case "usd":
-      return `$ ${n(2)}`
+      // "US$": en México, Colombia y Chile "$" solo es su peso.
+      return `US$ ${n(2)}`
     case "usdt":
       return `${n(2)} USDT`
     default:

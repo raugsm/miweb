@@ -33,7 +33,7 @@ function precioServicio(s: ServicioPrecio | null): string {
 
 // El crédito de la app sale del catálogo (negocio.parametro), igual que en la página App AriTool.
 function precioApp(datos: Precios | null): string {
-  return datos?.app?.credito_usd != null ? `$${datos.app.credito_usd} por proceso` : "Precio en la app"
+  return datos?.app?.credito_usd != null ? `US$ ${datos.app.credito_usd} por proceso` : "Precio en la app"
 }
 
 // ======================= DESKTOP (W1) =======================
