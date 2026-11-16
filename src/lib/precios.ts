@@ -298,9 +298,10 @@ export function limpiarCachePrecios(): void {
 }
 
 /**
- * Formatea un monto en su moneda para mostrarlo al cliente. Presentación pura.
- * pen → "S/ 8.52" · mxn → "$ 46.73" · cop/clp → "$ 54.450" (sin decimales) · usd → "US$ 2.40" · usdt → "2.40 USDT".
- * Cada moneda con los separadores de su país: en Colombia y Chile "54,450" se lee 54,45.
+ * Formatea un monto en su moneda para mostrarlo al cliente. Presentación pura. Tabla de Ari-Diseño (buzón #2143):
+ * pen → "S/ 1,234.50" · mxn → "$1,234.50 MXN" · cop → "$34.500 COP" · clp → "$11.500 CLP" (sin decimales)
+ * · usd → "US$ 2.40" · usdt → "9.50 USDT".
+ * Cada moneda con los separadores de su país (en Colombia y Chile "54,450" se lee 54,45) y los pesos con su código.
  */
 export function formatearPrecio(monto: number, moneda: Moneda): string {
   const n = (dec: number, local = "es-PE") =>
@@ -309,13 +310,13 @@ export function formatearPrecio(monto: number, moneda: Moneda): string {
     case "pen":
       return `S/ ${n(2)}`
     case "mxn":
-      return `$ ${n(2, "es-MX")}`
+      return `$${n(2, "es-MX")} MXN`
     case "cop":
-      return `$ ${n(0, "es-CO")}`
+      return `$${n(0, "es-CO")} COP`
     case "clp":
-      return `$ ${n(0, "es-CL")}`
+      return `$${n(0, "es-CL")} CLP`
     case "ars":
-      return `$ ${n(0, "es-AR")}`
+      return `$${n(0, "es-AR")} ARS`
     case "usd":
       // "US$": en México, Colombia y Chile "$" solo es su peso.
       return `US$ ${n(2)}`
