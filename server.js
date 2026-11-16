@@ -6100,24 +6100,21 @@ async function latestClientVersionInfo() {
   return info;
 }
 
-async function latestClientDownloadUrl() {
-  const info = await latestClientVersionInfo();
-  return info.downloadUrl;
-}
-
 async function redirectToLatestClientInstaller(res) {
   try {
-    const downloadUrl = await latestClientDownloadUrl();
+    const info = await latestClientVersionInfo();
+    const downloadUrl = info.downloadUrl;
     if (!downloadUrl) {
       res.writeHead(503, { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" });
       return res.end("El servicio de descarga estÃ¡ temporalmente no disponible.\nPor favor intentÃ¡ de nuevo en unos minutos.");
     }
     // Se pide la descarga explicita, igual que en los botones de Ari-Tool:
     // sin esto el navegador decide solo y puede abrir una pestana en vez de
-    // guardar el archivo.
-    const nombre = decodeURIComponent(
-      (downloadUrl.split("?")[0].split("/").pop() || "AriadGSM-Cliente.exe")
-    );
+    // guardar el archivo. El nombre es AriTool-<version>.exe (pedido de Peter,
+    // 16-nov), se llame como se llame el archivo subido; la ruta no cambia.
+    const nombre = info.version
+      ? `AriTool-${info.version}.exe`
+      : decodeURIComponent(downloadUrl.split("?")[0].split("/").pop() || "AriadGSM-Cliente.exe");
     const separador = downloadUrl.includes("?") ? "&" : "?";
     const urlDescarga = `${downloadUrl}${separador}download=${encodeURIComponent(nombre)}`;
     res.writeHead(302, {

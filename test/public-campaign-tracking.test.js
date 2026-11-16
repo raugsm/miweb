@@ -223,10 +223,11 @@ test("public client download resolves the latest installer from Supabase", async
     assert.equal(download.status, 302);
     // El enlace tiene que pedir la descarga, no solo apuntar al archivo: sin
     // el parametro `download` el navegador decide solo y puede abrir una
-    // pestana en vez de guardarlo.
+    // pestana en vez de guardarlo. El nombre es AriTool-<version>.exe, no el
+    // del archivo subido.
     assert.equal(
       download.headers.get("location"),
-      `${remoteDownloadUrl}?download=AriadGSM-Cliente-Setup-PerUser-v0.5.2.exe`
+      `${remoteDownloadUrl}?download=AriTool-0.5.2.exe`
     );
 
     assert.equal(supabaseRequests.length, 1, "latest version should be cached between public version and download requests");
