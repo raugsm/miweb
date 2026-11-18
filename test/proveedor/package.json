@@ -1,0 +1,17 @@
+{
+  "name": "pruebas-proveedor",
+  "private": true,
+  "type": "module",
+  "description": "Pruebas locales de la compra al proveedor de alquiler (PGlite + proveedor simulado). Sin red ni prod.",
+  "scripts": {
+    "unidad": "node --test ../../supabase/functions/proveedor_consultar/gsm_theme.test.ts",
+    "mock": "node --test mock/mock.test.mjs",
+    "sql": "node probar_compra_sql.mjs",
+    "e2e": "node probar_compra_e2e.mjs",
+    "alertas": "node probar_alertas_extra.mjs",
+    "taller": "node probar_oculta_taller.mjs"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.2.17"
+  }
+}
