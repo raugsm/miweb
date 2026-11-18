@@ -41,7 +41,8 @@ serve(async (req) => {
       const { data: clave } = await db.schema("frp").rpc("salud_clave");
       if (!clave || dada !== String(clave)) return resp(401, { error: "no_autorizado" });
       // Turno: si la vuelta anterior sigue corriendo (cron cada 30 s), esta no arranca.
-      const { data: turno } = await rpc("vuelta_tomar", { p_proveedor: PROVEEDOR, p_segundos: 150 });
+      const { data: turno, error: eTurno } = await rpc("vuelta_tomar", { p_proveedor: PROVEEDOR, p_segundos: 150 });
+      if (eTurno) throw new Error("vuelta_tomar: " + eTurno.message);   // no tapar un error como «ocupada» (se perdería todo)
       if (turno !== true) return resp(200, { ok: true, ocupada: true });
       try {
         const propio = env("PROV_TELEGRAM_TOKEN");

@@ -105,7 +105,7 @@ test("lee la cuenta que entrega el proveedor (S4.4) y no adivina", () => {
                       "User: a | Pass: x\nUser: b | Pass: y", 42,
                       // auditoría 18-nov G2: el texto entero tiene que calzar
                       "User: abc, Pass: xyz", "User: abc | Pass: xyz.", "User: abc | Pass: x y", "User: <b>abc</b> | Pass: x",
-                      "Hola! User: abc | Pass: x", "User: abc | Pass: x | 6 horas"]) {
+                      "Hola! User: abc | Pass: x", "User: abc | Pass: x | 6 horas", "User: abc | Pass: xyz,6h"]) {
     assert.equal(leerCuenta(malo), null, String(malo));
   }
 });

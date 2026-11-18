@@ -175,7 +175,7 @@ export async function vuelta(rpc: Rpc, api: Api, avisos: Avisos | null, proveedo
       let e: string;
       try { e = await enviarUno(rpc, api, proveedor, p.pedido); } catch (err) { errores.push(`enviar ${p.pedido}: ${String((err as Error)?.message ?? err).slice(0, 160)}`); continue; }
       enviados.push(e);
-      if (e === "por_enviar" || e === "ocupado" || e === "espera") break;                     // saldo sin respuesta, otro en vuelo o pausa
+      if (e === "por_enviar" || e === "ocupado") break;     // el saldo no respondió u otro en vuelo; «espera» sigue con el próximo
     }
     return enviados;
   });

@@ -142,7 +142,7 @@ export function leerCuenta(code: unknown): { usuario: string; clave: string } | 
   // Solo se traducen el salto <br> y las entidades comunes; cualquier otra etiqueta queda y hace que no calce.
   const t = t0.replace(/<br\s*\/?>/gi, "\n").replace(/&nbsp;/gi, " ")
     .replace(/&amp;/gi, "&").replace(/&#0?39;|&apos;/gi, "'").replace(/&quot;/gi, '"').replace(/&lt;/gi, "<").replace(/&gt;/gi, ">");
-  const m = t.match(/^\s*user(?:name)?\s*[:=]\s*([^\s|,;<>]+)\s*(?:\||\r?\n|[ \t])\s*pass(?:word)?\s*[:=]\s*([^\s|<>]+)\s*$/i);
+  const m = t.match(/^\s*user(?:name)?\s*[:=]\s*([^\s|,;<>]+)\s*(?:\||\r?\n|[ \t])\s*pass(?:word)?\s*[:=]\s*([^\s|,;<>]+)\s*$/i);
   if (!m) return null;
   // Un punto, coma, punto y coma o dos puntos pegado al final puede ser puntuación del mensaje, no parte del valor.
   if (/[.,;:]$/.test(m[1]) || /[.,;:]$/.test(m[2])) return null;

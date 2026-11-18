@@ -479,7 +479,7 @@ await usuario("sop_alquiler.operar"); await r1("select sop_proveedor.pedido_anul
 ok((await filas("select * from sop_proveedor.pedidos_a_seguir('pkgsmhub')")).some((x) => x.pedido === k.p), "M5: el anulado con número se sigue");
 await r1("select sop_proveedor.pedido_estado_proveedor($1, 4, 'User: q1 | Pass: w1') r", [k.p]);
 const an = await uno("select estado, cuenta_cif is not null as guardada from sop_proveedor.pedido where id = $1", [k.p]);
-ok(an.estado === "anulado" && an.guardada && (await uno("select count(*)::int n from sop_proveedor.alerta where tipo='cuenta_ilegible' and causa=$1", [k.a])).n === 1,
+ok(an.estado === "anulado" && an.guardada && (await uno("select count(*)::int n from sop_proveedor.alerta where tipo='cuenta_ilegible' and causa=$1", ["anulado:" + k.p])).n === 1,
    "M5: llegó la cuenta del anulado → guardada cifrada y alerta (pérdida)", an);
 ok(!(await filas("select * from sop_proveedor.pedidos_a_seguir('pkgsmhub')")).some((x) => x.pedido === k.p), "M5: con el estado final, se deja de seguir");
 // M7: si la entrega da error, no rebota: queda con la cuenta guardada y alerta.
@@ -506,6 +506,70 @@ await db.query("update sop_alquiler.alquiler set situacion = 'en_curso' where id
 r = await r1("select sop_proveedor.vigilar_cierres('pkgsmhub') r");
 ok((await uno("select count(*)::int n from sop_proveedor.alerta where causa = $1 and resuelta_en is null and tipo <> 'cuenta_ilegible'", [aT])).n === 0
    && (await uno("select count(*)::int n from sop_proveedor.alerta where tipo='gasto_maximo' and causa='falta' and resuelta_en is null")).n === 0, "M8: se cierran las alertas que ya no corresponden", r);
+
+// ── Tercera revisión (18-nov): lo que trajeron los arreglos.
+await servicio();
+await db.exec("update sop_proveedor.proveedor set respaldo_encendido = true, gasto_maximo_dia = 100; update sop_proveedor.conector set pausa_motivo = null, fallos_seguidos = 0, fallos_pedir = 0");
+await db.exec("update sop_proveedor.pedido set estado = 'anulado' where estado in ('por_enviar','enviando','en_proceso','listo','en_duda','cuenta_ilegible')");
+// P1: el alquiler deja de esperar pero tiene un pedido «en duda» → el aviso NO se cierra solo.
+let q = await nuevo();
+await r1("select sop_proveedor.pedido_preparar($1) r", [q.p]); await r1("select sop_proveedor.pedido_respuesta($1, 'sin_respuesta', null, 'x') r", [q.p]);
+await db.query("update sop_alquiler.alquiler set situacion = 'devuelto', devuelto_en = now() where id = $1", [q.a]);
+await r1("select sop_proveedor.vigilar_cierres('pkgsmhub') r");
+ok((await uno("select count(*)::int n from sop_proveedor.alerta where tipo='pedido_en_duda' and causa=$1 and resuelta_en is null", [q.a])).n === 1,
+   "P1: con un pedido «en duda», el aviso no se cierra aunque el alquiler se haya devuelto");
+// P2: con el corte duro activo (3 fallos + un «en duda»), el automático no crea ni omite: espera.
+await db.exec("update sop_proveedor.conector set fallos_pedir = 3");
+const aC = await alquilar();
+r = await r1("select sop_proveedor.pedidos_auto_crear('pkgsmhub') r");
+ok(r.creados === 0 && r.motivo === "proveedor_en_duda" && (await uno("select count(*)::int n from sop_proveedor.pedido where alquiler_id = $1", [aC])).n === 0,
+   "P2: con el corte duro, el automático no crea pedidos (no los pierde)", r);
+await db.exec("update sop_proveedor.conector set fallos_pedir = 0");
+await db.query("update sop_proveedor.pedido set estado = 'anulado' where id = $1", [q.p]);
+// P3: devolución «vista» solo si volvió justo lo del pedido y nada más se movió.
+q = await nuevo();
+await r1("select sop_proveedor.pedido_preparar($1) r", [q.p]); await r1("select sop_proveedor.pedido_respuesta($1, 'aceptado', '7101', 'ok') r", [q.p]);
+await r1("select sop_proveedor.pedido_saldo_despues($1, 9.61) r", [q.p]);
+await r1("select sop_proveedor.pedido_estado_proveedor($1, 3, 'Rejected') r", [q.p]);
+r = await r1("select sop_proveedor.pedido_rechazo_verificado($1, 30) r", [q.p]);
+ok(r.devolucion_vista === false, "P3: el saldo subió de más (recarga de Admin) → no se toma como devolución, va a Soporte", r);
+q = await nuevo();
+await r1("select sop_proveedor.pedido_preparar($1) r", [q.p]); await r1("select sop_proveedor.pedido_respuesta($1, 'aceptado', '7102', 'ok') r", [q.p]);
+await r1("select sop_proveedor.pedido_saldo_despues($1, 9.61) r", [q.p]);
+const otro = await nuevo();                                        // otro pedido sale entre medio
+await saldo(9.61); await r1("select sop_proveedor.pedido_preparar($1) r", [otro.p]);
+await r1("select sop_proveedor.pedido_estado_proveedor($1, 3, 'Rejected') r", [q.p]);
+r = await r1("select sop_proveedor.pedido_rechazo_verificado($1, 10) r", [q.p]);
+ok(r.devolucion_vista === false, "P3: salió otro pedido entre medio → no se puede saber, va a Soporte", r);
+await db.query("update sop_proveedor.pedido set estado = 'anulado' where id = $1", [otro.p]);
+// P6: un pedido de Soporte que esperaba no sale si el taller pidió la devolución.
+const aD = await alquilar();
+await usuario("sop_alquiler.operar"); r = await r1("select sop_proveedor.pedido_soporte_pedir($1, '556') r", [aD]); await servicio();
+await db.query("update sop_alquiler.alquiler set devolucion_solicitada_en = now() where id = $1", [aD]);
+await saldo(10);
+const rD = await r1("select sop_proveedor.pedido_preparar($1) r", [r.pedido]);
+ok(!rD.ok && rD.motivo === "devolucion_pedida", "P6: devolución pedida → el pedido de Soporte tampoco sale", rD);
+// P7: el aviso «no alcanza para el pedido» tiene su causa y se cierra cuando el pedido sale.
+q = await nuevo();
+await saldo(0.1);
+r = await r1("select sop_proveedor.pedido_preparar($1) r", [q.p]);
+const vivaR = (await uno("select count(*)::int n from sop_proveedor.alerta where tipo='saldo_agotado' and causa='reserva' and resuelta_en is null")).n;
+await saldo(10);
+await db.exec("update sop_proveedor.conector set pausa_motivo = null");
+r = await r1("select sop_proveedor.pedido_preparar($1) r", [q.p]);
+ok(vivaR === 1 && r.ok && (await uno("select count(*)::int n from sop_proveedor.alerta where tipo='saldo_agotado' and causa='reserva' and resuelta_en is null")).n === 0,
+   "P7: «no alcanza» se avisa con su causa y se cierra cuando el pedido sale", r);
+// P5: volver a pedir con una orden anulada viva en el proveedor → aviso a Soporte.
+await r1("select sop_proveedor.pedido_respuesta($1, 'aceptado', '7103', 'ok') r", [q.p]);
+await usuario("sop_alquiler.operar"); await r1("select sop_proveedor.pedido_anular($1, 'Soporte lo anuló para probar') r", [q.p]);
+r = await r1("select sop_proveedor.pedido_soporte_pedir($1, '648') r", [q.a]); await servicio();
+ok(r.ok && r.aviso === "hay_un_pedido_anulado_que_sigue_vivo_en_el_proveedor", "P5: Soporte se entera de que la orden anulada sigue viva", r);
+// M3: un pedido enviado ANTES no impide comparar (antes se salteaba con cualquier envío en 5 min).
+await db.exec("update sop_proveedor.pedido set estado = 'anulado' where estado in ('por_enviar','enviando','en_proceso','listo','en_duda','cuenta_ilegible')");
+const m3a = await nuevo(); await r1("select sop_proveedor.pedido_preparar($1) r", [m3a.p]); await r1("select sop_proveedor.pedido_respuesta($1, 'aceptado', '7104', 'ok') r", [m3a.p]);
+const m3b = await nuevo(); await r1("select sop_proveedor.pedido_preparar($1) r", [m3b.p]); await r1("select sop_proveedor.pedido_respuesta($1, 'aceptado', '7105', 'ok') r", [m3b.p]);
+r = await r1("select sop_proveedor.pedido_saldo_despues($1, 9.0) r", [m3b.p]);
+ok(r.cobro_distinto === true, "M3: con otro pedido enviado ANTES, igual compara y detecta el cobro de más", r);
 
 // Permisos: anon / authenticated no llegan a lo de la edge.
 for (const rol of ["anon", "authenticated"]) {
