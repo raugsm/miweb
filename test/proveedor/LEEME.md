@@ -19,3 +19,13 @@ npm run arreglos     # lo publicado + compra-arreglos = la fuente nueva
 - `datos/vivo-ultima.json` es una copia real del catálogo del 18-nov (sin la llave ni el correo).
 - `huella_propias.sql` (solo lectura, en prod): huella de las 6 propias para comparar antes y después de aplicar.
 - Mapa de las 9 reglas de `completo-18nov.md` contra cada prueba: `ari-equipo/proveedor-alquiler/backend-web.md`.
+
+## Cambios a la base (sop_proveedor de Ari-Web)
+
+1. Copiar la fuente actual (`20261118-proveedor-compra.sql` = prod) como `20261118-proveedor-compra.publicada-<hora>Z.sql`. Es la base y el rollback.
+2. Editar la fuente y correr las pruebas.
+3. `python -I -X utf8 generar_delta.py <base> <delta.sql> "<qué trae>"`, y después `BASE=<base> DELTA=<delta.sql> npm run arreglos`. Tiene que dar 0 distintas.
+4. Antes de aplicar, con OK de Peter en el chat de Ari-Web:
+   - `DERIVA_DIR=<carpeta con la base como compra.sql> DERIVA_OUT=d.json node deriva.mjs`;
+   - `python -I -X utf8 deriva_cmp.py C:/Users/peter/.claude/skills/ari-web/scripts/sql_api.py d.json`: prod tiene que ser igual a la base.
+5. Aplicar con `sql_api.py < delta.sql`. Después correr la deriva contra la fuente: tiene que dar todo igual.
