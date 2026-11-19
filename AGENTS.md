@@ -36,6 +36,7 @@ La tarea concreta de esta sesión va al final del prompt del usuario. Si el pedi
 **Engram SIEMPRE con `project="aritool"`.**
 
 ### Al arrancar
+0. Leé tu skill de conocimiento: `C:\Users\peter\.claude\skills\ari-web\estado.md` (lo que cambia) y `SKILL.md` (lo que dura). Mantenela al día (encargo de Peter, 19-nov).
 1. `mem_context`.
 2. Leé tu handoff: `mem_search("estado/handoff-ari-web")` (ficha #677).
 3. Leé el buzón: `mem_search("BUZON PARA Ari-Web")` y `mem_search("BUZON PARA TODOS")` (protocolo #1257).
