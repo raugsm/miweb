@@ -570,7 +570,7 @@ ok(r.ok === true, "R1: cuando la anulada llega a su estado final, Soporte puede 
 
 // ── R1 · Anular el alquiler (cascada de Ari-Master): la API no cancela, el pedido no queda huérfano ni se paga dos veces.
 await db.exec("update sop_proveedor.pedido set estado = 'anulado' where estado in ('por_enviar','enviando','en_proceso','listo','en_duda','cuenta_ilegible')");
-const anularA = async (a) => { await usuario("sop_alquiler.operar"); const x = await r1("select sop_proveedor.pedido_anular_alquiler($1, null) r", [a]); await servicio(); return x; };
+const anularA = async (a) => { await usuario(""); const x = await r1("select sop_proveedor.pedido_anular_alquiler($1, null) r", [a]); await servicio(); return x; };   // con el token del taller (devolución)
 r = await anularA(await alquilar());
 ok(r.ok && r.accion === "sin_pedido", "R1: alquiler sin pedido → nada que cortar", r);
 // por_enviar → anulado y nunca sale
@@ -611,13 +611,60 @@ r = await anularA(q.a);
 ok(r.ok && r.accion === "queda_en_duda" && (await uno("select estado from sop_proveedor.pedido where id = $1", [q.p])).estado === "en_duda"
    && (await uno("select count(*)::int n from sop_proveedor.alerta where tipo='pedido_en_duda' and causa=$1 and resuelta_en is null", [q.a])).n === 1,
    "R1: «en duda» queda abierto con su aviso (la devolución al taller sigue igual)", r);
-// permisos: sin capacidad no; _pedido_anular no la llama un usuario
-await usuario("");
-let err = null; try { await r1("select sop_proveedor.pedido_anular_alquiler($1, null) r", [q.a]); } catch (e) { err = e.message; }
-ok(err && /sin_capacidad/.test(err), "R1: sin capacidad no se puede anular por alquiler", err);
-await servicio();
+// permisos reales: ningún usuario llama a _pedido_anular ni a la cascada; el servidor sí a la cascada
+const priv = async (rol, fn) => (await uno("select has_function_privilege($1, $2, 'execute') x", [rol, fn])).x;
+ok(!(await priv("authenticated", "sop_proveedor._pedido_anular(uuid, text)")) && !(await priv("anon", "sop_proveedor._pedido_anular(uuid, text)"))
+   && !(await priv("service_role", "sop_proveedor._pedido_anular(uuid, text)")),
+   "R1: _pedido_anular no la ejecuta nadie de afuera");
+ok(!(await priv("authenticated", "sop_proveedor.pedido_anular_alquiler(uuid, text)")) && !(await priv("anon", "sop_proveedor.pedido_anular_alquiler(uuid, text)"))
+   && (await priv("service_role", "sop_proveedor.pedido_anular_alquiler(uuid, text)")),
+   "R1: la cascada no la llama un usuario del panel ni un taller directo; el servidor sí");
 r = await r1("select sop_proveedor.pedido_anular_alquiler($1, 'cascada del servidor') r", [q.a]);
 ok(r.accion === "queda_en_duda", "R1: el servidor (service_role) también puede llamarla", r);
+
+// ── Revisión de R1 (19-nov)
+await db.exec("update sop_proveedor.pedido set estado = 'anulado' where estado in ('por_enviar','enviando','en_proceso','listo','en_duda','cuenta_ilegible')");
+// 1: el anulado vivo se sigue y frena a Soporte aunque pasen más de 24 h
+q = await nuevo();
+await r1("select sop_proveedor.pedido_preparar($1) r", [q.p]); await r1("select sop_proveedor.pedido_respuesta($1, 'aceptado', '7301', 'ok') r", [q.p]);
+await anularA(q.a);
+await db.query("update sop_proveedor.pedido set cerrado_en = now() - interval '30 hours' where id = $1", [q.p]);
+await usuario("sop_alquiler.operar"); r = await r1("select sop_proveedor.pedido_soporte_pedir($1, '648') r", [q.a]); await servicio();
+ok(!r.ok && r.motivo === "hay_un_pedido_vivo_en_el_proveedor"
+   && (await uno("select count(*)::int n from sop_proveedor.pedidos_a_seguir('pkgsmhub') s where s.pedido = $1", [q.p])).n === 1,
+   "revisión R1 #1: a las 30 h el anulado vivo se sigue y Soporte no puede pedir otro", r);
+// 8: un anulado que el proveedor devolvió (STATUS 3) no suma al gasto del día
+const gastoAntes = (await uno(`select coalesce(sum(costo_esperado),0)::float g from sop_proveedor.pedido where estado in ('enviando','en_proceso','listo','entregado','en_duda','cuenta_ilegible','anulado')
+   and (estado <> 'anulado' or ultimo_status is distinct from 3) and enviado_en::date = now()::date`)).g;
+await r1("select sop_proveedor.pedido_estado_proveedor($1, 3, 'Rejected') r", [q.p]);
+const gastoDespues = (await uno(`select coalesce(sum(costo_esperado),0)::float g from sop_proveedor.pedido where estado in ('enviando','en_proceso','listo','entregado','en_duda','cuenta_ilegible','anulado')
+   and (estado <> 'anulado' or ultimo_status is distinct from 3) and enviado_en::date = now()::date`)).g;
+await db.exec("update sop_proveedor.proveedor set gasto_maximo_dia = " + (gastoDespues + 0.40));   // alcanza solo si el devuelto no cuenta
+const q8 = await nuevo(); r = await r1("select sop_proveedor.pedido_preparar($1) r", [q8.p]);
+ok(gastoAntes > gastoDespues && r.ok === true, "revisión R1 #8: el anulado devuelto no ocupa el máximo del día", { gastoAntes, gastoDespues, r });
+await db.exec("update sop_proveedor.proveedor set gasto_maximo_dia = 100, respaldo_encendido = true");
+await db.query("update sop_proveedor.pedido set estado = 'anulado' where id = $1", [q8.p]);
+// 3: un «enviando» de más de 2 minutos no traba la cascada: pasa a «en duda»
+q = await nuevo();
+await r1("select sop_proveedor.pedido_preparar($1) r", [q.p]);
+await db.query("update sop_proveedor.pedido set enviado_en = now() - interval '10 minutes' where id = $1", [q.p]);
+r = await anularA(q.a);
+ok(r.ok && r.accion === "queda_en_duda" && (await uno("select estado from sop_proveedor.pedido where id = $1", [q.p])).estado === "en_duda"
+   && (await uno("select count(*)::int n from sop_proveedor.alerta where tipo='pedido_en_duda' and causa=$1 and resuelta_en is null", [q.a])).n === 1,
+   "revisión R1 #3: «enviando» viejo (cron caído) pasa a «en duda» con aviso y no traba la devolución", r);
+// 6: el número que llega tarde para un «en duda» que Soporte ya anuló se guarda (y se sigue)
+await usuario("sop_alquiler.operar"); await r1("select sop_proveedor.pedido_anular($1, 'Soporte lo anuló sin número') r", [q.p]); await servicio();
+r = await r1("select sop_proveedor.pedido_respuesta($1, 'aceptado', '7302', 'llegó tarde') r", [q.p]);
+ok(r.ok && r.estado === "anulado" && (await uno("select referencia from sop_proveedor.pedido where id = $1", [q.p])).referencia === "7302"
+   && (await uno("select count(*)::int n from sop_proveedor.pedidos_a_seguir('pkgsmhub') s where s.pedido = $1", [q.p])).n === 1,
+   "revisión R1 #6: el número que llega tarde de un anulado se guarda y se sigue", r);
+// 5: anular un «listo» con la cuenta guardada avisa la pérdida
+q = await nuevo();
+await r1("select sop_proveedor.pedido_preparar($1) r", [q.p]); await r1("select sop_proveedor.pedido_respuesta($1, 'aceptado', '7303', 'ok') r", [q.p]);
+await db.query("update sop_proveedor.pedido set estado = 'listo', cuenta_cif = sop_alquiler.cifrar('User: p | Pass: q'), ultimo_status = 4 where id = $1", [q.p]);
+await anularA(q.a);
+ok((await uno("select count(*)::int n from sop_proveedor.alerta where tipo='cuenta_ilegible' and causa=$1 and resuelta_en is null", ["anulado:" + q.p])).n === 1,
+   "revisión R1 #5: anular un «listo» deja el aviso de la cuenta guardada (pérdida)");
 // M3: un pedido enviado ANTES no impide comparar (antes se salteaba con cualquier envío en 5 min).
 await db.exec("update sop_proveedor.pedido set estado = 'anulado' where estado in ('por_enviar','enviando','en_proceso','listo','en_duda','cuenta_ilegible')");
 const m3a = await nuevo(); await r1("select sop_proveedor.pedido_preparar($1) r", [m3a.p]); await r1("select sop_proveedor.pedido_respuesta($1, 'aceptado', '7104', 'ok') r", [m3a.p]);
