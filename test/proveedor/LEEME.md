@@ -10,9 +10,12 @@ npm run sql          # reglas de la compra en SQL, sobre la base y el M1 real de
 npm run e2e          # el ciclo real de la edge (ciclo.ts / api_gsm.ts) contra el proveedor simulado
 npm run alertas      # alertas #2, #3, #7 y #11 de p13
 npm run taller       # el catálogo de un taller no se rompe con _oculta_motivo
+npm run propias      # las 6 herramientas propias quedan IGUAL (antes = después), con el interruptor apagado y encendido
+npm run arreglos     # lo publicado + compra-arreglos = la fuente nueva
 ```
 
 - Los SQL se leen de `C:\private\AriTool_Recursos\db-diagramas\propuestas` (la fuente del equipo). Para cambiar la carpeta: variable `PROPUESTAS_DIR`.
 - `npm run sql` usa por defecto la cadena que está en prod (compra → alertas-extra → oculta-motivo → saldo-v5) y el M1 real. Con `M1_SIMULADO=1` usa un M1 de juguete.
 - `datos/vivo-ultima.json` es una copia real del catálogo del 18-nov (sin la llave ni el correo).
+- `huella_propias.sql` (solo lectura, en prod): huella de las 6 propias para comparar antes y después de aplicar.
 - Mapa de las 9 reglas de `completo-18nov.md` contra cada prueba: `ari-equipo/proveedor-alquiler/backend-web.md`.

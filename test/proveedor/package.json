@@ -10,7 +10,8 @@
     "e2e": "node probar_compra_e2e.mjs",
     "alertas": "node probar_alertas_extra.mjs",
     "taller": "node probar_oculta_taller.mjs",
-    "arreglos": "node valida_arreglos.mjs"
+    "arreglos": "node valida_arreglos.mjs",
+    "propias": "node probar_propias.mjs"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.2.17"
