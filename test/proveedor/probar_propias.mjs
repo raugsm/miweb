@@ -3,7 +3,8 @@
 // edge (ciclo.ts / api_gsm.ts) contra el proveedor simulado, con el interruptor APAGADO y después ENCENDIDO, y comprueba:
 //   · no cambia nada de la herramienta (precio, recargo, visible), ni del alquiler, ni las cuentas propias, ni los eventos;
 //   · no se crea ningún pedido solo, no sale ninguna orden al proveedor y no aparece ningún aviso nuevo para ellas;
-//   · lo único nuevo es aditivo: el botón «Pedir al proveedor» de Soporte funciona si Soporte lo toca.
+//   · lo único nuevo es aditivo: el botón «Pedir al proveedor» de Soporte funciona si Soporte lo toca;
+//   · y si Admin las pone en «respaldo», la compra automática trae la cuenta sin cambiar precio, recargo ni lo cobrado.
 import { PGlite } from "@electric-sql/pglite";
 import { readFileSync } from "node:fs";
 import { iniciarMock } from "./mock/mock.mjs";
@@ -83,6 +84,7 @@ const rpc = async (fn, args = {}) => {
     return { data: (await db.query(`select sop_proveedor.${fn}(${lista}) as r`, vals)).rows[0].r, error: null };
   } catch (e) { return { data: null, error: { message: e.message } }; }
 };
+const saldoFresco = () => db.query("select sop_proveedor.saldo_registrar('pkgsmhub', 100, 'usd', true, null)");
 const api = apiGsm(`http://127.0.0.1:${PUERTO}/public/api/index.php`, "u@x.com", "llave-de-prueba", 1500);
 const avisados = [];
 const avisos = { enviar: async (t) => { avisados.push(t); return true; } };
@@ -107,8 +109,22 @@ await db.exec(`select set_config('request.jwt.claims', '{"role":"authenticated"}
 const s2 = (await uno("select sop_proveedor.pedido_soporte_pedir($1, '556') r", [aU])).r;
 await servicio();
 ok(s2.ok === true, "aditivo: el botón «Pedir al proveedor» de Soporte funciona en una propia", s2);
-const otros = JSON.parse(antes).alquileres.filter((x) => true).length;
-ok((await uno("select count(*)::int n from sop_proveedor.pedido")).n === 1 && otros === 12, "y solo crea ESE pedido (los otros 11 alquileres, intactos)");
+ok((await uno("select count(*)::int n from sop_proveedor.pedido")).n === 1 && (await huella()) === antes,
+   "y solo crea ESE pedido: herramientas, los 12 alquileres, cuentas y eventos siguen idénticos");
+// 4) Aunque Admin las ponga en «respaldo» y se encienda el interruptor (lo que sí compra solo), precio, recargo,
+//    visibilidad y lo cobrado al taller no cambian: la compra solo trae la cuenta.
+const precios = async () => JSON.stringify({
+  herramientas: (await db.query("select * from sop_alquiler.herramienta order by clave")).rows,
+  cobrado: (await db.query("select id, precio_final_usdt, recargo_usdt, pago_situacion from sop_alquiler.alquiler order by id")).rows,
+});
+const preciosAntes = await precios();
+await db.exec(`insert into sop_proveedor.producto_config (herramienta, modo) select clave, 'respaldo' from sop_alquiler.herramienta;
+  update sop_proveedor.proveedor set respaldo_encendido = true, gasto_maximo_dia = 100`);
+await saldoFresco();
+for (let i = 0; i < 3; i++) await vuelta(rpc, api, avisos, "pkgsmhub");
+const comprados = (await uno("select count(*)::int n from sop_proveedor.pedido where origen = 'auto'")).n;
+ok(comprados > 0 && (await precios()) === preciosAntes,
+   "modo respaldo + interruptor: compra solo (" + comprados + " pedidos) y precio, recargo, visibilidad y lo cobrado NO cambian");
 
 await mock.cerrar?.();
 console.log(fallas === 0 ? "\nTODO OK" : `\n${fallas} FALLAS`);
