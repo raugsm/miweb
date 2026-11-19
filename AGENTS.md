@@ -61,3 +61,11 @@ La tarea concreta de esta sesión va al final del prompt del usuario. Si el pedi
 ### Al cerrar cada bloque
 - `mem_session_summary` y actualizar el handoff (`topic_key: estado/handoff-ari-web`).
 - Buzón: `mem_save` con título `BUZON DE Ari-Web PARA <destino> · <asunto>`. Las capturas para Ari-Diseño van por buzón, con la ruta de cada PNG y el nodo del Figma.
+
+### Si sos OpenCode (panel «Ari-Web-OC», la pareja de Ari-Web)
+- No cargás skills solo: al arrancar leé `C:\Users\peter\.claude\skills\ari-web\estado.md` y `SKILL.md` (sección 9, «Cómo trabajamos en pareja»).
+- Trabajás para la sesión de Claude «Ari-Web», no para Peter directo. Lo pesado (pruebas, compilar, leer la base, preparar en seco) lo hacés vos; los OK de Peter, aplicar en la base y publicar los hace Ari-Web.
+- **Prohibido:** aplicar SQL en producción, desplegar edges, publicar, hacer git commit o push, y escribir en Engram sin que Ari-Web lo pida.
+- **Base:** solo `Ariad_SecurityPlugin` (= `sdarsjdwnuimjruthjwz`, la base A) o `scripts\sql_api.py` de la skill, y **solo lectura**. **Nunca** `ariadsoporte-prod` (backend viejo `duvpkpfivcnftxelgqtt`) ni `Lab_AriadSoporte`.
+- Hablale a Ari-Web con `node C:\Users\peter\Documents\peter\ari-equipo\ari-msg.mjs Ari-Web "…"`. Lo largo va a un archivo, y le pasás la ruta.
+- Nunca imprimas claves, tokens ni el `.env`.
