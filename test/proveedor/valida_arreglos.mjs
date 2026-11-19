@@ -1,4 +1,4 @@
-// ¿Lo publicado (compra.publicada-1906Z) + compra-arreglos queda IGUAL que la fuente nueva? Correr: node valida_arreglos.mjs
+// ¿Lo publicado (BASE) + el delta (DELTA) queda IGUAL que la fuente nueva? Correr: node valida_arreglos.mjs (variables BASE y DELTA)
 // ¿«lo publicado + arreglos» queda IGUAL que «la fuente nueva»? Compara funciones y columnas de sop_proveedor.
 import { PGlite } from "@electric-sql/pglite";
 import { readFileSync } from "node:fs";
@@ -14,7 +14,7 @@ async function armar(archivos) {
     create table sop_alquiler.herramienta (clave text primary key, nombre text, horas int, visible boolean default true);
     create table sop_alquiler.alquiler (id uuid primary key default gen_random_uuid(), herramienta text, situacion text, pago_situacion text, cuenta_id uuid,
       devolucion_solicitada_en timestamptz, precio_final_usdt numeric, pagado_en timestamptz, estado_registro text, devuelto_en timestamptz, externo boolean, inicio timestamptz, fin_previsto timestamptz);
-    create table sop_alquiler.cuenta (id uuid primary key default gen_random_uuid(), herramienta text, usuario text, clave_cif bytea, estado text, externa boolean, alquilada_hasta timestamptz, notas text);
+    create table sop_alquiler.cuenta (id uuid primary key default gen_random_uuid(), herramienta text, usuario text, clave_cif bytea, estado text, externa boolean, alquilada_hasta timestamptz, notas text, estado_registro text default 'activo');
     create table sop_alquiler.evento (id bigserial, cuenta_id uuid, alquiler_id uuid, tipo text, grupo text, detalle jsonb, quien uuid);
     create function sop_alquiler.cifrar(t text) returns bytea language sql as $$ select convert_to(t, 'UTF8') $$;
     create function sop_alquiler.descifrar(b bytea) returns text language sql as $$ select convert_from(b, 'UTF8') $$;`);
@@ -26,7 +26,9 @@ async function armar(archivos) {
 }
 const comun = [D + "20261118-proveedor-alquiler-base.sql", D + "20261118-proveedor-m1-core.sql"];
 const despues = [D + "20261118-proveedor-alertas-extra.sql", D + "20261118-proveedor-oculta-motivo.sql", D + "20261118-proveedor-saldo-v5.sql"];
-const prodMasArreglos = await armar([...comun, D + "20261118-proveedor-compra.publicada-1906Z.sql", ...despues, D + "20261118-proveedor-compra-arreglos.sql"]);
+const BASE = process.env.BASE ?? "20261118-proveedor-compra.publicada-1518Z.sql", DELTA = process.env.DELTA ?? "20261119-proveedor-tope-cuenta-libre.sql";
+console.log("base:", BASE, "· delta:", DELTA);
+const prodMasArreglos = await armar([...comun, D + BASE, ...despues, D + DELTA]);
 const fuente = await armar([...comun, D + "20261118-proveedor-compra.sql", ...despues]);
 const a = new Map(prodMasArreglos.funcs.map((f) => [f.k, f.d + "|" + f.acl])), b = new Map(fuente.funcs.map((f) => [f.k, f.d + "|" + f.acl]));
 const dif = [...new Set([...a.keys(), ...b.keys()])].filter((k) => a.get(k) !== b.get(k));

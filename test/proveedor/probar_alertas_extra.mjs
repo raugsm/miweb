@@ -36,7 +36,7 @@ await db.exec(`create role anon; create role authenticated; create role service_
     pagado_en timestamptz default now(), estado_registro text default 'activo', usuario text, clave text,
     devuelto_en timestamptz, externo boolean, inicio timestamptz, fin_previsto timestamptz);
   create table sop_alquiler.cuenta (id uuid primary key default gen_random_uuid(), herramienta text, usuario text, clave_cif bytea,
-    estado text, externa boolean, alquilada_hasta timestamptz, notas text);
+    estado text, externa boolean, alquilada_hasta timestamptz, notas text, estado_registro text default 'activo');
   create table sop_alquiler.evento (id bigserial, cuenta_id uuid, alquiler_id uuid, tipo text, grupo text, detalle jsonb, quien uuid);
   create function sop_alquiler.cifrar(t text) returns bytea language sql as $$ select convert_to('cif:' || t, 'UTF8') $$;
   create function sop_alquiler.descifrar(b bytea) returns text language sql as $$ select substr(convert_from(b, 'UTF8'), 5) $$;

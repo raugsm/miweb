@@ -15,7 +15,7 @@ async function armar(conNueva) {
     create table sop_alquiler.herramienta (clave text primary key, nombre text, horas int, visible boolean default true);
     create table sop_alquiler.alquiler (id uuid primary key default gen_random_uuid(), herramienta text, situacion text, pago_situacion text, cuenta_id uuid,
       devolucion_solicitada_en timestamptz, precio_final_usdt numeric, pagado_en timestamptz, estado_registro text, devuelto_en timestamptz, externo boolean, inicio timestamptz, fin_previsto timestamptz);
-    create table sop_alquiler.cuenta (id uuid primary key default gen_random_uuid(), herramienta text, usuario text, clave_cif bytea, estado text, externa boolean, alquilada_hasta timestamptz, notas text);
+    create table sop_alquiler.cuenta (id uuid primary key default gen_random_uuid(), herramienta text, usuario text, clave_cif bytea, estado text, externa boolean, alquilada_hasta timestamptz, notas text, estado_registro text default 'activo');
     create table sop_alquiler.evento (id bigserial, cuenta_id uuid, alquiler_id uuid, tipo text, grupo text, detalle jsonb, quien uuid);
     create function sop_alquiler.cifrar(t text) returns bytea language sql as $$ select convert_to(t, 'UTF8') $$;
     create function sop_alquiler.descifrar(b bytea) returns text language sql as $$ select convert_from(b, 'UTF8') $$;

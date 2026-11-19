@@ -33,7 +33,7 @@ await db.exec(`create role anon; create role authenticated; create role service_
     pagado_en timestamptz default now(), estado_registro text default 'activo', usuario text, clave text,
     devuelto_en timestamptz, externo boolean, inicio timestamptz, fin_previsto timestamptz);
   create table sop_alquiler.cuenta (id uuid primary key default gen_random_uuid(), herramienta text, usuario text, clave_cif bytea,
-    estado text, externa boolean, alquilada_hasta timestamptz, notas text);
+    estado text, externa boolean, alquilada_hasta timestamptz, notas text, estado_registro text default 'activo');
   create table sop_alquiler.evento (id bigserial, cuenta_id uuid, alquiler_id uuid, tipo text, grupo text, detalle jsonb, quien uuid);
   create function sop_alquiler.cifrar(t text) returns bytea language sql as $$ select convert_to('cif:' || t, 'UTF8') $$;
   create function sop_alquiler.descifrar(b bytea) returns text language sql as $$ select substr(convert_from(b, 'UTF8'), 5) $$;
@@ -85,11 +85,11 @@ ok(r.creados === 0 && r.motivo === "respaldo_apagado", "regla 1: respaldo apagad
 
 await db.exec("update sop_proveedor.proveedor set respaldo_encendido = true");
 r = await r1("select sop_proveedor.pedidos_auto_crear('pkgsmhub') r");
-ok(r.creados === 0 && r.motivo === "sin_gasto_maximo" && (await uno("select count(*)::int n from sop_proveedor.alerta where tipo='gasto_maximo' and causa='falta' and resuelta_en is null")).n === 1,
-   "G1: encendido SIN máximo diario → no compra nada solo y avisa a Admin", r);
+ok(r.creados === 1 && (await uno("select count(*)::int n from sop_proveedor.alerta where tipo='gasto_maximo' and resuelta_en is null")).n === 0,
+   "tope opcional (Peter 19-nov): encendido SIN máximo diario → compra igual y no avisa «falta»", r);
 await db.exec("update sop_proveedor.proveedor set gasto_maximo_dia = 100");
 r = await r1("select sop_proveedor.pedidos_auto_crear('pkgsmhub') r");
-ok(r.creados === 1, "respaldo encendido y con máximo → crea el pedido", r);
+ok(r.creados === 0, "con máximo: el mismo alquiler no se vuelve a pedir", r);
 r = await r1("select sop_proveedor.pedidos_auto_crear('pkgsmhub') r");
 ok(r.creados === 0, "otra vuelta del cron: no crea otro (un pedido abierto por alquiler)", r);
 let p1 = await uno("select * from sop_proveedor.pedido where alquiler_id = $1", [a1]);
@@ -671,6 +671,46 @@ const m3a = await nuevo(); await r1("select sop_proveedor.pedido_preparar($1) r"
 const m3b = await nuevo(); await r1("select sop_proveedor.pedido_preparar($1) r", [m3b.p]); await r1("select sop_proveedor.pedido_respuesta($1, 'aceptado', '7105', 'ok') r", [m3b.p]);
 r = await r1("select sop_proveedor.pedido_saldo_despues($1, 9.0) r", [m3b.p]);
 ok(r.cobro_distinto === true, "M3: con otro pedido enviado ANTES, igual compara y detecta el cobro de más", r);
+
+// ── Cuenta propia libre (Ari-Master, 19-nov): el automático no compra si hay una propia libre de esa herramienta.
+await db.exec("update sop_proveedor.pedido set estado = 'anulado' where estado in ('por_enviar','enviando','en_proceso','listo','en_duda','cuenta_ilegible')");
+await db.exec("update sop_proveedor.proveedor set respaldo_encendido = true, gasto_maximo_dia = null; update sop_proveedor.conector set pausa_motivo = null, fallos_pedir = 0");
+await saldo(100);
+const cl_libre = (await uno("insert into sop_alquiler.cuenta (herramienta, usuario, estado, externa) values ('unlocktool', 'propia-libre', 'libre', false) returning id")).id;
+const cl_aL = await alquilar();
+r = await r1("select sop_proveedor.pedidos_auto_crear('pkgsmhub') r");
+ok((await uno("select count(*)::int n from sop_proveedor.pedido where alquiler_id = $1", [cl_aL])).n === 0, "cuenta libre: el automático no crea pedido", r);
+// un «por enviar» que ya existía espera (no se omite ni sale) mientras haya una propia libre
+await db.query("update sop_alquiler.cuenta set estado = 'alquilada' where id = $1", [cl_libre]);
+r = await r1("select sop_proveedor.pedidos_auto_crear('pkgsmhub') r");
+const cl_pL = (await uno("select id from sop_proveedor.pedido where alquiler_id = $1 and estado = 'por_enviar'", [cl_aL])).id;
+await db.query("update sop_alquiler.cuenta set estado = 'libre' where id = $1", [cl_libre]);
+r = await r1("select sop_proveedor.pedido_preparar($1) r", [cl_pL]);
+ok(!r.ok && r.motivo === "cuenta_propia_libre" && r.espera === true
+   && (await uno("select estado from sop_proveedor.pedido where id = $1", [cl_pL])).estado === "por_enviar",
+   "cuenta libre: el «por enviar» espera (no sale ni se omite)", r);
+// el reenganche le da la propia → el pedido se omite sin gastar
+await db.query("update sop_alquiler.alquiler set cuenta_id = $2, situacion = 'en_curso' where id = $1", [cl_aL, cl_libre]);
+await db.query("update sop_alquiler.cuenta set estado = 'alquilada' where id = $1", [cl_libre]);
+r = await r1("select sop_proveedor.pedido_preparar($1) r", [cl_pL]);
+ok(!r.ok && r.motivo === "alquiler_ya_no_espera" && (await uno("select estado from sop_proveedor.pedido where id = $1", [cl_pL])).estado === "omitido",
+   "cuenta libre: cuando el reenganche entrega la propia, el pedido se omite sin comprar", r);
+// Soporte sí puede pedir aunque haya una propia libre (decisión explícita)
+await db.query("update sop_alquiler.cuenta set estado = 'libre' where id = $1", [cl_libre]);
+const cl_aSop = await alquilar();
+await usuario("sop_alquiler.operar"); r = await r1("select sop_proveedor.pedido_soporte_pedir($1, '648') r", [cl_aSop]); await servicio();
+await saldo(100);
+const cl_rS = await r1("select sop_proveedor.pedido_preparar($1) r", [r.pedido]);
+ok(cl_rS.ok === true, "cuenta libre: el pedido de Soporte sale igual (lo decidió una persona)", cl_rS);
+await db.query("update sop_alquiler.cuenta set estado = 'alquilada' where id = $1", [cl_libre]);
+await db.query("update sop_proveedor.pedido set estado = 'anulado' where id = $1", [r.pedido]);
+// sin máximo, el gasto no frena (tope opcional)
+const cl_aT = await alquilar(); await saldo(100);
+r = await r1("select sop_proveedor.pedidos_auto_crear('pkgsmhub') r");
+const cl_pT = (await uno("select id from sop_proveedor.pedido where alquiler_id = $1", [cl_aT])).id;
+r = await r1("select sop_proveedor.pedido_preparar($1) r", [cl_pT]);
+ok(r.ok === true, "tope opcional: sin máximo, el pedido automático sale", r);
+await db.exec("update sop_proveedor.proveedor set gasto_maximo_dia = 100");
 
 // Permisos: anon / authenticated no llegan a lo de la edge.
 for (const rol of ["anon", "authenticated"]) {
