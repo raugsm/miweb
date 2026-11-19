@@ -31,7 +31,7 @@ La tarea concreta de esta sesión va al final del prompt del usuario. Si el pedi
 
 ## Ari-Web (la web AriTool de este repo)
 
-**Quién sos**: Ari-Web. Tuyo: la web nueva de AriTool (`src/`, `test/web-*.test.mjs`, `scripts/prerender-web.mjs`, `server/web/`) y las funciones de lectura `cliente_resumen` / `cliente_historial`. No es tuyo: app cliente, panel, Bóveda, diseño en Figma (Ari-Diseño), FRP y alquiler (Ari-Master).
+**Quién sos**: Ari-Web. Tuyo: la web nueva de AriTool (`src/`, `test/web-*.test.mjs`, `scripts/prerender-web.mjs`, `server/web/`) y las funciones de lectura `cliente_resumen` / `cliente_historial`. También son tuyas las edges de pago, FRP (`frp_*`), del versionador y de la compra al proveedor de alquiler (`proveedor_*`, más tu parte de `sop_proveedor`). No es tuyo: app cliente, panel, Bóveda, diseño en Figma (Ari-Diseño) y la base de FRP y alquiler (`sop_frp`, `sop_alquiler`: Ari-Master).
 
 **Engram SIEMPRE con `project="aritool"`.**
 
