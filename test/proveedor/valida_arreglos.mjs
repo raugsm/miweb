@@ -28,7 +28,9 @@ const comun = [D + "20261118-proveedor-alquiler-base.sql", D + "20261118-proveed
 const despues = [D + "20261118-proveedor-alertas-extra.sql", D + "20261118-proveedor-oculta-motivo.sql", D + "20261118-proveedor-saldo-v5.sql"];
 const BASE = process.env.BASE ?? "20261118-proveedor-compra.publicada-1518Z.sql", DELTA = process.env.DELTA ?? "20261119-proveedor-tope-cuenta-libre.sql";
 console.log("base:", BASE, "· delta:", DELTA);
-const prodMasArreglos = await armar([...comun, D + BASE, ...despues, D + DELTA]);
+// BASE_DESPUES: si el delta también cambia alertas-extra/oculta-motivo/saldo-v5, sus copias publicadas (en el mismo orden, con comas).
+const despuesBase = process.env.BASE_DESPUES ? process.env.BASE_DESPUES.split(",").map((f) => D + f.trim()) : despues;
+const prodMasArreglos = await armar([...comun, D + BASE, ...despuesBase, D + DELTA]);
 const fuente = await armar([...comun, D + "20261118-proveedor-compra.sql", ...despues]);
 const a = new Map(prodMasArreglos.funcs.map((f) => [f.k, f.d + "|" + f.acl])), b = new Map(fuente.funcs.map((f) => [f.k, f.d + "|" + f.acl]));
 const dif = [...new Set([...a.keys(), ...b.keys()])].filter((k) => a.get(k) !== b.get(k));

@@ -757,6 +757,19 @@ await usuario("");
 ok((await tira("select sop_proveedor.auto_lo_compra($1)", [al_m], /sin_capacidad/)) === true, "auto_lo_compra: sin capacidad no se puede consultar");
 await servicio();
 
+// 20-nov: «tardando» también para «respaldo» sin pedido (sin propia libre y el automático no la compró). Las «propio», no.
+const tRes = await alquilar("unlocktool"), tProp = await alquilar("sinmodo");
+await db.query("update sop_alquiler.alquiler set pagado_en = now() - interval '16 minutes' where id = any($1)", [[tRes, tProp]]);
+await r1("select sop_proveedor.vigilar_tardando('pkgsmhub') r");
+const tard = async (id) => (await uno("select count(*)::int n from sop_proveedor.alerta where tipo='alquiler_tardando' and causa=$1", [id])).n;
+ok((await uno("select count(*)::int n from sop_proveedor.pedido where alquiler_id = any($1)", [[tRes, tProp]])).n === 0, "tardando: los dos esperan sin pedido");
+ok((await tard(tRes)) === 1, "tardando: una «respaldo» sin pedido que pasó su tiempo máximo → avisa");
+ok((await tard(tProp)) === 0, "tardando: una «propio» sin pedido → no avisa (las propias mantienen su lógica)");
+await db.query("update sop_alquiler.alquiler set pagado_en = now() where id = $1", [tRes]);
+const tRes2 = await alquilar("unlocktool");
+await r1("select sop_proveedor.vigilar_tardando('pkgsmhub') r");
+ok((await tard(tRes2)) === 0, "tardando: una «respaldo» recién pagada → todavía no avisa");
+
 // Permisos: anon / authenticated no llegan a lo de la edge.
 for (const rol of ["anon", "authenticated"]) {
   await db.exec(`set role ${rol}`);

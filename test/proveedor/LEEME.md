@@ -25,6 +25,7 @@ npm run arreglos     # lo publicado + compra-arreglos = la fuente nueva
 1. Copiar la fuente actual (`20261118-proveedor-compra.sql` = prod) como `20261118-proveedor-compra.publicada-<hora>Z.sql`. Es la base y el rollback.
 2. Editar la fuente y correr las pruebas.
 3. `python -I -X utf8 generar_delta.py <base> <delta.sql> "<qué trae>"`, y después `BASE=<base> DELTA=<delta.sql> npm run arreglos`. Tiene que dar 0 distintas.
+   - Si el cambio también toca alertas-extra, oculta-motivo o saldo-v5, copiá esos archivos como publicados y pasalos en orden, separados por comas, en `BASE_DESPUES=<alertas-extra>,<oculta-motivo>,<saldo-v5>`. `generar_delta.py` solo mira compra.sql: el delta de esas funciones se arma a mano (ejemplo: `20261120-proveedor-avisos-respaldo.sql`).
 4. Antes de aplicar, con OK de Peter en el chat de Ari-Web:
    - `DERIVA_DIR=<carpeta con la base como compra.sql> DERIVA_OUT=d.json node deriva.mjs`;
    - `python -I -X utf8 deriva_cmp.py C:/Users/peter/.claude/skills/ari-web/scripts/sql_api.py d.json`: prod tiene que ser igual a la base.

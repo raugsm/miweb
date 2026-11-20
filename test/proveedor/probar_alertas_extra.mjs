@@ -67,7 +67,9 @@ await db.exec(`insert into sop_alquiler.herramienta (clave, nombre, horas, visib
     ('unlock_tool','pkgsmhub','648',24), ('griffin','pkgsmhub','1091',24), ('griffin','pkgsmhub','650',24), ('phoenix','pkgsmhub','667',24),
     ('samsung','pkgsmhub','668',24), ('pausada','pkgsmhub','668',24);
   insert into sop_proveedor.producto_config (herramienta, modo) values ('unlock_tool','respaldo'), ('griffin','solo_proveedor'),
-    ('phoenix','solo_proveedor'), ('samsung','solo_proveedor'), ('pausada','solo_proveedor');`);
+    ('phoenix','solo_proveedor'), ('samsung','solo_proveedor'), ('pausada','solo_proveedor');
+  insert into sop_alquiler.cuenta (herramienta, usuario, estado) values ('unlock_tool','propia-1','libre');`);
+const propiaUnlock = (estado) => db.query("update sop_alquiler.cuenta set estado = $1 where herramienta = 'unlock_tool'", [estado]);
 const TIPOS = ["costo_subio", "opcion_quitada", "herramienta_oculta", "ganancia_baja"];
 const vigilar = async () => {
   const r = (await uno("select sop_proveedor.vigilar_alertas_extra('pkgsmhub', true) r")).r;
@@ -161,6 +163,23 @@ await db.exec("update sop_proveedor.opcion set activa = false, actualizado_en = 
 await vigilar();
 ok((await cuenta("opcion_quitada", "556")) === 0, "#3: la que apagó el sistema (rechazos/cobro distinto) no cuenta como quitada");
 ok((await cuenta("herramienta_oculta", "unlock_tool")) === 0, "#7: Unlock (modo respaldo, tiene cuentas propias) no se marca oculta");
+// 20-nov: «respaldo» sin cuenta propia libre y sin opción → avisa, con su texto (no dice «oculta»); al liberarse una propia, se resuelve.
+await propiaUnlock("alquilada"); await vigilar();
+const o7r = await viva("herramienta_oculta", "unlock_tool");
+ok(o7r && o7r.datos.modo === "respaldo" && o7r.datos.motivo === "proveedor_no_la_tiene"
+   && o7r.texto.startsWith("Unlock Tool se quedó sin cuentas propias libres y no se puede comprar al proveedor: el proveedor no la tiene. Desde el")
+   && o7r.texto.endsWith("Vuelve sola cuando el proveedor la vuelva a tener. También vuelve cuando se libere una cuenta propia.") && !o7r.texto.includes("oculta"),
+  "#7: Unlock (respaldo) sin propias libres y sin opción → avisa que no se puede comprar al proveedor", o7r?.texto);
+ok((await porEnviar()).filter((x) => x === Number(o7r.id)).length === 1, "#7: respaldo → Telegram una vez"); await enviar();
+await vigilar();
+ok(!(await porEnviar()).includes(Number(o7r.id)) && (await cuenta("herramienta_oculta", "unlock_tool")) === 1, "#7: respaldo → no se repite ni se duplica");
+await propiaUnlock("libre"); await vigilar();
+ok(await resuelta(o7r.id), "#7: se libera una cuenta propia → se resuelve sola");
+await db.exec("update sop_proveedor.producto_config set modo = 'propio' where herramienta = 'unlock_tool'");
+await propiaUnlock("alquilada"); await vigilar();
+ok((await cuenta("herramienta_oculta", "unlock_tool")) === 0, "#7: una «propio» sin propias libres no avisa (las propias mantienen su lógica)");
+await db.exec("update sop_proveedor.producto_config set modo = 'respaldo' where herramienta = 'unlock_tool'");
+await propiaUnlock("libre");
 await db.exec("update sop_proveedor.opcion set activa = true where numero_servicio = '556'");
 await sync(); await vigilar();
 ok(await resuelta(a3.id), "#3: vuelve al catálogo → se resuelve sola");
@@ -196,6 +215,7 @@ ok(await resuelta(a3b.id) && await resuelta(o7.id) && await resuelta(o7s.id), "#
 await enviar();
 
 // ════════ #7 · por proveedor: sin saldo / proveedor caído (una sola alerta con la lista)
+await propiaUnlock("alquilada");   // Unlock («respaldo») sin propias libres: igual NO entra en «se ocultaron N» (sigue a la venta)
 await db.query("select sop_proveedor.saldo_registrar('pkgsmhub', 0.1, 'usd', true, null)");
 ok((await uno("select sop_proveedor.saldo_nivel('pkgsmhub') r")).r.nivel === "agotado", "saldo 0.10 → agotado (función real de compra.sql)");
 await vigilar(); await vigilar();
@@ -204,6 +224,7 @@ ok(og && JSON.stringify(og.datos.herramientas) === '["griffin","phoenix","samsun
    && og.texto.includes("Griffin Unlocker, Phoenix Key, Samsungtool.us") && og.texto.includes("Vuelven solas al recargar"),
   "#7: saldo agotado → UNA alerta con las 3 «solo proveedor» a la venta (sin la pausada)", og?.texto);
 ok((await cuenta("herramienta_oculta")) === 1, "#7: no una por herramienta ni duplicada");
+ok(!og.datos.herramientas.includes("unlock_tool"), "#7: una «respaldo» sin propias libres no entra en «se ocultaron N» (la lista no la oculta; avisa «tardando»)");
 ok((await porEnviar()).filter((x) => x === Number(og.id)).length === 1, "#7: Telegram una vez"); await enviar();
 await db.exec(`insert into sop_alquiler.herramienta (clave, nombre, horas) values ('nueva','Nueva Tool',24);
   insert into sop_proveedor.producto_config (herramienta, modo) values ('nueva','solo_proveedor');
@@ -216,6 +237,7 @@ await db.query("select sop_proveedor.saldo_registrar('pkgsmhub', 100, 'usd', tru
 ok((await uno("select sop_proveedor.saldo_nivel('pkgsmhub') r")).r.nivel === "verde", "recarga → verde");
 await vigilar();
 ok(await resuelta(og.id), "#7: al recargar se resuelve sola");
+await propiaUnlock("libre");
 for (let i = 0; i < 3; i++) await db.query("select sop_proveedor.conector_resultado('pkgsmhub', false, 'sin_respuesta')");
 await vigilar();
 const oc = await viva("herramienta_oculta", "*proveedor_caido");
