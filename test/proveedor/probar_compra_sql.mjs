@@ -769,6 +769,16 @@ ok((await uno("select count(*)::int n from sop_proveedor.pedido where alquiler_i
 ok((await tard(tRes)) === 1, "tardando: una «respaldo» con opción, sin pedido, que pasó su tiempo máximo → avisa");
 ok((await tard(tSinOp)) === 0, "tardando: una «respaldo» sin opción del proveedor → no avisa (va a mano, como una propia)");
 ok((await tard(tProp)) === 0, "tardando: una «propio» sin pedido → no avisa (las propias mantienen su lógica)");
+// Revisión del OpenCode (H4): una opción de 0.00 no es una opción (el automático no la compra) → tampoco avisa.
+await db.exec(`insert into sop_proveedor.opcion (proveedor_clave, numero_servicio, nombre, tipo, costo) values ('pkgsmhub','99990','Cero','REMOTE',0);
+  insert into sop_alquiler.herramienta values ('cerotool', 2);
+  insert into sop_proveedor.producto_config (herramienta, modo) values ('cerotool','respaldo');`);
+await db.exec(m1 ? "insert into sop_proveedor.enlace (herramienta, proveedor_clave, numero_servicio, horas) values ('cerotool','pkgsmhub','99990',24)"
+                 : "insert into sop_proveedor.enlace values ('cerotool','99990')");
+const tCero = await alquilar("cerotool");
+await db.query("update sop_alquiler.alquiler set pagado_en = now() - interval '16 minutes' where id = $1", [tCero]);
+await r1("select sop_proveedor.vigilar_tardando('pkgsmhub') r");
+ok((await tard(tCero)) === 0, "tardando: una «respaldo» cuya única opción cuesta 0.00 → no avisa (va a mano)");
 await db.query("update sop_alquiler.alquiler set pagado_en = now() where id = $1", [tRes]);
 const tRes2 = await alquilar("unlocktool");
 await r1("select sop_proveedor.vigilar_tardando('pkgsmhub') r");
