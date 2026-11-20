@@ -12,7 +12,7 @@ const m1 = leer(process.env.M1_SQL ?? D + "20261118-proveedor-m1-core.sql");
 const compra = leer(process.env.COMPRA_SQL ?? D + "20261118-proveedor-compra.sql");
 const ganancia = leer(process.env.GANANCIA_SQL ?? D + "20261118-proveedor-ganancia-general.sql");
 const extra = process.env.EXTRA_SQL ? leer(process.env.EXTRA_SQL)
-  : leer(D + "20261118-proveedor-alertas-extra.sql") + "\n" + leer(D + "20261118-proveedor-oculta-motivo.sql");
+  : leer(D + "20261118-proveedor-alertas-extra.sql") + "\n" + leer(D + "20261118-proveedor-oculta-motivo.sql") + "\n" + leer(D + "20261118-proveedor-saldo-v5.sql");
 const db = new PGlite();
 let fallas = 0, total = 0;
 const ok = (c, m, x = "") => { total++; console.log((c ? "OK   " : "FALLA") + " " + m + (x !== "" && !c ? "  " + (typeof x === "string" ? x : JSON.stringify(x)) : "")); if (!c) fallas++; };
@@ -167,9 +167,9 @@ ok((await cuenta("herramienta_oculta", "unlock_tool")) === 0, "#7: Unlock (modo 
 await propiaUnlock("alquilada"); await vigilar();
 const o7r = await viva("herramienta_oculta", "unlock_tool");
 ok(o7r && o7r.datos.modo === "respaldo" && o7r.datos.motivo === "proveedor_no_la_tiene"
-   && o7r.texto.startsWith("Unlock Tool se quedó sin cuentas propias libres y no se puede comprar al proveedor: el proveedor no la tiene. Desde el")
-   && o7r.texto.endsWith("Vuelve sola cuando el proveedor la vuelva a tener. También vuelve cuando se libere una cuenta propia.") && !o7r.texto.includes("oculta"),
-  "#7: Unlock (respaldo) sin propias libres y sin opción → avisa que no se puede comprar al proveedor", o7r?.texto);
+   && o7r.texto.startsWith("Unlock Tool se quedó sin cuentas propias libres y quedó oculta: el proveedor no la tiene. Desde el")
+   && o7r.texto.endsWith("Vuelve sola cuando el proveedor la vuelva a tener. También vuelve cuando se libere una cuenta propia."),
+  "#7: Unlock (respaldo) sin propias libres y sin opción → avisa que quedó oculta (guarda de Ari-Master)", o7r?.texto);
 ok((await porEnviar()).filter((x) => x === Number(o7r.id)).length === 1, "#7: respaldo → Telegram una vez"); await enviar();
 await vigilar();
 ok(!(await porEnviar()).includes(Number(o7r.id)) && (await cuenta("herramienta_oculta", "unlock_tool")) === 1, "#7: respaldo → no se repite ni se duplica");
@@ -215,7 +215,6 @@ ok(await resuelta(a3b.id) && await resuelta(o7.id) && await resuelta(o7s.id), "#
 await enviar();
 
 // ════════ #7 · por proveedor: sin saldo / proveedor caído (una sola alerta con la lista)
-await propiaUnlock("alquilada");   // Unlock («respaldo») sin propias libres: igual NO entra en «se ocultaron N» (sigue a la venta)
 await db.query("select sop_proveedor.saldo_registrar('pkgsmhub', 0.1, 'usd', true, null)");
 ok((await uno("select sop_proveedor.saldo_nivel('pkgsmhub') r")).r.nivel === "agotado", "saldo 0.10 → agotado (función real de compra.sql)");
 await vigilar(); await vigilar();
@@ -224,8 +223,20 @@ ok(og && JSON.stringify(og.datos.herramientas) === '["griffin","phoenix","samsun
    && og.texto.includes("Griffin Unlocker, Phoenix Key, Samsungtool.us") && og.texto.includes("Vuelven solas al recargar"),
   "#7: saldo agotado → UNA alerta con las 3 «solo proveedor» a la venta (sin la pausada)", og?.texto);
 ok((await cuenta("herramienta_oculta")) === 1, "#7: no una por herramienta ni duplicada");
-ok(!og.datos.herramientas.includes("unlock_tool"), "#7: una «respaldo» sin propias libres no entra en «se ocultaron N» (la lista no la oculta; avisa «tardando»)");
+ok(!og.datos.herramientas.includes("unlock_tool"), "#7: una «respaldo» CON propia libre no entra en «se ocultaron N»");
 ok((await porEnviar()).filter((x) => x === Number(og.id)).length === 1, "#7: Telegram una vez"); await enviar();
+const ocultasPanel = async () => (await uno("select sop_proveedor.conector_ver('pkgsmhub') r")).r.ocultas;
+const nPanel = await ocultasPanel();
+await propiaUnlock("alquilada"); await vigilar();
+const ogR = await viva("herramienta_oculta", "*sin_saldo");
+ok(ogR.id === og.id && JSON.stringify(ogR.datos.herramientas) === '["griffin","phoenix","samsung","unlock_tool"]'
+   && ogR.texto.startsWith("Se ocultaron 4 herramientas («solo proveedor» y «respaldo» sin cuentas propias libres) por falta de saldo")
+   && ogR.texto.includes("Unlock Tool") && !(await porEnviar()).includes(Number(og.id)),
+  "#7: una «respaldo» se queda sin propias → entra en la misma alerta, sin volver a mandar Telegram", ogR?.texto);
+ok((await ocultasPanel()) === nPanel + 1, "V5: conector_ver cuenta también la «respaldo» sin propias libres", { antes: nPanel, despues: await ocultasPanel() });
+await propiaUnlock("libre"); await vigilar();
+ok(JSON.stringify((await viva("herramienta_oculta", "*sin_saldo")).datos.herramientas) === '["griffin","phoenix","samsung"]' && (await ocultasPanel()) === nPanel,
+  "#7/V5: se libera la propia → sale de la lista y del contador");
 await db.exec(`insert into sop_alquiler.herramienta (clave, nombre, horas) values ('nueva','Nueva Tool',24);
   insert into sop_proveedor.producto_config (herramienta, modo) values ('nueva','solo_proveedor');
   insert into sop_proveedor.enlace (herramienta, proveedor_clave, numero_servicio, horas) values ('nueva','pkgsmhub','650',24);`);
@@ -237,7 +248,6 @@ await db.query("select sop_proveedor.saldo_registrar('pkgsmhub', 100, 'usd', tru
 ok((await uno("select sop_proveedor.saldo_nivel('pkgsmhub') r")).r.nivel === "verde", "recarga → verde");
 await vigilar();
 ok(await resuelta(og.id), "#7: al recargar se resuelve sola");
-await propiaUnlock("libre");
 for (let i = 0; i < 3; i++) await db.query("select sop_proveedor.conector_resultado('pkgsmhub', false, 'sin_respuesta')");
 await vigilar();
 const oc = await viva("herramienta_oculta", "*proveedor_caido");
