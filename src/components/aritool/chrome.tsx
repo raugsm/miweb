@@ -83,9 +83,17 @@ export function LogoAriCaja({ lado, radio }: { lado: number; radio: number }) {
   )
 }
 
-// Logos de herramientas: WebP de 144 × 144 (5 a 10 KB cada uno). Salen de los SVG de fuentes/tools, que
-// pesan hasta 2.2 MB y por eso no se publican; se regeneran con fuentes/tools/logos_webp.py.
-const ICONOS_OK = new Set(["android_multi_tool", "dft_pro", "tsm_tool_pro", "unlock_tool", "ts_tool", "tr_tools_pro"])
+// Logos de herramientas: WebP de 144 × 144 (5 a 10 KB cada uno). Salen de los SVG de fuentes/tools y, desde el
+// 20-nov, de C:\private\AriTool_Recursos\logos_app\herramientas (pesan hasta 2.7 MB y por eso no se publican ni se
+// copian al repo); se regeneran con fuentes/tools/logos_webp.py, con cada SVG renombrado a la clave de la herramienta.
+// Sin logo todavía: mdm_tool_beta (círculo vacío).
+const ICONOS_OK = new Set([
+  "android_multi_tool", "dft_pro", "tsm_tool_pro", "unlock_tool", "ts_tool", "tr_tools_pro",
+  "androidwin_tool", "anonyshu", "apizu_mdm_pro", "arab_frp_tool", "cerberus_pro", "cf_tools", "cp_tools", "galaxy_multi_tool",
+  "griffin_unlocker", "hydra_tool", "kg_killer_tool", "kg_pro_tool", "mdm_fix_tool", "moto_king_pro", "nice_unlocker",
+  "octoplus_full_digital", "oumse_gsm_pro", "phoenix_key", "samsungtool_us", "scorpion_tool", "smarttool_pro", "tfm_tool_pro",
+  "tojo360_tool", "uat_pro_tool",
+])
 
 export function LogoTool({ clave, size = 52, apagado = false }: { clave: string; size?: number; apagado?: boolean }) {
   if (ICONOS_OK.has(clave)) {
