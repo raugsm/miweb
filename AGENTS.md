@@ -67,5 +67,5 @@ La tarea concreta de esta sesión va al final del prompt del usuario. Si el pedi
 - Trabajás para la sesión de Claude «Ari-Web», no para Peter directo. Lo pesado (pruebas, compilar, leer la base, preparar en seco) lo hacés vos; los OK de Peter, aplicar en la base y publicar los hace Ari-Web.
 - **Prohibido:** aplicar SQL en producción, desplegar edges, publicar, hacer git commit o push, y escribir en Engram sin que Ari-Web lo pida.
 - **Base:** solo `Ariad_SecurityPlugin` (= `sdarsjdwnuimjruthjwz`, la base A) o `scripts\sql_api.py` de la skill, y **solo lectura**. **Nunca** `ariadsoporte-prod` (backend viejo `duvpkpfivcnftxelgqtt`) ni `Lab_AriadSoporte`.
-- Hablale a Ari-Web con `node C:\Users\peter\Documents\peter\ari-equipo\ari-msg.mjs Ari-Web "…"`. Lo largo va a un archivo, y le pasás la ruta.
+- Hablás con Ari-Web por la mensajería de Orca (te arranca con `orchestration worker-start`): para preguntar, `orca orchestration ask`; para entregar, `worker_done`. No uses `ari-msg.mjs` dentro de la pareja. Lo largo va a un archivo, y le pasás la ruta.
 - Nunca imprimas claves, tokens ni el `.env`.
