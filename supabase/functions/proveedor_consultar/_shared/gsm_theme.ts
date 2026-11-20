@@ -133,20 +133,99 @@ export function opcionesDe(json: unknown): Opcion[] {
   return lista.filter((o) => o.numero_servicio !== "" && !vistos.has(o.numero_servicio) && vistos.add(o.numero_servicio));
 }
 
-// La cuenta que entrega el proveedor (formato real: «User: … | Pass: …»). S4.4 + auditoría 18-nov G2: se acepta SOLO si el
-// texto ENTERO es «User: <usuario> <separador> Pass: <clave>» (mayúsculas o minúsculas; separador «|», salto de línea o
-// espacios). Cualquier sobrante (otro texto, etiquetas, una coma, un espacio en la clave, un signo al final) → null → Soporte.
+// La cuenta que entrega el proveedor. No hay un solo formato y el catálogo no dice cuál manda cada herramienta (INFO vacío):
+// 17-nov «User: … | Pass: …»; 20-nov (AT-261120-043, Moto King) «Rental account active | Login: … | Password: … | Expires: … |
+// Desktop app only (no web panel).». Por eso se lee por ETIQUETAS, en cualquier orden, separadas por «|», salto de línea, tab,
+// « / », « - », o por coma/punto y coma/espacios antes de otra etiqueta. S4.4, auditoría 18-nov G2 y revisión del 20-nov: se
+// entrega SOLO si no hay ninguna duda. Si no, null → Soporte (065):
+//  - un usuario (User/Username/Login/Email/Usuario…) y una clave (Pass/Password/Pwd/Clave…), cada uno con un solo valor;
+//  - cada valor: ASCII visible, sin «| , ; < > " ' `», sin signo o paréntesis suelto en los bordes, sin relleno («pending», «N/A»);
+//  - lo demás solo puede ser un dato conocido que no hace falta (Expires, Server, Note…) sin nada que parezca usuario, clave,
+//    PIN o código adentro, o una frase sin números ni «: = @», o emojis. Una etiqueta desconocida (PIN, 2FA, «User 2»…) → null.
+// «Account» sola no: a veces es el plan («Account: Premium»), no el usuario (verificación del OpenCode, 20-nov).
+const USUARIO = new Set(["user", "username", "user name", "userid", "user id", "login", "login id", "loginid", "login name", "usuario",
+  "email", "mail", "correo", "email id", "email address", "user/email", "email/user", "login/email", "email/login",
+  "username/email", "email/username"]);
+const CLAVE = new Set(["pass", "password", "passwd", "pass word", "pwd", "pw", "clave", "contrasena", "contrasenia"]);
+const SOBRA = new Set(["expires", "expire", "expiry", "expiration", "expired", "valid", "validity", "until", "till", "duration", "time",
+  "left", "remaining", "hours", "hour", "hrs", "plan", "status", "type", "server", "note", "notes", "info", "information", "rental",
+  "rent", "order", "service", "tool", "version", "created", "start", "end", "date", "website", "web", "url", "link", "panel",
+  "download", "support", "important", "warning", "attention", "notice", "message", "remark", "instructions", "instruction", "price",
+  "cost", "region", "country", "devices", "limit", "vence", "vencimiento", "valido", "duracion", "horas", "nota", "servidor", "tipo",
+  "estado"]);
+const SOBRA_FRASES = new Set(["order id", "order no", "account type", "account status"]);
+// Palabras de un dato de la cuenta: en un texto suelto o en el valor de algo que sobra, no se pasan por alto.
+const DATO = /(^|[^a-z])(user|username|login|usuario|e-?mail|mail|correo|pass|passwd|password|pwd|pw|clave|contrase[nñ]a|key|pin|code|c[oó]digo|token|serial|licen[cs]e|otp|2fa|auth|anydesk|activation|activaci[oó]n)([^a-z]|$)/i;
+const RELLENO = /^(pending|n\/?a|none|null|hidden|same|tbd|soon|wait|waiting|\*+|x{4,}|-+|\.+|\?+)$/i;
+const ENTIDAD: Record<string, string> = { nbsp: " ", amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", "#39": "'", "#039": "'" };
+const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+// Después de un valor, antes de otra etiqueta conocida («User: a Pass: b», «User: a, Pass: b», «Password: x Expires: …»).
+const ANTES_ETIQUETA = new RegExp(`(?:\\s*[,;])?\\s+(?=(?:${[...USUARIO, ...CLAVE, ...SOBRA_FRASES, ...SOBRA, "e-mail"]
+  .sort((a, b) => b.length - a.length).map((e) => esc(e).replace(/ /g, "\\s+")).join("|")})\\s*[:=])`, "i");
+const ETIQUETA = /^[^\p{L}\p{N}\x21-\x7E]*(\p{L}[\p{L} ._\/-]{0,30}?)\s*[:=]\s*(.*)$/su;
+
+function tipoDe(etiqueta: string): "usuario" | "clave" | "sobra" | null {
+  const todo = etiqueta.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().replace(/[-_.]/g, "").trim().replace(/\s+/g, " ");
+  if (CLAVE.has(todo)) return "clave";
+  if (USUARIO.has(todo)) return "usuario";
+  return SOBRA_FRASES.has(todo) || todo.split(/[ /]/).every((p) => SOBRA.has(p)) ? "sobra" : null;
+}
+
+function valor(v: string, esUsuario: boolean): string | null {
+  const q = v.trim().match(/^(["'`])([^"'`]+)\1$/);
+  const s = q ? q[2] : v.trim();
+  if (!/^[\x21-\x7E]{1,128}$/.test(s) || /[|,;<>"'`]/.test(s)) return null;    // sin espacios, emojis, invisibles ni «…»
+  // Un signo o paréntesis en el borde puede ser del mensaje («(User: a | Pass: b)», «Pass: x.»), no del valor.
+  if (/[.,;:]$/.test(s) || /^[*(\[{]|[*)\]}]$/.test(s)) return null;
+  const par = (a: string, b: string) => s.split(a).length === s.split(b).length;
+  if (!par("(", ")") || !par("[", "]") || !par("{", "}") || !/[A-Za-z0-9]/.test(s) || RELLENO.test(s)) return null;
+  if (esUsuario && (s.includes(":") || /^www\./i.test(s))) return null;           // ni una dirección web ni «mailto:»
+  return s;
+}
+
+// Texto suelto que se puede pasar por alto: emojis o símbolos que no son ASCII, o una frase de palabras sin números, sin
+// «: = @ # / \» y sin nada que parezca un dato («Rental account active», «Desktop app only (no web panel).»).
+function sueltoInofensivo(s: string): boolean {
+  if (!/[\x21-\x7E]/.test(s)) return true;
+  return /\s/.test(s) && !/[0-9:=@#\/\\]/.test(s) && !DATO.test(s)
+    && s.split(/\s+/).every((w) => /^[\p{L}()!.,'’-]+$/u.test(w) || !/[\x21-\x7E]/.test(w));
+}
+
 export function leerCuenta(code: unknown): { usuario: string; clave: string } | null {
   const t0 = texto(code);
-  if (!t0) return null;
-  // Solo se traducen el salto <br> y las entidades comunes; cualquier otra etiqueta queda y hace que no calce.
-  const t = t0.replace(/<br\s*\/?>/gi, "\n").replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&").replace(/&#0?39;|&apos;/gi, "'").replace(/&quot;/gi, '"').replace(/&lt;/gi, "<").replace(/&gt;/gi, ">");
-  const m = t.match(/^\s*user(?:name)?\s*[:=]\s*([^\s|,;<>]+)\s*(?:\||\r?\n|[ \t])\s*pass(?:word)?\s*[:=]\s*([^\s|,;<>]+)\s*$/i);
-  if (!m) return null;
-  // Un punto, coma, punto y coma o dos puntos pegado al final puede ser puntuación del mensaje, no parte del valor.
-  if (/[.,;:]$/.test(m[1]) || /[.,;:]$/.test(m[2])) return null;
-  return { usuario: m[1], clave: m[2] };
+  if (!t0 || t0.length > 2000) return null;
+  // Saltos y negrita/cursiva SIN atributos (un estilo puede esconder letras); cualquier otra etiqueta HTML queda y da null.
+  const t = t0.replace(/<br\s*\/?>|<\/?(?:p|div|li)>/gi, "\n").replace(/<\/?(?:b|strong|i|em|u|code|small)>/gi, "")
+    .replace(/&(nbsp|amp|lt|gt|quot|apos|#0?39);/gi, (_, n: string) => ENTIDAD[n.toLowerCase()])   // una sola pasada
+    .replace(/：/g, ":").replace(/[  ]{2,}/g, " ");
+  if (/[<>]/.test(t)) return null;
+  const cola = t.split(/\r?\n|\r|\||\t|\s[\/–—•-]\s/);
+  const usuarios = new Set<string>();
+  const claves = new Set<string>();
+  while (cola.length) {
+    const tramo = cola.shift()!.trim();
+    if (!tramo) continue;
+    const m = tramo.match(ETIQUETA);
+    if (!m) {
+      if (sueltoInofensivo(tramo)) continue;
+      return null;
+    }
+    const tipo = tipoDe(m[1]);
+    if (!tipo) return null;
+    const [v, ...resto] = m[2].split(ANTES_ETIQUETA);
+    cola.unshift(...resto);
+    if (tipo === "sobra") {
+      // «Note: PIN: 1234», «Support: user @x», «Note: backup abc999 Zz998877» (otro par sin etiqueta).
+      if (DATO.test(v) || v.includes("@") || v.split(/\s+/).some((w) => w.length >= 5 && /\p{L}/u.test(w) && /\d/.test(w))) return null;
+      continue;
+    }
+    const x = valor(v, tipo === "usuario");
+    if (!x) return null;
+    (tipo === "usuario" ? usuarios : claves).add(x);
+  }
+  // Dos usuarios distintos (Login y Email, User ID y Email…) o dos claves: no se elige.
+  if (usuarios.size !== 1 || claves.size !== 1) return null;
+  return { usuario: [...usuarios][0], clave: [...claves][0] };
 }
 
 // Nada que se guarde o se registre puede llevar la llave: se tapa la llave exacta y cualquier ristra larga.

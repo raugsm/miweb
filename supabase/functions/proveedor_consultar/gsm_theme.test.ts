@@ -101,13 +101,81 @@ test("lee la cuenta que entrega el proveedor (S4.4) y no adivina", () => {
   assert.deepEqual(leerCuenta("USER: a.b@c.com\nPASS: P@ss!word"), { usuario: "a.b@c.com", clave: "P@ss!word" });
   assert.deepEqual(leerCuenta("Username = u1   Password = p1"), { usuario: "u1", clave: "p1" });
   assert.deepEqual(leerCuenta("User: u2<br>Pass: p&amp;2"), { usuario: "u2", clave: "p&2" });
-  for (const malo of ["", null, "tu cuenta: ver correo", "User: | Pass: x", "User: a", "Pass: x | User: a",
+  for (const malo of ["", null, "tu cuenta: ver correo", "User: | Pass: x", "User: a",
                       "User: a | Pass: x\nUser: b | Pass: y", 42,
-                      // auditoría 18-nov G2: el texto entero tiene que calzar
-                      "User: abc, Pass: xyz", "User: abc | Pass: xyz.", "User: abc | Pass: x y", "User: <b>abc</b> | Pass: x",
-                      "Hola! User: abc | Pass: x", "User: abc | Pass: x | 6 horas", "User: abc | Pass: xyz,6h"]) {
+                      // auditoría 18-nov G2: nunca un valor con un signo de más
+                      "User: abc | Pass: xyz.", "User: abc | Pass: x y", "User: abc | Pass: xyz,6h"]) {
     assert.equal(leerCuenta(malo), null, String(malo));
   }
+});
+
+test("lee los otros formatos del proveedor por etiquetas (20-nov, AT-261120-043)", () => {
+  const bien: [string, string, string][] = [
+    // forma real de Moto King (valores inventados)
+    ["Rental account active | Login: rent-a1b2c3@ejemplo.com | Password: Xy12ab34 | Expires: 2026-11-21 16:15 UTC | Desktop app only (no web panel).",
+      "rent-a1b2c3@ejemplo.com", "Xy12ab34"],
+    ["Pass: x | User: a", "a", "x"],
+    ["User: abc, Pass: xyz", "abc", "xyz"],
+    ["User: abc; Pass: xyz", "abc", "xyz"],
+    ["User: <b>abc</b> | Pass: x", "abc", "x"],
+    ["<b>Username:</b> u3<br><b>Password:</b> p3<br>Valid: 6 hours", "u3", "p3"],
+    ["<p>Username: u3</p><p>Password: p3</p>", "u3", "p3"],
+    ["Email: m@x.io\nPassword: p4\nServer: 2", "m@x.io", "p4"],
+    ["Login: l5 Password: p5 Expires: 2026-11-21 16:15 UTC", "l5", "p5"],
+    ["✅ Order completed!\n👤 Username: u6\n🔑 Password: p6\n⏰ Time left: 6 hours", "u6", "p6"],
+    ["Email: acc7@x.com / Password: p7", "acc7@x.com", "p7"],
+    ["Usuario: u9 | Contraseña: p9", "u9", "p9"],
+    ["User/Email: u10@x.com - Pwd: p10", "u10@x.com", "p10"],
+    ["E-mail: e11@x.com\r\nPassword: 'p11'", "e11@x.com", "p11"],
+    ["Account type: Premium | Login: u12 | Password: p12 | Note: desktop app only", "u12", "p12"],
+    ["Order ID: 3815 | Login ID: u13 | Password: p13", "u13", "p13"],
+    ["Username：u14\tPassword：p14", "u14", "p14"],
+    ["User: abc123 | Pass: Abc123!", "abc123", "Abc123!"],
+    ["User: abc123 | Pass: a(b)c", "abc123", "a(b)c"],
+  ];
+  for (const [t, usuario, clave] of bien) assert.deepEqual(leerCuenta(t), { usuario, clave }, t);
+  for (const malo of [
+    "Login: a | PIN: 1234 | Password: x",                 // un dato más que el taller puede necesitar
+    "Activation key: K-1 | User: a | Pass: x",
+    "Your password: x | User: a",                          // una palabra suelta delante de la etiqueta
+    "Server password: z | User: a | Password: y",
+    "Old password: x",
+    "User: a | Password: -",                               // sin letras ni números
+    "Login: a | Email: b@c.com",                           // sin clave
+    "Login: a | Login: b | Password: x",                   // dos usuarios distintos
+    "User: a | Pass: x | Pass: y",
+    "a@b.com:pass123", "a@b.com | pass123", "a@b.com / pass123",   // sin etiquetas
+    "User: a | Pass: x<script>",                           // HTML que no es de formato
+    "User: a | Pass: x&lt;y",
+    "Login time: 6h | User: a | Pass: x",                  // etiqueta con «login» que no es el usuario
+    "AnyDesk: 123 456 789 | User: a | Pass: x",
+    // revisión adversarial del 20-nov: nada que sobre puede quedar pegado ni perderse
+    "Hola! User: abc | Pass: x", "User: abc | Pass: x | 6 horas", "Login: l8 | Email: e8@x.com | Password: p8",
+    "User: “abc123” | Pass: “Xy12ab34”", "User: abc123 | Pass: *Xy12ab34*", "(User: abc123 | Pass: Xy12ab34)",
+    "[User: abc123]\n[Pass: Xy12ab34]", "User: abc123 | Pass: Xy12ab…", "Username: abc123，\nPassword: Xy12ab34。",
+    "User: abc123 | Pass: Xy12​ab34", "User: abc123 | Pass: Xy12ab34✅", "User: abc123 | Pass: 'Xy12ab34'!",
+    "Email: mailto:a@x.com | Password: Xy12ab34", "User: abc123 | Pass: Kx9|@#$", "User: abc123 | Pass: Kx9|Ab!",
+    "User: abc123 | Pass: Xy12ab34 | 2FA: 482913", "User: abc123 | Pass: Xy12ab34 | PIN (if asked): 1234",
+    "User: abc123 | Pass: Xy12ab34 | PIN 1234", "User: abc123 | Pass: Xy12ab34 | Key #1: ABCD-EFGH",
+    "User: abc123 | Pass: Xy12ab34 | User 2: def456 | Pass 2: Qq77", "User: abc123 | Pass: Xy12ab34 | Note: PIN: 1234",
+    "User: abc123 | Pass: Xy12ab34 | Expires: 2026-11-21 16:15 UTC PIN: 1234", "User: abc123 | Pass: Xy12ab34 | Tool code: 5521",
+    "User ID: 7781 | Email: real@x.com | Password: Xy12ab34", "Login: https://unlocktool.net/login | Password: Xy12ab34",
+    "Email: real@x.com | Password: Xy12ab34 | Support: Telegram user: @gsmhelp",
+    "Account: acc7 | Password: p7 | For help email: support@prov.com", "Login: abc123 | One time password: 482913",
+    "Login: real@x.com | Email account password: Ep1x | Password: Xy12ab34", "ID: user77 | Email: contact@x.com | Password: Xy12ab34",
+    "Account: Premium | Username (email): real@x.com | Password: Xy12ab34",
+    "User: abc123 | Pass: pending", "User: abc123 | Pass: N/A", "User: abc123 | Pass: xxxxxxxx", "User: abc123 | Pass: hidden",
+    "User: abc123 | Pass: a&amp;amp;quot;b", 'User: abc123 | Pass: Xy12<span style="display:none">99</span>ab34',
+    // verificación del OpenCode, 20-nov
+    "Account: Premium | Password: Xy12ab34", "User: abc123 | Pass: Xy12ab34 | Note: backup abc999 Zz998877",
+  ]) assert.equal(leerCuenta(malo), null, malo);
+});
+
+test("un texto enorme no traba la vuelta", () => {
+  const t0 = Date.now();
+  assert.equal(leerCuenta(" ".repeat(100_000) + "User: a | Pass: x"), null);
+  assert.deepEqual(leerCuenta("User: a" + " ".repeat(1900) + "| Pass: x"), { usuario: "a", clave: "x" });
+  assert.ok(Date.now() - t0 < 200);
 });
 
 test("copia real guardada (opcional)", { skip: !process.env.PROVEEDOR_COPIA }, () => {
