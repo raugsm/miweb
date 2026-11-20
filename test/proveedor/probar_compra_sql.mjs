@@ -496,6 +496,7 @@ await servicio();
 ok(r.ok === true, "m6: se puede anular un pedido que todavía no salió", r);
 // m4: con pausa por saldo agotado, el botón de Soporte igual compra si la reserva alcanza.
 const a4b = await alquilar();
+await db.query("update sop_alquiler.alquiler set pagado_en = now() - interval '20 minutes' where id = $1", [a4b]);   // 20-nov: con el automático encendido, Soporte pide cuando ya tarda
 await usuario("sop_alquiler.operar"); r = await r1("select sop_proveedor.pedido_soporte_pedir($1, '556') r", [a4b]); await servicio();
 await saldo(10); await db.exec("update sop_proveedor.conector set pausa_motivo = 'saldo_agotado'");
 r = await r1("select sop_proveedor.pedido_preparar($1) r", [r.pedido]);
@@ -544,6 +545,7 @@ ok(r.devolucion_vista === false, "P3: salió otro pedido entre medio → no se p
 await db.query("update sop_proveedor.pedido set estado = 'anulado' where id = $1", [otro.p]);
 // P6: un pedido de Soporte que esperaba no sale si el taller pidió la devolución.
 const aD = await alquilar();
+await db.query("update sop_alquiler.alquiler set pagado_en = now() - interval '20 minutes' where id = $1", [aD]);
 await usuario("sop_alquiler.operar"); r = await r1("select sop_proveedor.pedido_soporte_pedir($1, '556') r", [aD]); await servicio();
 await db.query("update sop_alquiler.alquiler set devolucion_solicitada_en = now() where id = $1", [aD]);
 await saldo(10);
@@ -712,12 +714,56 @@ r = await r1("select sop_proveedor.pedido_preparar($1) r", [cl_pT]);
 ok(r.ok === true, "tope opcional: sin máximo, el pedido automático sale", r);
 await db.exec("update sop_proveedor.proveedor set gasto_maximo_dia = 100");
 
+// 20-nov (AT-261120-043): con el automático a punto de comprar, Soporte no le gana de mano; auto_lo_compra se lo dice al panel.
+await db.exec("update sop_proveedor.proveedor set respaldo_encendido = true, gasto_maximo_dia = null; update sop_proveedor.conector set pausa_motivo = null, fallos_seguidos = 0, fallos_pedir = 0");
+await saldo(100);
+const al_a = await alquilar();
+await usuario("sop_alquiler.operar");
+let al = await r1("select sop_proveedor.auto_lo_compra($1) r", [al_a]);
+ok(al.compra === true && al.boton === false && al.tardando === false, "auto_lo_compra: recién pagado y con el automático encendido → lo compra el sistema, sin botón", al);
+r = await r1("select sop_proveedor.pedido_soporte_pedir($1, '648') r", [al_a]);
+ok(r.ok === false && r.motivo === "automatico_en_curso"
+   && (await uno("select count(*)::int n from sop_proveedor.pedido where alquiler_id = $1", [al_a])).n === 0, "guarda: Soporte no le gana de mano al automático", r);
+await servicio();
+await db.query("update sop_alquiler.alquiler set pagado_en = now() - interval '20 minutes' where id = $1", [al_a]);
+await usuario("sop_alquiler.operar");
+al = await r1("select sop_proveedor.auto_lo_compra($1) r", [al_a]);
+ok(al.compra === true && al.tardando === true && al.boton === true, "auto_lo_compra: ya tarda → aparece el botón", al);
+r = await r1("select sop_proveedor.pedido_soporte_pedir($1, '648') r", [al_a]);
+ok(r.ok === true, "guarda: cuando ya tarda, Soporte puede pedir", r);
+al = await r1("select sop_proveedor.auto_lo_compra($1) r", [al_a]);
+ok(al.compra === false && al.motivo === "ya_tiene_pedido", "auto_lo_compra: con un pedido, el automático no compra otro", al);
+await servicio();
+await db.query("update sop_proveedor.pedido set estado = 'anulado' where alquiler_id = $1", [al_a]);
+// Si el automático NO lo va a comprar, el botón está desde el primer segundo.
+for (const [motivo, antes, despues] of [
+  ["respaldo_apagado", "update sop_proveedor.proveedor set respaldo_encendido = false", "update sop_proveedor.proveedor set respaldo_encendido = true"],
+  ["proveedor_caido", "update sop_proveedor.conector set pausa_motivo = 'proveedor_caido'", "update sop_proveedor.conector set pausa_motivo = null"],
+  ["cuenta_propia_libre", `update sop_alquiler.cuenta set estado = 'libre' where id = '${cl_libre}'`, `update sop_alquiler.cuenta set estado = 'alquilada' where id = '${cl_libre}'`],
+]) {
+  const x = await alquilar(); await db.exec(antes); await usuario("sop_alquiler.operar");
+  al = await r1("select sop_proveedor.auto_lo_compra($1) r", [x]);
+  await servicio(); await db.exec(despues);
+  ok(al.compra === false && al.motivo === motivo && al.boton === true, `auto_lo_compra: ${motivo} → botón para Soporte`, al);
+}
+const al_p = await alquilar("unlocktool", 0.01);
+await usuario("sop_alquiler.operar");
+al = await r1("select sop_proveedor.auto_lo_compra($1) r", [al_p]);
+ok(al.compra === false && al.motivo === "daria_perdida" && al.boton === true, "auto_lo_compra: daría pérdida → botón para Soporte", al);
+const al_m = await alquilar("sinmodo");
+al = await r1("select sop_proveedor.auto_lo_compra($1) r", [al_m]);
+ok(al.compra === false && al.motivo === "modo_propio", "auto_lo_compra: herramienta propia → el automático no la compra", al);
+await usuario("");
+ok((await tira("select sop_proveedor.auto_lo_compra($1)", [al_m], /sin_capacidad/)) === true, "auto_lo_compra: sin capacidad no se puede consultar");
+await servicio();
+
 // Permisos: anon / authenticated no llegan a lo de la edge.
 for (const rol of ["anon", "authenticated"]) {
   await db.exec(`set role ${rol}`);
   ok((await tira("select sop_proveedor.pedidos_auto_crear('pkgsmhub')", [], /permission denied/)) === true, `${rol} no puede crear pedidos`);
   ok((await tira("select * from sop_proveedor.pedido", [], /permission denied/)) === true, `${rol} no puede leer pedidos`);
   ok((await tira("select sop_proveedor.alertas_enviadas(array[1]::bigint[])", [], /permission denied/)) === true, `${rol} no puede marcar alertas`);
+  if (rol === "anon") ok((await tira("select sop_proveedor.auto_lo_compra(gen_random_uuid())", [], /permission denied/)) === true, "anon no puede consultar auto_lo_compra");
   await db.exec("reset role");
 }
 console.log(fallas === 0 ? "\nTODO OK" : `\n${fallas} FALLAS`);
