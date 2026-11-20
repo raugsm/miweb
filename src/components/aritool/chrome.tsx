@@ -86,7 +86,7 @@ export function LogoAriCaja({ lado, radio }: { lado: number; radio: number }) {
 // Logos de herramientas: WebP de 144 × 144 (5 a 10 KB cada uno). Salen de los SVG de fuentes/tools y, desde el
 // 20-nov, de C:\private\AriTool_Recursos\logos_app\herramientas (pesan hasta 2.7 MB y por eso no se publican ni se
 // copian al repo); se regeneran con fuentes/tools/logos_webp.py, con cada SVG renombrado a la clave de la herramienta.
-// Sin logo todavía: mdm_tool_beta (círculo vacío).
+// Sin logo todavía: mdm_tool_beta (va con sus iniciales).
 const ICONOS_OK = new Set([
   "android_multi_tool", "dft_pro", "tsm_tool_pro", "unlock_tool", "ts_tool", "tr_tools_pro",
   "androidwin_tool", "anonyshu", "apizu_mdm_pro", "arab_frp_tool", "cerberus_pro", "cf_tools", "cp_tools", "galaxy_multi_tool",
@@ -95,11 +95,27 @@ const ICONOS_OK = new Set([
   "tojo360_tool", "uat_pro_tool",
 ])
 
-export function LogoTool({ clave, size = 52, apagado = false }: { clave: string; size?: number; apagado?: boolean }) {
+/** Iniciales cuando falta el logo, con la misma regla que la app (TextosAlquiler.Iniciales): si la primera palabra es
+ *  una sigla, sus 2 primeras letras; si no, la inicial de las 2 primeras palabras. «MDM Tool Beta» → «MD», «Unlock Tool» → «UT». */
+export function inicialesTool(nombre: string) {
+  const partes = nombre.split(" ").filter(Boolean)
+  if (partes.length === 0) return ""
+  const p0 = partes[0]
+  const sigla = p0.length >= 2 && p0 === p0.toUpperCase()
+  return (sigla ? p0.slice(0, 2) : partes.length >= 2 ? p0[0] + partes[1][0] : p0.slice(0, 2)).toUpperCase()
+}
+
+export function LogoTool({ clave, nombre = "", size = 52, apagado = false }: { clave: string; nombre?: string; size?: number; apagado?: boolean }) {
   if (ICONOS_OK.has(clave)) {
     return <img src={`/tools/${clave}.webp`} alt="" className={`shrink-0 rounded-full object-cover ${apagado ? "opacity-45" : ""}`} style={{ width: size, height: size }} />
   }
-  return <div aria-hidden="true" className="shrink-0 rounded-full" style={{ width: size, height: size, background: C.border, opacity: apagado ? 0.6 : 1 }} />
+  // Sin logo: círculo con las iniciales, como la app (Ari-Bro, 20-nov: un círculo vacío parece roto).
+  return (
+    <div aria-hidden="true" className="flex shrink-0 items-center justify-center rounded-full"
+      style={{ width: size, height: size, background: C.iconBg, border: `1px solid ${C.borderAlt}`, color: C.muted2, fontWeight: 600, fontSize: size <= 30 ? 12 : 14, opacity: apagado ? 0.6 : 1 }}>
+      {inicialesTool(nombre)}
+    </div>
+  )
 }
 
 /**

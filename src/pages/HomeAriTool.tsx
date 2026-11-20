@@ -134,7 +134,7 @@ function TarjetaHerr({ h }: { h: HerramientaPrecio }) {
   if (!h.disponible) {
     return (
       <div data-ancla={h.clave} className="flex items-center gap-[14px] rounded-xl p-4" style={{ border: `1px solid ${C.border}`, background: C.card }}>
-        <LogoTool clave={h.clave} apagado />
+        <LogoTool clave={h.clave} nombre={h.nombre} apagado />
         <div className="flex min-w-0 flex-col gap-[3px]">
           <div className="truncate" style={{ color: C.muted, fontWeight: 600, fontSize: 16, lineHeight: "19px" }}>{h.nombre}</div>
           <div style={{ color: C.faint, fontSize: 13, lineHeight: "16px" }}>Próximamente</div>
@@ -146,7 +146,7 @@ function TarjetaHerr({ h }: { h: HerramientaPrecio }) {
   const desc = descargaDe(h.clave)
   return (
     <div data-ancla={h.clave} className="flex items-center gap-[14px] rounded-xl p-4" style={{ border: `1px solid ${C.border}`, background: C.card }}>
-      <LogoTool clave={h.clave} />
+      <LogoTool clave={h.clave} nombre={h.nombre} />
       <div className="flex min-w-0 flex-col gap-1">
         <div className="truncate" style={{ color: C.text, fontWeight: 600, fontSize: 16, lineHeight: "19px" }}>{h.nombre}</div>
         <div className="flex items-baseline gap-2 whitespace-nowrap">
@@ -341,7 +341,7 @@ function TarjetaHerrMobile({ h }: { h: HerramientaPrecio }) {
   const desc = descargaDe(h.clave)
   return (
     <div data-ancla={h.clave} className="flex min-w-0 flex-col overflow-hidden rounded-xl p-3" style={{ border: `1px solid ${C.border}`, background: C.card }}>
-      <LogoTool clave={h.clave} size={40} />
+      <LogoTool clave={h.clave} nombre={h.nombre} size={40} />
       <div className="mt-2 w-full truncate" style={{ color: C.text, fontWeight: 600, fontSize: 14, lineHeight: "17px" }}>{h.nombre}</div>
       <div className="mt-2 flex items-baseline gap-1.5">
         <span style={{ color: C.green, fontWeight: 700, fontSize: 14, lineHeight: "17px" }}>{precio}</span>
@@ -361,7 +361,7 @@ function TarjetaProximamenteMobile({ items }: { items: HerramientaPrecio[] }) {
     <div data-ancla={items.map((h) => h.clave).join(" ")} className="flex min-w-0 flex-col overflow-hidden rounded-xl p-3" style={{ border: `1px solid ${C.border}`, background: C.card }}>
       <div className="flex">
         {items.slice(0, 3).map((h, i) => (
-          <span key={h.clave} style={{ marginLeft: i === 0 ? 0 : -10 }}><LogoTool clave={h.clave} size={40} apagado /></span>
+          <span key={h.clave} style={{ marginLeft: i === 0 ? 0 : -10 }}><LogoTool clave={h.clave} nombre={h.nombre} size={40} apagado /></span>
         ))}
       </div>
       <div className="mt-2" style={{ color: C.muted, fontWeight: 600, fontSize: 14, lineHeight: "17px" }}>{items.length} más</div>

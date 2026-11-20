@@ -31,7 +31,7 @@ function destino(r: Resultado): string {
 }
 
 function IconoResultado({ r, size }: { r: Resultado; size: number }) {
-  if (r.tipo === "herramienta") return <LogoTool clave={r.clave} size={size} apagado={!r.disponible} />
+  if (r.tipo === "herramienta") return <LogoTool clave={r.clave} nombre={r.nombre} size={size} apagado={!r.disponible} />
   if (r.tipo === "app") return <LogoAriCaja lado={size} radio={Math.round(size / 4)} />
   const logo = ICONO_SERVICIO[r.clave]
   if (logo) return <img src={logo} alt="" className="shrink-0" style={{ width: size, height: size }} />

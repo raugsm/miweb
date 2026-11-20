@@ -56,17 +56,17 @@ function coincide(consulta: string, textos: Array<string | null | undefined>) {
   return q.split(" ").every((parte) => texto.includes(parte))
 }
 
-function LogoDe({ clave, size }: { clave: string; size: number }) {
+function LogoDe({ clave, nombre, size }: { clave: string; nombre: string; size: number }) {
   if (clave === APP_ARITOOL.clave) return <LogoAriCaja lado={size} radio={size > 40 ? 13 : 10} />
   if (clave === "xiaomi_frp" || clave === "cuenta_mi") return <img src="/brand/xiaomi.png" alt="" className="shrink-0 rounded-[10px]" style={{ width: size, height: size }} />
-  return <LogoTool clave={clave} size={size} />
+  return <LogoTool clave={clave} nombre={nombre} size={size} />
 }
 
 function TarjetaServicio({ s, movil, indice }: { s: ServicioVista; movil: boolean; indice: number }) {
   const lado = movil ? 40 : 52
   return (
     <Link to={RUTAS.app} data-ancla={s.clave} className="serv-card flex items-center rounded-xl" style={{ gap: movil ? 12 : 14, padding: movil ? 12 : 16, border: `1px solid ${C.border}`, background: C.card, animationDelay: `${Math.min(indice, 8) * 35}ms` }}>
-      <LogoDe clave={s.clave} size={lado} />
+      <LogoDe clave={s.clave} nombre={s.nombre} size={lado} />
       <span className="flex min-w-0 flex-col gap-1">
         <span className="truncate" style={{ color: s.disponible ? C.text : C.muted, fontWeight: 600, fontSize: movil ? 14 : 16, lineHeight: movil ? "17px" : "19px" }}>{s.nombre}</span>
         <span className="flex items-baseline gap-2 whitespace-nowrap">
@@ -86,7 +86,7 @@ function TarjetaHerramienta({ h, movil, indice }: { h: HerramientaPrecio; movil:
     // En celular la tarjeta es vertical, como las del Inicio W2: logo arriba y los datos debajo.
     const cuerpo = (
       <div className="flex min-w-0 flex-col p-3" style={{ minHeight: h.disponible ? 141 : 114 }}>
-        <LogoTool clave={h.clave} size={40} apagado={!h.disponible} />
+        <LogoTool clave={h.clave} nombre={h.nombre} size={40} apagado={!h.disponible} />
         <div className="mt-2 truncate" style={{ color: h.disponible ? C.text : C.muted, fontWeight: 600, fontSize: 14, lineHeight: "17px" }}>{h.nombre}</div>
         {h.disponible ? (
           <div className="mt-2 flex items-baseline gap-1.5 whitespace-nowrap">
@@ -104,7 +104,7 @@ function TarjetaHerramienta({ h, movil, indice }: { h: HerramientaPrecio; movil:
   }
   const contenido = (
     <div className="flex min-w-0 items-center" style={{ gap: 14 }}>
-      <LogoTool clave={h.clave} size={52} apagado={!h.disponible} />
+      <LogoTool clave={h.clave} nombre={h.nombre} size={52} apagado={!h.disponible} />
       <div className="flex min-w-0 flex-col" style={{ gap: 4 }}>
         <div className="truncate" style={{ color: h.disponible ? C.text : C.muted, fontWeight: 600, fontSize: 16, lineHeight: "19px" }}>{h.nombre}</div>
         {h.disponible ? (
@@ -134,7 +134,7 @@ function TarjetaProximamente({ items }: { items: HerramientaPrecio[] }) {
     <div data-ancla={items.map((h) => h.clave).join(" ")} className="serv-card flex min-w-0 flex-col rounded-xl p-3" style={{ border: `1px solid ${C.border}`, background: C.card, minHeight: 114 }}>
       <div className="flex">
         {items.slice(0, 3).map((h, i) => (
-          <span key={h.clave} style={{ marginLeft: i === 0 ? 0 : -10 }}><LogoTool clave={h.clave} size={40} apagado /></span>
+          <span key={h.clave} style={{ marginLeft: i === 0 ? 0 : -10 }}><LogoTool clave={h.clave} nombre={h.nombre} size={40} apagado /></span>
         ))}
       </div>
       <div className="mt-2" style={{ color: C.muted, fontWeight: 600, fontSize: 14, lineHeight: "17px" }}>{items.length} más</div>
