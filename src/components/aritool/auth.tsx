@@ -69,7 +69,7 @@ export function CabezaAuth({ titulo, texto }: { titulo: string; texto?: string }
   )
 }
 
-export function Banner({ tipo, icono: Icono, children }: { tipo: "rojo" | "ambar" | "azul"; icono: LucideIcon; children: React.ReactNode }) {
+export function Banner({ tipo, icono: Icono, children }: { tipo: "rojo" | "ambar" | "azul"; icono: LucideIcon | React.ComponentType<{ className?: string; style?: React.CSSProperties }>; children: React.ReactNode }) {
   const e = tipo === "rojo" ? ROJO : tipo === "ambar" ? AMBAR : AZUL
   return (
     <div className="flex w-full items-start gap-2.5" style={{ background: e.bg, border: `1px solid ${e.bd}`, borderRadius: 10, padding: 12 }}>

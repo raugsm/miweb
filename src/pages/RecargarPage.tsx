@@ -21,7 +21,7 @@ import { ArrowRight, Check, CircleAlert, CircleCheck, Clock, Info, LoaderCircle,
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 
-import { C, RUTAS } from "@/components/aritool/chrome"
+import { C, MonedaAri, RUTAS } from "@/components/aritool/chrome"
 import { Aviso, Ayuda, BotonAviso, BotonGrande, BotonWhatsApp, FilaCopiar, Instruccion, PaginaPasos, Pasos, TituloPaso, useCompu, Volver } from "@/components/aritool/pasos"
 import { usePrecios } from "@/hooks/use-precios"
 import { cobroActivo, cobroCancelar, pagoCobroCrear, pagoCobroEstado, resumenCliente, yapeConfirmar, yapeCrear, yapeEstado, type ResumenCliente } from "@/lib/cuenta"
@@ -555,7 +555,7 @@ function PasoAPaso({ producto }: { producto: Producto }) {
       <Pasos nombres={nombres} actual={2} m={m} />
       <TituloPaso paso={2} de={4} titulo="¿Cómo vas a pagar?" texto={m || !metodos.includes("yape") ? undefined : `Tocá el que usás. Te mostramos solo los que funcionan en ${nombrePais}.`} m={m} />
       <div className="flex w-full items-center" style={{ gap: m ? 8 : 10, padding: m ? "12px 13px" : "12px 16px", background: C.cardAlt, border: `1px solid ${C.borderSoft}`, borderRadius: 10 }}>
-        <Wallet className={m ? "size-[15px]" : "size-4"} style={{ color: C.muted2 }} />
+        {lic ? <Wallet className={m ? "size-[15px]" : "size-4"} style={{ color: C.muted2 }} /> : <MonedaAri className={m ? "size-[15px]" : "size-4"} />}
         {lic ? (
           <span style={{ color: C.muted2, fontSize: m ? 14 : 15, lineHeight: m ? "17px" : "18px" }}>Vas a comprar la licencia anual{precioLic != null ? <> · <b style={{ color: C.title, fontWeight: 700 }}>{usd(precioLic)}</b></> : null}</span>
         ) : <>

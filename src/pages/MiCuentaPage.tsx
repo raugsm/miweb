@@ -13,13 +13,13 @@
  * pago esperando (S4), historial vacío (S5), cargando (S6), no se pudo cargar (S7) y sesión vencida
  * (S8, se muestra en Ingresar).
  */
-import { ArrowRight, Key, LogOut, Timer, Wallet } from "lucide-react"
+import { ArrowRight, Key, LogOut, Timer } from "lucide-react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 
 import { Banner } from "@/components/aritool/auth"
 import { Barra, CabeceraHistorial, FilaCelular, FilaCompu, FilasCargandoCelular, FilasCargandoCompu, HistorialVacio, NoSePudo } from "@/components/aritool/historial"
-import { C, Cont, FranjaSoporte, HeaderDesktop, HeaderMobile, IconoWA, MenuMobile, PieDesktop, PieMobile, RUTAS, WA } from "@/components/aritool/chrome"
+import { C, Cont, FranjaSoporte, HeaderDesktop, HeaderMobile, IconoWA, MenuMobile, MonedaAri, PieDesktop, PieMobile, RUTAS, WA } from "@/components/aritool/chrome"
 import { SinPerfil } from "@/components/aritool/perfil"
 import { usePrecios } from "@/hooks/use-precios"
 import { NOMBRE_WEB } from "@/lib/buscador"
@@ -89,7 +89,7 @@ function useFalta(vence: string | undefined): number {
  */
 function avisoSaldo(pago: CobroActivo | null, falta: number, bajo: boolean) {
   if (pago && !pagoDeLaApp(pago)) return <Banner tipo="azul" icono={Timer}>Tenés un pago esperando: {pago.producto === "licencia" ? "licencia anual" : `recarga de ${usd(Number(pago.creditos))}`}. {pago.metodo === "yape" ? `S/ ${pago.monto} por Yape` : `${pago.monto} USDT por Binance`}. Vence en {minSeg(falta)}.</Banner>
-  if (bajo) return <Banner tipo="ambar" icono={Wallet}>Con esto no te alcanza para usar nada. Recargá para seguir.</Banner>
+  if (bajo) return <Banner tipo="ambar" icono={MonedaAri}>Con esto no te alcanza para usar nada. Recargá para seguir.</Banner>
   return null
 }
 
@@ -195,7 +195,7 @@ function CuerpoCompu({ carga, filas, whatsapp, minimo, precioLicencia, salir, re
                     {aviso ?? <p style={{ color: C.muted2, fontSize: 14, lineHeight: "17px" }}>Sirve para alquiler, Xiaomi FRP, Cuenta MI y Security Plugin.</p>}
                     <div className="flex items-center gap-3.5 pt-2">
                       <Link to={pago ? `${RUTAS.recargar}?paso=3` : RUTAS.recargar} className="flex shrink-0 items-center gap-2 text-white" style={{ background: C.blue, borderRadius: 10, padding: "13px 20px" }}>
-                        {pago ? null : <Wallet className="size-[17px]" />}
+                        {pago ? null : <MonedaAri className="size-[17px]" />}
                         <span style={{ fontWeight: 600, fontSize: 15, lineHeight: "18px" }}>{pago ? "Ver mi pago" : "Recargar saldo"}</span>
                       </Link>
                       {pago
@@ -266,7 +266,7 @@ function CuerpoCelular({ carga, filas, whatsapp, minimo, salir, reintentar }: Cu
                   <p style={{ color: "#fff", fontWeight: 700, fontSize: 40, lineHeight: "48px" }}>{usd(saldo)}</p>
                   {aviso ?? <p className="w-full" style={{ color: C.muted2, fontSize: 13, lineHeight: "18px" }}>Sirve para alquiler, Xiaomi FRP, Cuenta MI y Security Plugin.</p>}
                   <Link to={pago ? `${RUTAS.recargar}?paso=3` : RUTAS.recargar} className="flex w-full items-center justify-center gap-2 text-white" style={{ background: C.blue, borderRadius: 10, padding: "13px 0" }}>
-                    {pago ? null : <Wallet className="size-[17px]" />}
+                    {pago ? null : <MonedaAri className="size-[17px]" />}
                     <span style={{ fontWeight: 600, fontSize: 15, lineHeight: "18px" }}>{pago ? "Ver mi pago" : "Recargar saldo"}</span>
                   </Link>
                   {pago ? <p style={{ color: C.faint, fontSize: 12, lineHeight: "15px" }}>Solo un pago a la vez. Si lo cancelás, podés generar otro.</p> : null}

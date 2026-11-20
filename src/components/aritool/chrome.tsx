@@ -75,6 +75,12 @@ export function IconoWA({ className, style }: { className?: string; style?: Reac
   )
 }
 
+/** La moneda AriTool: el ícono del saldo (Peter, 20-nov). Se usa del mismo tamaño que el ícono que reemplaza (className,
+ *  por ejemplo «size-[17px]»). WebP de 72 × 72 sacado de logos_app/aritool-moneda/moneda_frontal.png. */
+export function MonedaAri({ className = "" }: { className?: string; style?: React.CSSProperties }) {
+  return <img src="/brand/moneda-aritool.webp" alt="" draggable={false} className={`shrink-0 select-none ${className}`} />
+}
+
 export function LogoAriCaja({ lado, radio }: { lado: number; radio: number }) {
   return (
     <span className="relative block shrink-0 overflow-hidden" style={{ width: lado, height: lado, borderRadius: radio, background: C.iconBg, border: `1px solid ${C.borderAlt}` }}>
